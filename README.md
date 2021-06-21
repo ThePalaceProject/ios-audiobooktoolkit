@@ -1,4 +1,21 @@
-1) Edit your Cartfile: `github "NYPL-Simplified/NYPLAudiobookToolkit"`
-2) Open Access Support is built-in. Other DRM providers will require licenses. Example: NYPL supports the Findaway Audioengine SDK with `NYPLAEToolkit`, which requires a license paid to Findaway.
-3) Ensure host has "Background Modes" enabled in Build Settings: Allow audio playback and airplay from the background
+# Build
+
+To build the project, first build Carthage dependencies:
+
+```
+carthage update --use-xcframeworks --platform ios
+```
+
+Open `NYPLAudiobookToolkit.xcodeproj` and build **NYPLAudiobookToolkit** target.
+
+Project development environment:
+
+- Xcode: 12.4
+- Carthage: 0.38
+
+# How to integrate ios-audiobooktoolkit into your project
+
+1) Edit your Cartfile: `github "ThePalaceProject/ios-audiobooktoolkit"`
+2) Open Access Support is built-in. Other DRM providers will require licenses.
+3) Ensure host has "Background Modes" enabled in Build Settings: Allow audio playback and airplay from the background.
 
