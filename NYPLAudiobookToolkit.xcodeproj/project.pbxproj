@@ -14,7 +14,6 @@
 		178707C824DA505700649567 /* RSAUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 178707C724DA505700649567 /* RSAUtils.swift */; };
 		178707CE24DA5E1300649567 /* Constants.m in Sources */ = {isa = PBXBuildFile; fileRef = 178707CD24DA5E1300649567 /* Constants.m */; };
 		219868BF267E0C770041369E /* PureLayout.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 219868BE267E0C770041369E /* PureLayout.xcframework */; };
-		219868C0267E0C770041369E /* PureLayout.xcframework in Copy Files */ = {isa = PBXBuildFile; fileRef = 219868BE267E0C770041369E /* PureLayout.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		21B26CCE257FB95300A60238 /* LCPPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B26CCD257FB95300A60238 /* LCPPlayer.swift */; };
 		21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B26CCF257FBA9F00A60238 /* LCPDownloadTask.swift */; };
 		21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C0F15925768E9A001E51EF /* LCPSpineElement.swift */; };
@@ -91,20 +90,6 @@
 			remoteInfo = NYPLAudiobookToolkit;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		7B5441EB200EA8810047B6C6 /* Copy Files */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 12;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				219868C0267E0C770041369E /* PureLayout.xcframework in Copy Files */,
-			);
-			name = "Copy Files";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		17576CA9248E898600E18B4C /* OverdriveAudiobook.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OverdriveAudiobook.swift; sourceTree = "<group>"; };
@@ -415,7 +400,6 @@
 				7B544188200EA7C20047B6C6 /* Frameworks */,
 				7B544189200EA7C20047B6C6 /* Headers */,
 				7B54418A200EA7C20047B6C6 /* Resources */,
-				7B5441EB200EA8810047B6C6 /* Copy Files */,
 				E6EF9A1C218CE5D9000CE559 /* Copy Frameworks (Carthage) */,
 			);
 			buildRules = (
