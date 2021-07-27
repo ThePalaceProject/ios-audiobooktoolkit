@@ -468,9 +468,6 @@ let SkipTimeInterval: Double = 15
             self.updateSpeedButtonIfNeeded()
             self.updatePlayPauseButtonIfNeeded()
         }
-        if (self.audiobookProgressView.backgroundColor != view.tintColor) {
-            self.audiobookProgressView.backgroundColor = view.tintColor
-        }
     }
 
     private func updatePlayPauseButtonIfNeeded() {
