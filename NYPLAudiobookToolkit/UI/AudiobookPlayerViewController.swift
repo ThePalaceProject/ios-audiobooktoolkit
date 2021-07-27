@@ -80,10 +80,6 @@ let SkipTimeInterval: Double = 15
         self.gradient.startPoint = CGPoint.zero
         self.gradient.endPoint = CGPoint(x: 1, y: 1)
         self.view.layer.insertSublayer(self.gradient, at: 0)
-        
-        if #available(iOS 13, *) {
-            self.view.backgroundColor = UIColor.systemBackground
-        }
    
         let tocImage = UIImage(
             named: "table_of_contents",
