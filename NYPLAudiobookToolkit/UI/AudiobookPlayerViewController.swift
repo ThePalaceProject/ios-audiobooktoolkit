@@ -107,7 +107,7 @@ let SkipTimeInterval: Double = 15
         self.navigationItem.rightBarButtonItems = [ tocBbi, indicatorBbi ]
 
         self.view.addSubview(self.audiobookProgressView)
-        self.audiobookProgressView.backgroundColor = view.tintColor
+        self.audiobookProgressView.backgroundColor = .black
         self.audiobookProgressView.autoPin(toTopLayoutGuideOf: self, withInset: 0)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .leading)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .trailing)

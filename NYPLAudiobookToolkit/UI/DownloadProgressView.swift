@@ -22,8 +22,7 @@ final class DownloadProgressView: UIView {
     private func setupView() {
         isHidden = true
         heightConstraint = autoSetDimension(.height, toSize: 0.0)
-        backgroundColor = .black
-        
+
         downloadLabel.clipsToBounds = true
         downloadLabel.text = NSLocalizedString("Downloading", comment: "")
         downloadLabel.textColor = .white
