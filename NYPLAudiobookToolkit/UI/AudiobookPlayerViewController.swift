@@ -112,7 +112,8 @@ let SkipTimeInterval: Double = 15
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .leading)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .trailing)
 
-        self.chapterInfoStack.titleText = self.audiobookManager.metadata.title ?? "Audiobook"
+//        self.chapterInfoStack.titleText = self.audiobookManager.metadata.title ?? "Audiobook"
+        self.chapterInfoStack.titleText = "This is a test" 
         self.chapterInfoStack.authors = self.audiobookManager.metadata.authors ?? [""]
 
         self.view.addSubview(self.chapterInfoStack)
