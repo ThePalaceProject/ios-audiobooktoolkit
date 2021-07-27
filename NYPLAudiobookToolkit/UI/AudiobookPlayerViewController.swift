@@ -80,6 +80,10 @@ let SkipTimeInterval: Double = 15
         self.gradient.startPoint = CGPoint.zero
         self.gradient.endPoint = CGPoint(x: 1, y: 1)
         self.view.layer.insertSublayer(self.gradient, at: 0)
+        
+        if #available(iOS 13, *) {
+            self.view.backgroundColor = UIColor.systemBackground
+        }
    
         let tocImage = UIImage(
             named: "table_of_contents",
@@ -112,8 +116,7 @@ let SkipTimeInterval: Double = 15
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .leading)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .trailing)
 
-//        self.chapterInfoStack.titleText = self.audiobookManager.metadata.title ?? "Audiobook"
-        self.chapterInfoStack.titleText = "This is a test" 
+        self.chapterInfoStack.titleText = self.audiobookManager.metadata.title ?? "Audiobook"
         self.chapterInfoStack.authors = self.audiobookManager.metadata.authors ?? [""]
 
         self.view.addSubview(self.chapterInfoStack)
