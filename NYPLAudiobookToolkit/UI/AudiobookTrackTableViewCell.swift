@@ -37,6 +37,8 @@ class AudiobookTrackTableViewCell: UITableViewCell {
         self.textLabel?.text = title
         self.textLabel?.alpha = labelAlpha
         self.detailTextLabel?.text = detailLabel
-        self.backgroundColor = .white
+        self.textLabel?.textColor = UIColor.label
+        self.detailTextLabel?.textColor = UIColor.secondaryLabel
+        self.backgroundColor = UIColor.systemBackground
     }
 }
