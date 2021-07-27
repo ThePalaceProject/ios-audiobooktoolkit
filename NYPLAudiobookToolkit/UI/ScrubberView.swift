@@ -163,6 +163,7 @@ final class ScrubberView: UIView {
         self.addSubview(self.leftLabel)
         self.addSubview(self.rightLabel)
         self.addSubview(self.middleLabel)
+    
         self.progressBackground.backgroundColor = UIColor.darkGray
         self.progressBackground.autoSetDimension(.height, toSize: CGFloat(self.barHeight))
         self.progressBackground.autoPinEdge(.left, to: .left, of: self)
@@ -225,7 +226,8 @@ final class ScrubberView: UIView {
         self.topLabel.setContentHuggingPriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)
         self.topLabel.setContentHuggingPriority(UILayoutPriority.defaultHigh, for: NSLayoutConstraint.Axis.vertical)
         self.topLabel.setContentCompressionResistancePriority(UILayoutPriority.defaultHigh, for: NSLayoutConstraint.Axis.horizontal)
-        
+        self.topLabel.textColor = .black
+
         self.gripper.backgroundColor = self.state.progressColor
         self.gripper.autoPinEdge(.top, to: .bottom, of: self.topLabel, withOffset: self.padding / 2)
         self.gripper.autoAlignAxis(.horizontal, toSameAxisOf: self.progressBackground)
