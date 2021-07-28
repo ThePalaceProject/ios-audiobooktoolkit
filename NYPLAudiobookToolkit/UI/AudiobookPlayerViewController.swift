@@ -80,7 +80,7 @@ let SkipTimeInterval: Double = 15
         self.gradient.startPoint = CGPoint.zero
         self.gradient.endPoint = CGPoint(x: 1, y: 1)
         self.view.layer.insertSublayer(self.gradient, at: 0)
-
+   
         let tocImage = UIImage(
             named: "table_of_contents",
             in: Bundle.audiobookToolkit(),
@@ -107,7 +107,7 @@ let SkipTimeInterval: Double = 15
         self.navigationItem.rightBarButtonItems = [ tocBbi, indicatorBbi ]
 
         self.view.addSubview(self.audiobookProgressView)
-        self.audiobookProgressView.backgroundColor = view.tintColor
+        self.audiobookProgressView.backgroundColor = .black
         self.audiobookProgressView.autoPin(toTopLayoutGuideOf: self, withInset: 0)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .leading)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .trailing)
@@ -467,9 +467,6 @@ let SkipTimeInterval: Double = 15
             }
             self.updateSpeedButtonIfNeeded()
             self.updatePlayPauseButtonIfNeeded()
-        }
-        if (self.audiobookProgressView.backgroundColor != view.tintColor) {
-            self.audiobookProgressView.backgroundColor = view.tintColor
         }
     }
 

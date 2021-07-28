@@ -53,6 +53,7 @@ class ChapterInfoStack: UIView {
         self.topLabel.textAlignment = .center
         self.topLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
         self.topLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        self.topLabel.textColor = UIColor.black
 
         self.bottomLabel.autoPinEdge(.top, to: .bottom, of: self.topLabel)
         self.bottomLabel.autoPinEdge(.left, to: .left, of: self)
@@ -60,6 +61,7 @@ class ChapterInfoStack: UIView {
         self.bottomLabel.autoPinEdge(.bottom, to: .bottom, of: self)
         self.bottomLabel.textAlignment = .center
         self.bottomLabel.textColor = UIColor.darkGray
+
         self.bottomLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
         self.bottomLabel.setContentCompressionResistancePriority(.required, for: .vertical)
       

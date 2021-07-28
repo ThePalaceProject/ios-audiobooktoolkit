@@ -67,6 +67,7 @@ class TextOverImageView: UIControl {
         self.textLabel.numberOfLines = 1
         self.textLabel.autoCenterInSuperview()
         self.textLabel.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        self.textLabel.textColor = .black
         self.addSubview(self.subtextLabel)
         self.subtextLabel.accessibilityIdentifier = "TextOverImageView.subtextLabel"
         self.subtextLabel.font = UIFont.systemFont(ofSize: 12)
@@ -74,6 +75,7 @@ class TextOverImageView: UIControl {
         self.subtextLabel.numberOfLines = 1
         self.subtextLabel.autoPinEdge(.top, to: .bottom, of: self.textLabel, withOffset: -6)
         self.subtextLabel.autoAlignAxis(.vertical, toSameAxisOf: self.textLabel)
+        self.subtextLabel.textColor = .black
     }
 
     required init?(coder aDecoder: NSCoder) {

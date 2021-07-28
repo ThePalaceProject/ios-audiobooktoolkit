@@ -163,6 +163,7 @@ final class ScrubberView: UIView {
         self.addSubview(self.leftLabel)
         self.addSubview(self.rightLabel)
         self.addSubview(self.middleLabel)
+    
         self.progressBackground.backgroundColor = UIColor.darkGray
         self.progressBackground.autoSetDimension(.height, toSize: CGFloat(self.barHeight))
         self.progressBackground.autoPinEdge(.left, to: .left, of: self)
@@ -182,6 +183,7 @@ final class ScrubberView: UIView {
         self.leftLabel.font = UIFont.systemFont(ofSize: 12)
         self.leftLabel.accessibilityIdentifier = "progress_leftLabel"
         self.leftLabel.text = self.state.progress.playheadText
+        self.leftLabel.textColor = .black
         
         self.rightLabel.autoPinEdge(.right, to: .right, of: self)
         self.rightLabel.autoAlignAxis(.horizontal, toSameAxisOf: self.middleLabel)
@@ -194,7 +196,8 @@ final class ScrubberView: UIView {
         self.rightLabel.font = UIFont.systemFont(ofSize: 12)
         self.rightLabel.accessibilityIdentifier = "progress_rightLabel"
         self.rightLabel.text = self.state.progress.timeLeftText
-        
+        self.rightLabel.textColor = .black
+
         self.middleLabel.autoPinEdge(.left, to: .right, of: self.leftLabel)
         self.middleLabel.autoPinEdge(.right, to: .left, of: self.rightLabel)
         self.middleLabel.autoPinEdge(.top, to: .bottom, of: self.gripper, withOffset: self.padding / 2)
@@ -206,6 +209,7 @@ final class ScrubberView: UIView {
         self.middleLabel.setContentCompressionResistancePriority(UILayoutPriority.defaultHigh, for: NSLayoutConstraint.Axis.horizontal)
         self.middleLabel.font = UIFont.boldSystemFont(ofSize: 16)
         self.middleLabel.accessibilityIdentifier = "progress_rightLabel"
+        self.middleLabel.textColor = .black
 
         self.labelWidthConstraints.append(leftLabelWidth)
         self.labelWidthConstraints.append(rightLabelWidth)
@@ -222,7 +226,8 @@ final class ScrubberView: UIView {
         self.topLabel.setContentHuggingPriority(UILayoutPriority.defaultLow, for: NSLayoutConstraint.Axis.horizontal)
         self.topLabel.setContentHuggingPriority(UILayoutPriority.defaultHigh, for: NSLayoutConstraint.Axis.vertical)
         self.topLabel.setContentCompressionResistancePriority(UILayoutPriority.defaultHigh, for: NSLayoutConstraint.Axis.horizontal)
-        
+        self.topLabel.textColor = .black
+
         self.gripper.backgroundColor = self.state.progressColor
         self.gripper.autoPinEdge(.top, to: .bottom, of: self.topLabel, withOffset: self.padding / 2)
         self.gripper.autoAlignAxis(.horizontal, toSameAxisOf: self.progressBackground)
