@@ -164,6 +164,8 @@ final class OpenAccessDownloadTask: DownloadTask {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
         }
         
+        request.setValue("", forHTTPHeaderField: "Content-Type")
+        
         guard let urlSession = urlSession else {
             return
         }
