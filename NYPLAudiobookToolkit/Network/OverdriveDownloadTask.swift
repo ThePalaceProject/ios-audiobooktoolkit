@@ -98,6 +98,7 @@ final class OverdriveDownloadTask: DownloadTask {
                                  cachePolicy: .useProtocolCachePolicy,
                                  timeoutInterval: OverdriveDownloadTask.DownloadTaskTimeoutValue)
         
+        request.setValue("", forHTTPHeaderField: "Content-Type")
         guard let urlSession = urlSession else {
             return
         }
