@@ -165,7 +165,8 @@ final class OpenAccessDownloadTask: DownloadTask {
         }
         
         request.setValue("", forHTTPHeaderField: "Content-Type")
-        
+        print("HTTP headers set in Toolkit to:\(request.allHTTPHeaderFields)")
+
         guard let urlSession = urlSession else {
             return
         }
