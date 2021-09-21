@@ -163,7 +163,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         if let profile = self.feedbooksProfile {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
         }
-        
+        print("HTTP headers set in Toolkit to:\(request.allHTTPHeaderFields)")
         request.setValue("", forHTTPHeaderField: "Content-Type")
         print("HTTP headers set in Toolkit to:\(request.allHTTPHeaderFields)")
 
