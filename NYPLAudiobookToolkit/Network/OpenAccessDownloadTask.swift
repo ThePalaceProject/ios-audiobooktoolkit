@@ -160,7 +160,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         var request = URLRequest(url: remoteURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue)
         
         // Feedbooks DRM
-        if let profile = self.feedbooksProfile, profile.contains("cantookaudio") {
+        if let profile = self.feedbooksProfile, !profile.contains("cantookaudio") {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
         }
         
