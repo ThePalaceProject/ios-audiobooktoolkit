@@ -57,11 +57,14 @@ import UIKit
         let drm = metadata?["encrypted"] as? [String: Any]
         let possibleScheme = drm?["scheme"] as? String
         let audiobook: Audiobook?
+        print("Breakpoint 1: JSON: \(JSON)")
         if let scheme = possibleScheme {
             switch scheme {
             case "http://librarysimplified.org/terms/drm/scheme/FAE":
                 let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
                 audiobook = FindawayAudiobookClass?.init(JSON: JSON)
+            case "http://readium.org/2014/01/lcp":
+                audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
             default:
                 audiobook = OpenAccessAudiobook(JSON: JSON)
             }
