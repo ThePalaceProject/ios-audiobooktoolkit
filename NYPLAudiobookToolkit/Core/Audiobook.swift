@@ -57,9 +57,7 @@ import UIKit
         let drm = metadata?["encrypted"] as? [String: Any]
         let possibleScheme = drm?["scheme"] as? String
         let audiobook: Audiobook?
-        print("Breakpoint 1: JSON: \(JSON)")
-        return LCPAudiobook(JSON: JSON, decryptor: decryptor)
-
+    
         if let scheme = possibleScheme {
             switch scheme {
             case "http://librarysimplified.org/terms/drm/scheme/FAE":
@@ -68,7 +66,14 @@ import UIKit
             case "http://readium.org/2014/01/lcp":
                 audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
             default:
-                audiobook = OpenAccessAudiobook(JSON: JSON)
+                if let type = JSON["formatType"] as? String,
+                    type == "audiobook-overdrive" {
+                        audiobook = OverdriveAudiobook(JSON: JSON)
+                } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
+                    audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
+                } else {
+                    audiobook = OpenAccessAudiobook(JSON: JSON)
+                }
             }
         } else if let type = JSON["formatType"] as? String,
             type == "audiobook-overdrive" {
