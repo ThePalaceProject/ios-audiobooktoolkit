@@ -57,7 +57,8 @@ import UIKit
         let drm = metadata?["encrypted"] as? [String: Any]
         let possibleScheme = drm?["scheme"] as? String
         let audiobook: Audiobook?
-    
+        print("Breakpoint 1: JSON: \(JSON)")
+
         if let scheme = possibleScheme {
             switch scheme {
             case "http://librarysimplified.org/terms/drm/scheme/FAE":
