@@ -57,27 +57,24 @@ import UIKit
         let drm = metadata?["encrypted"] as? [String: Any]
         let possibleScheme = drm?["scheme"] as? String
         let audiobook: Audiobook?
-        if let scheme = possibleScheme {
-            switch scheme {
-            case "http://librarysimplified.org/terms/drm/scheme/FAE":
-                let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
-                audiobook = FindawayAudiobookClass?.init(JSON: JSON)
-            default:
-                audiobook = OpenAccessAudiobook(JSON: JSON)
-            }
+
+        if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
+            let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
+            audiobook = FindawayAudiobookClass?.init(JSON: JSON)
         } else if let type = JSON["formatType"] as? String,
-            type == "audiobook-overdrive" {
-                audiobook = OverdriveAudiobook(JSON: JSON)
+                  type == "audiobook-overdrive" {
+            audiobook = OverdriveAudiobook(JSON: JSON)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
             audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
             audiobook = OpenAccessAudiobook(JSON: JSON)
         }
+
         ATLog(.debug, "checkDrmAsync")
         audiobook?.checkDrmAsync()
         return audiobook
     }
-    
+
     /// Instatiate an audiobook object with JSON data containing spine elements of the book
     /// - Parameters:
     ///   - JSON: Audiobook and spine elements data
