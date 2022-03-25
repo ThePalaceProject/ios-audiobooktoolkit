@@ -31,7 +31,7 @@ final class OverdriveSpineElement: SpineElement {
         self.chapterNumber = index
         self.audiobookID = audiobookID
 
-        let defaultTitleFormat = NSLocalizedString("Chapter %@", bundle: Bundle.audiobookToolkit()!, value: "Chapter %@", comment: "Default chapter title")
+        let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         self.title = String(format: defaultTitleFormat, "\(index + 1)")
 
         guard let payload = JSON as? [String: Any],

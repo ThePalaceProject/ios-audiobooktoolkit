@@ -70,7 +70,7 @@ final class LCPSpineElement: SpineElement {
         }
         
         self.url = url
-        let defaultTitleFormat = NSLocalizedString("Chapter %@", bundle: Bundle.audiobookToolkit()!, value: "Chapter %@", comment: "Default chapter title")
+        let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         let name = LCPSpineElement.elementName(JSON: payload["title"])
         self.title = name ?? String(format: defaultTitleFormat, "\(index + 1)")
         if let duration = payload["duration"] as? Double {
