@@ -499,7 +499,7 @@ let SkipTimeInterval: Double = 15
     }
 
     func middleTextFor(chapter: ChapterLocation) -> String {
-        let defaultTitleFormat = NSLocalizedString("Chapter %@", bundle: Bundle.audiobookToolkit()!, value: "Chapter %@", comment: "Default chapter title")
+        let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         let middleTextFormat = NSLocalizedString("%@ (file %@ of %d)", bundle: Bundle.audiobookToolkit()!, value: "%@ (file %@ of %d)", comment: "Current chapter and the amount of chapters left in the book")
         let indexString = oneBasedSpineIndex() ?? "--"
         let title = chapter.title ?? String(format: defaultTitleFormat, indexString)
