@@ -2,7 +2,7 @@
 //  AudiobookTOCTests.swift
 //  NYPLAudiobookToolkitTests
 //
-//  Created by Maurice Work on 4/5/22.
+//  Created by Maurice Carrier on 4/5/22.
 //  Copyright © 2022 Dean Silfen. All rights reserved.
 //
 
