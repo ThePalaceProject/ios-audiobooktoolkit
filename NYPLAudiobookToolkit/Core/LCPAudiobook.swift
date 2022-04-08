@@ -9,7 +9,7 @@
 import Foundation
 
 @objc public class LCPAudiobook: NSObject, Audiobook {
-    
+
     /// Readium @context parameter value for LCP audiobooks
     static let manifestContext = "https://readium.org/webpub-manifest/context.jsonld"
     
@@ -152,53 +152,45 @@ import Foundation
 
         return Dictionary(uniqueKeysWithValues: resourceElements.map { ($0.href, $0) })
     }
-}
 
-struct ResourceItem {
-    var href: URL
-    var chapter: Int
-    var duration: Double
-}
-
-struct TocElement: Codable {
-    var title: String?
-    var href: String?
-    var children: [TocElement]?
-    
-    func rawLink() -> String? {
-        guard var href = href else { return nil }
-        return stripOffset(&href)
+    struct ResourceItem {
+        var href: URL
+        var chapter: Int
+        var duration: Double
     }
 
-    func offset() -> Double {
-        let offsetKey = "#t="
-        guard let href = href, let range = href.range(of: offsetKey) else { return 0.0 }
-        return Double(href[range.upperBound...]) ?? 0.0
-    }
-    
-    func hasSameParent(as element: TocElement) -> Bool {
-        guard var href = href, var compHref = element.href else { return false }
-        return stripOffset(&href) == stripOffset(&compHref)
-    }
-    
-    func stripOffset(_ string: inout String) -> String {
-        let offsetKey = "#t="
-        string = string.removed(after: offsetKey)
-        return string
-    }
-}
+    struct TocElement: Codable {
+        var title: String?
+        var href: String?
+        var children: [TocElement]?
+        
+        func rawLink() -> String? {
+            guard var href = href else { return nil }
+            return stripOffset(&href)
+        }
 
-struct ResourceElement: Codable {
-    var href: String
-    var duration: Double
-    var chapter: Int?
-    var type: LCPSpineElementMediaType?
-}
+        func offset() -> Double {
+            let offsetKey = "#t="
+            guard let href = href, let range = href.range(of: offsetKey) else { return 0.0 }
+            return Double(href[range.upperBound...]) ?? 0.0
+        }
+        
+        func hasSameParent(as element: TocElement) -> Bool {
+            guard var href = href, var compHref = element.href else { return false }
+            return stripOffset(&href) == stripOffset(&compHref)
+        }
+        
+        func stripOffset(_ string: inout String) -> String {
+            let offsetKey = "#t="
+            string = string.removed(after: offsetKey)
+            return string
+        }
+    }
 
-extension String {
-    mutating func removed(after substring: String) -> String {
-        guard let range = self.range(of: substring) else { return self }
-        self.removeSubrange(range.lowerBound..<self.endIndex)
-        return self
+    struct ResourceElement: Codable {
+        var href: String
+        var duration: Double
+        var chapter: Int?
+        var type: LCPSpineElementMediaType?
     }
 }

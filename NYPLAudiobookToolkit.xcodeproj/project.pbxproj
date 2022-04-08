@@ -59,7 +59,7 @@
 		8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */; };
 		8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */; };
 		8C3CDB072422D85E0020FC0B /* Data+Base64.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB062422D85E0020FC0B /* Data+Base64.swift */; };
-		8C3CDB0E2422E7F40020FC0B /* String+Hmac.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB0D2422E7F40020FC0B /* String+Hmac.swift */; };
+		8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB0D2422E7F40020FC0B /* String+Extensions.swift */; };
 		8C3CDB102422E82C0020FC0B /* HmacAlgorithm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB0F2422E82C0020FC0B /* HmacAlgorithm.swift */; };
 		8C3F7112242BDDAF00E5C810 /* URLRequest+Curl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3F7111242BDDAF00E5C810 /* URLRequest+Curl.swift */; };
 		8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C6CD8A9240D9F8A00E2DFB0 /* JSONUtils.swift */; };
@@ -153,7 +153,7 @@
 		8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVPlayer+Description.swift"; sourceTree = "<group>"; };
 		8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONUtilsTest.swift; sourceTree = "<group>"; };
 		8C3CDB062422D85E0020FC0B /* Data+Base64.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Base64.swift"; sourceTree = "<group>"; };
-		8C3CDB0D2422E7F40020FC0B /* String+Hmac.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Hmac.swift"; sourceTree = "<group>"; };
+		8C3CDB0D2422E7F40020FC0B /* String+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extensions.swift"; sourceTree = "<group>"; };
 		8C3CDB0F2422E82C0020FC0B /* HmacAlgorithm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HmacAlgorithm.swift; sourceTree = "<group>"; };
 		8C3F7111242BDDAF00E5C810 /* URLRequest+Curl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Curl.swift"; sourceTree = "<group>"; };
 		8C6CD8A9240D9F8A00E2DFB0 /* JSONUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONUtils.swift; sourceTree = "<group>"; };
@@ -350,7 +350,7 @@
 				8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */,
 				8C3CDB062422D85E0020FC0B /* Data+Base64.swift */,
 				8CF57BDB2432788C0053C31E /* Data+BigEndian.swift */,
-				8C3CDB0D2422E7F40020FC0B /* String+Hmac.swift */,
+				8C3CDB0D2422E7F40020FC0B /* String+Extensions.swift */,
 				8C3F7111242BDDAF00E5C810 /* URLRequest+Curl.swift */,
 				E503256C27FE8EFA00317F68 /* Array+Extensions.swift */,
 			);
@@ -600,7 +600,7 @@
 				A94E769C219F7B4200E943A2 /* AudiobookCoverImageView.swift in Sources */,
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				7B6C1BD2203F5BE600EB791E /* AudiobookTableOfContentsTableViewController.swift in Sources */,
-				8C3CDB0E2422E7F40020FC0B /* String+Hmac.swift in Sources */,
+				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				A92FB10421CDF94A004740F4 /* DownloadProgressView.swift in Sources */,
 				A934D08E22065B9500724200 /* NYPLStringAdditions.m in Sources */,
 				178707C824DA505700649567 /* RSAUtils.swift in Sources */,
