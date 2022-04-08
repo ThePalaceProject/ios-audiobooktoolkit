@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum LCPSpineElementMediaType: String {
+enum LCPSpineElementMediaType: String, Codable {
     case audioMP3 = "audio/mp3"
     case audioAAC = "audio/aac"
     case audioMPEG = "audio/mpeg"
@@ -36,7 +36,7 @@ final class LCPSpineElement: SpineElement {
             number: self.chapterNumber,
             part: 0,
             duration: self.duration,
-            startOffset: 0,
+            startOffset: self.offset * 1000.0,
             playheadOffset: 0,
             title: self.title,
             audiobookID: self.audiobookID
@@ -47,9 +47,33 @@ final class LCPSpineElement: SpineElement {
     let chapterNumber: UInt
     let title: String
     let url: URL
+    var offset: Double
     let mediaType: LCPSpineElementMediaType
     let duration: TimeInterval
     let audiobookID: String
+    
+    init?(
+        chapterNumber: UInt,
+        title: String,
+        href: String,
+        offset: Double,
+        mediaType: LCPSpineElementMediaType,
+        duration: TimeInterval,
+        audiobookID: String
+    ) {
+        guard let url = URL(string: href) else {
+            return nil
+        }
+
+        self.key = "\(audiobookID)-\(chapterNumber)"
+        self.chapterNumber = chapterNumber
+        self.title = title
+        self.url = url
+        self.offset = offset
+        self.mediaType = mediaType
+        self.duration = duration
+        self.audiobookID = audiobookID
+    }
     
     /// Spine element for LCP audiobooks
     /// - Parameters:
@@ -83,6 +107,7 @@ final class LCPSpineElement: SpineElement {
         } else {
             self.mediaType = .audioMP3
         }
+        self.offset = 0.0
     }
     
     /// Title for a spine element from `name` parameter
