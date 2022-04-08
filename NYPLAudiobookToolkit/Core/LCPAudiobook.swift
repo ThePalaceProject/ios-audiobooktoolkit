@@ -18,7 +18,9 @@ import Foundation
     public var spine: [SpineElement]
     
     public var player: Player
-    
+
+    private static let offsetKey = "#t="
+
     public var drmStatus: DrmStatus {
         get {
             return DrmStatus.succeeded
@@ -170,7 +172,6 @@ import Foundation
         }
 
         func offset() -> Double {
-            let offsetKey = "#t="
             guard let href = href, let range = href.range(of: offsetKey) else { return 0.0 }
             return Double(href[range.upperBound...]) ?? 0.0
         }
@@ -181,7 +182,6 @@ import Foundation
         }
         
         func stripOffset(_ string: inout String) -> String {
-            let offsetKey = "#t="
             string = string.removed(after: offsetKey)
             return string
         }
