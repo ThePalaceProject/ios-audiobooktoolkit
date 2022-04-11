@@ -12,4 +12,10 @@ extension String {
         }
         return Data(bytes: digest)
     }
+
+    mutating func removed(after substring: String) -> String {
+        guard let range = self.range(of: substring) else { return self }
+        self.removeSubrange(range.lowerBound..<self.endIndex)
+        return self
+    }
 }
