@@ -59,7 +59,7 @@ class AudiobookTOCTests: XCTestCase {
         validate(manifest: "toc_manifest", against: tocManaifestExpectedResults)
     }
 
-    func testNonTockManifest() throws {
+    func testNonTocManifest() throws {
         validate(manifest: "non_toc_manifest", against: nonTocManifestExpeectedResults)
     }
 

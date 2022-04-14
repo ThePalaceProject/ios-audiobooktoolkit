@@ -63,9 +63,12 @@ import Foundation
         
         if let toc = publication["toc"] as? [[String: Any]] {
             self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
+            print("TOC SPINE: \(self.spine)")
         } else {
             self.spine = LCPAudiobook.getSpineElements(resources: resources, identifier: uniqueIdentifier)
+            print("NON TOC SPINE: \(self.spine)")
         }
+        
         guard let cursor = Cursor(data: spine) else {
             let title = metadata["title"] as? String ?? ""
             ATLog(.error, "Cursor could not be cast to Cursor<LCPSpineElement> in \(id) \(title)")
