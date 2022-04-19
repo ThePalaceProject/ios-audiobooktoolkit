@@ -8,14 +8,14 @@ final class OverdriveSpineElement: SpineElement {
         return OverdriveDownloadTask(spineElement: self)
     }()
     
-    lazy var chapter: ChapterLocation = {
+    lazy var chapter: ChapterLocation? = {
         return ChapterLocation(number: self.chapterNumber,
                                part: 0,
                                duration: self.duration,
                                startOffset: 0,
                                playheadOffset: 0,
                                title: self.title,
-                               audiobookID: self.audiobookID)!
+                               audiobookID: self.audiobookID)
     }()
     
     let key: String

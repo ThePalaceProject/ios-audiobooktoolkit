@@ -31,7 +31,7 @@ final class LCPSpineElement: SpineElement {
         return LCPDownloadTask(spineElement: self)
     }()
     
-    lazy var chapter: ChapterLocation = {
+    lazy var chapter: ChapterLocation? = {
         return ChapterLocation(
             number: self.chapterNumber,
             part: 0,
@@ -40,7 +40,7 @@ final class LCPSpineElement: SpineElement {
             playheadOffset: 0,
             title: self.title,
             audiobookID: self.audiobookID
-            )!
+            )
     }()
     
     let key: String

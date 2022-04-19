@@ -26,7 +26,7 @@ import Foundation
     func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation)
 
     /// Playback failed. Send an error with more context if it is available.
-    func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?)
+    func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation?, withError error: NSError?)
 
     /// Called when the playhead crosses a chapter boundary without direction.
     /// Depending on the underlying playback engine, this could come some time
@@ -133,7 +133,6 @@ import Foundation
         self.startOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
-        
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
@@ -170,7 +169,7 @@ import Foundation
     }
 }
 
-public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElement>)
+public typealias Playhead = (location: ChapterLocation?, cursor: Cursor<SpineElement>)
 
 /// Utility function for manipulating the playhead.
 ///
@@ -211,7 +210,7 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
     for (i, element) in cursor.data.enumerated() {
-        if element.chapter.number == destination.number {
+        if let chapter = element.chapter, chapter.number == destination.number {
             foundIndex = i
             break
         }
@@ -252,7 +251,7 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
     }
 }
 
-private func chapterAt(cursor: Cursor<SpineElement>) -> ChapterLocation {
+private func chapterAt(cursor: Cursor<SpineElement>) -> ChapterLocation? {
     return cursor.currentElement.chapter
 }
 
@@ -269,8 +268,7 @@ private func attemptToMove(cursor: Cursor<SpineElement>, forwardTo location: Cha
     var possibleDestinationLocation: ChapterLocation?
 
     let newCursor: Cursor<SpineElement>
-    if let nextCursor = cursor.next() {
-        let newChapter = chapterAt(cursor: nextCursor)
+    if let nextCursor = cursor.next(), let newChapter = chapterAt(cursor: nextCursor) {
         if newChapter.duration > timeIntoNextChapter {
             possibleDestinationLocation = newChapter.update(
                 playheadOffset: timeIntoNextChapter
@@ -281,9 +279,11 @@ private func attemptToMove(cursor: Cursor<SpineElement>, forwardTo location: Cha
         newCursor = nextCursor
     } else {
         // No chapter exists after the current one
-        possibleDestinationLocation = chapterAt(cursor: cursor).update(
-            playheadOffset: chapterAt(cursor: cursor).duration
-        )
+        if let currentChapter = chapterAt(cursor: cursor) {
+            possibleDestinationLocation = currentChapter.update(
+                playheadOffset: currentChapter.duration
+            )
+        }
         newCursor = cursor
     }
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
@@ -301,12 +301,15 @@ private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: Chapte
     let newCursor: Cursor<SpineElement>
     if let prevCursor = cursor.prev() {
         newCursor = prevCursor
-        let destinationChapter = chapterAt(cursor: newCursor)
-        let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
-        possibleDestinationLocation = destinationChapter.update(playheadOffset: max(0, playheadOffset))
+        if let destinationChapter = chapterAt(cursor: newCursor) {
+            let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
+            possibleDestinationLocation = destinationChapter.update(playheadOffset: max(0, playheadOffset))
+        }
     } else {
         // No chapter exists before the current one
-        possibleDestinationLocation = chapterAt(cursor: cursor).update(playheadOffset: 0)
+        if let currentChapter = chapterAt(cursor: cursor) {
+            possibleDestinationLocation = currentChapter.update(playheadOffset: 0)
+        }
         newCursor = cursor
     }
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
