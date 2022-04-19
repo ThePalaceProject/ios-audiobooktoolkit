@@ -77,7 +77,6 @@
 		A97CE13121ED388D00B64305 /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */; };
 		A9DC9CFD220547F800D122F2 /* ErrorDescriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
-		E5230282280E009F0096B615 /* test_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5230281280E009F0096B615 /* test_manifest.json */; };
 		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
@@ -173,7 +172,6 @@
 		A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorDescriptions.swift; sourceTree = "<group>"; };
 		E503256C27FE8EFA00317F68 /* Array+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Extensions.swift"; sourceTree = "<group>"; };
-		E5230281280E009F0096B615 /* test_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = test_manifest.json; sourceTree = "<group>"; };
 		E549653227FBEAC400913BD6 /* toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = toc_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
@@ -391,7 +389,6 @@
 		E549653127FBEAA900913BD6 /* TestResources */ = {
 			isa = PBXGroup;
 			children = (
-				E5230281280E009F0096B615 /* test_manifest.json */,
 				E549653227FBEAC400913BD6 /* toc_manifest.json */,
 				E549653427FBEB5100913BD6 /* non_toc_manifest.json */,
 			);
@@ -510,7 +507,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */,
-				E5230282280E009F0096B615 /* test_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

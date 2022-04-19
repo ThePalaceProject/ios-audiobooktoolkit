@@ -65,13 +65,7 @@ public final class AudiobookTableOfContents: NSObject {
 extension AudiobookTableOfContents: UITableViewDelegate {
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let spineElement = self.networkService.spine[indexPath.row]
-
-        guard let chapter = spineElement.chapter else {
-            ATLog(.debug, "Selected chapter unavailable")
-            return
-        }
-
-        self.player.playAtLocation(chapter)
+        self.player.playAtLocation(spineElement.chapter)
         self.delegate?.audiobookTableOfContentsUserSelected(spineItem: spineElement)
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: true)
     }
@@ -108,7 +102,7 @@ extension AudiobookTableOfContents: PlayerDelegate {
         self.delegate?.audiobookTableOfContentsDidRequestReload(self)
     }
 
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation?, withError error: NSError?) { }
+    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
     public func player(_ player: Player, didComplete chapter: ChapterLocation) { }
     public func playerDidUnload(_ player: Player) { }
 }

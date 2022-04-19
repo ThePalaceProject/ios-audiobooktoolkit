@@ -184,9 +184,9 @@ extension DefaultAudiobookManager: PlayerDelegate {
         self.mediaControlHandler.enableMediaControlCommands()
     }
     public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) { }
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation?, withError error: NSError?) { }
+    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
     public func player(_ player: Player, didComplete chapter: ChapterLocation) {
-        let sortedSpine = self.networkService.spine.compactMap{ $0.chapter }.sorted{ $0 < $1 }
+        let sortedSpine = self.networkService.spine.map{ $0.chapter }.sorted{ $0 < $1 }
         guard let firstChapter = sortedSpine.first,
             let lastChapter = sortedSpine.last else {
                 ATLog(.error, "Audiobook Spine is corrupt.")

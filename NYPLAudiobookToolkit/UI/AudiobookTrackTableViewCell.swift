@@ -11,8 +11,8 @@ class AudiobookTrackTableViewCell: UITableViewCell {
 
     func configureFor(_ spineElement: SpineElement) {
         let progress = spineElement.downloadTask.downloadProgress
-        let spineDuration = spineElement.chapter?.duration ?? 0.0
-        let title = spineElement.chapter?.title ?? ""
+        let spineDuration = spineElement.chapter.duration
+        let title = spineElement.chapter.title
         let detailLabel: String
         let labelAlpha: CGFloat
         if progress == 0 {

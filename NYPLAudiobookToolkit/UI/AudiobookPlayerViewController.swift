@@ -292,10 +292,10 @@ let SkipTimeInterval: Double = 15
         let timeLeftAfterChapter = spine.reduce(timeLeftInChapter, { (result, element) -> TimeInterval in
             var newResult: TimeInterval = 0
             if addUpStuff {
-                newResult = result + (element.chapter?.duration ?? 0.0)
+                newResult = result + element.chapter.duration
             }
 
-            if let chapter = element.chapter, chapter.inSameChapter(other: self.currentChapterLocation) {
+            if element.chapter.inSameChapter(other: self.currentChapterLocation) {
                 newResult = timeLeftInChapter
                 addUpStuff = true
             }
@@ -571,11 +571,7 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
 
         self.playbackControlView.showPauseButtonIfNeeded()
 
-        guard let selectedChapter = item.chapter else {
-            //TODO: Present an error to user
-            return
-        }
-
+        let selectedChapter = item.chapter
         let timeLeftInBook = self.timeLeftAfter(chapter: selectedChapter)
         self.seekBar.setOffset(
             selectedChapter.playheadOffset,
@@ -659,7 +655,7 @@ extension AudiobookPlayerViewController: PlayerDelegate {
         self.updatePlayPauseButtonIfNeeded()
     }
 
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation?, withError error: NSError?) {
+    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
         presentAlertAndLog(error: error)
     }
 
