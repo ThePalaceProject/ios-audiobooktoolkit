@@ -110,7 +110,7 @@ class PlayerManipulationTest: XCTestCase {
                 playheadOffset: 0,
                 title: "title",
                 audiobookID: "somebook"
-            )!
+            )
             let mock = SpineElementMock(key: "something\(i)", downloadTask: fakeDownloadTask, chapter: chapter)
             mockElements.append(mock)
         }

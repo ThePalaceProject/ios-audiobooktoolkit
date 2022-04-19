@@ -15,7 +15,7 @@ final class OverdriveSpineElement: SpineElement {
                                startOffset: 0,
                                playheadOffset: 0,
                                title: self.title,
-                               audiobookID: self.audiobookID)!
+                               audiobookID: self.audiobookID)
     }()
     
     let key: String

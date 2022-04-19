@@ -187,7 +187,7 @@ let SkipTimeInterval: Double = 15
             startOffset: 0,
             playheadOffset: 0,
             title: "test title",
-            audiobookID: "12345")!
+            audiobookID: "12345")
 
         self.toolbar.autoPin(toBottomLayoutGuideOf: self, withInset: 0)
         self.toolbar.autoPinEdge(.left, to: .left, of: self.view)
