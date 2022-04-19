@@ -121,11 +121,7 @@ import Foundation
             self.part == rhs.part
     }
 
-    public init?(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
-        guard startOffset <= duration else {
-            return nil
-        }
-        
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part

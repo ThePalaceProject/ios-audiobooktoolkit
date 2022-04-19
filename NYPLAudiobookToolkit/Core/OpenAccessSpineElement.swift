@@ -19,7 +19,7 @@ final class OpenAccessSpineElement: SpineElement {
             playheadOffset: 0,
             title: self.title,
             audiobookID: self.audiobookID
-            )!
+            )
     }()
 
     let key: String
