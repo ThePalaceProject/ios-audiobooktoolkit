@@ -62,7 +62,10 @@ class AudiobookTOCTests: XCTestCase {
     func testNonTockManifest() throws {
         validate(manifest: "non_toc_manifest", against: nonTocManifestExpeectedResults)
     }
-
+    
+    func testOddManifest() throws {
+        validate(manifest: "test_manifest", against: tocManaifestExpectedResults)
+    }
     private func validate(manifest: String, against results: [TestOutcome]) {
         let bundle = Bundle(for: AudiobookTOCTests.self)
         let url = bundle.url(forResource: manifest, withExtension: "json")!
@@ -74,6 +77,9 @@ class AudiobookTOCTests: XCTestCase {
         }
 
         for (index, element) in spine.enumerated() {
+            
+            let chapter = element.chapter
+            print(chapter)
             XCTAssertEqual(element.chapterNumber, results[index].chapter)
             XCTAssertEqual(element.offset, results[index].offset)
             XCTAssertEqual(element.duration, results[index].duration)

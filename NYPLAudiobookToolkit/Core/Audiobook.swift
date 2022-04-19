@@ -29,7 +29,7 @@ import UIKit
 @objc public protocol SpineElement: class {
     var key: String { get }
     var downloadTask: DownloadTask { get }
-    var chapter: ChapterLocation { get }
+    var chapter: ChapterLocation? { get }
 }
 
 @objc public protocol Audiobook: class {

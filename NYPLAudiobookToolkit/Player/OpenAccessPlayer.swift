@@ -56,13 +56,14 @@ class OpenAccessPlayer: NSObject, Player {
         } else {
             offset = 0
         }
+        guard let currentChapter = self.chapterAtCurrentCursor else { return nil }
         return ChapterLocation(
-            number: self.chapterAtCurrentCursor.number,
-            part: self.chapterAtCurrentCursor.part,
-            duration: self.chapterAtCurrentCursor.duration,
+            number: currentChapter.number,
+            part: currentChapter.part,
+            duration: currentChapter.duration,
             startOffset: 0,
             playheadOffset: offset,
-            title: self.chapterAtCurrentCursor.title,
+            title: currentChapter.title,
             audiobookID: self.audiobookID
         )
     }
@@ -116,10 +117,10 @@ class OpenAccessPlayer: NSObject, Player {
     {
         if self.isPlaying {
             self.avQueuePlayer.pause()
-        } else if self.cursorQueuedToPlay != nil {
+        } else if self.cursorQueuedToPlay != nil, let currentChapter = self.chapterAtCurrentCursor {
             self.cursorQueuedToPlay = nil
             NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
-            notifyDelegatesOfPauseFor(chapter: self.chapterAtCurrentCursor)
+            notifyDelegatesOfPauseFor(chapter: currentChapter)
         }
     }
 
@@ -142,10 +143,10 @@ class OpenAccessPlayer: NSObject, Player {
                                                     currentChapterDuration: chapterDuration,
                                                     requestedSkipDuration: timeInterval)
 
-        if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset) {
+        if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset),
+            let newPlayheadLocation = move(cursor: self.cursor, to: destinationLocation).location {
             self.playAtLocation(destinationLocation)
-            let newPlayhead = move(cursor: self.cursor, to: destinationLocation)
-            completion?(newPlayhead.location)
+            completion?(newPlayheadLocation)
         } else {
             ATLog(.error, "New chapter location could not be created from skip.")
             return
@@ -171,16 +172,16 @@ class OpenAccessPlayer: NSObject, Player {
         switch newItemDownloadStatus {
         case .saved(_):
             // If we're in the same AVPlayerItem, apply seek directly with AVPlayer.
-            if newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor) {
-                self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+            if let location = newPlayhead.location, location.inSameChapter(other: self.chapterAtCurrentCursor) {
+                self.seekWithinCurrentItem(newOffset: location.playheadOffset)
                 return
             }
             // Otherwise, check for an AVPlayerItem at the new cursor, rebuild the player
             // queue starting from there, and then begin playing at that location.
             self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
-                if success {
+                if success, let location = newPlayhead.location {
                     self.cursor = newPlayhead.cursor
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+                    self.seekWithinCurrentItem(newOffset: location.playheadOffset)
                     self.play()
                 } else {
                     ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
@@ -219,9 +220,9 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         currentItem.seek(to: CMTimeMakeWithSeconds(Float64(newOffset), preferredTimescale: Int32(1))) { finished in
-            if finished {
+            if finished, let currentChapter = self.chapterAtCurrentCursor {
                 ATLog(.debug, "Seek operation finished.")
-                self.notifyDelegatesOfPlaybackFor(chapter: self.chapterAtCurrentCursor)
+                self.notifyDelegatesOfPlaybackFor(chapter: currentChapter)
             } else {
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
             }
@@ -238,7 +239,7 @@ class OpenAccessPlayer: NSObject, Player {
         self.delegates.remove(delegate)
     }
 
-    private var chapterAtCurrentCursor: ChapterLocation
+    private var chapterAtCurrentCursor: ChapterLocation?
     {
         return self.cursor.currentElement.chapter
     }
@@ -267,8 +268,8 @@ class OpenAccessPlayer: NSObject, Player {
                 if let cursor = self.cursorQueuedToPlay {
                     self.cursorQueuedToPlay = nil
                     self.buildNewPlayerQueue(atCursor: cursor) { success in
-                        if success {
-                            self.seekWithinCurrentItem(newOffset: self.chapterAtCurrentCursor.playheadOffset)
+                        if success, let currentChapter = self.chapterAtCurrentCursor {
+                            self.seekWithinCurrentItem(newOffset: currentChapter.playheadOffset)
                             self.play()
                         } else {
                             ATLog(.error, "User attempted to play when the player wasn't ready.")
@@ -408,7 +409,10 @@ class OpenAccessPlayer: NSObject, Player {
                 ATLog(.debug, "End of book reached.")
                 self.pause()
             }
-            self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
+
+            if let currentChapter = currentCursor.currentElement.chapter {
+                self.notifyDelegatesOfPlaybackEndFor(chapter: currentChapter)
+            }
         }
     }
 
@@ -573,7 +577,7 @@ extension OpenAccessPlayer{
         }
     }
 
-    fileprivate func notifyDelegatesOfPlaybackFailureFor(chapter: ChapterLocation, _ error: NSError?) {
+    fileprivate func notifyDelegatesOfPlaybackFailureFor(chapter: ChapterLocation?, _ error: NSError?) {
         self.delegates.allObjects.forEach { (delegate) in
             delegate.player(self, didFailPlaybackOf: chapter, withError: error)
         }
