@@ -38,12 +38,17 @@ class OpenAccessPlayer: NSObject, Player {
 
     /// AVPlayer returns 0 for being "paused", but the protocol expects the
     /// "user-chosen rate" upon playing.
-    var playbackRate: PlaybackRate = .normalTime {
-        didSet {
+    var playbackRate: PlaybackRate {
+        set {
             if self.avQueuePlayer.rate != 0.0 {
-                let rate = PlaybackRate.convert(rate: self.playbackRate)
+                let rate = PlaybackRate.convert(rate: newValue)
                 self.avQueuePlayer.rate = rate
+                savePlaybackSpeed()
             }
+        }
+
+        get {
+            fetchPlaybackSpeed() ?? .normalTime
         }
     }
 
