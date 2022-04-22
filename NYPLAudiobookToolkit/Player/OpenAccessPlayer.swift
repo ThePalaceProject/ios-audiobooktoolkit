@@ -43,8 +43,8 @@ class OpenAccessPlayer: NSObject, Player {
             if self.avQueuePlayer.rate != 0.0 {
                 let rate = PlaybackRate.convert(rate: newValue)
                 self.avQueuePlayer.rate = rate
-                savePlaybackSpeed()
             }
+            savePlaybackSpeed(rate: newValue)
         }
 
         get {

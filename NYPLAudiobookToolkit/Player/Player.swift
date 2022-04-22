@@ -85,8 +85,8 @@ import Foundation
 }
 
 extension Player {
-    func savePlaybackSpeed() {
-        UserDefaults.standard.set(playbackRate.rawValue, forKey: "playback_rate")
+    func savePlaybackSpeed(rate: PlaybackRate) {
+        UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
     }
 
     func fetchPlaybackSpeed() -> PlaybackRate? {
