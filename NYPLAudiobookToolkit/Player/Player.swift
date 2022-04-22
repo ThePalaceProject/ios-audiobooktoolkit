@@ -85,11 +85,11 @@ import Foundation
 }
 
 extension Player {
-    func savePlaybackSpeed(rate: PlaybackRate) {
+    func savePlaybackRate(rate: PlaybackRate) {
         UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
     }
 
-    func fetchPlaybackSpeed() -> PlaybackRate? {
+    func fetchPlaybackRate() -> PlaybackRate? {
         guard let rate = UserDefaults.standard.value(forKey: "playback_rate") as? Int else { return nil }
         return PlaybackRate(rawValue: rate)
     }

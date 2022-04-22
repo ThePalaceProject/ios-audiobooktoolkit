@@ -44,11 +44,12 @@ class OpenAccessPlayer: NSObject, Player {
                 let rate = PlaybackRate.convert(rate: newValue)
                 self.avQueuePlayer.rate = rate
             }
-            savePlaybackSpeed(rate: newValue)
+
+            savePlaybackRate(rate: newValue)
         }
 
         get {
-            fetchPlaybackSpeed() ?? .normalTime
+            fetchPlaybackRate() ?? .normalTime
         }
     }
 
