@@ -84,6 +84,17 @@ import Foundation
     func removeDelegate(_ delegate: PlayerDelegate)
 }
 
+extension Player {
+    func savePlaybackRate(rate: PlaybackRate) {
+        UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
+    }
+
+    func fetchPlaybackRate() -> PlaybackRate? {
+        guard let rate = UserDefaults.standard.value(forKey: "playback_rate") as? Int else { return nil }
+        return PlaybackRate(rawValue: rate)
+    }
+}
+
 /// This class represents a location in a book.
 @objcMembers public final class ChapterLocation: NSObject, Comparable, Codable {
     public let title: String?
