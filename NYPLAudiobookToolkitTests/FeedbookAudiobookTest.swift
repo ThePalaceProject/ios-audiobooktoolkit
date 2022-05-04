@@ -55,6 +55,16 @@ class FeedbookAudiobookTest: XCTestCase {
     XCTAssertNil(AudiobookFactory.audiobook(feedbookObj) , "AudiobookFactory should return nil for expired book")
   }
   
+    func testAudiobook() {
+      let bundle = Bundle(for: AudiobookTOCTests.self)
+      let url = bundle.url(forResource: "SummerWivesManifest", withExtension: "json")!
+      
+      let jsonData = try! Data(contentsOf: url, options: .mappedIfSafe)
+      let string = try! JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any]
+      let audiobook = AudiobookFactory.audiobook(string)
+      XCTAssertNotNil(audiobook)
+    }
+    
   // This test is disabled until we populate `feedbookJson` with some json data
 //  func testFeedBook() {
 //    let feedbookData = feedbookJson.data(using: .utf8)

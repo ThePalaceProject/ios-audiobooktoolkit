@@ -28,13 +28,13 @@ final class OpenAccessAudiobook: Audiobook {
             ATLog(.error, "OpenAccessAudiobook failed to init from JSON: \n\(JSON ?? "nil")")
             return nil
         }
-        
+
         // Feedbook DRM Check
         if !FeedbookDRMProcessor.processManifest(payload, drmData: &drmData) {
             ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON ?? "nil")")
             return nil
         }
-        
+
         let mappedSpine = payloadSpine.enumerated().compactMap { (tupleItem:(index: Int, element: Any)) -> OpenAccessSpineElement? in
             OpenAccessSpineElement(
                 JSON: tupleItem.element,
@@ -44,6 +44,7 @@ final class OpenAccessAudiobook: Audiobook {
             }.sorted {
                 return $0.chapterNumber < $1.chapterNumber
             }
+
         if (mappedSpine.count == 0 || mappedSpine.count != payloadSpine.count) {
             ATLog(.error, "Failure to create any or all spine elements from the manifest.")
             return nil

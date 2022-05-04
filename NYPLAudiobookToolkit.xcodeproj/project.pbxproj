@@ -80,6 +80,8 @@
 		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
+		E5A2EB5F281C649000527D6C /* SummerWivesManifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A2EB5E281C649000527D6C /* SummerWivesManifest.json */; };
+		E5A2EB61281C6ADB00527D6C /* working_cantook_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A2EB60281C6ADB00527D6C /* working_cantook_manifest.json */; };
 		E6160DFF2188EBFE0048755C /* BufferActivityIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */; };
 		E67888EA214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
@@ -175,6 +177,8 @@
 		E549653227FBEAC400913BD6 /* toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = toc_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
+		E5A2EB5E281C649000527D6C /* SummerWivesManifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = SummerWivesManifest.json; sourceTree = "<group>"; };
+		E5A2EB60281C6ADB00527D6C /* working_cantook_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = working_cantook_manifest.json; sourceTree = "<group>"; };
 		E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BufferActivityIndicator.swift; sourceTree = "<group>"; };
 		E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTrackTableViewCell.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -389,6 +393,8 @@
 		E549653127FBEAA900913BD6 /* TestResources */ = {
 			isa = PBXGroup;
 			children = (
+				E5A2EB60281C6ADB00527D6C /* working_cantook_manifest.json */,
+				E5A2EB5E281C649000527D6C /* SummerWivesManifest.json */,
 				E549653227FBEAC400913BD6 /* toc_manifest.json */,
 				E549653427FBEB5100913BD6 /* non_toc_manifest.json */,
 			);
@@ -507,6 +513,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */,
+				E5A2EB5F281C649000527D6C /* SummerWivesManifest.json in Resources */,
+				E5A2EB61281C6ADB00527D6C /* working_cantook_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
