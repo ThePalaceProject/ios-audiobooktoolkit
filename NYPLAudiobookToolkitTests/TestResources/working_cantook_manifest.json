@@ -1,0 +1,499 @@
+{
+  "@context": "http://readium.org/webpub/default.jsonld",
+  "metadata": {
+    "@type": "http://schema.org/book",
+    "title": "Ordinary Girls  Muchachas ordinarias (Spanish edition)",
+    "author": "Jaquira Diaz, Maria Victoria Martinez",
+    "identifier": "urn:uuid:fc79d386-4452-41f2-8877-6fe65558bf1e",
+    "language": "en",
+    "modified": "N/A",
+    "http://www.feedbooks.com/audiobooks/rights": {
+      "start": null,
+      "end": "2022-05-20T18:43:06Z"
+    },
+    "http://www.feedbooks.com/audiobooks/signature": {
+      "issuer": "https://www.cantookaudio.com",
+      "algorithm": "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+      "value": "hVWdXDFW0lqlPRgPe61w9E9g6kfgJNgyewcnDFmlJLm656w6LVSmzbVvOOGa0eWn8m9Cbfn4SVwrJc8U0escODRDP89J0O4l/BUrlVdmhgK0aK9nsCw2gzeH1z7cEPcIhBcGCnIdPNWmFa3cXdBvxRRd0ZZF5URcqq8Ub3N4qgTF4P5AF+jlUKp6IHNbQbePIcZS8eTTyYK1yu5xZIDO6ybfT4RQPdddBmcz5ij5FVBIjfzibmcClr+5Am/T3E/BRHKLKZA/XhI52SVOVdo/BEssLkFWOJRYBQiIL4EX0WORuLckLheIOOAOzc6pBfD7XeXtuYAlEYPi2kVzsVeXSw=="
+    }
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "http://listen.cantookaudio.com/a317274a-1919-4460-abdd-d4f77ec8a5c6?nonce=c0DrSp5IF6uwvh1C9UDO&sig=HYjLb8Vs5ci5akNrZvd9-yTnhVXpEoOG4bWQ25HVqKs=",
+      "type": "application/audiobook+json"
+    },
+    {
+      "rel": "cover",
+      "href": "https://storage.googleapis.com/cantookhub-media-cant/f1/2760192de33f45ad675914925124d2171ea5f7.jpg",
+      "type": "image/jpeg"
+    },
+    {
+      "rel": "return",
+      "href": "https://listen.cantookaudio.com/return/a317274a-1919-4460-abdd-d4f77ec8a5c6",
+      "type": "application/audiobook+json"
+    }
+  ],
+  "spine": [
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/42ba1271-c060-4550-a865-e0a7de0fb437.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 1",
+      "duration": 35,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/42ba1271-c060-4550-a865-e0a7de0fb437.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/653cd3e1-5996-4b40-8de8-7897ec0191ec.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 2",
+      "duration": 33,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/653cd3e1-5996-4b40-8de8-7897ec0191ec.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/f2408471-2509-4a9e-bcc1-87f929cc1427.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 3",
+      "duration": 260,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/f2408471-2509-4a9e-bcc1-87f929cc1427.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/6cc1d792-2842-40a8-a63a-bb2436859420.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 4",
+      "duration": 7,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/6cc1d792-2842-40a8-a63a-bb2436859420.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/3a1edd8b-0c98-476f-b3e7-0d4b0068c322.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 5",
+      "duration": 1386,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/3a1edd8b-0c98-476f-b3e7-0d4b0068c322.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/cddd6888-5b1b-40a6-9dbb-50963ea22a5d.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 6",
+      "duration": 893,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/cddd6888-5b1b-40a6-9dbb-50963ea22a5d.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/bca37737-fe43-4811-82ab-6d61b8a406c2.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 7",
+      "duration": 2171,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/bca37737-fe43-4811-82ab-6d61b8a406c2.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/26c93f15-c333-4e0f-9075-655c08db1c16.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 8",
+      "duration": 2449,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/26c93f15-c333-4e0f-9075-655c08db1c16.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/b09b1ede-706e-46fc-9a7c-43c3b78f89f8.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 9",
+      "duration": 6,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/b09b1ede-706e-46fc-9a7c-43c3b78f89f8.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2efc1fd8-3fc4-4d9a-82a8-2d50be12b1a2.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 10",
+      "duration": 4468,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2efc1fd8-3fc4-4d9a-82a8-2d50be12b1a2.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2ebc0920-e606-4dec-abfb-d8fb09e7fb84.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 11",
+      "duration": 5063,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2ebc0920-e606-4dec-abfb-d8fb09e7fb84.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/9de4fdf1-afed-4ca9-9a87-3ea001d60770.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 12",
+      "duration": 2752,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/9de4fdf1-afed-4ca9-9a87-3ea001d60770.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/90084423-4f6e-4971-8204-9db069e4e7d6.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 13",
+      "duration": 1861,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/90084423-4f6e-4971-8204-9db069e4e7d6.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2ce8a349-34bd-4ec3-8475-3af4da6c8d32.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 14",
+      "duration": 1616,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/2ce8a349-34bd-4ec3-8475-3af4da6c8d32.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/19b62e73-ba30-44ba-8243-b940fc271975.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 15",
+      "duration": 6,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/19b62e73-ba30-44ba-8243-b940fc271975.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/6301e240-667a-4960-94c9-cbcf98f4f7d1.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 16",
+      "duration": 2615,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/6301e240-667a-4960-94c9-cbcf98f4f7d1.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/8e09f7aa-ea18-406b-9442-fa7d729927e2.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 17",
+      "duration": 2542,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/8e09f7aa-ea18-406b-9442-fa7d729927e2.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/31a7cc7c-88e8-4e69-ac20-ef9aee2bde03.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 18",
+      "duration": 1741,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/31a7cc7c-88e8-4e69-ac20-ef9aee2bde03.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/7014e122-2a4d-432e-aa8a-16b87ada8b51.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 19",
+      "duration": 2928,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/7014e122-2a4d-432e-aa8a-16b87ada8b51.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/b193dac3-dbd1-416f-b27f-95d91eeaa795.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 20",
+      "duration": 7,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/b193dac3-dbd1-416f-b27f-95d91eeaa795.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/c138f789-01ab-481a-b3b5-d9414ec54ad6.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 21",
+      "duration": 5164,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/c138f789-01ab-481a-b3b5-d9414ec54ad6.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/5014ac09-395e-40d0-9436-a5c9820c897f.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 22",
+      "duration": 221,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/5014ac09-395e-40d0-9436-a5c9820c897f.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    },
+    {
+      "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/d41ba434-1212-49a1-911f-fca72514dfea.mp4",
+      "type": "audio/mp4",
+      "title": "Chapter 23",
+      "duration": 63,
+      "bitrate": 64,
+      "alternates": [
+        {
+          "href": "https://listen.cantookaudio.com/item/a317274a-1919-4460-abdd-d4f77ec8a5c6/d41ba434-1212-49a1-911f-fca72514dfea.ogg",
+          "type": "audio/ogg",
+          "bitrate": 32
+        }
+      ],
+      "properties": {
+        "encrypted": {
+          "scheme": "http://www.feedbooks.com/audiobooks/access-restriction",
+          "profile": "https://www.cantookaudio.com"
+        }
+      }
+    }
+  ]
+}
