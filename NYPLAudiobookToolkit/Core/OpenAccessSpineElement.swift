@@ -1,3 +1,4 @@
+import Darwin
 enum OpenAccessSpineElementMediaType: String {
     case audioMPEG = "audio/mpeg"
     case audioMP4 = "audio/mp4"
@@ -53,16 +54,20 @@ final class OpenAccessSpineElement: SpineElement {
         self.urlString = urlString
         self.duration = duration
 
-        guard let mediaTypeString = payload["type"] as? String,
-            let mediaType = OpenAccessSpineElementMediaType(rawValue: mediaTypeString) else {
-                ATLog(.error, "Media Type of open acess spine element not supported.")
-                return nil
-        }
-        self.mediaType = mediaType
-
-        let alternatesJson = payload["alternates"] as? [[String:String]]
+        let alternatesJson = payload["alternates"] as? [[String:Any]]
         self.alternateUrls = OpenAccessSpineElement.parseAlternateUrls(alternatesJson)
         
+        if let primaryMediaTypeString = payload["type"] as? String,
+            let primaryMediaType = OpenAccessSpineElementMediaType(rawValue: primaryMediaTypeString)
+        {
+            self.mediaType = primaryMediaType
+        } else if let secondaryMediaType = self.alternateUrls?.first?.0 {
+            self.mediaType = secondaryMediaType
+        } else {
+            ATLog(.error, "Media Type of open acess spine element not supported.")
+            return nil
+        }
+
         // Feedbooks DRM
         var profileVal: String? = nil
         if let props = payload["properties"] as? [String: Any],
@@ -74,15 +79,15 @@ final class OpenAccessSpineElement: SpineElement {
         self.feedbooksProfile = profileVal
     }
 
-    private class func parseAlternateUrls(_ json: [[String:String]]?) -> [(OpenAccessSpineElementMediaType, URL)]? {
+    private class func parseAlternateUrls(_ json: [[String:Any]]?) -> [(OpenAccessSpineElementMediaType, URL)]? {
         guard let json = json else {
             ATLog(.debug, "No alternate links provided in spine.")
             return nil
         }
         let alternates = json.compactMap({ (alternateLink) -> (OpenAccessSpineElementMediaType, URL)? in
-            if let typeString = alternateLink["type"],
+            if let typeString = alternateLink["type"] as? String,
                 let mediaType = OpenAccessSpineElementMediaType(rawValue: typeString),
-                let urlString = alternateLink["href"],
+                let urlString = alternateLink["href"] as? String,
                 let url = URL(string: urlString) {
                 return (mediaType, url)
             } else {
