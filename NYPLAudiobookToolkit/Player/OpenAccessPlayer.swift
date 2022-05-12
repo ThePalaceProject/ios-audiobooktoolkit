@@ -15,8 +15,8 @@ class OpenAccessPlayer: NSObject, Player {
     }
     
     var isDrmOk: Bool {
-        didSet(oldValue) {
-            if !oldValue {
+        didSet {
+            if !isDrmOk {
                 pause()
                 notifyDelegatesOfPlaybackFailureFor(chapter: self.chapterAtCurrentCursor, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil))
                 unload()

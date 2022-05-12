@@ -152,7 +152,7 @@ var sharedLogHandler: LogHandler?
 
     @objc func timerDidTick1Second(_ timer: Timer) {
         self.timerDelegate?.audiobookManager(self, didUpdate: timer)
-//        guard self.audiobook.player.isLoaded else { return }
+        guard self.audiobook.player.isLoaded else { return }
         if let chapter = self.audiobook.player.currentChapterLocation {
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
             if let title = chapter.title {
