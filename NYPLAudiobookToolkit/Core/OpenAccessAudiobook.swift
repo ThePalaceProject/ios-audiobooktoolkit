@@ -12,9 +12,9 @@ final class OpenAccessAudiobook: Audiobook {
             // Access to `drmData` is private and can only be modified by internal code
             return (drmData["status"] as? DrmStatus) ?? DrmStatus.succeeded
         }
-        set(newStatus) {
-            drmData["status"] = newStatus
-            player.isDrmOk = newStatus == DrmStatus.succeeded
+        set {
+            drmData["status"] = newValue
+            player.isDrmOk = (DrmStatus.succeeded == newValue)
         }
     }
     
