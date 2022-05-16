@@ -50,8 +50,6 @@ final class OpenAccessSpineElement: SpineElement {
         }
         let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         self.title = payload["title"] as? String ?? String(format: defaultTitleFormat, "\(index + 1)")
-        self.url = url
-        self.urlString = urlString
         self.duration = duration
 
         let alternatesJson = payload["alternates"] as? [[String:Any]]
@@ -60,8 +58,12 @@ final class OpenAccessSpineElement: SpineElement {
         if let primaryMediaTypeString = payload["type"] as? String,
             let primaryMediaType = OpenAccessSpineElementMediaType(rawValue: primaryMediaTypeString)
         {
+            self.url = url
+            self.urlString = urlString
             self.mediaType = primaryMediaType
-        } else if let secondaryMediaType = self.alternateUrls?.first?.0 {
+        } else if let secondaryMediaType = self.alternateUrls?.first?.0, let url = self.alternateUrls?.first?.1 {
+            self.url = url
+            self.urlString = url.absoluteString
             self.mediaType = secondaryMediaType
         } else {
             ATLog(.error, "Media Type of open acess spine element not supported.")
