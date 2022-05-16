@@ -53,7 +53,7 @@ final class OpenAccessSpineElement: SpineElement {
         self.duration = duration
 
         let alternatesJson = payload["alternates"] as? [[String:Any]]
-        self.alternateUrls = OpenAccessSpineElement.parseAlternateUrls(alternatesJson)
+        var alternateUrls = OpenAccessSpineElement.parseAlternateUrls(alternatesJson)
         
         if let primaryMediaTypeString = payload["type"] as? String,
             let primaryMediaType = OpenAccessSpineElementMediaType(rawValue: primaryMediaTypeString)
@@ -61,7 +61,10 @@ final class OpenAccessSpineElement: SpineElement {
             self.url = url
             self.urlString = urlString
             self.mediaType = primaryMediaType
-        } else if let secondaryMediaType = self.alternateUrls?.first?.0, let url = self.alternateUrls?.first?.1 {
+            self.alternateUrls = alternateUrls
+        } else if let secondaryMediaType = alternateUrls?.first?.0, let url = alternateUrls?.first?.1 {
+            alternateUrls?.removeFirst()
+            self.alternateUrls = alternateUrls
             self.url = url
             self.urlString = url.absoluteString
             self.mediaType = secondaryMediaType
