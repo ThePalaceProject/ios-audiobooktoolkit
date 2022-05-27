@@ -211,14 +211,27 @@ class OpenAccessPlayer: NSObject, Player {
         self.playAtLocation(location)
         self.pause()
     }
+    
+    private var retryCount = 0
 
     /// Moving within the current AVPlayerItem.
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
         guard let currentItem = self.avQueuePlayer.currentItem else {
-            ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
+            guard retryCount <= 2 else {
+                ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
+                return
+            }
+
+            /// Attempts to seek on the current AVPlayerItem prior to initialization fail
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.retryCount += 1
+                self?.seekWithinCurrentItem(newOffset: newOffset)
+            }
+
             return
         }
+
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
             ATLog(.debug, "Item not ready to play. Queueing seek operation.")
             self.queuedSeekOffset = newOffset
