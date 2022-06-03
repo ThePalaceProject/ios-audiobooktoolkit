@@ -48,6 +48,8 @@ final class OpenAccessSpineElement: SpineElement {
                 ATLog(.error, "OpenAccessSpineElement failed to init from JSON: \n\(JSON ?? "nil")")
                 return nil
         }
+        
+        print("SpineElement: \(JSON)")
         let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         self.title = payload["title"] as? String ?? String(format: defaultTitleFormat, "\(index + 1)")
         self.url = url
