@@ -168,7 +168,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         // Feedbooks DRM
         // CantookAudio does not support Authorization fields causing downloads to fail, this fix may need to be less exclusive
         // if future issues arise with other providers.
-        if let profile = self.feedbooksProfile, !profile.contains("cantookaudio") {
+        if let profile = self.feedbooksProfile {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
         }
         
