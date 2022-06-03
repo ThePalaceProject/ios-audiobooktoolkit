@@ -16,6 +16,7 @@ let LCPDownloadTaskCompleteNotification = NSNotification.Name(rawValue: "LCPDown
 final class LCPDownloadTask: DownloadTask {
     
     func fetch() {
+        print("Fetching in LCPDownloadTask")
         // No need to download files.
     }
     

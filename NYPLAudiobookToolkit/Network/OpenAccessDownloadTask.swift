@@ -46,6 +46,8 @@ final class OpenAccessDownloadTask: DownloadTask {
     /// update state to the delegates. Otherwise, attempt to download the file
     /// referenced in the spine element.
     func fetch() {
+        print("Fetching in OpenAccessDownloadTask")
+
         switch self.assetFileStatus() {
         case .saved(_):
             downloadProgress = 1.0
@@ -53,13 +55,17 @@ final class OpenAccessDownloadTask: DownloadTask {
         case .missing(let missingAssetURL):
             switch urlMediaType {
             case .rbDigital:
+                print("RBDigitalDownload")
                 self.downloadAssetForRBDigital(toLocalDirectory: missingAssetURL)
             case .audioMPEG:
+                print("audioMPEG")
                 fallthrough
             case .audioMP4:
+                print("audioMP4")
                 self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory: missingAssetURL)
             }
         case .unknown:
+            print("unknown")
             self.delegate?.downloadTaskFailed(self, withError: nil)
         }
     }
