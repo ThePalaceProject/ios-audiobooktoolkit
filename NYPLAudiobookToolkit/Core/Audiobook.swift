@@ -65,7 +65,9 @@ import UIKit
                   type == "audiobook-overdrive" {
             audiobook = OverdriveAudiobook(JSON: JSON)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
-            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
+            audiobook = OpenAccessAudiobook(JSON: JSON)
+
+//            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
             audiobook = OpenAccessAudiobook(JSON: JSON)
         }
