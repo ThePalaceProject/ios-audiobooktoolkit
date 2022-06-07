@@ -65,7 +65,8 @@ import UIKit
                   type == "audiobook-overdrive" {
             audiobook = OverdriveAudiobook(JSON: JSON)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
-            audiobook = OpenAccessAudiobook(JSON: JSON)
+            let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
+            audiobook = FindawayAudiobookClass?.init(JSON: JSON)
 
 //            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
