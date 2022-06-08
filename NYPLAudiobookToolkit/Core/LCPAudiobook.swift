@@ -42,7 +42,7 @@ import Foundation
     }
     
     @available(*, deprecated, message: "Use init?(JSON: Any?, decryptor: DRMDecryptor?) instead")
-    public required convenience init?(JSON: Any?) {
+    public required convenience init?(JSON: Any?, token: String?) {
         self.init(JSON: JSON, decryptor: nil)
     }
     

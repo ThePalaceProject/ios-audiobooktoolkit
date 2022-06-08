@@ -15,7 +15,7 @@
         }
     }
     
-    public required init?(JSON: Any?) {
+    public required init?(JSON: Any?, token: String?) {
         guard let payload = JSON as? [String: Any],
         let identifier = payload["id"] as? String,
         let links = payload["links"] as? [String: Any],

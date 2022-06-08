@@ -2,6 +2,7 @@ final class OpenAccessAudiobook: Audiobook {
     let player: Player
     var spine: [SpineElement]
     let uniqueIdentifier: String
+    var token: String? = nil
     
     private var drmData: [String: Any]
     
@@ -17,8 +18,8 @@ final class OpenAccessAudiobook: Audiobook {
             player.isDrmOk = (DrmStatus.succeeded == newValue)
         }
     }
-    
-    public required init?(JSON: Any?) {
+
+    public required init?(JSON: Any?, token: String?) {
         drmData = [String: Any]()
         drmData["status"] = DrmStatus.succeeded
         guard let payload = JSON as? [String: Any],
@@ -28,7 +29,8 @@ final class OpenAccessAudiobook: Audiobook {
             ATLog(.error, "OpenAccessAudiobook failed to init from JSON: \n\(JSON ?? "nil")")
             return nil
         }
-        
+        self.token = token
+
         // Feedbook DRM Check
         if !FeedbookDRMProcessor.processManifest(payload, drmData: &drmData) {
             ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON ?? "nil")")
@@ -39,7 +41,8 @@ final class OpenAccessAudiobook: Audiobook {
             OpenAccessSpineElement(
                 JSON: tupleItem.element,
                 index: UInt(tupleItem.index),
-                audiobookID: identifier
+                audiobookID: identifier,
+                token: token
             )
             }.sorted {
                 return $0.chapterNumber < $1.chapterNumber

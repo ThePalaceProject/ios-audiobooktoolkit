@@ -39,7 +39,7 @@ import UIKit
     var drmStatus: DrmStatus { get set }
     func checkDrmAsync()
     func deleteLocalContent()
-    init?(JSON: Any?)
+    init?(JSON: Any?, token: String?)
 }
 
 /// Host app should instantiate a audiobook object with JSON.
@@ -51,7 +51,7 @@ import UIKit
     ///   - JSON: Audiobook and spine elements data
     ///   - decryptor: Optional DRM decryptor for encrypted audio files
     /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?) -> Audiobook? {
+    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
         guard let JSON = JSON as? [String: Any] else { return nil }
         let metadata = JSON["metadata"] as? [String: Any]
         let drm = metadata?["encrypted"] as? [String: Any]
@@ -60,14 +60,16 @@ import UIKit
 
         if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
             let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
-            audiobook = FindawayAudiobookClass?.init(JSON: JSON)
+            audiobook = FindawayAudiobookClass?.init(JSON: JSON, token: nil)
         } else if let type = JSON["formatType"] as? String,
                   type == "audiobook-overdrive" {
-            audiobook = OverdriveAudiobook(JSON: JSON)
+            audiobook = OverdriveAudiobook(JSON: JSON, token: nil)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
-            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
+            audiobook = OpenAccessAudiobook(JSON: JSON, token: token)
+
+//            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
-            audiobook = OpenAccessAudiobook(JSON: JSON)
+            audiobook = OpenAccessAudiobook(JSON: JSON, token: nil)
         }
 
         ATLog(.debug, "checkDrmAsync")
