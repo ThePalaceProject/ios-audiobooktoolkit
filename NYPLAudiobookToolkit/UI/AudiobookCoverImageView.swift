@@ -10,7 +10,7 @@ public class AudiobookCoverImageView: UIImageView {
         accessibilityIdentifier = "cover_art"
         layer.cornerRadius = 10
         layer.masksToBounds = true
-        contentMode = .scaleAspectFit
+        contentMode = .scaleAspectFill
         isAccessibilityElement = true
         accessibilityLabel = NSLocalizedString("Cover", bundle: Bundle.audiobookToolkit()!, value: "Cover", comment:"The art on an album cover.")
         if #available(iOS 11.0, *) {
