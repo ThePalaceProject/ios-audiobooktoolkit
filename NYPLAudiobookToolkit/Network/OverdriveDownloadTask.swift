@@ -28,7 +28,6 @@ final class OverdriveDownloadTask: DownloadTask {
     }
     
     func fetch() {
-        print("Fetching in OverdriveDownloadTask")
         switch self.assetFileStatus() {
         case .saved(_):
             downloadProgress = 1.0
