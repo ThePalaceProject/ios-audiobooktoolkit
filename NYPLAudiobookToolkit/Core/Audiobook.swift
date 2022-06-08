@@ -63,11 +63,11 @@ import UIKit
             audiobook = FindawayAudiobookClass?.init(JSON: JSON, token: nil)
         } else if let type = JSON["formatType"] as? String,
                   type == "audiobook-overdrive" {
-            audiobook = OverdriveAudiobook(JSON: JSON, token: nil)
+            audiobook = OverdriveAudiobook(JSON: JSON, token: token)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext, let decryptor = decryptor {
-            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
+            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor, token: token)
         } else {
-            audiobook = OpenAccessAudiobook(JSON: JSON, token: nil)
+            audiobook = OpenAccessAudiobook(JSON: JSON, token: token)
         }
 
         ATLog(.debug, "checkDrmAsync")
