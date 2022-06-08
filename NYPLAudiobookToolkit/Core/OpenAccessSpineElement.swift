@@ -52,7 +52,6 @@ final class OpenAccessSpineElement: SpineElement {
         
         self.token = token
         
-        print("SpineElement: \(JSON)")
         let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         self.title = payload["title"] as? String ?? String(format: defaultTitleFormat, "\(index + 1)")
         self.url = url
