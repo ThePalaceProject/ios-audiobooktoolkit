@@ -172,10 +172,8 @@ final class OpenAccessDownloadTask: DownloadTask {
         // if future issues arise with other providers.
         if let profile = self.feedbooksProfile {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
-        }
-        
-        if let token = self.token {
-            request.setValue("Bearer \(token))", forHTTPHeaderField: "Authorization")
+        } else if let token = self.token {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
         guard let urlSession = urlSession else {
