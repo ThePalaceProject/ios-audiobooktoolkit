@@ -39,49 +39,38 @@ import UIKit
     var drmStatus: DrmStatus { get set }
     func checkDrmAsync()
     func deleteLocalContent()
-    init?(JSON: Any?, token: String?)
+    init?(JSON: Any?)
 }
 
-/// Host app should instantiate a audiobook object with JSON.
+public enum AudiobookType {
+    case FindAway(JSON: Any)
+    case Overdrive(JSON: Any)
+    case LCP(JSON: Any, decryptor: DRMDecryptor)
+    case OpenAccess(JSON: Any, token: String?)
+}
+
+/// Host app should instantiate a audiobook object with an AudiobookType with associated JSON,
+/// decryptor or tokens
 /// This audiobook should then be able to construct utility classes
 /// using data in the spine of that JSON.
 @objcMembers public final class AudiobookFactory: NSObject {
-    /// Instatiate an audiobook object with JSON data containing spine elements of the book
-    /// - Parameters:
-    ///   - JSON: Audiobook and spine elements data
-    ///   - decryptor: Optional DRM decryptor for encrypted audio files
-    ///   - token: Optional bearer token for protected audio files
-    ///   - isLCP: BOOL identifying LCP Audiobooks
-    /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?, token: String? = nil, isLCP: Bool = false) -> Audiobook? {
-        guard let JSON = JSON as? [String: Any] else { return nil }
-        let metadata = JSON["metadata"] as? [String: Any]
-        let drm = metadata?["encrypted"] as? [String: Any]
-        let possibleScheme = drm?["scheme"] as? String
+    public static func audiobook(_ type: AudiobookType) -> Audiobook? {
         let audiobook: Audiobook?
 
-        if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
+        switch type {
+        case .FindAway(let JSON):
             let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
-            audiobook = FindawayAudiobookClass?.init(JSON: JSON, token: nil)
-        } else if let type = JSON["formatType"] as? String,
-                  type == "audiobook-overdrive" {
+            audiobook = FindawayAudiobookClass?.init(JSON: JSON)
+        case .Overdrive(let JSON):
             audiobook = OverdriveAudiobook(JSON: JSON)
-        } else if isLCP {
+        case .LCP(let JSON, let decryptor):
             audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
-        } else {
+        case .OpenAccess(let JSON, let token):
             audiobook = OpenAccessAudiobook(JSON: JSON, token: token)
         }
 
         ATLog(.debug, "checkDrmAsync")
         audiobook?.checkDrmAsync()
         return audiobook
-    }
-
-    /// Instatiate an audiobook object with JSON data containing spine elements of the book
-    /// - Parameters:
-    ///   - JSON: Audiobook and spine elements data
-    /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?) -> Audiobook? {
-        return self.audiobook(JSON, decryptor: nil)
     }
 }
