@@ -14,7 +14,12 @@
             player.isDrmOk = newStatus == DrmStatus.succeeded
         }
     }
-
+    
+    @available(*, deprecated, message: "Use init?(JSON: Any?, decryptor: DRMDecryptor?) instead")
+    public required convenience init?(JSON: Any?, token: String?) {
+        self.init(JSON: JSON)
+    }
+    
     public init?(JSON: Any?) {
         guard let payload = JSON as? [String: Any],
         let identifier = payload["id"] as? String,

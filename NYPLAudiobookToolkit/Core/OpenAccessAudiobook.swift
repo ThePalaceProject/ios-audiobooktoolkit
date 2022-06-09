@@ -19,11 +19,7 @@ final class OpenAccessAudiobook: Audiobook {
         }
     }
 
-    public required convenience init?(JSON: Any?) {
-        self.init(JSON: JSON, token: nil)
-    }
-
-    public init?(JSON: Any?, token: String?) {
+    public required init?(JSON: Any?, token: String?) {
         drmData = [String: Any]()
         drmData["status"] = DrmStatus.succeeded
         guard let payload = JSON as? [String: Any],

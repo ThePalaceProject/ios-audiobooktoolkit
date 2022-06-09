@@ -41,10 +41,11 @@ import Foundation
         }
     }
     
-    public required convenience init?(JSON: Any?) {
+    @available(*, deprecated, message: "Use init?(JSON: Any?, decryptor: DRMDecryptor?) instead")
+    public required convenience init?(JSON: Any?, token: String?) {
         self.init(JSON: JSON, decryptor: nil)
     }
-
+    
     /// LCP DRM protected audiobook
     /// - Parameters:
     ///   - JSON: Dictionary with audiobook and spine elements data from `manifest.json`.
