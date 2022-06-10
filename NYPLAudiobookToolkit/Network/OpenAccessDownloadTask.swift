@@ -32,6 +32,7 @@ final class OpenAccessDownloadTask: DownloadTask {
     let urlMediaType: OpenAccessSpineElementMediaType
     let alternateLinks: [(OpenAccessSpineElementMediaType, URL)]?
     let feedbooksProfile: String?
+    let token: String?
 
     init(spineElement: OpenAccessSpineElement) {
         self.key = spineElement.key
@@ -40,6 +41,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         self.urlMediaType = spineElement.mediaType
         self.alternateLinks = spineElement.alternateUrls
         self.feedbooksProfile = spineElement.feedbooksProfile
+        self.token = spineElement.token
     }
 
     /// If the asset is already downloaded and verified, return immediately and
@@ -164,6 +166,8 @@ final class OpenAccessDownloadTask: DownloadTask {
         // if future issues arise with other providers.
         if let profile = self.feedbooksProfile, !profile.contains("cantookaudio") {
             request.setValue("Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")", forHTTPHeaderField: "Authorization")
+        } else if let token = self.token {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
         guard let urlSession = urlSession else {

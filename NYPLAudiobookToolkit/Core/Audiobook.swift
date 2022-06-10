@@ -50,8 +50,9 @@ import UIKit
     /// - Parameters:
     ///   - JSON: Audiobook and spine elements data
     ///   - decryptor: Optional DRM decryptor for encrypted audio files
+    ///   - token: Optional bearer token for protected audio files
     /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?) -> Audiobook? {
+    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
         guard let JSON = JSON as? [String: Any] else { return nil }
         let metadata = JSON["metadata"] as? [String: Any]
         let drm = metadata?["encrypted"] as? [String: Any]
@@ -64,10 +65,10 @@ import UIKit
         } else if let type = JSON["formatType"] as? String,
                   type == "audiobook-overdrive" {
             audiobook = OverdriveAudiobook(JSON: JSON)
-        } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext {
+        } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext, let decryptor = decryptor {
             audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
-            audiobook = OpenAccessAudiobook(JSON: JSON)
+            audiobook = OpenAccessAudiobook(JSON: JSON, token: token)
         }
 
         ATLog(.debug, "checkDrmAsync")
