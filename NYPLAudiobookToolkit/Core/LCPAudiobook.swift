@@ -40,7 +40,8 @@ import Foundation
             spineElement.downloadTask.delete()
         }
     }
-    
+
+    @available(*, deprecated, message: "Use init?(JSON: Any?, decryptor: DRMDecryptor?) instead")
     public required convenience init?(JSON: Any?) {
         self.init(JSON: JSON, decryptor: nil)
     }
