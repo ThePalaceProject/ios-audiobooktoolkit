@@ -51,7 +51,6 @@ import UIKit
     ///   - JSON: Audiobook and spine elements data
     ///   - decryptor: Optional DRM decryptor for encrypted audio files
     ///   - token: Optional bearer token for protected audio files
-    ///   - isLCP: BOOL identifying LCP Audiobooks
     /// - Returns: Audiobook object
     public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
         guard let JSON = JSON as? [String: Any] else { return nil }
