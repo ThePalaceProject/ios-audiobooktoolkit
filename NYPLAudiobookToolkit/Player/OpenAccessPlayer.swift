@@ -218,17 +218,7 @@ class OpenAccessPlayer: NSObject, Player {
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
         guard let currentItem = self.avQueuePlayer.currentItem else {
-            guard retryCount <= 2 else {
-                ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
-                return
-            }
-
-            /// Attempts to seek on the current AVPlayerItem prior to initialization fail
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.retryCount += 1
-                self?.seekWithinCurrentItem(newOffset: newOffset)
-            }
-
+            ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
             return
         }
 
