@@ -158,17 +158,13 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    func playAtLocation(_ newLocation: ChapterLocation) {
-        playAtLocation(newLocation, isAwaitingDownload: false)
-    }
-
     /// New Location's playhead offset could be oustide the bounds of audio, so
     /// move and get a reference to the actual new chapter location. Only update
     /// the cursor if a new queue can successfully be built for the player.
     ///
     /// - Parameter newLocation: Chapter Location with possible playhead offset
     ///   outside the bounds of audio for the current chapter
-    func playAtLocation(_ newLocation: ChapterLocation, isAwaitingDownload: Bool = false) {
+    func playAtLocation(_ newLocation: ChapterLocation) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
@@ -199,14 +195,14 @@ class OpenAccessPlayer: NSObject, Player {
             }
         case .missing(_):
             // TODO: Could eventually handle streaming from here.
-            guard isAwaitingDownload else {
+            guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
                 let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
                 self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
                 return
             }
                         
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
-                self.playAtLocation(newLocation, isAwaitingDownload: self.playerIsReady != .readyToPlay || self.playerIsReady != .failed)
+                self.playAtLocation(newLocation)
             }
             
             return
