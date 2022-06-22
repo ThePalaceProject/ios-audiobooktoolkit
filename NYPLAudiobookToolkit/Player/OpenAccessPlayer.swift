@@ -158,14 +158,17 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
+    func playAtLocation(_ newLocation: ChapterLocation) {
+        playAtLocation(newLocation, isAwaitingDownload: false)
+    }
+
     /// New Location's playhead offset could be oustide the bounds of audio, so
     /// move and get a reference to the actual new chapter location. Only update
     /// the cursor if a new queue can successfully be built for the player.
     ///
     /// - Parameter newLocation: Chapter Location with possible playhead offset
     ///   outside the bounds of audio for the current chapter
-    func playAtLocation(_ newLocation: ChapterLocation)
-    {
+    func playAtLocation(_ newLocation: ChapterLocation, isAwaitingDownload: Bool = false) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
@@ -196,8 +199,16 @@ class OpenAccessPlayer: NSObject, Player {
             }
         case .missing(_):
             // TODO: Could eventually handle streaming from here.
-            let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
-            self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+            guard isAwaitingDownload else {
+                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
+                self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+                return
+            }
+                        
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+                self.playAtLocation(newLocation, isAwaitingDownload: self.playerIsReady != .readyToPlay || self.playerIsReady != .failed)
+            }
+            
             return
         case .unknown:
             let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
@@ -211,25 +222,13 @@ class OpenAccessPlayer: NSObject, Player {
         self.playAtLocation(location)
         self.pause()
     }
-    
-    private var retryCount = 0
 
     /// Moving within the current AVPlayerItem.
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
         guard let currentItem = self.avQueuePlayer.currentItem else {
-            guard retryCount <= 2 else {
                 ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
                 return
-            }
-
-            /// Attempts to seek on the current AVPlayerItem prior to initialization fail
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.retryCount += 1
-                self?.seekWithinCurrentItem(newOffset: newOffset)
-            }
-
-            return
         }
 
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
