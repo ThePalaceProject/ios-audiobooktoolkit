@@ -197,21 +197,24 @@ class OpenAccessPlayer: NSObject, Player {
                     completion?(error)
                 }
             }
-        case .missing(_):
-            // TODO: Could eventually handle streaming from here.
-            guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
-                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
-                self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
-                completion?(error)
-                return
-            }
-
-            self.playAtLocation(newLocation, completion: completion)
-            return
-        case .unknown:
-            let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
-            self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
-            return
+        default:
+            self.cursor = newPlayhead.cursor
+            rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
+//        case .missing(_):
+//            // TODO: Could eventually handle streaming from here.
+//            guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
+//                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
+//                self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+//                completion?(error)
+//                return
+//            }
+//
+//            self.playAtLocation(newLocation, completion: completion)
+//            return
+//        case .unknown:
+//            let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
+//            self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+//            return
         }
     }
 
