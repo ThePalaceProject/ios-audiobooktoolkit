@@ -78,7 +78,7 @@ import Foundation
     /// Move playhead but do not start playback. This is useful for
     /// state restoration where we want to prepare for playback
     /// at a specific point, but playback has not yet been requested.
-    func movePlayheadToLocation(_ location: ChapterLocation)
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: ((Error?) -> Void)?)
 
     func registerDelegate(_ delegate: PlayerDelegate)
     func removeDelegate(_ delegate: PlayerDelegate)

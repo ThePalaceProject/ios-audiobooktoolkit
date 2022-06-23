@@ -215,9 +215,9 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    func movePlayheadToLocation(_ location: ChapterLocation)
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: ((Error?) -> Void)?)
     {
-        self.playAtLocation(location, completion: nil)
+        self.playAtLocation(location, completion: completion)
         self.pause()
     }
 
