@@ -1,6 +1,8 @@
 import AVFoundation
 
 class OpenAccessPlayer: NSObject, Player {
+    
+    typealias DownloadTaskCompletion = (Error?) -> Void
 
     var errorDomain: String {
         return OpenAccessPlayerErrorDomain
@@ -164,7 +166,7 @@ class OpenAccessPlayer: NSObject, Player {
     ///
     /// - Parameter newLocation: Chapter Location with possible playhead offset
     ///   outside the bounds of audio for the current chapter
-    func playAtLocation(_ newLocation: ChapterLocation, completion: ((Error?) -> Void)?) {
+    func playAtLocation(_ newLocation: ChapterLocation, completion: DownloadTaskCompletion?) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
@@ -197,28 +199,30 @@ class OpenAccessPlayer: NSObject, Player {
                     completion?(error)
                 }
             }
-        default:
+        case .missing(_):
+            // TODO: Could eventually handle streaming from here.
+            guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
+                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
+                self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+                completion?(error)
+                return
+            }
+
             self.cursor = newPlayhead.cursor
+            self.taskCompletion = completion
             rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
-//        case .missing(_):
-//            // TODO: Could eventually handle streaming from here.
-//            guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
-//                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
-//                self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
-//                completion?(error)
-//                return
-//            }
-//
-//            self.playAtLocation(newLocation, completion: completion)
-//            return
-//        case .unknown:
-//            let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
-//            self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
-//            return
+            return
+    
+        case .unknown:
+            let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
+            self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
+            return
         }
     }
 
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: ((Error?) -> Void)?)
+    var taskCompletion: DownloadTaskCompletion?
+    
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: DownloadTaskCompletion?)
     {
         self.playAtLocation(location, completion: completion)
         self.pause()
@@ -476,6 +480,7 @@ class OpenAccessPlayer: NSObject, Player {
     @objc func downloadTaskFinished()
     {
         self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
+        self.taskCompletion?(nil)
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
     
