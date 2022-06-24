@@ -208,10 +208,9 @@ class OpenAccessPlayer: NSObject, Player {
                 return
             }
 
-            self.cursor = newPlayhead.cursor
-            self.queuedSeekOffset = newPlayhead.location.playheadOffset
+            self.queuedPlayhead = newPlayhead
             self.taskCompletion = completion
-            rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
+            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
     
         case .unknown:
@@ -318,6 +317,7 @@ class OpenAccessPlayer: NSObject, Player {
     private let audiobookID: String
     private var cursor: Cursor<SpineElement>
     private var queuedSeekOffset: TimeInterval?
+    private var queuedPlayhead: Playhead?
     private var cursorQueuedToPlay: Cursor<SpineElement>?
     private var playerContext = 0
 
@@ -468,6 +468,15 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
+    
+    fileprivate func locateOnFinishDownload(task: DownloadTask)
+    {
+        ATLog(.debug, "Added observer for missing download task.")
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(self.locateOnDownloadFinish),
+                                               name: taskCompleteNotification,
+                                               object: task)
+    }
 
     fileprivate func rebuildOnFinishedDownload(task: DownloadTask)
     {
@@ -483,6 +492,18 @@ class OpenAccessPlayer: NSObject, Player {
         self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
         self.taskCompletion?(nil)
         self.taskCompletion = nil
+        NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
+    }
+
+    @objc func locateOnDownloadFinish()
+    {
+        guard let queuedPlayhead = self.queuedPlayhead else {
+            return
+        }
+
+        self.cursor = queuedPlayhead.cursor
+        self.seekWithinCurrentItem(newOffset: queuedPlayhead.location.playheadOffset)
+        self.play()
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
     
