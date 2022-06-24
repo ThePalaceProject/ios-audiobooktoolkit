@@ -481,6 +481,7 @@ class OpenAccessPlayer: NSObject, Player {
     {
         self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
         self.taskCompletion?(nil)
+        self.taskCompletion = nil
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
     
