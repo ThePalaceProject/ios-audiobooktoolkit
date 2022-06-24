@@ -184,21 +184,8 @@ class OpenAccessPlayer: NSObject, Player {
                 completion?(nil)
                 return
             }
-            // Otherwise, check for an AVPlayerItem at the new cursor, rebuild the player
-            // queue starting from there, and then begin playing at that location.
-            self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
-                if success {
-                    self.cursor = newPlayhead.cursor
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
-                    self.play()
-                    completion?(nil)
-                } else {
-                    ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
-                    let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
-                    self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
-                    completion?(error)
-                }
-            }
+            
+            startPlayer(at: newPlayhead, completion: completion)
         case .missing(_):
             // TODO: Could eventually handle streaming from here.
             guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
@@ -219,6 +206,23 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
     }
+    
+    private func startPlayer(at playhead: Playhead, completion: DownloadTaskCompletion?) {
+        self.buildNewPlayerQueue(atCursor: playhead.cursor) { (success) in
+            if success {
+                self.cursor = playhead.cursor
+                self.seekWithinCurrentItem(newOffset: playhead.location.playheadOffset)
+                self.play()
+                completion?(nil)
+            } else {
+                ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
+                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
+                self.notifyDelegatesOfPlaybackFailureFor(chapter: playhead.location, error)
+                completion?(error)
+            }
+        }
+    }
+    
 
     var taskCompletion: DownloadTaskCompletion?
     
@@ -501,11 +505,8 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
 
-        self.cursor = queuedPlayhead.cursor
-        self.seekWithinCurrentItem(newOffset: queuedPlayhead.location.playheadOffset)
-        self.taskCompletion?(nil)
+        self.startPlayer(at: queuedPlayhead, completion: self.taskCompletion)
         self.taskCompletion = nil
-        self.play()
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
     
