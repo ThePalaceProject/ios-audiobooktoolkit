@@ -503,6 +503,8 @@ class OpenAccessPlayer: NSObject, Player {
 
         self.cursor = queuedPlayhead.cursor
         self.seekWithinCurrentItem(newOffset: queuedPlayhead.location.playheadOffset)
+        self.taskCompletion?(nil)
+        self.taskCompletion = nil
         self.play()
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
