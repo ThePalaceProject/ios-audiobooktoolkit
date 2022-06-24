@@ -197,7 +197,8 @@ class OpenAccessPlayer: NSObject, Player {
 
             self.queuedPlayhead = newPlayhead
             self.taskCompletion = completion
-            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
+            self.cursorQueuedToPlay = newPlayhead.cursor
+//            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
     
         case .unknown:
@@ -507,6 +508,7 @@ class OpenAccessPlayer: NSObject, Player {
 
         self.startPlayer(at: queuedPlayhead, completion: self.taskCompletion)
         self.taskCompletion = nil
+        self.play()
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
     
