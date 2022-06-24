@@ -209,6 +209,7 @@ class OpenAccessPlayer: NSObject, Player {
             }
 
             self.cursor = newPlayhead.cursor
+            self.queuedSeekOffset = newPlayhead.location.playheadOffset
             self.taskCompletion = completion
             rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
