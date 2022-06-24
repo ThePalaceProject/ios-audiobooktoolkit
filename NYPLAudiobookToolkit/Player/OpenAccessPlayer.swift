@@ -198,7 +198,7 @@ class OpenAccessPlayer: NSObject, Player {
             self.queuedPlayhead = newPlayhead
             self.taskCompletion = completion
             self.cursorQueuedToPlay = newPlayhead.cursor
-//            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
+            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
     
         case .unknown:
