@@ -473,15 +473,15 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
-    
-    fileprivate func locateOnFinishDownload(task: DownloadTask)
-    {
-        ATLog(.debug, "Added observer for missing download task.")
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(self.locateOnDownloadFinish),
-                                               name: taskCompleteNotification,
-                                               object: task)
-    }
+//
+//    fileprivate func locateOnFinishDownload(task: DownloadTask)
+//    {
+//        ATLog(.debug, "Added observer for missing download task.")
+//        NotificationCenter.default.addObserver(self,
+//                                               selector: #selector(self.locateOnDownloadFinish),
+//                                               name: taskCompleteNotification,
+//                                               object: task)
+//    }
 
     fileprivate func rebuildOnFinishedDownload(task: DownloadTask)
     {
@@ -500,17 +500,17 @@ class OpenAccessPlayer: NSObject, Player {
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
 
-    @objc func locateOnDownloadFinish()
-    {
-        guard let queuedPlayhead = self.queuedPlayhead else {
-            return
-        }
-
-        self.startPlayer(at: queuedPlayhead, completion: self.taskCompletion)
-        self.taskCompletion = nil
-        self.play()
-        NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
-    }
+//    @objc func locateOnDownloadFinish()
+//    {
+//        guard let queuedPlayhead = self.queuedPlayhead else {
+//            return
+//        }
+//
+//        self.startPlayer(at: queuedPlayhead, completion: self.taskCompletion)
+//        self.taskCompletion = nil
+//        self.play()
+//        NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
+//    }
     
     func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
         guard let task = task as? OpenAccessDownloadTask else {
