@@ -198,9 +198,9 @@ class OpenAccessPlayer: NSObject, Player {
             self.queuedPlayhead = newPlayhead
             self.taskCompletion = completion
             self.cursorQueuedToPlay = newPlayhead.cursor
-            locateOnFinishDownload(task: newPlayhead.cursor.currentElement.downloadTask)
+            rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
-    
+
         case .unknown:
             let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
             self.notifyDelegatesOfPlaybackFailureFor(chapter: newLocation, error)
