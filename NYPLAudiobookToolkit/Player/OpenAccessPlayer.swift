@@ -207,7 +207,6 @@ class OpenAccessPlayer: NSObject, Player {
                 return
             }
 
-            self.queuedPlayhead = newPlayhead
             self.taskCompletion = completion
             self.cursorQueuedToPlay = newPlayhead.cursor
             rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
@@ -317,7 +316,6 @@ class OpenAccessPlayer: NSObject, Player {
     private let audiobookID: String
     private var cursor: Cursor<SpineElement>
     private var queuedSeekOffset: TimeInterval?
-    private var queuedPlayhead: Playhead?
     private var cursorQueuedToPlay: Cursor<SpineElement>?
     private var playerContext = 0
 
@@ -468,15 +466,6 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
-//
-//    fileprivate func locateOnFinishDownload(task: DownloadTask)
-//    {
-//        ATLog(.debug, "Added observer for missing download task.")
-//        NotificationCenter.default.addObserver(self,
-//                                               selector: #selector(self.locateOnDownloadFinish),
-//                                               name: taskCompleteNotification,
-//                                               object: task)
-//    }
 
     fileprivate func rebuildOnFinishedDownload(task: DownloadTask)
     {
