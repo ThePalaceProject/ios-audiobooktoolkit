@@ -456,6 +456,19 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
+    func rebuildQueueAndSeek(cursor: Cursor<SpineElement>, newOffset: TimeInterval)
+    {
+        buildNewPlayerQueue(atCursor: self.cursor) { (success) in
+            if success {
+                self.seekWithinCurrentItem(newOffset: newOffset)
+            } else {
+                ATLog(.error, "Ready status is \"failed\".")
+                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
+                self.notifyDelegatesOfPlaybackFailureFor(chapter: self.chapterAtCurrentCursor, error)
+            }
+        }
+    }
+
     func rebuildQueueImmediatelyAndPlay(cursor: Cursor<SpineElement>)
     {
         buildNewPlayerQueue(atCursor: self.cursor) { (success) in
@@ -463,7 +476,7 @@ class OpenAccessPlayer: NSObject, Player {
                 if let queuedSeekOffset = queuedSeekOffset {
                     seekWithinCurrentItem(newOffset: queuedSeekOffset)
                 }
-
+            
                 self.play()
             } else {
                 ATLog(.error, "Ready status is \"failed\".")
@@ -484,7 +497,12 @@ class OpenAccessPlayer: NSObject, Player {
 
     @objc func downloadTaskFinished()
     {
-        self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
+        if let newOffset = self.queuedSeekOffset {
+            self.rebuildQueueAndSeek(cursor: self.cursor, newOffset: newOffset)
+        } else {
+            self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
+        }
+
         self.taskCompletion?(nil)
         self.taskCompletion = nil
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
