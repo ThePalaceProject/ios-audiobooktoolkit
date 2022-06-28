@@ -443,7 +443,7 @@ class OpenAccessPlayer: NSObject, Player {
         if let fileStatus = assetFileStatus(self.cursor.currentElement.downloadTask) {
             switch fileStatus {
             case .saved(_):
-                self.rebuildQueueImmediatelyAndPlay(cursor: cursor)
+                self.rebuildQueueAndSeekOrPlay(cursor: cursor)
             case .missing(_):
                 self.rebuildOnFinishedDownload(task: self.cursor.currentElement.downloadTask)
             case .unknown:
@@ -456,28 +456,16 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    func rebuildQueueAndSeek(cursor: Cursor<SpineElement>, newOffset: TimeInterval)
+    // Will seek to new offset and pause, if provided.
+    func rebuildQueueAndSeekOrPlay(cursor: Cursor<SpineElement>, newOffset: TimeInterval? = nil)
     {
         buildNewPlayerQueue(atCursor: self.cursor) { (success) in
             if success {
-                self.seekWithinCurrentItem(newOffset: newOffset)
-            } else {
-                ATLog(.error, "Ready status is \"failed\".")
-                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
-                self.notifyDelegatesOfPlaybackFailureFor(chapter: self.chapterAtCurrentCursor, error)
-            }
-        }
-    }
-
-    func rebuildQueueImmediatelyAndPlay(cursor: Cursor<SpineElement>)
-    {
-        buildNewPlayerQueue(atCursor: self.cursor) { (success) in
-            if success {
-                if let queuedSeekOffset = queuedSeekOffset {
-                    seekWithinCurrentItem(newOffset: queuedSeekOffset)
+                if let newOffset = newOffset {
+                    self.seekWithinCurrentItem(newOffset: newOffset)
+                } else {
+                    self.play()
                 }
-            
-                self.play()
             } else {
                 ATLog(.error, "Ready status is \"failed\".")
                 let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
@@ -497,12 +485,7 @@ class OpenAccessPlayer: NSObject, Player {
 
     @objc func downloadTaskFinished()
     {
-        if let newOffset = self.queuedSeekOffset {
-            self.rebuildQueueAndSeek(cursor: self.cursor, newOffset: newOffset)
-        } else {
-            self.rebuildQueueImmediatelyAndPlay(cursor: self.cursor)
-        }
-
+        self.rebuildQueueAndSeekOrPlay(cursor: self.cursor, newOffset: self.queuedSeekOffset)
         self.taskCompletion?(nil)
         self.taskCompletion = nil
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
