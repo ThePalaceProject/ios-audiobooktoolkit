@@ -460,6 +460,10 @@ class OpenAccessPlayer: NSObject, Player {
     {
         buildNewPlayerQueue(atCursor: self.cursor) { (success) in
             if success {
+                if let queuedSeekOffset = queuedSeekOffset {
+                    seekWithinCurrentItem(newOffset: queuedSeekOffset)
+                }
+
                 self.play()
             } else {
                 ATLog(.error, "Ready status is \"failed\".")
