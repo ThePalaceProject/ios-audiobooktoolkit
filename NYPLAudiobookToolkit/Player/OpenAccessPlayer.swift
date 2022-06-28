@@ -184,8 +184,20 @@ class OpenAccessPlayer: NSObject, Player {
                 completion?(nil)
                 return
             }
-            
-            startPlayer(at: newPlayhead, completion: completion)
+
+            self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
+                if success {
+                    self.cursor = newPlayhead.cursor
+                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+                    self.play()
+                    completion?(nil)
+                } else {
+                    ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
+                    let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
+                    self.notifyDelegatesOfPlaybackFailureFor(chapter: newPlayhead.location, error)
+                    completion?(error)
+                }
+            }
         case .missing(_):
             // TODO: Could eventually handle streaming from here.
             guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
@@ -208,23 +220,6 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
-    private func startPlayer(at playhead: Playhead, completion: DownloadTaskCompletion?) {
-        self.buildNewPlayerQueue(atCursor: playhead.cursor) { (success) in
-            if success {
-                self.cursor = playhead.cursor
-                self.seekWithinCurrentItem(newOffset: playhead.location.playheadOffset)
-                self.play()
-                completion?(nil)
-            } else {
-                ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
-                let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
-                self.notifyDelegatesOfPlaybackFailureFor(chapter: playhead.location, error)
-                completion?(error)
-            }
-        }
-    }
-    
-
     var taskCompletion: DownloadTaskCompletion?
     
     func movePlayheadToLocation(_ location: ChapterLocation, completion: DownloadTaskCompletion?)
@@ -500,18 +495,6 @@ class OpenAccessPlayer: NSObject, Player {
         NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
     }
 
-//    @objc func locateOnDownloadFinish()
-//    {
-//        guard let queuedPlayhead = self.queuedPlayhead else {
-//            return
-//        }
-//
-//        self.startPlayer(at: queuedPlayhead, completion: self.taskCompletion)
-//        self.taskCompletion = nil
-//        self.play()
-//        NotificationCenter.default.removeObserver(self, name: taskCompleteNotification, object: nil)
-//    }
-    
     func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
         guard let task = task as? OpenAccessDownloadTask else {
             return nil
