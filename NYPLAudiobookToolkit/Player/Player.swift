@@ -42,6 +42,8 @@ import Foundation
 /// This does not specifically refer to AVPlayer, but could also be
 /// FAEPlaybackEngine, or another engine that handles DRM content.
 @objc public protocol Player {
+    typealias DownloadTaskCompletion = (Error?) -> Void
+
     var isPlaying: Bool { get }
     
     // When set, should lock down playback
@@ -73,12 +75,12 @@ import Foundation
     /// This method is useful for scenarios like a table of contents
     /// where you select a new chapter and wish to immediately start
     /// playback.
-    func playAtLocation(_ newLocation: ChapterLocation, completion: ((Error?) -> Void)?)
+    func playAtLocation(_ newLocation: ChapterLocation, completion: DownloadTaskCompletion?)
 
     /// Move playhead but do not start playback. This is useful for
     /// state restoration where we want to prepare for playback
     /// at a specific point, but playback has not yet been requested.
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: ((Error?) -> Void)?)
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: DownloadTaskCompletion?)
 
     func registerDelegate(_ delegate: PlayerDelegate)
     func removeDelegate(_ delegate: PlayerDelegate)

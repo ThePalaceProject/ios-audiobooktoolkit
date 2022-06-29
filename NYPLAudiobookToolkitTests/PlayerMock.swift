@@ -15,9 +15,9 @@ class PlayerMock: Player {
 
     var isLoaded: Bool = false
 
-    func playAtLocation(_ newLocation: ChapterLocation, completion: ((Error?) -> Void)?) { }
+    func playAtLocation(_ newLocation: ChapterLocation, completion: DownloadTaskCompletion?) { }
     
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: ((Error?) -> Void)?) { }
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: DownloadTaskCompletion?) { }
 
     var playbackRate: PlaybackRate = .normalTime
     

@@ -1,8 +1,6 @@
 import AVFoundation
 
 class OpenAccessPlayer: NSObject, Player {
-    
-    typealias DownloadTaskCompletion = (Error?) -> Void
 
     var errorDomain: String {
         return OpenAccessPlayerErrorDomain
