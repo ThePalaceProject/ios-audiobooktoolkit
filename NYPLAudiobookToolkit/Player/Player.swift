@@ -103,7 +103,6 @@ extension Player {
     public let duration: TimeInterval
     public let startOffset: TimeInterval
     public let playheadOffset: TimeInterval
-    public let playheadOffsetInMilliSeconds: TimeInterval?
     public let audiobookID: String
 
     public var timeRemaining: TimeInterval {
@@ -133,30 +132,15 @@ extension Player {
             self.part == rhs.part
     }
 
-    public init(
-        number: UInt,
-        part: UInt,
-        duration: TimeInterval,
-        startOffset: TimeInterval,
-        playheadOffset: TimeInterval,
-        playheadOffestInMilliseconds: TimeInterval?,
-        title: String?,
-        audiobookID: String
-    ) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
         self.duration = duration
         self.startOffset = startOffset
-
-        if let offsetInMilliseconds = playheadOffestInMilliseconds {
-            self.playheadOffset = offsetInMilliseconds/1000
-        } else {
-            self.playheadOffset = playheadOffset
-        }
-
-        self.playheadOffsetInMilliSeconds = playheadOffestInMilliseconds ?? playheadOffset * 1000
+        self.playheadOffset = playheadOffset
         self.title = title
+        
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
@@ -166,7 +150,6 @@ extension Player {
             duration: self.duration,
             startOffset: self.startOffset,
             playheadOffset: offset,
-            playheadOffestInMilliseconds: offset * 1000,
             title: self.title,
             audiobookID: self.audiobookID
         )

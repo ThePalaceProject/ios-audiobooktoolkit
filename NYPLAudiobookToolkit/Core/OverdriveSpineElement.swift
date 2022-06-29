@@ -14,7 +14,6 @@ final class OverdriveSpineElement: SpineElement {
                                duration: self.duration,
                                startOffset: 0,
                                playheadOffset: 0,
-                               playheadOffestInMilliseconds: 0,
                                title: self.title,
                                audiobookID: self.audiobookID)
     }()

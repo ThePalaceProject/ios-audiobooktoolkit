@@ -186,7 +186,6 @@ let SkipTimeInterval: Double = 15
             duration: 4000,
             startOffset: 0,
             playheadOffset: 0,
-            playheadOffestInMilliseconds: 0,
             title: "test title",
             audiobookID: "12345")
 
