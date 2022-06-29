@@ -38,6 +38,7 @@ final class LCPSpineElement: SpineElement {
             duration: self.duration,
             startOffset: self.offset * 1000.0,
             playheadOffset: 0,
+            playheadOffestInMilliseconds: 0,
             title: self.title,
             audiobookID: self.audiobookID
             )
