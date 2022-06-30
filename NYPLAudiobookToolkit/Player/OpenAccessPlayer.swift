@@ -164,7 +164,7 @@ class OpenAccessPlayer: NSObject, Player {
     ///
     /// - Parameter newLocation: Chapter Location with possible playhead offset
     ///   outside the bounds of audio for the current chapter
-    func playAtLocation(_ newLocation: ChapterLocation, completion: DownloadTaskCompletion?) {
+    func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
@@ -219,9 +219,9 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    var taskCompletion: DownloadTaskCompletion?
+    var taskCompletion: Completion?
     
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: DownloadTaskCompletion?)
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?)
     {
         self.playAtLocation(location, completion: completion)
         self.pause()
