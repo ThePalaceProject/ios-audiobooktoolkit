@@ -2,6 +2,8 @@ import AVFoundation
 
 class OpenAccessPlayer: NSObject, Player {
 
+    var taskCompletion: Completion? = nil
+
     var errorDomain: String {
         return OpenAccessPlayerErrorDomain
     }
@@ -164,7 +166,7 @@ class OpenAccessPlayer: NSObject, Player {
     ///
     /// - Parameter newLocation: Chapter Location with possible playhead offset
     ///   outside the bounds of audio for the current chapter
-    func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) {
+    func playAtLocation(_ newLocation: ChapterLocation, completion: Completion? = nil) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
@@ -219,9 +221,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    var taskCompletion: Completion?
-    
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?)
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion? = nil)
     {
         self.playAtLocation(location, completion: completion)
         self.pause()
