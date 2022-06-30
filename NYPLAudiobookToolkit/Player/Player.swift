@@ -99,14 +99,26 @@ extension Player {
 
 /// This class represents a location in a book.
 @objcMembers public final class ChapterLocation: NSObject, Comparable, Codable {
-    public let title: String?
+    public let type = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
-    public let duration: TimeInterval
-    public let startOffset: TimeInterval
+    public let startOffset: TimeInterval?
     public let playheadOffset: TimeInterval
+    public let title: String?
     public let audiobookID: String
-
+    public let duration: TimeInterval
+    
+    enum CodingKeys: String, CodingKey {
+        case type
+        case number = "chapter"
+        case part
+        case startOffset
+        case playheadOffset = "time"
+        case title
+        case audiobookID
+        case duration
+    }
+    
     public var timeRemaining: TimeInterval {
         return self.duration - self.playheadOffset
     }
@@ -133,6 +145,29 @@ extension Player {
             self.number == rhs.number &&
             self.part == rhs.part
     }
+    
+    public init(from decoder: Decoder) throws {
+        startOffset = 0
+
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        audiobookID = try values.decode(String.self, forKey: .audiobookID)
+        title = try values.decode(String.self, forKey: .title)
+        number = try values.decode(UInt.self, forKey: .number)
+        part = try values.decode(UInt.self, forKey: .part)
+        duration = Double(try values.decode(Double.self, forKey: .duration).seconds)
+        playheadOffset = Double(try values.decode(Double.self, forKey: .playheadOffset).seconds)
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(number, forKey: .number)
+        try container.encode(part, forKey: .part)
+        try container.encode(duration.milliseconds, forKey: .duration)
+        try container.encode(playheadOffset.milliseconds, forKey: .playheadOffset)
+        try container.encode(type, forKey: .type)
+        try container.encode(audiobookID, forKey: .audiobookID)
+    }
 
     public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
@@ -150,7 +185,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.startOffset,
+            startOffset: self.startOffset ?? 0,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
