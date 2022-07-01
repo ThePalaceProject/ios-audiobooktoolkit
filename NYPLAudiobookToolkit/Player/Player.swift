@@ -109,7 +109,7 @@ extension Player {
     public let duration: TimeInterval
     
     enum CodingKeys: String, CodingKey {
-        case type
+        case type = "@type"
         case number = "chapter"
         case part
         case startOffset
