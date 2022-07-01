@@ -154,8 +154,8 @@ extension Player {
         title = try values.decode(String.self, forKey: .title)
         number = try values.decode(UInt.self, forKey: .number)
         part = try values.decode(UInt.self, forKey: .part)
-        duration = Double(try values.decode(Double.self, forKey: .duration)/1000)
-        playheadOffset = Double(try values.decode(Double.self, forKey: .playheadOffset)/1000)
+        duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
+        playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -163,8 +163,8 @@ extension Player {
         try container.encode(title, forKey: .title)
         try container.encode(number, forKey: .number)
         try container.encode(part, forKey: .part)
-        try container.encode(duration.milliseconds, forKey: .duration)
-        try container.encode(playheadOffset.milliseconds, forKey: .playheadOffset)
+        try container.encode(Int(duration.milliseconds), forKey: .duration)
+        try container.encode(Int(playheadOffset.milliseconds), forKey: .playheadOffset)
         try container.encode(type, forKey: .type)
         try container.encode(audiobookID, forKey: .audiobookID)
     }
