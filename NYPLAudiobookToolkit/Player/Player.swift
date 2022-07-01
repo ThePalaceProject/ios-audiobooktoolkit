@@ -154,8 +154,8 @@ extension Player {
         title = try values.decode(String.self, forKey: .title)
         number = try values.decode(UInt.self, forKey: .number)
         part = try values.decode(UInt.self, forKey: .part)
-        duration = Double(try values.decode(Double.self, forKey: .duration).seconds)
-        playheadOffset = Double(try values.decode(Double.self, forKey: .playheadOffset).seconds)
+        duration = Double(try values.decode(Double.self, forKey: .duration)/1000)
+        playheadOffset = Double(try values.decode(Double.self, forKey: .playheadOffset)/1000)
     }
     
     public func encode(to encoder: Encoder) throws {
