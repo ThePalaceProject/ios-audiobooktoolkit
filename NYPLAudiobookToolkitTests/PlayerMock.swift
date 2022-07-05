@@ -10,14 +10,15 @@ import UIKit
 import NYPLAudiobookToolkit
 
 class PlayerMock: Player {
+    
     var isDrmOk: Bool = true
 
     var isLoaded: Bool = false
 
-    func playAtLocation(_ location: ChapterLocation) { }
+    func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) { }
     
-    func movePlayheadToLocation(_ location: ChapterLocation) { }
-    
+    func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?) { }
+
     var playbackRate: PlaybackRate = .normalTime
     
     var currentChapterLocation: ChapterLocation? {

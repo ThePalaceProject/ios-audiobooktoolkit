@@ -194,7 +194,7 @@ extension DefaultAudiobookManager: PlayerDelegate {
         }
         if lastChapter.inSameChapter(other: chapter) {
             self.playbackCompletionHandler?()
-            self.audiobook.player.movePlayheadToLocation(firstChapter)
+            self.audiobook.player.movePlayheadToLocation(firstChapter, completion: nil)
         }
     }
     public func playerDidUnload(_ player: Player) {
