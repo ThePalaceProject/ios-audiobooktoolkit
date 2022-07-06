@@ -677,6 +677,7 @@ extension AudiobookPlayerViewController: AudiobookNetworkServiceDelegate {
             presentAlertAndLog(error: error)
             self.audiobookManager.refreshDelegate?.audiobookManagerDidRequestRefresh()
         }
+        self.audiobookManager.refreshDelegate?.audiobookManagerDidRequestRefresh()
     }
     public func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateOverallDownloadProgress progress: Float) {
         if (progress < 1.0) && (self.audiobookProgressView.isHidden) {
