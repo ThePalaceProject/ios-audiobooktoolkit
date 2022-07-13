@@ -298,6 +298,11 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
                 try FileManager.default.moveItem(at: from, to: to)
                 completionHandler(true)
             } catch {
+                guard let error.code != 516 else {
+                    completionHandler(true)
+                    return
+                }
+
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
                 completionHandler(false)
             }
