@@ -298,7 +298,8 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
                 try FileManager.default.moveItem(at: from, to: to)
                 completionHandler(true)
             } catch {
-                guard let error.code != 516 else {
+
+                if (error as NSError).code == 516 {
                     completionHandler(true)
                     return
                 }
