@@ -294,17 +294,17 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
             ATLog(.debug, "Media file needs optimization: \(from.absoluteString)")
             MediaProcessor.optimizeQTFile(input: from, output: to, completionHandler: completionHandler)
         } else {
-            
-            // File has already been moved to the expected location.
-            guard !FileManager.default.fileExists(atPath: to.absoluteString) else {
-                completionHandler(true)
-                return
-            }
-
             do {
                 try FileManager.default.moveItem(at: from, to: to)
                 completionHandler(true)
             } catch {
+                // Error code 516 is thrown when the file has already successfully
+                // been downloaded and moved to the save location. Download is verified.
+                if (error as NSError).code == 516 {
+                    completionHandler(true)
+                    return
+                }
+
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
                 completionHandler(false)
             }
