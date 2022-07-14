@@ -671,8 +671,6 @@ extension AudiobookPlayerViewController: AudiobookNetworkServiceDelegate {
     public func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateProgressFor spineElement: SpineElement) {}
     public func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didDeleteFileFor spineElement: SpineElement) {}
     public func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didReceive error: NSError?, for spineElement: SpineElement) {
-        presentAlertAndLog(error: error)
-        self.audiobookProgressView.stopShowingProgress()
         if let error = error,
           error.domain == OverdrivePlayerErrorDomain && error.code == OverdrivePlayerError.downloadExpired.rawValue {
             self.audiobookManager.refreshDelegate?.audiobookManagerDidRequestRefresh()

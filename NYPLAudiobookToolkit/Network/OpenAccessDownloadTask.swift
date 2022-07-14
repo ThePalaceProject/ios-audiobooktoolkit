@@ -298,6 +298,13 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
                 try FileManager.default.moveItem(at: from, to: to)
                 completionHandler(true)
             } catch {
+                // Error code 516 is thrown when the file has already successfully
+                // been downloaded and moved to the save location. Download is verified.
+                if (error as NSError).code == 516 {
+                    completionHandler(true)
+                    return
+                }
+
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
                 completionHandler(false)
             }
