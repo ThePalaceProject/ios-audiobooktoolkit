@@ -270,7 +270,8 @@ final class ScrubberView: UIView {
     
     func scrub(touch: UITouch?) {
         if let touch = touch {
-            let position = touch.location(in: self.progressBackground)
+            var position = touch.location(in: self.progressBackground)
+            position.x += touchOffset
             let percentage: Float
             if position.x >= 0 && position.x <= self.progressBarWidth {
                 percentage = Float(position.x / self.progressBarWidth)
@@ -310,7 +311,8 @@ final class ScrubberView: UIView {
         let activationWidth: CGFloat = 44.0 // Recommended min width, Apple HIG
         let touchX = touch.location(in: self.progressBackground).x
         let gripperX = self.progressBar.bounds.width
-        return abs(touchX - gripperX) <= (activationWidth / 2)
+        touchOffset = gripperX - touchX
+        return abs(touchOffset) <= (activationWidth / 2)
     }
 
     private func topLabelVoiceOverDescription() -> String {
@@ -336,6 +338,10 @@ final class ScrubberView: UIView {
     
     /// Indicates scrubbing is under way
     private var isScrubbing = false
+    
+    /// Touch offset keeps the distance between the touch and the grip
+    /// to avoid immediate scrubbing on touch.
+    private var touchOffset: CGFloat = 0.0
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if canScrub(touch: touches.first) {
