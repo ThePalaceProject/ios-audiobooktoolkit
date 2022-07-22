@@ -268,9 +268,10 @@ final class ScrubberView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func scrub(touch: UITouch?, currentlyScrubbing: Bool) {
+    func scrub(touch: UITouch?) {
         if let touch = touch {
-            let position = touch.location(in: self.progressBackground)
+            var position = touch.location(in: self.progressBackground)
+            position.x += touchOffset
             let percentage: Float
             if position.x >= 0 && position.x <= self.progressBarWidth {
                 percentage = Float(position.x / self.progressBarWidth)
@@ -287,7 +288,7 @@ final class ScrubberView: UIView {
                 progressColor: self.state.progressColor,
                 progress: self.state.progress.progressFromPercentage(percentage),
                 middleText: self.state.middleText,
-                scrubbing: currentlyScrubbing
+                scrubbing: self.isScrubbing
             )
         } else {
             self.state = ScrubberUIState(
@@ -295,9 +296,23 @@ final class ScrubberView: UIView {
                 progressColor: self.state.progressColor,
                 progress: self.state.progress,
                 middleText: self.state.middleText,
-                scrubbing: currentlyScrubbing
+                scrubbing: self.isScrubbing
             )
         }
+    }
+    
+    /// Checks if it is possible to scrub through the content.
+    /// - Parameter touch: `UITouch` touch.
+    /// - Returns: `true` if the touch is close to the gripper, `false` otherwise.
+    private func canScrub(touch: UITouch?) -> Bool {
+        guard let touch = touch else {
+            return false
+        }
+        let activationWidth: CGFloat = 44.0 // Recommended min width, Apple HIG
+        let touchX = touch.location(in: self.progressBackground).x
+        let gripperX = self.progressBar.bounds.width
+        touchOffset = gripperX - touchX
+        return abs(touchOffset) <= (activationWidth / 2)
     }
 
     private func topLabelVoiceOverDescription() -> String {
@@ -320,23 +335,41 @@ final class ScrubberView: UIView {
     }
 
     //MARK:-
+    
+    /// Indicates scrubbing is under way
+    private var isScrubbing = false
+    
+    /// Touch offset keeps the distance between the touch and the grip
+    /// to avoid immediate scrubbing on touch.
+    private var touchOffset: CGFloat = 0.0
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.scrub(touch: touches.first, currentlyScrubbing: true)
+        if canScrub(touch: touches.first) {
+            isScrubbing = true
+            self.scrub(touch: touches.first)
+        }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.scrub(touch: touches.first, currentlyScrubbing: true)
+        if isScrubbing {
+            self.scrub(touch: touches.first)
+        }
     }
     
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.scrub(touch: touches.first, currentlyScrubbing: false)
-        self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+        if isScrubbing {
+            isScrubbing = false
+            self.scrub(touch: touches.first)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+        }
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.scrub(touch: touches.first, currentlyScrubbing: false)
-        self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+        if isScrubbing {
+            isScrubbing = false
+            self.scrub(touch: touches.first)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+        }
     }
 }
 
