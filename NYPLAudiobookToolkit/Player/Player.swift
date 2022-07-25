@@ -99,7 +99,7 @@ extension Player {
 
 /// This class represents a location in a book.
 @objcMembers public final class ChapterLocation: NSObject, Comparable, Codable {
-    public let type = "LocatorAudioBookTime"
+    public let type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
     public let startOffset: TimeInterval?
