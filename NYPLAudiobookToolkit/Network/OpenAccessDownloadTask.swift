@@ -284,7 +284,7 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
             self.downloadTask.downloadProgress = 1.0
         } else if totalBytesWritten <= 0 {
             self.downloadTask.downloadProgress = 0.0
-        } else {
+        } else { 
             self.downloadTask.downloadProgress = Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)
         }
     }
