@@ -118,7 +118,18 @@ extension Player {
         case audiobookID
         case duration
     }
-    
+
+    enum LegacyKeys: String, CodingKey {
+        case type = "@type"
+        case number
+        case part
+        case startOffset
+        case playheadOffset
+        case title
+        case audiobookID
+        case duration
+    }
+
     public var timeRemaining: TimeInterval {
         return self.duration - self.playheadOffset
     }
@@ -150,22 +161,26 @@ extension Player {
         startOffset = 0
 
         let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Legacy bookmarks will not have a type property and need to be decoded
+        // using legacy keys.
+        guard values.contains(.type) else {
+            let legacyValues = try decoder.container(keyedBy: LegacyKeys.self)
+            audiobookID = try legacyValues.decode(String.self, forKey: .audiobookID)
+            title = try legacyValues.decode(String.self, forKey: .title)
+            number = try legacyValues.decode(UInt.self, forKey: .number)
+            part = try legacyValues.decode(UInt.self, forKey: .part)
+            duration = Double(try legacyValues.decode(Float.self, forKey: .duration))
+            playheadOffset = Double(try legacyValues.decode(Float.self, forKey: .playheadOffset))
+            return
+        }
+
         audiobookID = try values.decode(String.self, forKey: .audiobookID)
         title = try values.decode(String.self, forKey: .title)
         number = try values.decode(UInt.self, forKey: .number)
         part = try values.decode(UInt.self, forKey: .part)
-        
-        if let legacyDuration = try? values.decode(Float.self, forKey: .duration) {
-            duration = Double(legacyDuration)
-        } else {
-            duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
-        }
-
-        if let legacyOffset = try? values.decode(Float.self, forKey: .playheadOffset) {
-            playheadOffset = Double(legacyOffset)
-        } else {
-            playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
-        }
+        duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
+        playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
     }
     
     public func encode(to encoder: Encoder) throws {
