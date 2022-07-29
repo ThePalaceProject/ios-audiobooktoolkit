@@ -230,17 +230,17 @@ class OpenAccessPlayer: NSObject, Player {
     /// Moving within the current AVPlayerItem.
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
-        guard let currentItem = self.avQueuePlayer.currentItem else {
-                ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
-                return
-        }
-
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
             ATLog(.debug, "Item not ready to play. Queueing seek operation.")
             self.queuedSeekOffset = newOffset
             return
         }
-    
+        
+        guard let currentItem = self.avQueuePlayer.currentItem else {
+            ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
+            return
+        }
+        
         currentItem.seek(to: CMTimeMakeWithSeconds(Float64(newOffset), preferredTimescale: Int32(1))) { finished in
             if finished {
                 ATLog(.debug, "Seek operation finished.")
