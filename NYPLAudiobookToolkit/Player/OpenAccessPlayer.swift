@@ -678,6 +678,8 @@ extension OpenAccessPlayer{
                     play()
                 } else {
                     ATLog(.warn, "System audio interruption ended, not resuming.")
+                    play()
+
                 }
 
             default: ()
