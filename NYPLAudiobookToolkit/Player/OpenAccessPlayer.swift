@@ -659,7 +659,12 @@ extension OpenAccessPlayer{
     }
     
     @objc func handleRouteChange(notification: Notification) {
-        // To be implemented.
-        print("Route change occured: \(notification)")
+        guard let userInfo = notification.userInfo,
+               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+                   return
+           }
+
+        print("Route change occured: \(reason)")
     }
 }
