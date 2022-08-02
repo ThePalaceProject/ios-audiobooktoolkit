@@ -29,8 +29,8 @@ class OpenAccessPlayer: NSObject, Player {
         // Get the default notification center instance.
         let nc = NotificationCenter.default
         nc.addObserver(self,
-                       selector: #selector(handleRouteChange),
-                       name: AVAudioSession.routeChangeNotification,
+                       selector: #selector(handleInterruption),
+                       name: AVAudioSession.interruptionNotification,
                        object: nil)
     }
 
@@ -658,13 +658,29 @@ extension OpenAccessPlayer{
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.reasonForWaitingToPlay))
     }
     
-    @objc func handleRouteChange(notification: Notification) {
+    @objc func handleInterruption(notification: Notification) {
         guard let userInfo = notification.userInfo,
-               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
-               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
-                   return
-           }
+                let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+                    return
+            }
 
-        print("Route change occured: \(reason)")
+            switch type {
+
+            case .began:
+                ATLog(.warn, "System audio interruption initiated.")
+
+            case .ended:
+                guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if options.contains(.shouldResume) {
+                    ATLog(.warn, "System audio interruption ended, resuming.")
+                    play()
+                } else {
+                    ATLog(.warn, "System audio interruption ended, not resuming.")
+                }
+
+            default: ()
+            }
     }
 }
