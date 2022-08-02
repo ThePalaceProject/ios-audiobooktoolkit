@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 @objc public enum PlaybackRate: Int, CaseIterable {
     case threeQuartersTime = 75
@@ -380,5 +381,4 @@ private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: Chapte
     }
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
 }
-
 

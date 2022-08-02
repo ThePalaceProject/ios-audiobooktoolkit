@@ -1,7 +1,6 @@
 import AVFoundation
 
 class OpenAccessPlayer: NSObject, Player {
-
     var taskCompletion: Completion? = nil
 
     var errorDomain: String {
@@ -24,6 +23,15 @@ class OpenAccessPlayer: NSObject, Player {
                 unload()
             }
         }
+    }
+    
+    @objc func setupNotifications() {
+        // Get the default notification center instance.
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleRouteChange),
+                       name: AVAudioSession.routeChangeNotification,
+                       object: nil)
     }
 
     private var avQueuePlayerIsPlaying: Bool = false {
@@ -327,9 +335,9 @@ class OpenAccessPlayer: NSObject, Player {
         self.audiobookID = audiobookID
         self.isDrmOk = drmOk // Skips didSet observer
         self.avQueuePlayer = AVQueuePlayer()
-
         super.init()
 
+        self.setupNotifications()
         self.buildNewPlayerQueue(atCursor: self.cursor) { _ in }
 
         if #available(iOS 10.0, *) {
@@ -648,5 +656,10 @@ extension OpenAccessPlayer{
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.rate))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.currentItem.status))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.reasonForWaitingToPlay))
+    }
+    
+    @objc func handleRouteChange(notification: Notification) {
+        // To be implemented.
+        print("Route change occured: \(notification)")
     }
 }
