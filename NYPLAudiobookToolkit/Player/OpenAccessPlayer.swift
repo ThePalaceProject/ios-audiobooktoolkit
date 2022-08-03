@@ -1,5 +1,7 @@
 import AVFoundation
 
+let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
+
 class OpenAccessPlayer: NSObject, Player {
     var taskCompletion: Completion? = nil
 
@@ -9,6 +11,10 @@ class OpenAccessPlayer: NSObject, Player {
     
     var taskCompleteNotification: Notification.Name {
         return OpenAccessTaskCompleteNotification
+    }
+    
+    var interruptionNotification: Notification.Name {
+        return AudioInterruptionNotification
     }
     
     var isPlaying: Bool {
@@ -30,7 +36,7 @@ class OpenAccessPlayer: NSObject, Player {
         let nc = NotificationCenter.default
         nc.addObserver(self,
                        selector: #selector(handleInterruption),
-                       name: AVAudioSession.interruptionNotification,
+                       name: interruptionNotification,
                        object: nil)
     }
 
@@ -656,8 +662,9 @@ extension OpenAccessPlayer{
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.rate))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.currentItem.status))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.reasonForWaitingToPlay))
+        NotificationCenter.default.removeObserver(self, name: interruptionNotification, object: nil)
     }
-    
+
     @objc func handleInterruption(notification: Notification) {
         guard let userInfo = notification.userInfo,
                 let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
