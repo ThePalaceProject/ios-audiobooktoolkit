@@ -673,22 +673,17 @@ extension OpenAccessPlayer{
             }
 
             switch type {
-
             case .began:
-                ATLog(.warn, "System audio interruption initiated.")
-
+                ATLog(.warn, "System audio interruption began.")
             case .ended:
+                ATLog(.warn, "System audio interruption ended.")
                 guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
                 let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
                 if options.contains(.shouldResume) {
-                    ATLog(.warn, "System audio interruption ended, resuming.")
                     play()
                 } else {
-                    ATLog(.warn, "System audio interruption ended, not resuming.")
                     play()
-
                 }
-
             default: ()
             }
     }
