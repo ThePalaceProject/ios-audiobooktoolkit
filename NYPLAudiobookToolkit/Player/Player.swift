@@ -381,3 +381,4 @@ private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: Chapte
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
 }
 
+
