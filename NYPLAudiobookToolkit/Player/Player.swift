@@ -1,5 +1,4 @@
 import Foundation
-import AVFoundation
 
 @objc public enum PlaybackRate: Int, CaseIterable {
     case threeQuartersTime = 75
