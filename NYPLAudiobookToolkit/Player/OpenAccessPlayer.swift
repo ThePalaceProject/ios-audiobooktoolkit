@@ -1,7 +1,8 @@
 import AVFoundation
 
-class OpenAccessPlayer: NSObject, Player {
+let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 
+class OpenAccessPlayer: NSObject, Player {
     var taskCompletion: Completion? = nil
 
     var errorDomain: String {
@@ -10,6 +11,10 @@ class OpenAccessPlayer: NSObject, Player {
     
     var taskCompleteNotification: Notification.Name {
         return OpenAccessTaskCompleteNotification
+    }
+    
+    var interruptionNotification: Notification.Name {
+        return AudioInterruptionNotification
     }
     
     var isPlaying: Bool {
@@ -24,6 +29,15 @@ class OpenAccessPlayer: NSObject, Player {
                 unload()
             }
         }
+    }
+    
+    @objc func setupNotifications() {
+        // Get the default notification center instance.
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleInterruption),
+                       name: interruptionNotification,
+                       object: nil)
     }
 
     private var avQueuePlayerIsPlaying: Bool = false {
@@ -327,9 +341,9 @@ class OpenAccessPlayer: NSObject, Player {
         self.audiobookID = audiobookID
         self.isDrmOk = drmOk // Skips didSet observer
         self.avQueuePlayer = AVQueuePlayer()
-
         super.init()
 
+        self.setupNotifications()
         self.buildNewPlayerQueue(atCursor: self.cursor) { _ in }
 
         if #available(iOS 10.0, *) {
@@ -648,5 +662,29 @@ extension OpenAccessPlayer{
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.rate))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.currentItem.status))
         self.avQueuePlayer.removeObserver(self, forKeyPath: #keyPath(AVQueuePlayer.reasonForWaitingToPlay))
+        NotificationCenter.default.removeObserver(self, name: interruptionNotification, object: nil)
+    }
+
+    @objc func handleInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+                let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+                    return
+            }
+
+            switch type {
+            case .began:
+                ATLog(.warn, "System audio interruption began.")
+            case .ended:
+                ATLog(.warn, "System audio interruption ended.")
+                guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if options.contains(.shouldResume) {
+                    play()
+                } else {
+                    play()
+                }
+            default: ()
+            }
     }
 }
