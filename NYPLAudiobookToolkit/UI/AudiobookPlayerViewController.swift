@@ -555,7 +555,9 @@ let SkipTimeInterval: Double = 15
         }
         alertController.addAction(alertAction)
 
-        self.present(alertController, animated: true)
+        DispatchQueue.main.async {
+            self.present(alertController, animated: true)
+        }
 
         let bookID = self.audiobookManager.audiobook.uniqueIdentifier
         let logString = "\(#file): Player reported an error. Audiobook: \(bookID)"
