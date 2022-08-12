@@ -9,8 +9,10 @@ class BufferActivityIndicatorView: UIActivityIndicatorView {
     private let debounceTimeInterval = 1.0
 
     override func startAnimating() {
-        super.startAnimating()
-
+        DispatchQueue.main.async {
+            super.startAnimating()
+        }
+        
         // Announce a "buffer" to VoiceOver with sufficient debounce...
         if debounceTimer == nil {
             debounceTimer = Timer.scheduledTimer(timeInterval: debounceTimeInterval,
@@ -22,8 +24,9 @@ class BufferActivityIndicatorView: UIActivityIndicatorView {
     }
 
     override func stopAnimating() {
-        super.stopAnimating()
-
+        DispatchQueue.main.async {
+            super.stopAnimating()
+        }
         debounceTimer?.invalidate()
         debounceTimer = nil
     }
