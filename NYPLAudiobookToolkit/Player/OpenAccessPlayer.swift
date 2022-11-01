@@ -242,9 +242,9 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     /// Moving within the current AVPlayerItem.
-    private func seekWithinCurrentItem(newOffset: TimeInterval)
+    private func seekWithinCurrentItem(newOffset: TimeInterval, overrideIsReady: Bool = false)
     {
-        if self.avQueuePlayer.currentItem?.status != .readyToPlay {
+        if self.avQueuePlayer.currentItem?.status != .readyToPlay && !overrideIsReady {
             ATLog(.debug, "Item not ready to play. Queueing seek operation.")
             self.queuedSeekOffset = newOffset
             return
@@ -305,7 +305,7 @@ class OpenAccessPlayer: NSObject, Player {
                     self.cursorQueuedToPlay = nil
                     self.buildNewPlayerQueue(atCursor: cursor) { success in
                         if success {
-                            self.seekWithinCurrentItem(newOffset: self.chapterAtCurrentCursor.playheadOffset)
+                            self.seekWithinCurrentItem(newOffset: self.chapterAtCurrentCursor.playheadOffset, overrideIsReady: true)
                             self.play()
                         } else {
                             ATLog(.error, "User attempted to play when the player wasn't ready.")
