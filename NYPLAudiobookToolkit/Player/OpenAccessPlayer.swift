@@ -336,7 +336,7 @@ class OpenAccessPlayer: NSObject, Player {
     var delegates: NSHashTable<PlayerDelegate> = NSHashTable(options: [NSPointerFunctions.Options.weakMemory])
 
     required init(cursor: Cursor<SpineElement>, audiobookID: String, drmOk: Bool) {
-
+        print("This is the cursor element: \(cursor)")
         self.cursor = cursor
         self.audiobookID = audiobookID
         self.isDrmOk = drmOk // Skips didSet observer
