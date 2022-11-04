@@ -42,6 +42,10 @@ import UIKit
     init?(JSON: Any?)
 }
 
+extension Audiobook {
+    func nextChapter() {}
+}
+
 /// Host app should instantiate a audiobook object with JSON.
 /// This audiobook should then be able to construct utility classes
 /// using data in the spine of that JSON.

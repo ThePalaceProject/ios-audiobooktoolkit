@@ -452,6 +452,12 @@ let SkipTimeInterval: Double = 15
         guard let currentLocation = self.currentChapterLocation else {
             return
         }
+        
+        guard currentLocation.duration > 0 else {
+            self.audiobookManager.audiobook.nextChapter()
+            return
+        }
+
         if !(self.seekBar.scrubbing || self.waitingForPlayer) {
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(

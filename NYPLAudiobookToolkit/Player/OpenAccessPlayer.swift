@@ -432,6 +432,10 @@ class OpenAccessPlayer: NSObject, Player {
     /// downloads have completed since the queue was last built.
     @objc func currentPlayerItemEnded(item: AVPlayerItem)
     {
+        nextChapter()
+    }
+    
+    func nextChapter() {
         DispatchQueue.main.async {
             let currentCursor = self.cursor
             if let nextCursor = self.cursor.next() {

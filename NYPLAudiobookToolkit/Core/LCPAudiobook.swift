@@ -98,18 +98,19 @@ import Foundation
         for (index, element) in allTocElements.enumerated() {
             var elementDuration = 0.0
             let section = resourceElements[element.rawLink() ?? ""]
-
+            let offset = element.offset()
+            
             if index < allTocElements.count {
                 let current = allTocElements[safe: index]
                 let next = allTocElements[safe: index + 1]
 
                 if let current = current, let next = next, current.hasSameParent(as: next) {
                     // If next element is in same section, calculate duration as difference between current and next
-                    elementDuration = next.offset() - element.offset()
+                    elementDuration = next.offset() - offset
                 } else if let section = section {
                     // If next element is not in the same section as the next element,
                     // calculate duration as the difference between current element and duration of section
-                    elementDuration = section.duration - element.offset()
+                    elementDuration = section.duration - offset
                 }
             }
 
@@ -117,7 +118,7 @@ import Foundation
                 chapterNumber: UInt(section?.chapter ?? 0),
                 title: element.title ?? "",
                 href: element.href ?? "",
-                offset: element.offset(),
+                offset: offset,
                 mediaType: section?.type ?? .audioMP3,
                 duration: elementDuration,
                 audiobookID: identifier
