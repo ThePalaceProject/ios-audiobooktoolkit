@@ -432,10 +432,6 @@ class OpenAccessPlayer: NSObject, Player {
     /// downloads have completed since the queue was last built.
     @objc func currentPlayerItemEnded(item: AVPlayerItem)
     {
-        nextChapter()
-    }
-    
-    func nextChapter() {
         DispatchQueue.main.async {
             let currentCursor = self.cursor
             if let nextCursor = self.cursor.next() {
@@ -450,6 +446,17 @@ class OpenAccessPlayer: NSObject, Player {
                 self.pause()
             }
             self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
+        }
+    }
+    
+    func nextChapter() {
+        DispatchQueue.main.async {
+            let currentCursor = self.cursor
+            if let nextCursor = self.cursor.next() {
+                self.cursor = nextCursor
+                self.seekWithinCurrentItem(newOffset: nextCursor.currentElement.chapter.playheadOffset)
+                self.play()
+            }
         }
     }
 
