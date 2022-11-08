@@ -453,7 +453,7 @@ let SkipTimeInterval: Double = 15
             return
         }
         
-        guard self.currentChapterLocation?.duration ?? 0.0 - self.seekBar.state.progress.offset >= 0 else {
+        guard self.seekBar.state.progress.duration >= self.seekBar.state.progress.offset else {
             (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
             return
         }
