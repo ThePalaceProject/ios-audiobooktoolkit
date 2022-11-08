@@ -453,7 +453,7 @@ let SkipTimeInterval: Double = 15
             return
         }
         
-        guard self.seekBar.state.progress.duration >= 0 else {
+        guard self.currentChapterLocation?.duration ?? 0.0 - self.seekBar.state.progress.offset >= 0 else {
             (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
             return
         }
@@ -673,13 +673,12 @@ extension AudiobookPlayerViewController: PlayerDelegate {
     
     public func updateSeekBar(chapter: ChapterLocation) {
         self.seekBar.setOffset(
-            chapter.playheadOffset ?? 0.0,
+            chapter.playheadOffset,
             duration: chapter.duration,
-            timeLeftInBook: 1.0,
+            timeLeftInBook: self.timeLeftAfter(chapter: chapter),
             middleText: self.middleTextFor(chapter: chapter)
         )
     }
-
 
     public func playerDidUnload(_ player: Player) { }
 }
