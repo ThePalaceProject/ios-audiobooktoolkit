@@ -201,6 +201,8 @@ extension DefaultAudiobookManager: PlayerDelegate {
       self.mediaControlHandler.teardown()
       self.timer?.invalidate()
     }
+
+    public func updateSeekBar(chapter: ChapterLocation) { }
 }
 
 typealias RemoteCommandHandler = (_ event: MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus

@@ -105,6 +105,7 @@ extension AudiobookTableOfContents: PlayerDelegate {
     public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
     public func player(_ player: Player, didComplete chapter: ChapterLocation) { }
     public func playerDidUnload(_ player: Player) { }
+    public func updateSeekBar(chapter: ChapterLocation) { }
 }
 
 extension AudiobookTableOfContents: AudiobookNetworkServiceDelegate {

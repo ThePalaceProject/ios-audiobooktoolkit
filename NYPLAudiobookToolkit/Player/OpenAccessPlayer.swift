@@ -454,7 +454,7 @@ class OpenAccessPlayer: NSObject, Player {
             if let nextCursor = self.cursor.next() {
                 self.cursor = nextCursor
                 self.movePlayheadToLocation(nextCursor.currentElement.chapter)
-                self.notifyDelegatesOfPlaybackFor(chapter: nextCursor.currentElement.chapter)
+                self.updateSeekbar(chapter: nextCursor.currentElement.chapter)
             }
         }
     }
@@ -642,6 +642,12 @@ extension OpenAccessPlayer{
     fileprivate func notifyDelegatesOfUnloadRequest() {
         self.delegates.allObjects.forEach { (delegate) in
             delegate.playerDidUnload(self)
+        }
+    }
+    
+    fileprivate func updateSeekbar(chapter: ChapterLocation) {
+        self.delegates.allObjects.forEach { (delegate) in
+            delegate.updateSeekBar(chapter: chapter)
         }
     }
 

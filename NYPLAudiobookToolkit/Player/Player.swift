@@ -36,6 +36,8 @@ import Foundation
 
     /// Called by the host when we're done with the audiobook, to perform necessary cleanup.
     func playerDidUnload(_ player: Player)
+    
+    func updateSeekBar(chapter: ChapterLocation) 
 }
 
 /// Objects that impelment Player should wrap a PlaybackEngine.
