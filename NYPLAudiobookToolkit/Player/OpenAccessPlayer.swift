@@ -451,11 +451,9 @@ class OpenAccessPlayer: NSObject, Player {
     
     func nextChapter() {
         DispatchQueue.main.async {
-            let currentCursor = self.cursor
             if let nextCursor = self.cursor.next() {
                 self.cursor = nextCursor
-                self.seekWithinCurrentItem(newOffset: nextCursor.currentElement.chapter.playheadOffset)
-                self.play()
+                self.movePlayheadToLocation(nextCursor.currentElement.chapter)
             }
         }
     }
