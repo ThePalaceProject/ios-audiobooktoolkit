@@ -653,6 +653,12 @@ extension AudiobookPlayerViewController: PlayerDelegate {
     public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
         self.waitingForPlayer = false
         self.updatePlayPauseButtonIfNeeded()
+        self.seekBar.setOffset(
+            chapter.startOffset ?? 0.0,
+            duration: chapter.duration,
+            timeLeftInBook: 1.0,
+            middleText: self.middleTextFor(chapter: chapter)
+        )
         if !self.seekBar.isUserInteractionEnabled {
             self.seekBar.isUserInteractionEnabled = true
         }
