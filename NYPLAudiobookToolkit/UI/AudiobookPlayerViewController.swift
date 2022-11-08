@@ -672,12 +672,12 @@ extension AudiobookPlayerViewController: PlayerDelegate {
     }
     
     public func updateSeekBar(chapter: ChapterLocation) {
-//        self.seekBar.setOffset(
-//            chapter.startOffset ?? 0.0,
-//            duration: chapter.duration,
-//            timeLeftInBook: 1.0,
-//            middleText: self.middleTextFor(chapter: chapter)
-//        )
+        self.seekBar.setOffset(
+            chapter.playheadOffset ?? 0.0,
+            duration: chapter.duration,
+            timeLeftInBook: 1.0,
+            middleText: self.middleTextFor(chapter: chapter)
+        )
     }
 
 
