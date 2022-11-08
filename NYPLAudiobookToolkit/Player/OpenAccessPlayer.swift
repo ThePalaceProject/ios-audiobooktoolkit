@@ -454,6 +454,7 @@ class OpenAccessPlayer: NSObject, Player {
             if let nextCursor = self.cursor.next() {
                 self.cursor = nextCursor
                 self.movePlayheadToLocation(nextCursor.currentElement.chapter)
+                self.notifyDelegatesOfPlaybackFor(chapter: nextCursor.currentElement.chapter)
             }
         }
     }
