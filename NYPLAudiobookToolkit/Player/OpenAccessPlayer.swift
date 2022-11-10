@@ -74,7 +74,7 @@ class OpenAccessPlayer: NSObject, Player {
         let playerItemStatus = self.avQueuePlayer.currentItem?.status
         let offset: TimeInterval
         if !avPlayerOffset.isNaN && playerItemStatus == .readyToPlay {
-            offset = avPlayerOffset - self.chapterAtCurrentCursor.startOffset
+            offset = avPlayerOffset
         } else {
             offset = 0
         }
@@ -82,7 +82,7 @@ class OpenAccessPlayer: NSObject, Player {
             number: self.chapterAtCurrentCursor.number,
             part: self.chapterAtCurrentCursor.part,
             duration: self.chapterAtCurrentCursor.duration,
-            startOffset: offset,
+            startOffset: self.chapterAtCurrentCursor.startOffset,
             playheadOffset: offset,
             title: self.chapterAtCurrentCursor.title,
             audiobookID: self.audiobookID
