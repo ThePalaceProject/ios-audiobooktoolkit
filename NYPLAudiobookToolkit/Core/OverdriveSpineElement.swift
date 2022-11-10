@@ -12,7 +12,7 @@ final class OverdriveSpineElement: SpineElement {
         return ChapterLocation(number: self.chapterNumber,
                                part: 0,
                                duration: self.duration,
-                               startOffset: self.chapter.playheadOffset,
+//                               startOffset: 0,
                                playheadOffset: 0,
                                title: self.title,
                                audiobookID: self.audiobookID)

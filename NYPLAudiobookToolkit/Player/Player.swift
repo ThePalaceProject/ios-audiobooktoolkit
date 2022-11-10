@@ -104,20 +104,17 @@ extension Player {
     public let type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
-    public let startOffset: TimeInterval?
+//    public let startOffset: TimeInterval?
     public let playheadOffset: TimeInterval
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
-    public var scrubberOffset: TimeInterval {
-        playheadOffset - (startOffset ?? 0)
-    }
     
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case number = "chapter"
         case part
-        case startOffset
+//        case startOffset
         case playheadOffset = "time"
         case title
         case audiobookID
@@ -128,7 +125,7 @@ extension Player {
         case type = "@type"
         case number
         case part
-        case startOffset
+//        case startOffset
         case playheadOffset
         case title
         case audiobookID
@@ -163,7 +160,7 @@ extension Player {
     }
     
     public init(from decoder: Decoder) throws {
-        startOffset = 0
+//        startOffset = 0
 
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -199,12 +196,12 @@ extension Player {
         try container.encode(audiobookID, forKey: .audiobookID)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
         self.duration = duration
-        self.startOffset = startOffset
+//        self.startOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
         
@@ -215,7 +212,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.startOffset ?? 0,
+//            startOffset: self.startOffset ?? 0,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
