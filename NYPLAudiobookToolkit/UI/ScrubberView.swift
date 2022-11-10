@@ -130,7 +130,7 @@ final class ScrubberView: UIView {
         self.state = ScrubberUIState(
             gripperHeight: self.state.gripperHeight,
             progressColor: self.state.progressColor,
-            progress: ScrubberProgress(offset: 0, duration: duration, timeLeftInBook: timeLeftInBook),
+            progress: ScrubberProgress(offset: offset, duration: duration, timeLeftInBook: timeLeftInBook),
             middleText: middleText,
             scrubbing: self.state.scrubbing
         )
