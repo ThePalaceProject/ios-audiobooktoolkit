@@ -104,7 +104,7 @@ extension Player {
     public let type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
-//    public let startOffset: TimeInterval?
+    public let startOffset: TimeInterval
     public let playheadOffset: TimeInterval
     public let title: String?
     public let audiobookID: String
@@ -114,7 +114,7 @@ extension Player {
         case type = "@type"
         case number = "chapter"
         case part
-//        case startOffset
+        case startOffset
         case playheadOffset = "time"
         case title
         case audiobookID
@@ -125,7 +125,7 @@ extension Player {
         case type = "@type"
         case number
         case part
-//        case startOffset
+        case startOffset
         case playheadOffset
         case title
         case audiobookID
@@ -160,8 +160,6 @@ extension Player {
     }
     
     public init(from decoder: Decoder) throws {
-//        startOffset = 0
-
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
         // Legacy bookmarks will not have a type property and need to be decoded
@@ -174,6 +172,7 @@ extension Player {
             part = try legacyValues.decode(UInt.self, forKey: .part)
             duration = Double(try legacyValues.decode(Float.self, forKey: .duration))
             playheadOffset = Double(try legacyValues.decode(Float.self, forKey: .playheadOffset))
+            startOffset = playheadOffset
             return
         }
 
@@ -183,6 +182,7 @@ extension Player {
         part = try values.decode(UInt.self, forKey: .part)
         duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
         playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
+        startOffset = playheadOffset
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -196,15 +196,14 @@ extension Player {
         try container.encode(audiobookID, forKey: .audiobookID)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
         self.duration = duration
-//        self.startOffset = startOffset
+        self.startOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
-        
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
@@ -212,7 +211,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-//            startOffset: self.startOffset ?? 0,
+            startOffset: self.startOffset,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID

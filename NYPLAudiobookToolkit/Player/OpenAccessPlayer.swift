@@ -82,7 +82,7 @@ class OpenAccessPlayer: NSObject, Player {
             number: self.chapterAtCurrentCursor.number,
             part: self.chapterAtCurrentCursor.part,
             duration: self.chapterAtCurrentCursor.duration,
-//            startOffset: 0,
+            startOffset: offset,
             playheadOffset: offset,
             title: self.chapterAtCurrentCursor.title,
             audiobookID: self.audiobookID
