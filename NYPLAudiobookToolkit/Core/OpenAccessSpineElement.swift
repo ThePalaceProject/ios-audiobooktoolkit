@@ -16,7 +16,7 @@ final class OpenAccessSpineElement: SpineElement {
             number: self.chapterNumber,
             part: 0,
             duration: self.duration,
-//            startOffset: 0,
+            startOffset: 0,
             playheadOffset: 0,
             title: self.title,
             audiobookID: self.audiobookID
