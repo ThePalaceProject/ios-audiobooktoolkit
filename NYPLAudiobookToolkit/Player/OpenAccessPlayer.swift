@@ -75,6 +75,7 @@ class OpenAccessPlayer: NSObject, Player {
         let offset: TimeInterval
         if !avPlayerOffset.isNaN && playerItemStatus == .readyToPlay {
             offset = max(avPlayerOffset - (self.chapterAtCurrentCursor.startOffset ?? 0), 0)
+            print("Current chapter location created: offset: \(offset), avPlayerOffset: \(avPlayerOffset), startOffset: \(self.chapterAtCurrentCursor.startOffset ?? 0)")
         } else {
             offset = 0
         }
