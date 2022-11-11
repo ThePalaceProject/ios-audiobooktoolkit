@@ -52,7 +52,7 @@ struct ScrubberProgress {
     }
     
     func progressFromPercentage(_ percentage: Float) -> ScrubberProgress {
-        let newOffset = TimeInterval(Float(self.duration + (fileOffset ?? 0)) * percentage)
+        let newOffset = TimeInterval(Float(self.duration) * percentage) + (fileOffset ?? 0)
         let difference = self.offset - newOffset
         return ScrubberProgress(
             fileOffset: self.fileOffset,
