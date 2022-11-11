@@ -461,7 +461,7 @@ let SkipTimeInterval: Double = 15
 
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(
-                max(currentLocation.playheadOffset - (currentLocation.startOffset ?? 0), 0),
+                currentLocation.playheadOffset,
                 duration: currentLocation.duration,
                 timeLeftInBook: timeLeftInBook,
                 middleText: self.middleTextFor(chapter: currentLocation)
@@ -717,7 +717,7 @@ extension AudiobookPlayerViewController: ScrubberViewDelegate {
             self.activityIndicator.startAnimating()
         }
 
-        let offsetMovement = requestedOffset.playheadOffset - currentOffset.playheadOffset
+        let offsetMovement = requestedOffset.playheadOffset - max(currentOffset.playheadOffset - (currentOffset.startOffset ?? 0), 0)
 
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
             self.seekBar.setOffset(adjustedLocation.playheadOffset,
