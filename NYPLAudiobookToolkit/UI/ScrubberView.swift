@@ -127,6 +127,7 @@ final class ScrubberView: UIView {
     }
     
     public func setOffset(_ offset: TimeInterval, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
+        
         self.state = ScrubberUIState(
             gripperHeight: self.state.gripperHeight,
             progressColor: self.state.progressColor,
