@@ -20,7 +20,6 @@ private func defaultTimeLabelWidth() -> CGFloat {
 }
 
 struct ScrubberProgress {
-    let fileOffset: TimeInterval?
     let offset: TimeInterval
     let duration: TimeInterval
     let timeLeftInBook: TimeInterval
@@ -55,7 +54,6 @@ struct ScrubberProgress {
         let newOffset = TimeInterval(Float(self.duration) * percentage)
         let difference = self.offset - newOffset
         return ScrubberProgress(
-            fileOffset: self.fileOffset,
             offset: newOffset,
             duration: self.duration,
             timeLeftInBook: self.timeLeftInBook + difference
@@ -76,7 +74,7 @@ struct ScrubberUIState {
     public func progressLocationFor(_ width: CGFloat) -> CGFloat {
         var progressLocation = self.gripperHeight
         if self.progress.duration > 0 {
-            progressLocation = CGFloat((self.progress.offset - (self.progress.fileOffset ?? 0)) / self.progress.duration) * width
+            progressLocation = CGFloat(self.progress.offset / self.progress.duration) * width
         }
         
         // Somehow our offset is greater than our duration, and our location is greater than the width of the actual playing content
@@ -119,7 +117,7 @@ final class ScrubberView: UIView {
     var state: ScrubberUIState = ScrubberUIState(
         gripperHeight: 36,
         progressColor: UIColor.black,
-        progress: ScrubberProgress(fileOffset: 0, offset: 0, duration: 0, timeLeftInBook: 0),
+        progress: ScrubberProgress(offset: 0, duration: 0, timeLeftInBook: 0),
         middleText: "",
         scrubbing: false
     ) {
@@ -128,12 +126,11 @@ final class ScrubberView: UIView {
         }
     }
     
-    public func setOffset(_ fileOffset: TimeInterval?, offset: TimeInterval, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
-        
+    public func setOffset(_ offset: TimeInterval, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
         self.state = ScrubberUIState(
             gripperHeight: self.state.gripperHeight,
             progressColor: self.state.progressColor,
-            progress: ScrubberProgress(fileOffset: fileOffset, offset: offset, duration: duration, timeLeftInBook: timeLeftInBook),
+            progress: ScrubberProgress(offset: offset, duration: duration, timeLeftInBook: timeLeftInBook),
             middleText: middleText,
             scrubbing: self.state.scrubbing
         )
