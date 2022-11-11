@@ -52,7 +52,7 @@ struct ScrubberProgress {
     }
     
     func progressFromPercentage(_ percentage: Float) -> ScrubberProgress {
-        let newOffset = TimeInterval(Float(self.duration) * percentage) + (fileOffset ?? 0)
+        let newOffset = TimeInterval(Float(self.duration) * percentage)
         let difference = self.offset - newOffset
         return ScrubberProgress(
             fileOffset: self.fileOffset,
@@ -76,7 +76,7 @@ struct ScrubberUIState {
     public func progressLocationFor(_ width: CGFloat) -> CGFloat {
         var progressLocation = self.gripperHeight
         if self.progress.duration > 0 {
-            progressLocation = CGFloat(self.progress.offset / self.progress.duration) * width
+            progressLocation = CGFloat((self.progress.offset - (self.progress.fileOffset ?? 0)) / self.progress.duration) * width
         }
         
         // Somehow our offset is greater than our duration, and our location is greater than the width of the actual playing content
