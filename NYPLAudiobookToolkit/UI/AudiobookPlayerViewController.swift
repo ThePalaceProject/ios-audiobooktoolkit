@@ -461,7 +461,7 @@ let SkipTimeInterval: Double = 15
 
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(
-                currentLocation.playheadOffset,
+                currentLocation.playheadOffset + (currentLocation.startOffset ?? 0),
                 duration: currentLocation.duration,
                 timeLeftInBook: timeLeftInBook,
                 middleText: self.middleTextFor(chapter: currentLocation)
