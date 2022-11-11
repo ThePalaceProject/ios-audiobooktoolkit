@@ -125,7 +125,7 @@ extension Player {
         case type = "@type"
         case number
         case part
-        case startOffsetstartOffset
+        case startOffset
         case playheadOffset
         case title
         case audiobookID

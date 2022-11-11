@@ -461,7 +461,7 @@ let SkipTimeInterval: Double = 15
 
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(
-                currentLocation.playheadOffset - (currentLocation.startOffset ?? 0),
+                currentLocation.playheadOffset,
                 duration: currentLocation.duration,
                 timeLeftInBook: timeLeftInBook,
                 middleText: self.middleTextFor(chapter: currentLocation)
@@ -582,7 +582,7 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         let selectedChapter = item.chapter
         let timeLeftInBook = self.timeLeftAfter(chapter: selectedChapter)
         self.seekBar.setOffset(
-            selectedChapter.playheadOffset - (selectedChapter.startOffset ?? 0),
+            selectedChapter.playheadOffset,
             duration: selectedChapter.duration,
             timeLeftInBook: timeLeftInBook,
             middleText: self.middleTextFor(chapter: selectedChapter)
