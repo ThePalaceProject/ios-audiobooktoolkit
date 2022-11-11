@@ -717,7 +717,7 @@ extension AudiobookPlayerViewController: ScrubberViewDelegate {
             self.activityIndicator.startAnimating()
         }
 
-        let offsetMovement = requestedOffset.playheadOffset - currentOffset.playheadOffset - currentOffset.startOffset
+        let offsetMovement = requestedOffset.playheadOffset - currentOffset.playheadOffset - (currentOffset.startOffset ?? 0)
 
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
             self.seekBar.setOffset(adjustedLocation.playheadOffset,
