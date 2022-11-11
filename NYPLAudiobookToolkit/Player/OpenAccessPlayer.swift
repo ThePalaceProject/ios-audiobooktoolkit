@@ -74,7 +74,7 @@ class OpenAccessPlayer: NSObject, Player {
         let playerItemStatus = self.avQueuePlayer.currentItem?.status
         let offset: TimeInterval
         if !avPlayerOffset.isNaN && playerItemStatus == .readyToPlay {
-            offset = avPlayerOffset - (self.chapterAtCurrentCursor.playheadOffset)
+            offset = max(avPlayerOffset - (self.chapterAtCurrentCursor.playheadOffset), 0)
         } else {
             offset = 0
         }
