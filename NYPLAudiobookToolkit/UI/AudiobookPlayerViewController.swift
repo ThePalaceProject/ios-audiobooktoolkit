@@ -229,7 +229,7 @@ let SkipTimeInterval: Double = 15
         items.insert(sleepTimer, at: self.sleepTimerBarButtonIndex)
         self.toolbar.setItems(items, animated: true)
         self.seekBar.setOffset(
-            chapter.playheadOffset,
+            chapter.playheadOffset - (chapter.startOffset ?? 0),
             duration: chapter.duration,
             timeLeftInBook: self.timeLeftAfter(chapter: chapter),
             middleText: self.middleTextFor(chapter: chapter)
@@ -461,7 +461,7 @@ let SkipTimeInterval: Double = 15
 
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(
-                currentLocation.playheadOffset,
+                currentLocation.playheadOffset - (currentLocation.startOffset ?? 0),
                 duration: currentLocation.duration,
                 timeLeftInBook: timeLeftInBook,
                 middleText: self.middleTextFor(chapter: currentLocation)
@@ -582,7 +582,7 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         let selectedChapter = item.chapter
         let timeLeftInBook = self.timeLeftAfter(chapter: selectedChapter)
         self.seekBar.setOffset(
-            selectedChapter.playheadOffset,
+            selectedChapter.playheadOffset - (selectedChapter.startOffset ?? 0),
             duration: selectedChapter.duration,
             timeLeftInBook: timeLeftInBook,
             middleText: self.middleTextFor(chapter: selectedChapter)
@@ -673,7 +673,7 @@ extension AudiobookPlayerViewController: PlayerDelegate {
     
     public func updateSeekBar(chapter: ChapterLocation) {
         self.seekBar.setOffset(
-            chapter.playheadOffset,
+            chapter.playheadOffset - (chapter.startOffset ?? 0),
             duration: chapter.duration,
             timeLeftInBook: self.timeLeftAfter(chapter: chapter),
             middleText: self.middleTextFor(chapter: chapter)
