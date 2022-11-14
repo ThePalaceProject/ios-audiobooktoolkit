@@ -141,19 +141,19 @@ import AVFoundation
 
         
         groups.forEach { group in
-            guard let url = group.first?.url else { return }
+            guard let url = (group.first?.downloadTask as? LCPDownloadTask)?.decryptedUrl else { return }
             let asset = AVAsset(url: url)
             
-
             group.forEach { item in
     
                 let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough)!
-                exporter.outputFileType = AVFileType.wav
+                exporter.outputFileType = AVFileType.mp4
 
                 let startTime = CMTimeMake(value: Int64(item.offset), timescale: 1)
                 let endTime = CMTimeMake(value: Int64(item.offset + item.duration), timescale: 1)
                 exporter.timeRange = CMTimeRange(start: startTime, end: endTime)
-                let exportPath: String = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].path+"/"+item.title+".wav"
+                let fileName = item.title.replacingOccurrences(of: " ", with: "_")
+                let exportPath: String = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].path+"/"+fileName+".mp4"
                 let exportURL = URL(fileURLWithPath: exportPath)
                 exporter.outputURL = exportURL
                 item.url = exportURL
