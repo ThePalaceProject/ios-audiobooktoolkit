@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AVFoundation
 
 @objc public class LCPAudiobook: NSObject, Audiobook {
 
@@ -107,7 +108,7 @@ import Foundation
                     // If next element is in same section, calculate duration as difference between current and next
                     elementDuration = next.offset() - element.offset()
                 } else if let section = section {
-                    // If next element is not in the same section as the next element,
+                    // If next element is not in the same section as the following element,
                     // calculate duration as the difference between current element and duration of section
                     elementDuration = section.duration - element.offset()
                 }
@@ -123,8 +124,53 @@ import Foundation
                 audiobookID: identifier
             ))
         }
+        return splitAudio(elements: spineElements)
+    }
+    
+    private static func splitAudio(elements: [LCPSpineElement]) -> [LCPSpineElement] {
+    
+        let groups = elements.reduce(into: [[LCPSpineElement]]()) { acc, element in
+            for i in acc.indices {
+                if acc[i][0].url.path == element.url.path {
+                    acc[i].append(element)
+                    return
+                }
+            }
+            acc.append([element])
+        }
 
-        return spineElements
+        
+        groups.forEach { group in
+            guard let url = group.first?.url else { return }
+            let asset = AVAsset(url: url)
+            
+
+            group.forEach { item in
+    
+                let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough)!
+                exporter.outputFileType = AVFileType.wav
+
+                let startTime = CMTimeMake(value: Int64(item.offset), timescale: 1)
+                let endTime = CMTimeMake(value: Int64(item.offset + item.duration), timescale: 1)
+                exporter.timeRange = CMTimeRange(start: startTime, end: endTime)
+                let exportPath: String = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].path+"/"+item.title+".wav"
+                let exportURL = URL(fileURLWithPath: exportPath)
+                exporter.outputURL = exportURL
+                item.url = exportURL
+                item.offset  = 0
+
+                exporter.exportAsynchronously {
+                    switch exporter.status {
+                    case .failed:
+                        print("Export Failed")
+                    default:
+                        print("Export Succeeded: \(exportURL)")
+                    }
+                }
+            }
+        }
+
+        return elements
     }
     
     private static func extractTOCElements(toc: [[String: Any]]) ->[TocElement] {

@@ -46,7 +46,7 @@ final class LCPSpineElement: SpineElement {
     let key: String
     let chapterNumber: UInt
     let title: String
-    let url: URL
+    var url: URL
     var offset: Double
     let mediaType: LCPSpineElementMediaType
     let duration: TimeInterval
