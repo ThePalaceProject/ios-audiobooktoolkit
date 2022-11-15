@@ -78,7 +78,7 @@ struct ScrubberUIState {
     public func progressLocationFor(_ width: CGFloat) -> CGFloat {
         var progressLocation = self.gripperHeight
         if self.progress.duration > 0 {
-            progressLocation = CGFloat(self.progress.offset / self.progress.duration) * width
+            progressLocation = CGFloat(self.progress.scrubberOffset / self.progress.duration) * width
         }
         
         // Somehow our offset is greater than our duration, and our location is greater than the width of the actual playing content
@@ -329,7 +329,7 @@ final class ScrubberView: UIView {
     }
 
     private func progressBackgroundVoiceOverDescription() -> String {
-        let offset = HumanReadableTimestamp(timeInterval: self.state.progress.offset).accessibleDescription
+        let offset = HumanReadableTimestamp(timeInterval: self.state.progress.scrubberOffset).accessibleDescription
         let remaining = HumanReadableTimestamp(timeInterval: self.state.progress.timeLeft).accessibleDescription
         let accessibleString = NSLocalizedString("%@ played. %@ remaining.",
                                                  bundle: Bundle.audiobookToolkit()!,
@@ -364,7 +364,7 @@ final class ScrubberView: UIView {
         if isScrubbing {
             isScrubbing = false
             self.scrub(touch: touches.first)
-            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.scrubberOffset)
         }
     }
     
@@ -372,7 +372,7 @@ final class ScrubberView: UIView {
         if isScrubbing {
             isScrubbing = false
             self.scrub(touch: touches.first)
-            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.scrubberOffset)
         }
     }
 }
