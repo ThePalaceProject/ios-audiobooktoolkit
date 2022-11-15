@@ -21,15 +21,18 @@ private func defaultTimeLabelWidth() -> CGFloat {
 
 struct ScrubberProgress {
     let offset: TimeInterval
+    let startOffset: TimeInterval
     let duration: TimeInterval
     let timeLeftInBook: TimeInterval
+    
+    var scrubberOffset: TimeInterval { startOffset - offset }
 
     var timeLeftText: String {
         return HumanReadableTimestamp(timeInterval: self.timeLeft).timecode
     }
 
     var playheadText: String {
-        return HumanReadableTimestamp(timeInterval: self.offset).timecode
+        return HumanReadableTimestamp(timeInterval: self.scrubberOffset).timecode
     }
 
     var timeLeftInBookText: String {
@@ -47,14 +50,15 @@ struct ScrubberProgress {
     }
 
     var timeLeft: TimeInterval {
-        return max(self.duration - self.offset, 0)
+        return max(self.duration - self.scrubberOffset, 0)
     }
     
     func progressFromPercentage(_ percentage: Float) -> ScrubberProgress {
         let newOffset = TimeInterval(Float(self.duration) * percentage)
-        let difference = self.offset - newOffset
+        let difference = self.scrubberOffset - newOffset
         return ScrubberProgress(
             offset: newOffset,
+            startOffset: self.startOffset,
             duration: self.duration,
             timeLeftInBook: self.timeLeftInBook + difference
         )
@@ -117,7 +121,7 @@ final class ScrubberView: UIView {
     var state: ScrubberUIState = ScrubberUIState(
         gripperHeight: 36,
         progressColor: UIColor.black,
-        progress: ScrubberProgress(offset: 0, duration: 0, timeLeftInBook: 0),
+        progress: ScrubberProgress(offset: 0, startOffset: 0, duration: 0, timeLeftInBook: 0),
         middleText: "",
         scrubbing: false
     ) {
@@ -126,11 +130,11 @@ final class ScrubberView: UIView {
         }
     }
     
-    public func setOffset(_ offset: TimeInterval, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
+    public func setOffset(_ offset: TimeInterval, startOffset: TimeInterval, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
         self.state = ScrubberUIState(
             gripperHeight: self.state.gripperHeight,
             progressColor: self.state.progressColor,
-            progress: ScrubberProgress(offset: offset, duration: duration, timeLeftInBook: timeLeftInBook),
+            progress: ScrubberProgress(offset: offset, startOffset: startOffset, duration: duration, timeLeftInBook: timeLeftInBook),
             middleText: middleText,
             scrubbing: self.state.scrubbing
         )
