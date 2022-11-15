@@ -25,7 +25,7 @@ struct ScrubberProgress {
     let duration: TimeInterval
     let timeLeftInBook: TimeInterval
     
-    var scrubberOffset: TimeInterval { startOffset - offset }
+    var scrubberOffset: TimeInterval { max(startOffset - offset, 0.0) }
 
     var timeLeftText: String {
         return HumanReadableTimestamp(timeInterval: self.timeLeft).timecode
