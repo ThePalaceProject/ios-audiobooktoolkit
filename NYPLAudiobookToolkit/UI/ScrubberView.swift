@@ -50,7 +50,7 @@ struct ScrubberProgress {
     }
 
     var timeLeft: TimeInterval {
-        return max(self.duration - self.scrubberOffset, 0)
+        return max(self.duration - self.startOffset, 0)
     }
     
     func progressFromPercentage(_ percentage: Float) -> ScrubberProgress {
