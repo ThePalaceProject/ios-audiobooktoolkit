@@ -364,7 +364,7 @@ final class ScrubberView: UIView {
         if isScrubbing {
             isScrubbing = false
             self.scrub(touch: touches.first)
-            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.scrubberOffset)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
         }
     }
     
@@ -372,7 +372,7 @@ final class ScrubberView: UIView {
         if isScrubbing {
             isScrubbing = false
             self.scrub(touch: touches.first)
-            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.scrubberOffset)
+            self.delegate?.scrubberView(self, didRequestScrubTo: self.state.progress.offset)
         }
     }
 }
