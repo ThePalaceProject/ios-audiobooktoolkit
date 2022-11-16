@@ -481,8 +481,10 @@ let SkipTimeInterval: Double = 15
             self.playbackControlView.showPauseButtonIfNeeded()
         } else {
             self.playbackControlView.showPlayButtonIfNeeded()
-            if activityIndicator.isAnimating {
-                activityIndicator.stopAnimating()
+            DispatchQueue.main.async() {
+                if self.activityIndicator.isAnimating {
+                    self.activityIndicator.stopAnimating()
+                }
             }
         }
     }
@@ -673,7 +675,7 @@ extension AudiobookPlayerViewController: PlayerDelegate {
     
     public func updateSeekBar(chapter: ChapterLocation) {
         self.seekBar.setOffset(
-            chapter.playheadOffset,
+            chapter.startOffset,
             duration: chapter.duration,
             timeLeftInBook: self.timeLeftAfter(chapter: chapter),
             middleText: self.middleTextFor(chapter: chapter)
