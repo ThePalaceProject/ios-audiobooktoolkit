@@ -137,6 +137,7 @@ final class ScrubberView: UIView {
     }
 
     public func updateUIWith(_ state: ScrubberUIState) {
+        print("UI Updated with state: \(state)")
         self.leftLabel.text = self.state.progress.playheadText
         self.rightLabel.text = self.state.progress.timeLeftText
         self.topLabel.text = self.state.progress.timeLeftInBookText
