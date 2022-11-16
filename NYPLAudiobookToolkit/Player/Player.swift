@@ -109,9 +109,7 @@ extension Player {
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
-
-    var actualPlayheadOffset: TimeInterval { max(self.playheadOffset - (self.startOffset ?? 0), 0) }
-
+    
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case number = "chapter"
@@ -135,21 +133,21 @@ extension Player {
     }
 
     public var timeRemaining: TimeInterval {
-        return self.duration - self.actualPlayheadOffset
+        return self.duration - self.playheadOffset
     }
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.actualPlayheadOffset < 0 {
-            timeInterval = abs(self.actualPlayheadOffset)
+        if self.playheadOffset < 0 {
+            timeInterval = abs(self.playheadOffset)
         }
         return timeInterval
     }
     
     public var timeIntoNextChapter: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.actualPlayheadOffset > self.duration {
-            timeInterval = self.actualPlayheadOffset - self.duration
+        if self.playheadOffset > self.duration {
+            timeInterval = self.playheadOffset - self.duration
         }
         return timeInterval
     }
