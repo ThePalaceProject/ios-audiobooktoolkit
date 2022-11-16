@@ -212,7 +212,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.startOffset ?? 0,
+            startOffset: self.startOffset ?? offset,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
