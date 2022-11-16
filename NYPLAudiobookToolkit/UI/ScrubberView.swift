@@ -103,7 +103,6 @@ final class ScrubberView: UIView {
         return label
     }()
     let middleLabel = UIScrubberLabel()
-    var initalOffset: TimeInterval = 0
     
     var scrubbing: Bool {
         return self.state.scrubbing
@@ -127,15 +126,11 @@ final class ScrubberView: UIView {
         }
     }
     
-    public func setOffset(_ offset: TimeInterval, initialOffset: TimeInterval? = nil, chapterOffset: TimeInterval? = nil, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
-        if let initialOffset = initialOffset {
-            self.initalOffset = initialOffset
-        }
-
+    public func setOffset(_ offset: TimeInterval, chapterOffset: TimeInterval? = nil, duration: TimeInterval, timeLeftInBook: TimeInterval, middleText: String?) {
         self.state = ScrubberUIState(
             gripperHeight: self.state.gripperHeight,
             progressColor: self.state.progressColor,
-            progress: ScrubberProgress(offset: max(offset - self.initalOffset, 0), duration: duration, timeLeftInBook: timeLeftInBook),
+            progress: ScrubberProgress(offset: offset, duration: duration, timeLeftInBook: timeLeftInBook),
             middleText: middleText,
             scrubbing: self.state.scrubbing
         )
