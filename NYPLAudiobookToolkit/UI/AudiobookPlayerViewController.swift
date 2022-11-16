@@ -456,11 +456,12 @@ let SkipTimeInterval: Double = 15
             return
         }
 
+        guard currentLocation.timeRemaining > 0 else {
+            (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
+            return
+        }
+
         if !(self.seekBar.scrubbing || self.waitingForPlayer) {
-            guard currentLocation.timeRemaining > 0 else {
-                (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
-                return
-            }
 
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             print("Offset Updated playheadOffset: \(currentLocation.playheadOffset), startOffset: \(currentLocation.startOffset ?? 0), duration: \(currentLocation.duration)")
