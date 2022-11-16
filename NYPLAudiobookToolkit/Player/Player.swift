@@ -140,16 +140,16 @@ extension Player {
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset < 0 {
-            timeInterval = abs(self.playheadOffset)
+        if self.actualPlayheadOffset < 0 {
+            timeInterval = abs(self.actualPlayheadOffset)
         }
         return timeInterval
     }
     
     public var timeIntoNextChapter: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset > self.duration {
-            timeInterval = self.playheadOffset - self.duration
+        if self.actualPlayheadOffset > self.duration {
+            timeInterval = self.actualPlayheadOffset - self.duration
         }
         return timeInterval
     }
