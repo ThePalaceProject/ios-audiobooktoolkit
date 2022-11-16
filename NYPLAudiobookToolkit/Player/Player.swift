@@ -135,7 +135,7 @@ extension Player {
     }
 
     public var timeRemaining: TimeInterval {
-        return self.duration - self.actualPlayheadOffset
+        return self.duration - self.playheadOffset
     }
 
     public var secondsBeforeStart: TimeInterval? {
