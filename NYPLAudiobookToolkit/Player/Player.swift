@@ -157,10 +157,12 @@ extension Player {
     
     public func inSameChapter(other: ChapterLocation?) -> Bool {
         guard let rhs = other else { return false }
-        return self.audiobookID == rhs.audiobookID &&
+        let sameChapter = self.audiobookID == rhs.audiobookID &&
             self.number == rhs.number &&
             self.part == rhs.part &&
             self.title == rhs.title
+        print("IS in same chapter: \(sameChapter)")
+        return sameChapter
     }
     
     public init(from decoder: Decoder) throws {
