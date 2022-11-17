@@ -161,7 +161,7 @@ extension Player {
             self.number == rhs.number &&
             self.part == rhs.part &&
             self.title == rhs.title
-        print("IS in same chapter: \(sameChapter)")
+        print("IS in same chapter: lhs: \(self), rhs: \(rhs): sameChapter: \(sameChapter)")
         return sameChapter
     }
     
