@@ -193,6 +193,8 @@ class OpenAccessPlayer: NSObject, Player {
         switch newItemDownloadStatus {
         case .saved(_):
             // If we're in the same AVPlayerItem, apply seek directly with AVPlayer.
+            let isSameChapter = newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor)
+            print("Selected Chapter: \(newPlayhead) and chapter: \(self.chapterAtCurrentCursor) are same \(isSameChapter)")
             if newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor) {
                 self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
                 completion?(nil)
