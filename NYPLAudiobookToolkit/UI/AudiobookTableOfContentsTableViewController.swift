@@ -10,14 +10,15 @@ import UIKit
 
 let AudiobookTableOfContentsTableViewControllerCellIdentifier = "AudiobookTableOfContentsTableViewControllerCellIdentifier"
 
-public protocol AudiobookTableOfContentsTableViewControllerDelegate {
+public protocol AudiobookTableOfContentsTableViewControllerDelegate: class {
     func userSelectedSpineItem(item: SpineElement)
 }
 
 public class AudiobookTableOfContentsTableViewController: UITableViewController {
 
     let tableOfContents: AudiobookTableOfContents
-    let delegate: AudiobookTableOfContentsTableViewControllerDelegate
+    weak var delegate: AudiobookTableOfContentsTableViewControllerDelegate?
+    
     private let activityIndicator: UIActivityIndicatorView
     public init(tableOfContents: AudiobookTableOfContents, delegate: AudiobookTableOfContentsTableViewControllerDelegate) {
         self.tableOfContents = tableOfContents
@@ -30,6 +31,7 @@ public class AudiobookTableOfContentsTableViewController: UITableViewController 
         self.tableOfContents.delegate = self
         self.tableView.dataSource = self.tableOfContents
         self.tableView.delegate = self.tableOfContents
+        self.tableView.allowsMultipleSelection = false
     }
     
     required public init?(coder aDecoder: NSCoder) {
