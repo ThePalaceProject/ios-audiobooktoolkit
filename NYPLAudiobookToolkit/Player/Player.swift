@@ -20,6 +20,8 @@ import Foundation
     ///   * The play() method was called
     ///   * The playhead was modified, the result of jumpToLocation(_), skipForward() or skipBack()
     func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation)
+    
+    func playerTimeDidUpdate(_ player: Player)
 
     /// Called to notify that playback has stopped
     /// this should only happen as a result of pause() being called.
@@ -36,6 +38,7 @@ import Foundation
 
     /// Called by the host when we're done with the audiobook, to perform necessary cleanup.
     func playerDidUnload(_ player: Player)
+    
     
     func updateSeekBar(chapter: ChapterLocation) 
 }

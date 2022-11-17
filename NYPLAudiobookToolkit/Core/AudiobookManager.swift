@@ -127,15 +127,15 @@ var sharedLogHandler: LogHandler?
         })
         super.init()
         self.audiobook.player.registerDelegate(self)
-        DispatchQueue.main.async {
-            self.timer = Timer.scheduledTimer(
-                timeInterval: 1,
-                target: self,
-                selector: #selector(DefaultAudiobookManager.timerDidTick1Second(_:)),
-                userInfo: nil,
-                repeats: true
-            )
-        }
+//        DispatchQueue.main.async {
+//            self.timer = Timer.scheduledTimer(
+//                timeInterval: 1,
+//                target: self,
+//                selector: #selector(DefaultAudiobookManager.timerDidTick1Second(_:)),
+//                userInfo: nil,
+//                repeats: true
+//            )
+//        }
     }
 
     deinit {
@@ -150,7 +150,7 @@ var sharedLogHandler: LogHandler?
         )
     }
 
-    @objc func timerDidTick1Second(_ timer: Timer) {
+    @objc func timerDidTick1Second(_ timer: Timer? = nil) {
         self.timerDelegate?.audiobookManager(self, didUpdate: timer)
         guard self.audiobook.player.isLoaded else { return }
         if let chapter = self.audiobook.player.currentChapterLocation {
@@ -182,6 +182,9 @@ var sharedLogHandler: LogHandler?
 extension DefaultAudiobookManager: PlayerDelegate {
     public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
         self.mediaControlHandler.enableMediaControlCommands()
+    }
+    public func playerTimeDidUpdate(_ player: Player) {
+        timerDidTick1Second()
     }
     public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) { }
     public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }

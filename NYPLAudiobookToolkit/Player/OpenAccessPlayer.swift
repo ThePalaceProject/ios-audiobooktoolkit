@@ -345,6 +345,9 @@ class OpenAccessPlayer: NSObject, Player {
 
         self.setupNotifications()
         self.buildNewPlayerQueue(atCursor: self.cursor) { _ in }
+        self.avQueuePlayer.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 1), queue: nil) { time in
+            self.notifyDelegatesOfPlayerTimeUpdate()
+        }
 
         if #available(iOS 10.0, *) {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])
@@ -635,6 +638,12 @@ extension OpenAccessPlayer{
     fileprivate func notifyDelegatesOfPlaybackFor(chapter: ChapterLocation) {
         self.delegates.allObjects.forEach { (delegate) in
             delegate.player(self, didBeginPlaybackOf: chapter)
+        }
+    }
+    
+    fileprivate func notifyDelegatesOfPlayerTimeUpdate() {
+        self.delegates.allObjects.forEach { (delegate) in
+            delegate.playerTimeDidUpdate(self)
         }
     }
 

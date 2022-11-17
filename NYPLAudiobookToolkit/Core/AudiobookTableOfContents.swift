@@ -97,6 +97,8 @@ extension AudiobookTableOfContents: PlayerDelegate {
         self.delegate?.audiobookTableOfContentsDidRequestReload(self)
     }
     
+    public func playerTimeDidUpdate(_ player: Player) { }
+
     public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: false)
         self.delegate?.audiobookTableOfContentsDidRequestReload(self)
