@@ -159,7 +159,8 @@ extension Player {
         guard let rhs = other else { return false }
         return self.audiobookID == rhs.audiobookID &&
             self.number == rhs.number &&
-            self.part == rhs.part
+            self.part == rhs.part &&
+            self.title == rhs.title
     }
     
     public init(from decoder: Decoder) throws {
