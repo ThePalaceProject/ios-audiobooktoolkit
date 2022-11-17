@@ -40,14 +40,14 @@ public class AudiobookTableOfContentsTableViewController: UITableViewController 
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if let index = self.tableOfContents.currentSpineIndex() {
-            self.tableView.reloadData()
-            if self.tableView.numberOfRows(inSection: 0) > index {
-                let indexPath = IndexPath(row: index, section: 0)
-                self.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .top)
-                self.announceTrackIfNeeded(track: indexPath)
-            }
-        }
+//        if let index = self.tableOfContents.currentSpineIndex() {
+//            self.tableView.reloadData()
+//            if self.tableView.numberOfRows(inSection: 0) > index {
+//                let indexPath = IndexPath(row: index, section: 0)
+//                self.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .top)
+//                self.announceTrackIfNeeded(track: indexPath)
+//            }
+//        }
     }
 
     private func announceTrackIfNeeded(track: IndexPath) {
