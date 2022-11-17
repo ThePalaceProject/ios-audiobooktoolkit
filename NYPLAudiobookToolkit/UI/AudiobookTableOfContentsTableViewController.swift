@@ -83,6 +83,6 @@ extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsD
     }
 
     func audiobookTableOfContentsUserSelected(spineItem: SpineElement) {
-        self.delegate.userSelectedSpineItem(item: spineItem)
+        self.delegate?.userSelectedSpineItem(item: spineItem)
     }
 }
