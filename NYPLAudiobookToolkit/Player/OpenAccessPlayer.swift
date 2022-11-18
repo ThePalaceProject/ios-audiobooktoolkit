@@ -456,27 +456,27 @@ class OpenAccessPlayer: NSObject, Player {
 
     func nextChapter() {
         DispatchQueue.main.async {
-            let currentCursor = self.cursor
+//            let currentCursor = self.cursor
             if let nextCursor = self.cursor.next() {
-                self.cursor = nextCursor
-                if let nextCursor = self.cursor.next() {
-                    ATLog(.debug, "Attempting to recover the missing AVPlayerItem.")
-                    self.cursor = nextCursor
-                    if self.avQueuePlayer.items().count <= 1 {
-                        self.pause()
-                        self.attemptToRecoverMissingPlayerItem(cursor: currentCursor)
-                    }
-                } else {
-                    ATLog(.debug, "End of book reached.")
-                    self.pause()
-                }
-                self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
-//                self.playAtLocation(nextCursor.currentElement.chapter, completion: { [weak self] error in
-//                    if let error = error as? NSError {
-//                        self?.notifyDelegatesOfPlaybackFailureFor(chapter: nextCursor.currentElement.chapter, error)
+//                self.cursor = nextCursor
+//                if let nextCursor = self.cursor.next() {
+//                    ATLog(.debug, "Attempting to recover the missing AVPlayerItem.")
+//                    self.cursor = nextCursor
+//                    if self.avQueuePlayer.items().count <= 1 {
+//                        self.pause()
+//                        self.attemptToRecoverMissingPlayerItem(cursor: nextCursor)
 //                    }
-//                    self?.updateSeekbar(chapter: nextCursor.currentElement.chapter)
-//                })
+//                } else {
+//                    ATLog(.debug, "End of book reached.")
+//                    self.pause()
+//                }
+//                self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
+                self.playAtLocation(nextCursor.currentElement.chapter, completion: { [weak self] error in
+                    if let error = error as? NSError {
+                        self?.notifyDelegatesOfPlaybackFailureFor(chapter: nextCursor.currentElement.chapter, error)
+                    }
+                    self?.updateSeekbar(chapter: nextCursor.currentElement.chapter)
+                })
             }
         }
     }

@@ -41,7 +41,9 @@ public class AudiobookTableOfContentsTableViewController: UITableViewController 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         if let index = self.tableOfContents.currentSpineIndex() {
-            self.tableView.reloadData()
+            DispatchQueue.main.async {
+                self.tableView.reloadData()
+            }
             if self.tableView.numberOfRows(inSection: 0) > index {
                 let indexPath = IndexPath(row: index, section: 0)
                 self.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .top)
@@ -66,11 +68,13 @@ public class AudiobookTableOfContentsTableViewController: UITableViewController 
 
 extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsDelegate {
     func audiobookTableOfContentsDidRequestReload(_ audiobookTableOfContents: AudiobookTableOfContents) {
-        if let selectedIndexPath = self.tableView.indexPathForSelectedRow {
-            self.tableView.reloadData()
-            self.tableView.selectRow(at: selectedIndexPath, animated: false, scrollPosition: .none)
-        } else {
-            self.tableView.reloadData()
+        DispatchQueue.main.async {
+            if let selectedIndexPath = self.tableView.indexPathForSelectedRow {
+                self.tableView.reloadData()
+                self.tableView.selectRow(at: selectedIndexPath, animated: false, scrollPosition: .none)
+            } else {
+                self.tableView.reloadData()
+            }
         }
     }
 
