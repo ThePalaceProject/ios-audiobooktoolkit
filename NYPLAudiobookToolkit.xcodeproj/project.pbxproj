@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 48;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,7 +13,6 @@
 		177E52FC24908FD80031CCCD /* OverdrivePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 177E52FB24908FD80031CCCD /* OverdrivePlayer.swift */; };
 		178707C824DA505700649567 /* RSAUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 178707C724DA505700649567 /* RSAUtils.swift */; };
 		178707CE24DA5E1300649567 /* Constants.m in Sources */ = {isa = PBXBuildFile; fileRef = 178707CD24DA5E1300649567 /* Constants.m */; };
-		219868BF267E0C770041369E /* PureLayout.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 219868BE267E0C770041369E /* PureLayout.xcframework */; };
 		21B26CCE257FB95300A60238 /* LCPPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B26CCD257FB95300A60238 /* LCPPlayer.swift */; };
 		21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B26CCF257FBA9F00A60238 /* LCPDownloadTask.swift */; };
 		21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C0F15925768E9A001E51EF /* LCPSpineElement.swift */; };
@@ -190,7 +189,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
-				219868BF267E0C770041369E /* PureLayout.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -764,8 +762,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -792,11 +789,7 @@
 				INFOPLIST_FILE = NYPLAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MARKETING_VERSION = 2.2;
 				"OTHER_SWIFT_FLAGS[arch=*]" = "-D DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = NYPLAudiobooksToolkit.NYPLAudiobookToolkit;
@@ -828,11 +821,7 @@
 				INFOPLIST_FILE = NYPLAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				MARKETING_VERSION = 2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = NYPLAudiobooksToolkit.NYPLAudiobookToolkit;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
@@ -853,11 +842,7 @@
 					"$(PROJECT_DIR)/Carthage/Build/**",
 				);
 				INFOPLIST_FILE = NYPLAudiobookToolkitTests/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = NYPLAudiobooksToolkit.NYPLAudiobookToolkitTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 4.2;
@@ -876,11 +861,7 @@
 					"$(PROJECT_DIR)/Carthage/Build/**",
 				);
 				INFOPLIST_FILE = NYPLAudiobookToolkitTests/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = NYPLAudiobooksToolkit.NYPLAudiobookToolkitTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 4.2;
