@@ -3,6 +3,7 @@ import AVFoundation
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 
 class OpenAccessPlayer: NSObject, Player {
+
     var taskCompletion: Completion? = nil
 
     var errorDomain: String {
@@ -68,6 +69,8 @@ class OpenAccessPlayer: NSObject, Player {
             fetchPlaybackRate() ?? .normalTime
         }
     }
+
+    var currentChapterPublisher: Published<ChapterLocation>.Publisher { }
 
     var currentChapterLocation: ChapterLocation? {
         let avPlayerOffset = self.avQueuePlayer.currentTime().seconds

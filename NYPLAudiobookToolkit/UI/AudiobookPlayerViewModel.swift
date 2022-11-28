@@ -8,10 +8,24 @@
 import Foundation
 import Combine
 
-struct AudiobookPlayerViewModel {
-    
+class AudiobookPlayerViewModel {
+
     private let audiobookManager: AudiobookManager
+
+    @Published var currentChapterLocation: ChapterLocation?
     
-    public var currentChapterLocation: ChapterLocation? {
+//    public var currentChapterLocation: ChapterLocation? {
+//        audiobookManager.audiobook.player.currentChapterLocation
+//    }
+
+    init(audiobookManager: AudiobookManager) {
+        self.audiobookManager = audiobookManager
+        subscribeToPublishers()
     }
+    
+    func subscribeToPublishers() {
+        
+    }
+    
+    
 }

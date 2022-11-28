@@ -1,6 +1,7 @@
 import Foundation
+import Combine
 
-@objc public enum PlaybackRate: Int, CaseIterable {
+public enum PlaybackRate: Int, CaseIterable {
     case threeQuartersTime = 75
     case normalTime = 100
     case oneAndAQuarterTime = 125
@@ -13,7 +14,7 @@ import Foundation
 }
 
 /// Receive updates from player as events happen
-@objc public protocol PlayerDelegate: class {
+public protocol PlayerDelegate: class {
 
     /// Guaranteed to be called on the following scenarios:
     ///   * The playhead crossed to a new chapter
@@ -41,7 +42,7 @@ import Foundation
 /// Objects that impelment Player should wrap a PlaybackEngine.
 /// This does not specifically refer to AVPlayer, but could also be
 /// FAEPlaybackEngine, or another engine that handles DRM content.
-@objc public protocol Player {
+public protocol Player {
     typealias Completion = (Error?) -> Void
 
     var isPlaying: Bool { get }
@@ -49,6 +50,7 @@ import Foundation
     // When set, should lock down playback
     var isDrmOk: Bool { get set }
     
+    var currentChapterPublisher: Published<ChapterLocation>.Publisher { get }
     var currentChapterLocation: ChapterLocation? { get }
 
     /// The rate at which the audio will play, when playing.
