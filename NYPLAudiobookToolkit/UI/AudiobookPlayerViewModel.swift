@@ -10,22 +10,15 @@ import Combine
 
 class AudiobookPlayerViewModel {
 
-    private let audiobookManager: AudiobookManager
+    @Published var waitingForPlayer = false
 
-    @Published var currentChapterLocation: ChapterLocation?
+    public var currentChapterLocation: ChapterLocation? {
+        audiobookManager.audiobook.player.currentChapterLocation
+    }
     
-//    public var currentChapterLocation: ChapterLocation? {
-//        audiobookManager.audiobook.player.currentChapterLocation
-//    }
+    private let audiobookManager: AudiobookManager
 
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
-        subscribeToPublishers()
     }
-    
-    func subscribeToPublishers() {
-        
-    }
-    
-    
 }

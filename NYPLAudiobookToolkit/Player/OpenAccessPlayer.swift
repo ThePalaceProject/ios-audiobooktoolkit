@@ -70,8 +70,6 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    var currentChapterPublisher: Published<ChapterLocation>.Publisher { }
-
     var currentChapterLocation: ChapterLocation? {
         let avPlayerOffset = self.avQueuePlayer.currentTime().seconds
         let playerItemStatus = self.avQueuePlayer.currentItem?.status

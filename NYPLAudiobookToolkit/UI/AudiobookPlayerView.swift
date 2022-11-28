@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct AudiobookPlayerViewControllerNow: View {
+struct AudiobookPlayerView: View {
     var body: some View {
         Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
     }
@@ -15,6 +15,6 @@ struct AudiobookPlayerViewControllerNow: View {
 
 struct AudiobookPlayerViewControllerNow_Previews: PreviewProvider {
     static var previews: some View {
-        AudiobookPlayerViewControllerNow()
+        AudiobookPlayerView()
     }
 }
