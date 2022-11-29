@@ -89,6 +89,7 @@ import Foundation
     }
     
     private static func getSpineElements(toc: [[String: Any]], resources: [[String: Any]], identifier: String) -> [LCPSpineElement] {
+        print("TOC: \(toc)")
         var spineElements: [LCPSpineElement] = []
         let resourceElements = LCPAudiobook.extract(resources: resources)
 

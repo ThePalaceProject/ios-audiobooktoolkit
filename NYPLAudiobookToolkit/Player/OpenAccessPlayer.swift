@@ -175,6 +175,17 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
+    func nextChapter() {
+        DispatchQueue.main.async {
+            if let nextCursor = self.cursor.next() {
+                self.cursor = nextCursor
+                print("Next Chapter to play is: \(nextCursor.currentElement.chapter)")
+                self.playAtLocation(nextCursor.currentElement.chapter, completion: nil)
+                self.play()
+            }
+        }
+    }
+
     /// New Location's playhead offset could be oustide the bounds of audio, so
     /// move and get a reference to the actual new chapter location. Only update
     /// the cursor if a new queue can successfully be built for the player.

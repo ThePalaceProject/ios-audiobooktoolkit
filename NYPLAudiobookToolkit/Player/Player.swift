@@ -206,6 +206,7 @@ extension Player {
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
+        print("UPdated playhead offset: \(offset), startOffset: \(self.startOffset)")
         return ChapterLocation(
             number: self.number,
             part: self.part,

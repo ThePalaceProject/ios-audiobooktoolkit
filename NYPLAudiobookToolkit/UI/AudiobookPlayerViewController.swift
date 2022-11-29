@@ -453,6 +453,7 @@ let SkipTimeInterval: Double = 15
             return
         }
         if !(self.seekBar.scrubbing || self.waitingForPlayer) {
+
             let timeLeftInBook = self.timeLeftAfter(chapter: currentLocation)
             self.seekBar.setOffset(
                 currentLocation.playheadOffset,
@@ -467,6 +468,11 @@ let SkipTimeInterval: Double = 15
             }
             self.updateSpeedButtonIfNeeded()
             self.updatePlayPauseButtonIfNeeded()
+        }
+
+        guard currentLocation.timeRemaining >= 0 else {
+            (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
+            return
         }
     }
 
