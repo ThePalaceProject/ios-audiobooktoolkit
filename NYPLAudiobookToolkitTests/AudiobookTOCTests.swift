@@ -62,6 +62,14 @@ class AudiobookTOCTests: XCTestCase {
     func testNonTockManifest() throws {
         validate(manifest: "non_toc_manifest", against: nonTocManifestExpeectedResults)
     }
+    
+    func testAliceManifest() throws {
+        validate(manifest: "alice_manifest", against: nonTocManifestExpeectedResults)
+    }
+    
+    func testMartianManifest() throws {
+        validate(manifest: "the_martian_manifest", against: nonTocManifestExpeectedResults)
+    }
 
     private func validate(manifest: String, against results: [TestOutcome]) {
         let bundle = Bundle(for: AudiobookTOCTests.self)

@@ -61,6 +61,9 @@ import Foundation
             }
         self.uniqueIdentifier = id
         
+        let json = try! JSONSerialization.data(withJSONObject: JSON)
+        print("Manifest: \(String(data: json, encoding: .utf8)!)")
+        
         if let toc = publication["toc"] as? [[String: Any]] {
             self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
         } else {
@@ -89,7 +92,7 @@ import Foundation
     }
     
     private static func getSpineElements(toc: [[String: Any]], resources: [[String: Any]], identifier: String) -> [LCPSpineElement] {
-        print("TOC: \(toc)")
+        print("TOC: \(toc), resources: \(resources)")
         var spineElements: [LCPSpineElement] = []
         let resourceElements = LCPAudiobook.extract(resources: resources)
 
@@ -104,17 +107,22 @@ import Foundation
                 let current = allTocElements[safe: index]
                 let next = allTocElements[safe: index + 1]
 
-                if let current = current, let next = next, current.hasSameParent(as: next) {
-                    // If next element is in same section, calculate duration as difference between current and next
-                    elementDuration = next.offset() - element.offset()
-                } else if let section = section {
-                    // If next element is not in the same section as the next element,
-                    // calculate duration as the difference between current element and duration of section
-                    elementDuration = section.duration - element.offset()
+                if let current = current {
+                    if let next = next, current.hasSameParent(as: next) {
+                        // If next element is in same section, calculate duration as difference between current and next
+                        elementDuration = next.offset() - element.offset()
+                    } else if let section = section, let previous = allTocElements[safe: index - 1], current.hasSameParent(as: previous) {
+                        // If next element is not in the same section as the next element,
+                        // calculate duration as the difference between current element and duration of section
+                        elementDuration = section.duration - element.offset()
+                    } else {
+                        // If there is only a single element in the section,
+                        elementDuration = section?.duration ?? 0
+                    }
                 }
             }
 
-            spineElements.append(LCPSpineElement(
+            let spineElement = LCPSpineElement(
                 chapterNumber: UInt(index + 1),
                 title: element.title ?? "",
                 href: element.href ?? "",
@@ -122,7 +130,10 @@ import Foundation
                 mediaType: section?.type ?? .audioMP3,
                 duration: elementDuration,
                 audiobookID: identifier
-            ))
+            )
+            
+            print("New Spine Element: ChapterNumber: \(spineElement?.chapterNumber), title: \(spineElement?.title), offset: \(spineElement?.offset), duration: \(spineElement?.duration)")
+            spineElements.append(spineElement)
         }
 
         return spineElements
@@ -193,5 +204,11 @@ import Foundation
         var duration: Double
         var chapter: Int?
         var type: LCPSpineElementMediaType?
+    }
+}
+
+extension Data {
+    var prettyString: NSString? {
+        return NSString(data: self, encoding: String.Encoding.utf8.rawValue) ?? nil
     }
 }
