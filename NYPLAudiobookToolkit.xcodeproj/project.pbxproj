@@ -76,7 +76,7 @@
 		A97CE13121ED388D00B64305 /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */; };
 		A9DC9CFD220547F800D122F2 /* ErrorDescriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
-		E5158C2C29353C510007ABDB /* PureLayout.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5158C2B29353C510007ABDB /* PureLayout.xcframework */; };
+		E5158C762935C1420007ABDB /* PureLayout.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5158C2B29353C510007ABDB /* PureLayout.xcframework */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
 		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
@@ -190,8 +190,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5158C762935C1420007ABDB /* PureLayout.xcframework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
-				E5158C2C29353C510007ABDB /* PureLayout.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
