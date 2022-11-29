@@ -114,7 +114,7 @@ import Foundation
             }
 
             spineElements.append(LCPSpineElement(
-                chapterNumber: UInt(section?.chapter ?? 0),
+                chapterNumber: UInt(index + 1),
                 title: element.title ?? "",
                 href: element.href ?? "",
                 offset: element.offset(),
