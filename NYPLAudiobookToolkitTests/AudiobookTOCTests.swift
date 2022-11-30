@@ -54,6 +54,16 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(6), offset: 0.0, duration: 626.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(7), offset: 0.0, duration: 539.0, mediaType: .audioMPEG)
     ]
+    
+    var martianExpectedREsults = [
+        TestOutcome(chapter: UInt(1), offset: 0.0, duration: 75.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 75.0, duration: 1388.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 1463.0, duration: 955, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 2418.0, duration: 299.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 0.0, duration: 668.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 0.0, duration: 626.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 0.0, duration: 539.0, mediaType: .audioMPEG)
+    ]
 
     func testTocManifest() throws {
         validate(manifest: "toc_manifest", against: tocManaifestExpectedResults)

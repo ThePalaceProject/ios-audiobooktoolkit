@@ -470,10 +470,10 @@ let SkipTimeInterval: Double = 15
             self.updatePlayPauseButtonIfNeeded()
         }
 
-//        guard currentLocation.timeRemaining >= 0 else {
-//            (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
-//            return
-//        }
+        guard currentLocation.timeRemaining >= 0 else {
+            (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.nextChapter()
+            return
+        }
     }
 
     private func updatePlayPauseButtonIfNeeded() {

@@ -181,7 +181,7 @@ class OpenAccessPlayer: NSObject, Player {
                 self.cursor = nextCursor
                 print("Next Chapter to play is: \(nextCursor.currentElement.chapter)")
                 self.playAtLocation(nextCursor.currentElement.chapter, completion: nil)
-                self.play()
+//                self.play()
             }
         }
     }
