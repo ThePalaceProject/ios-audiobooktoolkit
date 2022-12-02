@@ -108,6 +108,12 @@ extension Player {
     public let audiobookID: String
     public let duration: TimeInterval
     
+    public var actualOffset: TimeInterval {
+        let offset = max(self.playheadOffset - (self.startOffset ?? 0), 0)
+        print("MYDebugger2: startOffset: \(self.startOffset!) playheadOffset: \(self.playheadOffset), actualOffset = \(offset)")
+        return offset
+    }
+    
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case number = "chapter"
@@ -131,21 +137,21 @@ extension Player {
     }
 
     public var timeRemaining: TimeInterval {
-        return self.duration - self.playheadOffset
+        return self.duration - self.actualOffset
     }
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset < 0 {
-            timeInterval = abs(self.playheadOffset)
+        if self.actualOffset < 0 {
+            timeInterval = abs(self.actualOffset)
         }
         return timeInterval
     }
     
     public var timeIntoNextChapter: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset > self.duration {
-            timeInterval = self.playheadOffset - self.duration
+        if self.actualOffset > self.duration {
+            timeInterval = self.actualOffset - self.duration
         }
         return timeInterval
     }
@@ -206,7 +212,7 @@ extension Player {
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
-        print("UPdated playhead offset: \(offset), startOffset: \(self.startOffset)")
+        print("MYDebugger: UPdated playhead offset: \(offset), startOffset: \(self.startOffset)")
         return ChapterLocation(
             number: self.number,
             part: self.part,
@@ -218,7 +224,7 @@ extension Player {
         )
     }
     public override var description: String {
-        return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) D \(self.duration)"
+        return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
     }
     
     public func toData() -> Data {
@@ -270,17 +276,23 @@ public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElem
 /// - Returns: The `Playhead` where the location represents the chapter the
 ///   playhead is located in, and a cursor that points to that chapter.
 public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) -> Playhead {
+    print("MYDebugger: move cursor: \(cursor.currentElement.chapter.description) to destination: \(destination.description)")
 
     // Check if location is in immediately adjacent chapters
-    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
-        return nextPlayhead
-    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
-        return prevPlayhead
-    }
+//    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
+//        print("MYDebugger: move cursor to next chapter")
+//
+//        return nextPlayhead
+//    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
+//        print("MYDebugger: move cursor to previous chapter")
+//
+//        return prevPlayhead
+//    }
 
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
     for (i, element) in cursor.data.enumerated() {
+
         if element.chapter.number == destination.number {
             foundIndex = i
             break
@@ -288,6 +300,7 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
     }
     if let foundIndex = foundIndex {
         let cursor = Cursor(data: cursor.data, index: foundIndex)!
+        print("MYDebugger: move cursor index found: \(cursor.currentElement.chapter.description)")
         return (destination, cursor)
     } else {
         ATLog(.error, "Cursor move failure. Returning original cursor.")

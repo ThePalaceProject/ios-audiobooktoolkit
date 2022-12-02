@@ -79,15 +79,18 @@ class OpenAccessPlayer: NSObject, Player {
         } else {
             offset = 0
         }
-        return ChapterLocation(
+        
+        let location = ChapterLocation(
             number: self.chapterAtCurrentCursor.number,
             part: self.chapterAtCurrentCursor.part,
             duration: self.chapterAtCurrentCursor.duration,
-            startOffset: 0,
+            startOffset: self.chapterAtCurrentCursor.startOffset ?? 0,
             playheadOffset: offset,
             title: self.chapterAtCurrentCursor.title,
             audiobookID: self.audiobookID
         )
+        print("MYDebugger2: curretnChapterLocationfetched: \(location)")
+        return location
     }
 
     var isLoaded = true
@@ -175,17 +178,6 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    func nextChapter() {
-        DispatchQueue.main.async {
-            if let nextCursor = self.cursor.next() {
-                self.cursor = nextCursor
-                print("Next Chapter to play is: \(nextCursor.currentElement.chapter)")
-                self.playAtLocation(nextCursor.currentElement.chapter, completion: nil)
-//                self.play()
-            }
-        }
-    }
-
     /// New Location's playhead offset could be oustide the bounds of audio, so
     /// move and get a reference to the actual new chapter location. Only update
     /// the cursor if a new queue can successfully be built for the player.
@@ -194,6 +186,7 @@ class OpenAccessPlayer: NSObject, Player {
     ///   outside the bounds of audio for the current chapter
     func playAtLocation(_ newLocation: ChapterLocation, completion: Completion? = nil) {
         let newPlayhead = move(cursor: self.cursor, to: newLocation)
+        print("MYDebugger: Play at location: \(newLocation)")
 
         guard let newItemDownloadStatus = assetFileStatus(newPlayhead.cursor.currentElement.downloadTask) else {
             let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
@@ -206,7 +199,7 @@ class OpenAccessPlayer: NSObject, Player {
         case .saved(_):
             // If we're in the same AVPlayerItem, apply seek directly with AVPlayer.
             if newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor) {
-                self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+                self.seekWithinCurrentItem(newOffset: newPlayhead.location.actualOffset)
                 completion?(nil)
                 return
             }
@@ -214,8 +207,11 @@ class OpenAccessPlayer: NSObject, Player {
             // queue starting from there, and then begin playing at that location.
             self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
                 if success {
+                    print("MYDebugger: new playhead cursor in play at location: \(newPlayhead.cursor.currentElement.chapter.description)")
+                    print("MYDebugger: new playhead startOffset: \(newPlayhead.cursor.currentElement.chapter.startOffset!) playheadOffset: \(newPlayhead.cursor.currentElement.chapter.playheadOffset)")
+
                     self.cursor = newPlayhead.cursor
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.actualOffset)
                     self.play()
                     completion?(nil)
                 } else {
@@ -257,7 +253,7 @@ class OpenAccessPlayer: NSObject, Player {
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
-            ATLog(.debug, "Item not ready to play. Queueing seek operation.")
+            ATLog(.debug, "MYDebugger: Item not ready to play. Queueing seek operation. Offset queued at: \(newOffset), current Chapter: \(self.chapterAtCurrentCursor.description)")
             self.queuedSeekOffset = newOffset
             return
         }
@@ -340,7 +336,11 @@ class OpenAccessPlayer: NSObject, Player {
 
     private let avQueuePlayer: AVQueuePlayer
     private let audiobookID: String
-    private var cursor: Cursor<SpineElement>
+    private var cursor: Cursor<SpineElement> {
+        didSet {
+            print("MYDebugger: new cursor set chapter: \(cursor.currentElement.chapter.description)")
+        }
+    }
     private var queuedSeekOffset: TimeInterval?
     private var cursorQueuedToPlay: Cursor<SpineElement>?
     private var playerContext = 0
@@ -442,7 +442,7 @@ class OpenAccessPlayer: NSObject, Player {
     /// Not needed for explicit seek operations. Check the player for any more
     /// AVPlayerItems so that we can potentially rebuild the queue if more
     /// downloads have completed since the queue was last built.
-    @objc func currentPlayerItemEnded(item: AVPlayerItem)
+    @objc func currentPlayerItemEnded(item: AVPlayerItem? = nil)
     {
         DispatchQueue.main.async {
             let currentCursor = self.cursor

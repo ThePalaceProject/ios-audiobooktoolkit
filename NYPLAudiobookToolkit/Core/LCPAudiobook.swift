@@ -113,11 +113,11 @@ import Foundation
                         elementDuration = next.offset() - element.offset()
                     } else if let section = section, let previous = allTocElements[safe: index - 1], current.hasSameParent(as: previous) {
                         // If next element is not in the same section as the next element,
-                        // calculate duration as the difference between current element and duration of section
-                        elementDuration = (section.duration + (next?.offset() ?? 0.0)) - element.offset()
+                        // calculate duration as the difference between current element and duration of section.
+                        elementDuration = section.duration - element.offset()
                     } else {
                         // If there is only a single element in the section,
-                        elementDuration = section?.duration ?? 0
+                        elementDuration = section?.duration ?? 0 - element.offset()
                     }
                 }
             }
@@ -132,7 +132,7 @@ import Foundation
                 audiobookID: identifier
             )
             
-            print("New Spine Element: ChapterNumber: \(spineElement?.chapterNumber), title: \(spineElement?.title), offset: \(spineElement?.offset), duration: \(spineElement?.duration)")
+            print("MYDebugger: New Spine Element: ChapterNumber: \(spineElement?.chapterNumber), title: \(spineElement?.title), offset: \(spineElement?.offset), duration: \(spineElement?.duration)")
             spineElements.append(spineElement)
         }
 

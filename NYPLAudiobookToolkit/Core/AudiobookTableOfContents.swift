@@ -65,6 +65,7 @@ public final class AudiobookTableOfContents: NSObject {
 extension AudiobookTableOfContents: UITableViewDelegate {
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let spineElement = self.networkService.spine[indexPath.row]
+        print("MYDebugger: SPine element: \(spineElement.chapter.description) selected at indexPath: \(indexPath.row)")
         self.player.playAtLocation(spineElement.chapter, completion: nil)
         self.delegate?.audiobookTableOfContentsUserSelected(spineItem: spineElement)
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: true)
