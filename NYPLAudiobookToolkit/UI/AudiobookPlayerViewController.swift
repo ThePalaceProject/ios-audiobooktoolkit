@@ -471,8 +471,6 @@ let SkipTimeInterval: Double = 15
         }
 
         guard currentLocation.timeRemaining >= 0 else {
-            print("MyDebugger2: Next chapter triggered: \(currentLocation.description), timmeRemaining: \(currentLocation.timeRemaining)")
-
             (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.currentPlayerItemEnded()
             return
         }

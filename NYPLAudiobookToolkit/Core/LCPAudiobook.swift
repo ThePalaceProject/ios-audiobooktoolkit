@@ -132,7 +132,6 @@ import Foundation
                 audiobookID: identifier
             )
             
-            print("MYDebugger: New Spine Element: ChapterNumber: \(spineElement?.chapterNumber), title: \(spineElement?.title), offset: \(spineElement?.offset), duration: \(spineElement?.duration)")
             spineElements.append(spineElement)
         }
 

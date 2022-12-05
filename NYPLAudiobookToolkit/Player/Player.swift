@@ -110,7 +110,6 @@ extension Player {
     
     public var actualOffset: TimeInterval {
         let offset = max(self.playheadOffset - (self.startOffset ?? 0), 0)
-//        print("MYDebugger2: startOffset: \(self.startOffset!) playheadOffset: \(self.playheadOffset), actualOffset = \(offset)")
         return offset
     }
     
@@ -212,7 +211,6 @@ extension Player {
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
-        print("MYDebugger: UPdated playhead offset: \(offset), startOffset: \(self.startOffset)")
         return ChapterLocation(
             number: self.number,
             part: self.part,
@@ -276,18 +274,6 @@ public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElem
 /// - Returns: The `Playhead` where the location represents the chapter the
 ///   playhead is located in, and a cursor that points to that chapter.
 public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) -> Playhead {
-    print("MYDebugger: move cursor: \(cursor.currentElement.chapter.description) to destination: \(destination.description)")
-
-    // Check if location is in immediately adjacent chapters
-//    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
-//        print("MYDebugger: move cursor to next chapter")
-//
-//        return nextPlayhead
-//    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
-//        print("MYDebugger: move cursor to previous chapter")
-//
-//        return prevPlayhead
-//    }
 
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
@@ -299,9 +285,7 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
         }
     }
     if let foundIndex = foundIndex {
-        let cursor = Cursor(data: cursor.data, index: foundIndex)!
-        print("MYDebugger: move cursor index found: \(cursor.currentElement.chapter.description)")
-        return (destination, cursor)
+        return (destination, Cursor(data: cursor.data, index: foundIndex)!)
     } else {
         ATLog(.error, "Cursor move failure. Returning original cursor.")
         return (cursor.currentElement.chapter, cursor)
@@ -331,7 +315,6 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
             return chapterDuration
         }
     } else {
-        print("MyDebugger4 requestedPlayheadOff: \(actualPlayheadOffset)")
         return max(requestedPlayheadOffset, 0)
     }
 }
