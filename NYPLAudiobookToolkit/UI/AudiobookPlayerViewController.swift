@@ -229,7 +229,7 @@ let SkipTimeInterval: Double = 15
         items.insert(sleepTimer, at: self.sleepTimerBarButtonIndex)
         self.toolbar.setItems(items, animated: true)
         self.seekBar.setOffset(
-            chapter.playheadOffset - (chapter.startOffset ?? 0),
+            chapter.actualOffset,
             duration: chapter.duration,
             timeLeftInBook: self.timeLeftAfter(chapter: chapter),
             middleText: self.middleTextFor(chapter: chapter)
@@ -710,10 +710,10 @@ extension AudiobookPlayerViewController: ScrubberViewDelegate {
             self.activityIndicator.startAnimating()
         }
 
-        let offsetMovement = requestedOffset.playheadOffset - currentOffset.playheadOffset
+        let offsetMovement = requestedOffset.playheadOffset - currentOffset.actualOffset
 
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
-            self.seekBar.setOffset(adjustedLocation.playheadOffset - (adjustedLocation.startOffset ?? 0),
+            self.seekBar.setOffset(adjustedLocation.actualOffset,
                                    duration: adjustedLocation.duration,
                                    timeLeftInBook: self.timeLeftAfter(chapter: adjustedLocation),
                                    middleText: self.middleTextFor(chapter: adjustedLocation)

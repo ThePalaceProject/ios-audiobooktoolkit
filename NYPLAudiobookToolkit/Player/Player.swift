@@ -110,7 +110,7 @@ extension Player {
     
     public var actualOffset: TimeInterval {
         let offset = max(self.playheadOffset - (self.startOffset ?? 0), 0)
-        print("MYDebugger2: startOffset: \(self.startOffset!) playheadOffset: \(self.playheadOffset), actualOffset = \(offset)")
+//        print("MYDebugger2: startOffset: \(self.startOffset!) playheadOffset: \(self.playheadOffset), actualOffset = \(offset)")
         return offset
     }
     
@@ -317,21 +317,22 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
 ///   - skipTime: The requested skip time interval
 /// - Returns: The new Playhead Offset location that should be set
 public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInterval,
+                                   actualPlayheadOffset actualOffset: TimeInterval? = 0,
                                    currentChapterDuration chapterDuration: TimeInterval,
                                    requestedSkipDuration skipTime: TimeInterval) -> TimeInterval {
     let requestedPlayheadOffset = currentOffset + skipTime
+    let actualPlayheadOffset = (actualOffset ?? currentOffset) + skipTime
     if (currentOffset == chapterDuration) {
         return requestedPlayheadOffset
     } else if (skipTime > 0) {
-        return min(requestedPlayheadOffset, chapterDuration)
-    } else {
-        if currentOffset > abs(skipTime) {
+        if actualPlayheadOffset < chapterDuration {
             return requestedPlayheadOffset
-        } else if requestedPlayheadOffset > (skipTime + 4) {
-            return 0
         } else {
-            return skipTime
+            return chapterDuration
         }
+    } else {
+        print("MyDebugger4 requestedPlayheadOff: \(actualPlayheadOffset)")
+        return max(requestedPlayheadOffset, 0)
     }
 }
 

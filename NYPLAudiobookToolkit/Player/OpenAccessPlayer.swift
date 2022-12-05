@@ -162,11 +162,14 @@ class OpenAccessPlayer: NSObject, Player {
             ATLog(.error, "Invalid chapter information required for skip.")
             return
         }
+
         let currentPlayheadOffset = currentLocation.playheadOffset
         let chapterDuration = currentLocation.duration
         let adjustedOffset = adjustedPlayheadOffset(currentPlayheadOffset: currentPlayheadOffset,
                                                     currentChapterDuration: chapterDuration,
                                                     requestedSkipDuration: timeInterval)
+
+        print("MyDebugger3 skippiing playhead: startOffset: \(currentLocation.startOffset), playheadOffset: \(currentLocation.playheadOffset), duration: \(currentLocation.duration), adjustedOffset: \(adjustedOffset), skipDuration: \(timeInterval)")
 
         if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset) {
             self.playAtLocation(destinationLocation,  completion: nil)
@@ -199,7 +202,7 @@ class OpenAccessPlayer: NSObject, Player {
         case .saved(_):
             // If we're in the same AVPlayerItem, apply seek directly with AVPlayer.
             if newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor) {
-                self.seekWithinCurrentItem(newOffset: newPlayhead.location.actualOffset)
+                self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
                 completion?(nil)
                 return
             }
@@ -211,7 +214,7 @@ class OpenAccessPlayer: NSObject, Player {
                     print("MYDebugger: new playhead startOffset: \(newPlayhead.cursor.currentElement.chapter.startOffset!) playheadOffset: \(newPlayhead.cursor.currentElement.chapter.playheadOffset)")
 
                     self.cursor = newPlayhead.cursor
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.actualOffset)
+                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
                     self.play()
                     completion?(nil)
                 } else {
@@ -252,6 +255,7 @@ class OpenAccessPlayer: NSObject, Player {
     /// Moving within the current AVPlayerItem.
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
+        print("New Seeking interval: \(newOffset)")
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
             ATLog(.debug, "MYDebugger: Item not ready to play. Queueing seek operation. Offset queued at: \(newOffset), current Chapter: \(self.chapterAtCurrentCursor.description)")
             self.queuedSeekOffset = newOffset
