@@ -79,17 +79,16 @@ class OpenAccessPlayer: NSObject, Player {
         } else {
             offset = 0
         }
-        
-        let location = ChapterLocation(
+
+        return ChapterLocation(
             number: self.chapterAtCurrentCursor.number,
             part: self.chapterAtCurrentCursor.part,
             duration: self.chapterAtCurrentCursor.duration,
-            startOffset: self.chapterAtCurrentCursor.startOffset ?? 0,
+            startOffset: self.chapterAtCurrentCursor.chapterOffset ?? 0,
             playheadOffset: offset,
             title: self.chapterAtCurrentCursor.title,
             audiobookID: self.audiobookID
         )
-        return location
     }
 
     var isLoaded = true

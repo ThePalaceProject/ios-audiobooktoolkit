@@ -102,17 +102,19 @@ extension Player {
     public let type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
-    public let startOffset: TimeInterval?
+    // Starting offset for current chapter in the event chapter does not begin at the start of the audio file
+    public let chapterOffset: TimeInterval?
+    // Actual offset of the playhead based on location in audio file
     public let playheadOffset: TimeInterval
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
     
     public var actualOffset: TimeInterval {
-        let offset = max(self.playheadOffset - (self.startOffset ?? 0), 0)
+        let offset = max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
         return offset
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case number = "chapter"
@@ -163,7 +165,7 @@ extension Player {
     }
     
     public init(from decoder: Decoder) throws {
-        startOffset = 0
+        chapterOffset = 0
 
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -204,7 +206,7 @@ extension Player {
         self.number = number
         self.part = part
         self.duration = duration
-        self.startOffset = startOffset
+        self.chapterOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
         
@@ -215,7 +217,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.startOffset ?? 0,
+            startOffset: self.chapterOffset ?? 0,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
