@@ -3,6 +3,7 @@ import AVFoundation
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 
 class OpenAccessPlayer: NSObject, Player {
+
     var taskCompletion: Completion? = nil
 
     var errorDomain: String {
@@ -78,11 +79,12 @@ class OpenAccessPlayer: NSObject, Player {
         } else {
             offset = 0
         }
+
         return ChapterLocation(
             number: self.chapterAtCurrentCursor.number,
             part: self.chapterAtCurrentCursor.part,
             duration: self.chapterAtCurrentCursor.duration,
-            startOffset: 0,
+            startOffset: self.chapterAtCurrentCursor.chapterOffset ?? 0,
             playheadOffset: offset,
             title: self.chapterAtCurrentCursor.title,
             audiobookID: self.audiobookID
@@ -158,6 +160,7 @@ class OpenAccessPlayer: NSObject, Player {
             ATLog(.error, "Invalid chapter information required for skip.")
             return
         }
+
         let currentPlayheadOffset = currentLocation.playheadOffset
         let chapterDuration = currentLocation.duration
         let adjustedOffset = adjustedPlayheadOffset(currentPlayheadOffset: currentPlayheadOffset,
@@ -245,7 +248,6 @@ class OpenAccessPlayer: NSObject, Player {
     private func seekWithinCurrentItem(newOffset: TimeInterval)
     {
         if self.avQueuePlayer.currentItem?.status != .readyToPlay {
-            ATLog(.debug, "Item not ready to play. Queueing seek operation.")
             self.queuedSeekOffset = newOffset
             return
         }
@@ -430,7 +432,7 @@ class OpenAccessPlayer: NSObject, Player {
     /// Not needed for explicit seek operations. Check the player for any more
     /// AVPlayerItems so that we can potentially rebuild the queue if more
     /// downloads have completed since the queue was last built.
-    @objc func currentPlayerItemEnded(item: AVPlayerItem)
+    @objc func currentPlayerItemEnded(item: AVPlayerItem? = nil)
     {
         DispatchQueue.main.async {
             let currentCursor = self.cursor

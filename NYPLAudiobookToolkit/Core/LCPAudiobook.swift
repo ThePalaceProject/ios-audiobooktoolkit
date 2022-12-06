@@ -60,7 +60,6 @@ import Foundation
                 return nil
             }
         self.uniqueIdentifier = id
-        
         if let toc = publication["toc"] as? [[String: Any]] {
             self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
         } else {
@@ -98,30 +97,34 @@ import Foundation
         for (index, element) in allTocElements.enumerated() {
             var elementDuration = 0.0
             let section = resourceElements[element.rawLink() ?? ""]
-
+            
             if index < allTocElements.count {
-                let current = allTocElements[safe: index]
                 let next = allTocElements[safe: index + 1]
-
-                if let current = current, let next = next, current.hasSameParent(as: next) {
-                    // If next element is in same section, calculate duration as difference between current and next
-                    elementDuration = next.offset() - element.offset()
-                } else if let section = section {
-                    // If next element is not in the same section as the next element,
-                    // calculate duration as the difference between current element and duration of section
-                    elementDuration = section.duration - element.offset()
+                
+                if let current = allTocElements[safe: index] {
+                    if let next = next, current.hasSameParent(as: next) {
+                        // If next element is in same section, calculate duration as difference between current and next
+                        elementDuration = next.offset() - element.offset()
+                    } else if let section = section {
+                        // If current element is not in the same section as the next element,
+                        // calculate duration as the difference between current
+                        // element and duration of section plus the offset to the next chapter.
+                        elementDuration = section.duration - element.offset() + (next?.offset() ?? 0)
+                    }
                 }
             }
 
-            spineElements.append(LCPSpineElement(
-                chapterNumber: UInt(section?.chapter ?? 0),
+            let spineElement = LCPSpineElement(
+                chapterNumber: UInt(index + 1),
                 title: element.title ?? "",
                 href: element.href ?? "",
                 offset: element.offset(),
                 mediaType: section?.type ?? .audioMP3,
                 duration: elementDuration,
                 audiobookID: identifier
-            ))
+            )
+            
+            spineElements.append(spineElement)
         }
 
         return spineElements

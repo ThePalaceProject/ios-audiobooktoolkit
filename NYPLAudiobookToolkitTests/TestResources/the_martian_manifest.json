@@ -1,0 +1,1053 @@
+{
+  "resources": [
+    {
+      "height": 2026,
+      "width": 2026,
+      "href": "6c0c98a35369d377b89f971fda27a5239d05b9.jpg",
+      "type": "image/jpeg",
+      "rel": "cover"
+    }
+  ],
+  "readingOrder": [
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_001.wav",
+      "href": "8927fab5-a7c2-4d8a-81c6-7776b16e6723.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 809
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_002.wav",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1092
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_003.wav",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1075
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_004.wav",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1016
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_005.wav",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1232
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_006.wav",
+      "href": "dc1dd2d7-9fb6-4594-a948-265c685c1c69.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1521
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_007.wav",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1688
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_008.wav",
+      "href": "b2c20639-b4a3-4e88-901b-8a84734fb813.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1394
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_009.wav",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1072
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_010.wav",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 880
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_011.wav",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1815
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_012.wav",
+      "href": "f963bf44-09d6-4284-8df5-dec7f6f1c9a6.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1273
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_013.wav",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1217
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_014.wav",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1544
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_015.wav",
+      "href": "dc243075-6610-4bc6-915e-8beac9c4f0ff.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1835
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_016.wav",
+      "href": "2fac4123-4476-4236-bc45-b8936371ef2b.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 2316
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_017.wav",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1412
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_018.wav",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1640
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_019.wav",
+      "href": "cb576287-9bc1-4613-a51c-2314bbd23f14.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1286
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_020.wav",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1448
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_021.wav",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1758
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_022.wav",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1353
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_023.wav",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1449
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_024.wav",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1473
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_025.wav",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1770
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_026.wav",
+      "href": "afd103e9-30f9-4a29-95b4-52072623f9af.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 2562
+    },
+    {
+      "bitrate": 1411,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935487_027.wav",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 1614
+    }
+  ],
+  "id": "urn:isbn:9781603935487",
+  "metadata": {
+    "author": "Andy Weir",
+    "published": "2020-01-01T00:00:00Z",
+    "@type": "http://schema.org/Audiobook",
+    "title": "The Martian",
+    "identifier": "urn:isbn:9781603935487",
+    "language": "en",
+    "modified": "2022-06-03T16:00:44Z",
+    "publisher": "Audible",
+    "duration": 39544
+  },
+  "links": [
+    {
+      "type": "application/audiobook+json",
+      "href": "manifest.json",
+      "rel": "self"
+    }
+  ],
+  "@context": "https://readium.org/webpub-manifest/context.jsonld",
+  "toc": [
+    {
+      "title": "Opening Credits",
+      "href": "8927fab5-a7c2-4d8a-81c6-7776b16e6723.MP3.mp3#t=0"
+    },
+    {
+      "title": "Chapter 1",
+      "href": "8927fab5-a7c2-4d8a-81c6-7776b16e6723.MP3.mp3#t=28"
+    },
+    {
+      "title": "Log Entry: Sol 6",
+      "href": "8927fab5-a7c2-4d8a-81c6-7776b16e6723.MP3.mp3#t=29"
+    },
+    {
+      "title": "Chapter 2",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=2"
+    },
+    {
+      "title": "Log Entry: Sol 7",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=4"
+    },
+    {
+      "title": "Log Entry: Sol 10",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=339"
+    },
+    {
+      "title": "Log Entry: Sol 11",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=518"
+    },
+    {
+      "title": "Log Entry: Sol 14",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=525"
+    },
+    {
+      "title": "Log Entry: Sol 15",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=756"
+    },
+    {
+      "title": "Log Entry: Sol 16",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=822"
+    },
+    {
+      "title": "Log Entry: Sol 22",
+      "href": "5e6e0c56-4124-48c1-b857-beed0b5d7a56.MP3.mp3#t=973"
+    },
+    {
+      "title": "Chapter 3",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3#t=3"
+    },
+    {
+      "title": "Log Entry: Sol 25",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3#t=5"
+    },
+    {
+      "title": "Log Entry: Sol 26",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3#t=305"
+    },
+    {
+      "title": "Log Entry: Sol 29",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3#t=485"
+    },
+    {
+      "title": "Log Entry: Sol 30",
+      "href": "95fb6f16-a1c2-4133-bb08-d1ccce3feb64.MP3.mp3#t=691"
+    },
+    {
+      "title": "Chapter 4",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=3"
+    },
+    {
+      "title": "Log Entry: Sol 32",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=5"
+    },
+    {
+      "title": "Log Entry: Sol 33",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=213"
+    },
+    {
+      "title": "Log Entry: Sol 33 (2)",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=344"
+    },
+    {
+      "title": "Log Entry: Sol 34",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=646"
+    },
+    {
+      "title": "Log Entry: Sol 37",
+      "href": "08e28d65-3c7e-4836-babd-700709be1641.MP3.mp3#t=756"
+    },
+    {
+      "title": "Chapter 5",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=4"
+    },
+    {
+      "title": "Log Entry: Sol 38",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=6"
+    },
+    {
+      "title": "Log Entry: Sol 38 (2)",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=164"
+    },
+    {
+      "title": "Log Entry: Sol 39",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=174"
+    },
+    {
+      "title": "Log Entry: Sol 40",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=284"
+    },
+    {
+      "title": "Log Entry: Sol 41",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=820"
+    },
+    {
+      "title": "Log Entry: Sol 42",
+      "href": "9e3ba3ba-c501-40f3-b60c-8185021a062e.MP3.mp3#t=1132"
+    },
+    {
+      "title": "Chapter 6",
+      "href": "dc1dd2d7-9fb6-4594-a948-265c685c1c69.MP3.mp3#t=5"
+    },
+    {
+      "title": "Log Entry: Sol 61",
+      "href": "dc1dd2d7-9fb6-4594-a948-265c685c1c69.MP3.mp3#t=1514"
+    },
+    {
+      "title": "Chapter 7",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=6"
+    },
+    {
+      "title": "Log Entry: Sol 63",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=9"
+    },
+    {
+      "title": "Log Entry: Sol 64",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=365"
+    },
+    {
+      "title": "Log Entry: Sol 65",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=548"
+    },
+    {
+      "title": "Log Entry: Sol 66",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=735"
+    },
+    {
+      "title": "Log Entry: Sol 67",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=792"
+    },
+    {
+      "title": "Log Entry: Sol 68",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=910"
+    },
+    {
+      "title": "Log Entry: Sol 69",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=1144"
+    },
+    {
+      "title": "Log Entry: Sol 70",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=1355"
+    },
+    {
+      "title": "Log Entry: Sol 71",
+      "href": "9ad1a8a8-6673-415b-99ed-87eb10f4faf9.MP3.mp3#t=1472"
+    },
+    {
+      "title": "Chapter 8",
+      "href": "b2c20639-b4a3-4e88-901b-8a84734fb813.MP3.mp3#t=6"
+    },
+    {
+      "title": "Chapter 9",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=6"
+    },
+    {
+      "title": "Log Entry: Sol 79",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=10"
+    },
+    {
+      "title": "Log Entry: Sol 80",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=235"
+    },
+    {
+      "title": "Log Entry: Sol 81",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=402"
+    },
+    {
+      "title": "Log Entry: Sol 82",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=595"
+    },
+    {
+      "title": "Log Entry: Sol 83",
+      "href": "2b3a426e-a361-472e-8282-f87db62f7e74.MP3.mp3#t=929"
+    },
+    {
+      "title": "Chapter 10",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=7"
+    },
+    {
+      "title": "Log Entry: Sol 90",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=12"
+    },
+    {
+      "title": "Log Entry: Sol 92",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=112"
+    },
+    {
+      "title": "Log Entry: Sol 93",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=181"
+    },
+    {
+      "title": "Log Entry: Sol 94",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=287"
+    },
+    {
+      "title": "Log Entry: Sol 95",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=471"
+    },
+    {
+      "title": "Log Entry: Sol 96",
+      "href": "e5df82ab-fa62-4fd8-8130-7897c588bd69.MP3.mp3#t=722"
+    },
+    {
+      "title": "Chapter 11",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3#t=8"
+    },
+    {
+      "title": "Log Entry: Sol 97",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3#t=141"
+    },
+    {
+      "title": "Log Entry: Sol 97 (2)",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3#t=457"
+    },
+    {
+      "title": "Log Entry: Sol 98",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3#t=1158"
+    },
+    {
+      "title": "Log Entry: Sol 98 (2)",
+      "href": "ccfe9448-7d84-437d-aa4f-2610e3a27767.MP3.mp3#t=1471"
+    },
+    {
+      "title": "Chapter 12",
+      "href": "f963bf44-09d6-4284-8df5-dec7f6f1c9a6.MP3.mp3#t=8"
+    },
+    {
+      "title": "Chapter 13",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=8"
+    },
+    {
+      "title": "Log Entry: Sol 114",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=45"
+    },
+    {
+      "title": "Log Entry: Sol 115",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=228"
+    },
+    {
+      "title": "Log Entry: Sol 116",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=388"
+    },
+    {
+      "title": "Log Entry: Sol 117",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=585"
+    },
+    {
+      "title": "Log Entry: Sol 118",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=751"
+    },
+    {
+      "title": "Log Entry: Sol 119",
+      "href": "a87a8105-06eb-445e-9fec-0482e76aa3f9.MP3.mp3#t=961"
+    },
+    {
+      "title": "Chapter 14",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=9"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=12"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (2)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=48"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (3)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=120"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (4)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=310"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (5)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=470"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (6)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=603"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (7)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=806"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 119 (8)",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=909"
+    },
+    {
+      "title": "Audio Log Transcript: Sol 120",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=982"
+    },
+    {
+      "title": "Log Entry: Sol 120",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=1066"
+    },
+    {
+      "title": "Log Entry: Sol 121",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=1287"
+    },
+    {
+      "title": "Log Entry: Sol 122",
+      "href": "cdf568a3-ace3-4e41-a509-3199ada5434d.MP3.mp3#t=1396"
+    },
+    {
+      "title": "Chapter 15",
+      "href": "dc243075-6610-4bc6-915e-8beac9c4f0ff.MP3.mp3#t=10"
+    },
+    {
+      "title": "Chapter 16",
+      "href": "2fac4123-4476-4236-bc45-b8936371ef2b.MP3.mp3#t=10"
+    },
+    {
+      "title": "Chapter 17",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=10"
+    },
+    {
+      "title": "Log Entry: Sol 192",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=14"
+    },
+    {
+      "title": "Log Entry: Sol 193",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=325"
+    },
+    {
+      "title": "Log Entry: Sol 194",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=732"
+    },
+    {
+      "title": "Log Entry: Sol 195",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=858"
+    },
+    {
+      "title": "Log Entry: Sol 196",
+      "href": "04a67b99-faa5-4366-8785-38fd1b729861.MP3.mp3#t=953"
+    },
+    {
+      "title": "Chapter 18",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=11"
+    },
+    {
+      "title": "Log Entry: Sol 197",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=14"
+    },
+    {
+      "title": "Log Entry: Sol 198",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=183"
+    },
+    {
+      "title": "Log Entry: Sol 199",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=336"
+    },
+    {
+      "title": "Log Entry: Sol 200",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=566"
+    },
+    {
+      "title": "Log Entry: Sol 201",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=733"
+    },
+    {
+      "title": "Log Entry: Sol 207",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=937"
+    },
+    {
+      "title": "Log Entry: Sol 208",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=1100"
+    },
+    {
+      "title": "Log Entry: Sol 209",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=1295"
+    },
+    {
+      "title": "Log Entry: Sol 211",
+      "href": "852a54c4-f31a-45cb-a20a-4b27b802e7e2.MP3.mp3#t=1437"
+    },
+    {
+      "title": "Chapter 19",
+      "href": "cb576287-9bc1-4613-a51c-2314bbd23f14.MP3.mp3#t=12"
+    },
+    {
+      "title": "Chapter 20",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=13"
+    },
+    {
+      "title": "Log Entry: Sol 376",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=16"
+    },
+    {
+      "title": "Log Entry: Sol 380",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=162"
+    },
+    {
+      "title": "Log Entry: Sol 381",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=307"
+    },
+    {
+      "title": "Log Entry: Sol 383",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=383"
+    },
+    {
+      "title": "Log Entry: Sol 385",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=499"
+    },
+    {
+      "title": "Log Entry: Sol 387",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=663"
+    },
+    {
+      "title": "Log Entry: Sol 388",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=869"
+    },
+    {
+      "title": "Log Entry: Sol 389",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=1123"
+    },
+    {
+      "title": "Log Entry: Sol 390",
+      "href": "8d40f57e-fefe-4ec8-ab2b-4dcf3595a51c.MP3.mp3#t=1347"
+    },
+    {
+      "title": "Chapter 21",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=14"
+    },
+    {
+      "title": "Log Entry: Sol 431",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=17"
+    },
+    {
+      "title": "Log Entry: Sol 434",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=309"
+    },
+    {
+      "title": "Log Entry: Sol 435",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=527"
+    },
+    {
+      "title": "Log Entry: Sol 436",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=669"
+    },
+    {
+      "title": "Log Entry: Sol 439",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=1007"
+    },
+    {
+      "title": "Log Entry: Sol 444",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=1299"
+    },
+    {
+      "title": "Log Entry: Sol 449",
+      "href": "d344d0aa-e9c7-48b4-82a8-51a0855b8810.MP3.mp3#t=1570"
+    },
+    {
+      "title": "Chapter 22",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=15"
+    },
+    {
+      "title": "Log Entry: Sol 458",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=18"
+    },
+    {
+      "title": "Log Entry: Sol 462",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=274"
+    },
+    {
+      "title": "Log Entry: Sol 466",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=519"
+    },
+    {
+      "title": "Log Entry: Sol 468",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=673"
+    },
+    {
+      "title": "Log Entry: Sol 473",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=865"
+    },
+    {
+      "title": "Log Entry: Sol 474",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=983"
+    },
+    {
+      "title": "Log Entry: Sol 475",
+      "href": "5fc0ae09-5037-4d05-a8d5-127a962a9574.MP3.mp3#t=1071"
+    },
+    {
+      "title": "Chapter 23",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=16"
+    },
+    {
+      "title": "Log Entry: Sol 476",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=19"
+    },
+    {
+      "title": "Log Entry: Sol 477",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=237"
+    },
+    {
+      "title": "Log Entry: Sol 478",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=422"
+    },
+    {
+      "title": "Log Entry: Sol 479",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=515"
+    },
+    {
+      "title": "Log Entry: Sol 480",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=604"
+    },
+    {
+      "title": "Log Entry: Sol 482",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=707"
+    },
+    {
+      "title": "Log Entry: Sol 484",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=786"
+    },
+    {
+      "title": "Log Entry: Sol 487",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=868"
+    },
+    {
+      "title": "Log Entry: Sol 492",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=962"
+    },
+    {
+      "title": "Log Entry: Sol 497",
+      "href": "072ae088-1c83-4503-8ad6-6060402ed770.MP3.mp3#t=1165"
+    },
+    {
+      "title": "Chapter 24",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=16"
+    },
+    {
+      "title": "Log Entry: Sol 498",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=122"
+    },
+    {
+      "title": "Log Entry: Sol 498 (2)",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=285"
+    },
+    {
+      "title": "Log Entry: Sol 499",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=445"
+    },
+    {
+      "title": "Log Entry: Sol 500",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=673"
+    },
+    {
+      "title": "Log Entry: Sol 501",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=799"
+    },
+    {
+      "title": "Log Entry: Sol 502",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=1153"
+    },
+    {
+      "title": "Log Entry: Sol 503",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=1264"
+    },
+    {
+      "title": "Log Entry: Sol 504",
+      "href": "07a22620-9e80-4c88-8f77-0ce049a219d9.MP3.mp3#t=1298"
+    },
+    {
+      "title": "Chapter 25",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=17"
+    },
+    {
+      "title": "Log Entry: Sol 505",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=20"
+    },
+    {
+      "title": "Log Entry: Sol 506",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=608"
+    },
+    {
+      "title": "Log Entry: Sol 526",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=996"
+    },
+    {
+      "title": "Log Entry: Sol 529",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=1069"
+    },
+    {
+      "title": "Log Entry: Sol 543",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=1311"
+    },
+    {
+      "title": "Log Entry: Sol 549",
+      "href": "ca3a235f-7de8-4ad5-8b38-5c7b935b282a.MP3.mp3#t=1588"
+    },
+    {
+      "title": "Chapter 26",
+      "href": "afd103e9-30f9-4a29-95b4-52072623f9af.MP3.mp3#t=17"
+    },
+    {
+      "title": "Some Selections from the Files of Mark Watney",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=17"
+    },
+    {
+      "title": "Diary of an AssCan",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=23"
+    },
+    {
+      "title": "I Made It!",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=561"
+    },
+    {
+      "title": "Car Trouble",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=711"
+    },
+    {
+      "title": "The Earthling",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=873"
+    },
+    {
+      "title": "End Credits",
+      "href": "26aaa0e8-057a-4e91-8b1b-6a7de300f31d.MP3.mp3#t=1584"
+    }
+  ]
+}

@@ -102,12 +102,19 @@ extension Player {
     public let type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
-    public let startOffset: TimeInterval?
+    // Starting offset for current chapter in the event chapter does not begin at the start of the audio file
+    public let chapterOffset: TimeInterval?
+    // Actual offset of the playhead based on location in audio file
     public let playheadOffset: TimeInterval
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
     
+    public var actualOffset: TimeInterval {
+        let offset = max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
+        return offset
+    }
+
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case number = "chapter"
@@ -131,21 +138,21 @@ extension Player {
     }
 
     public var timeRemaining: TimeInterval {
-        return self.duration - self.playheadOffset
+        return self.duration - self.actualOffset
     }
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset < 0 {
-            timeInterval = abs(self.playheadOffset)
+        if self.actualOffset < 0 {
+            timeInterval = abs(self.actualOffset)
         }
         return timeInterval
     }
     
     public var timeIntoNextChapter: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset > self.duration {
-            timeInterval = self.playheadOffset - self.duration
+        if self.actualOffset > self.duration {
+            timeInterval = self.actualOffset - self.duration
         }
         return timeInterval
     }
@@ -158,7 +165,7 @@ extension Player {
     }
     
     public init(from decoder: Decoder) throws {
-        startOffset = 0
+        chapterOffset = 0
 
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -199,7 +206,7 @@ extension Player {
         self.number = number
         self.part = part
         self.duration = duration
-        self.startOffset = startOffset
+        self.chapterOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
         
@@ -210,14 +217,14 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.startOffset ?? 0,
+            startOffset: self.chapterOffset ?? 0,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
         )
     }
     public override var description: String {
-        return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) D \(self.duration)"
+        return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
     }
     
     public func toData() -> Data {
@@ -270,24 +277,17 @@ public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElem
 ///   playhead is located in, and a cursor that points to that chapter.
 public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) -> Playhead {
 
-    // Check if location is in immediately adjacent chapters
-    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
-        return nextPlayhead
-    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
-        return prevPlayhead
-    }
-
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
     for (i, element) in cursor.data.enumerated() {
+
         if element.chapter.number == destination.number {
             foundIndex = i
             break
         }
     }
     if let foundIndex = foundIndex {
-        let cursor = Cursor(data: cursor.data, index: foundIndex)!
-        return (destination, cursor)
+        return (destination, Cursor(data: cursor.data, index: foundIndex)!)
     } else {
         ATLog(.error, "Cursor move failure. Returning original cursor.")
         return (cursor.currentElement.chapter, cursor)
@@ -303,21 +303,21 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
 ///   - skipTime: The requested skip time interval
 /// - Returns: The new Playhead Offset location that should be set
 public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInterval,
+                                   actualPlayheadOffset actualOffset: TimeInterval? = 0,
                                    currentChapterDuration chapterDuration: TimeInterval,
                                    requestedSkipDuration skipTime: TimeInterval) -> TimeInterval {
     let requestedPlayheadOffset = currentOffset + skipTime
+    let actualPlayheadOffset = (actualOffset ?? currentOffset) + skipTime
     if (currentOffset == chapterDuration) {
         return requestedPlayheadOffset
     } else if (skipTime > 0) {
-        return min(requestedPlayheadOffset, chapterDuration)
-    } else {
-        if currentOffset > abs(skipTime) {
+        if actualPlayheadOffset < chapterDuration {
             return requestedPlayheadOffset
-        } else if requestedPlayheadOffset > (skipTime + 4) {
-            return 0
         } else {
-            return skipTime
+            return chapterDuration
         }
+    } else {
+        return max(requestedPlayheadOffset, 0)
     }
 }
 

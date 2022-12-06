@@ -1,0 +1,255 @@
+{
+  "metadata": {
+    "author": "Lewis Carroll",
+    "published": "2016-02-23T00:00:00Z",
+    "@type": "http://schema.org/Audiobook",
+    "title": "Alice's Adventures in Wonderland",
+    "identifier": "urn:isbn:9781603935067",
+    "language": "en",
+    "modified": "2022-06-02T21:58:41Z",
+    "publisher": "Audible",
+    "duration": 9840
+  },
+  "toc": [
+    {
+      "title": "Opening Credits",
+      "href": "5135ad1f-5b85-4fda-92fe-3507e82e81e3.MP3.mp3#t=0"
+    },
+    {
+      "title": "Down the Rabbit Hole",
+      "href": "5135ad1f-5b85-4fda-92fe-3507e82e81e3.MP3.mp3#t=3"
+    },
+    {
+      "title": "The Pool of Tears",
+      "href": "310206c6-74e7-4eab-b69e-513f4648a673.MP3.mp3#t=2"
+    },
+    {
+      "title": "A Caucus Race and a Long Tale",
+      "href": "c3bdbec4-3120-4842-b6dd-901d7d012238.MP3.mp3#t=3"
+    },
+    {
+      "title": "The Rabbit Sends in a Little Bill",
+      "href": "7d07e47b-d4ae-43ec-b1b2-634838404960.MP3.mp3#t=3"
+    },
+    {
+      "title": "Advice from a Caterpillar",
+      "href": "fbcda473-7d68-4696-b9c9-c913102b5edc.MP3.mp3#t=4"
+    },
+    {
+      "title": "Pig and Pepper",
+      "href": "aa9e0657-9ffb-4c5e-8da7-397b4900077b.MP3.mp3#t=4"
+    },
+    {
+      "title": "A Mad Tea Party",
+      "href": "a5ace2f2-4d9d-47db-bb12-5f530110d0f8.MP3.mp3#t=5"
+    },
+    {
+      "title": "The Queen's Croquet Ground",
+      "href": "78183963-73bf-404b-88bd-e076162ac0ee.MP3.mp3#t=6"
+    },
+    {
+      "title": "The Mock Turtle's Story",
+      "href": "3df7ec19-9478-4d5f-b13a-97d8a0b19061.MP3.mp3#t=6"
+    },
+    {
+      "title": "The Lobster Quadrille",
+      "href": "3f6635f0-c556-49e5-ae9f-cd08e954b6c9.MP3.mp3#t=7"
+    },
+    {
+      "title": "Who Stole the Tarts?",
+      "href": "d191e9b9-d4fa-48a1-a597-4c2de5126df7.MP3.mp3#t=7"
+    },
+    {
+      "title": "Alice's Evidence",
+      "href": "30241b4f-4bf9-4796-9ba7-54d41bb4a2b1.MP3.mp3#t=7"
+    }
+  ],
+  "links": [
+    {
+      "type": "application/audiobook+json",
+      "href": "manifest.json",
+      "rel": "self"
+    }
+  ],
+  "readingOrder": [
+    {
+      "bitrate": 191,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_001.mp3",
+      "href": "5135ad1f-5b85-4fda-92fe-3507e82e81e3.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 809
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_002.mp3",
+      "href": "310206c6-74e7-4eab-b69e-513f4648a673.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 774
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_003.mp3",
+      "href": "c3bdbec4-3120-4842-b6dd-901d7d012238.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 627
+    },
+    {
+      "bitrate": 191,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_004.mp3",
+      "href": "7d07e47b-d4ae-43ec-b1b2-634838404960.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 892
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_005.mp3",
+      "href": "fbcda473-7d68-4696-b9c9-c913102b5edc.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 780
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_006.mp3",
+      "href": "aa9e0657-9ffb-4c5e-8da7-397b4900077b.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 939
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_007.mp3",
+      "href": "a5ace2f2-4d9d-47db-bb12-5f530110d0f8.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 904
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_008.mp3",
+      "href": "78183963-73bf-404b-88bd-e076162ac0ee.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 912
+    },
+    {
+      "bitrate": 191,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_009.mp3",
+      "href": "3df7ec19-9478-4d5f-b13a-97d8a0b19061.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 920
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_010.mp3",
+      "href": "3f6635f0-c556-49e5-ae9f-cd08e954b6c9.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 764
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_011.mp3",
+      "href": "d191e9b9-d4fa-48a1-a597-4c2de5126df7.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 694
+    },
+    {
+      "bitrate": 192,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "profile": "http://readium.org/lcp/profile-1.0",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "title": "9781603935067_012.mp3",
+      "href": "30241b4f-4bf9-4796-9ba7-54d41bb4a2b1.MP3.mp3",
+      "type": "audio/mpeg",
+      "duration": 825
+    }
+  ],
+  "@context": "https://readium.org/webpub-manifest/context.jsonld",
+  "id": "urn:isbn:9781603935067",
+  "resources": [
+    {
+      "height": 2400,
+      "width": 2400,
+      "href": "2eb1faebed526c360a8d688776843c3cd02583.jpg",
+      "type": "image/jpeg",
+      "rel": "cover"
+    }
+  ]
+}
