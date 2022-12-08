@@ -46,19 +46,19 @@ final class PlaybackControlView: UIView {
 
     private func setToPauseIcon() {
         self.playButton.image = self.pauseImage
-        self.playButton.accessibilityLabel = NSLocalizedString("Pause", bundle: Bundle.audiobookToolkit()!, value: "Pause", comment: "Pause")
+        self.playButton.accessibilityLabel = Strings.Generic.pause
     }
 
     private func setToPlayIcon() {
         self.playButton.image = self.playImage
-        self.playButton.accessibilityLabel = NSLocalizedString("Play", bundle: Bundle.audiobookToolkit()!, value: "Play", comment: "Play")
+        self.playButton.accessibilityLabel = Strings.Generic.play
     }
 
     private var horizontalPadding = CGFloat(30)
     private let skipBackView: TextOverImageView = { () -> TextOverImageView in
         let view = TextOverImageView()
         view.image = UIImage(named: "skip_back", in: Bundle.audiobookToolkit(), compatibleWith: nil)
-        view.subtext = NSLocalizedString("sec", bundle: Bundle.audiobookToolkit()!, value: "sec", comment: "Abbreviations for seconds")
+        view.subtext = Strings.Generic.sec
         view.accessibilityIdentifier = "skip_back"
         return view
     }()
@@ -66,7 +66,7 @@ final class PlaybackControlView: UIView {
     private let skipForwardView: TextOverImageView = { () -> TextOverImageView in
         let view = TextOverImageView()
         view.image = UIImage(named: "skip_forward", in: Bundle.audiobookToolkit(), compatibleWith: nil)
-        view.subtext = NSLocalizedString("sec", bundle: Bundle.audiobookToolkit()!, value: "sec", comment: "Abbreviations for seconds")
+        view.subtext = Strings.Generic.sec
         view.accessibilityIdentifier = "skip_forward"
         return view
     }()
@@ -112,7 +112,7 @@ final class PlaybackControlView: UIView {
         self.addSubview(self.playButton)
         self.playButton.image = self.playImage
         self.playButton.autoAlignAxis(.vertical, toSameAxisOf: self)
-        self.playButton.accessibilityLabel = NSLocalizedString("Play", bundle: Bundle.audiobookToolkit()!, value: "Play", comment: "Play")
+        self.playButton.accessibilityLabel = Strings.Generic.play
         self.playButton.addTarget(self, action: #selector(PlaybackControlView.playButtonWasTapped(_:)), for: .touchUpInside)
 
         self.addSubview(self.skipBackView)
@@ -130,11 +130,11 @@ final class PlaybackControlView: UIView {
         self.skipForwardView.addTarget(self, action: #selector(PlaybackControlView.skipForwardButtonWasTapped(_:)), for: .touchUpInside)
 
         self.skipBackView.text = "\(self.skipBackValue)"
-        let skipBackFormat = NSLocalizedString("Rewind %d seconds", bundle: Bundle.audiobookToolkit()!, value: "Rewind %d seconds", comment: "Rewind a configurable number of seconds")
+        let skipBackFormat = Strings.PlaybackControlView.rewind
         self.skipBackView.accessibilityLabel = String(format: skipBackFormat, self.skipBackValue)
 
         self.skipForwardView.text = "\(self.skipForwardValue)"
-        let skipFrowardFormat = NSLocalizedString("Fast Forward %d seconds", bundle: Bundle.audiobookToolkit()!, value: "Fast Forward %d seconds", comment: "Fast forward a configurable number of seconds")
+        let skipFrowardFormat = Strings.PlaybackControlView.forward
         self.skipForwardView.accessibilityLabel = String(format: skipFrowardFormat, self.skipForwardValue)
 
         compactConstraints = NSLayoutConstraint.autoCreateConstraintsWithoutInstalling {

@@ -7,6 +7,7 @@ import MediaPlayer
 let SkipTimeInterval: Double = 15
 
 @objcMembers public final class AudiobookPlayerViewController: UIViewController {
+    typealias DisplayStrings = Strings.AudiobookPlayerViewController
 
     private let audiobookManager: AudiobookManager
     public var currentChapterLocation: ChapterLocation? {
@@ -35,7 +36,7 @@ let SkipTimeInterval: Double = 15
     private let speedBarButtonIndex = 1
     private let sleepTimerBarButtonIndex = 5
     private let sleepTimerDefaultText = "☾"
-    private let sleepTimerDefaultAccessibilityLabel = NSLocalizedString("Sleep Timer", bundle: Bundle.audiobookToolkit()!, value: "Sleep Timer", comment:"Sleep Timer")
+    private let sleepTimerDefaultAccessibilityLabel = DisplayStrings.sleepTimer
 
     private var audiobookProgressView = DownloadProgressView()
 
@@ -93,14 +94,8 @@ let SkipTimeInterval: Double = 15
             action: #selector(AudiobookPlayerViewController.tocWasPressed)
         )
         tocBbi.width = audioRouteButtonWidth
-        tocBbi.accessibilityLabel = NSLocalizedString("Table of Contents",
-                                                   bundle: Bundle.audiobookToolkit()!,
-                                                   value: "Table of Contents",
-                                                   comment: "Title to describe the list of chapters or tracks.")
-        tocBbi.accessibilityHint = NSLocalizedString("Select a chapter or track from a list.",
-                                                  bundle: Bundle.audiobookToolkit()!,
-                                                  value: "Select a chapter or track from a list.",
-                                                  comment: "Explain what a table of contents is.")
+        tocBbi.accessibilityLabel = DisplayStrings.tableOfContents
+        tocBbi.accessibilityHint = DisplayStrings.chapterSelectionAccessibility
 
         self.activityIndicator.hidesWhenStopped = true
         let indicatorBbi = UIBarButtonItem(customView: self.activityIndicator)
@@ -209,9 +204,9 @@ let SkipTimeInterval: Double = 15
             action: #selector(AudiobookPlayerViewController.speedWasPressed(_:))
         )
         speed.width = toolbarButtonWidth
-        let playbackButtonName = NSLocalizedString("Playback Speed", bundle: Bundle.audiobookToolkit()!, value: "Playback Speed", comment: "Title to set how fast the audio plays")
+        let playbackButtonName = DisplayStrings.playbackSpeed
         let playbackRateDescription = HumanReadablePlaybackRate(rate: self.audiobookManager.audiobook.player.playbackRate).accessibleDescription
-        speed.accessibilityLabel = "\(playbackButtonName): Currently \(playbackRateDescription)"
+        speed.accessibilityLabel = "\(playbackButtonName): \(DisplayStrings.currently) \(playbackRateDescription)"
         items.insert(speed, at: self.speedBarButtonIndex)
 
         let audioRoutingItem = self.audioRoutingBarButtonItem()
@@ -323,7 +318,7 @@ let SkipTimeInterval: Double = 15
             return action
         }
         
-        let actionSheetTitle = NSLocalizedString("Playback Speed", bundle: Bundle.audiobookToolkit()!, value: "Playback Speed", comment: "Title to set how fast the audio plays")
+        let actionSheetTitle = DisplayStrings.playbackSpeed
 
         let actionSheet: UIAlertController
         if self.traitCollection.horizontalSizeClass == .regular && UIAccessibility.isVoiceOverRunning {
@@ -337,7 +332,7 @@ let SkipTimeInterval: Double = 15
             let alert = actionFrom(rate: trigger, player: self.audiobookManager.audiobook.player)
             actionSheet.addAction(alert)
         }
-        let cancelActionTitle = NSLocalizedString("Cancel", bundle: Bundle.audiobookToolkit()!, value: "Cancel", comment: "Cancel")
+        let cancelActionTitle = DisplayStrings.cancel
         actionSheet.addAction(UIAlertAction(title: cancelActionTitle, style: .cancel, handler: nil))
         actionSheet.popoverPresentationController?.barButtonItem = self.toolbar.items?[self.speedBarButtonIndex]
         actionSheet.popoverPresentationController?.sourceView = self.view
@@ -382,24 +377,24 @@ let SkipTimeInterval: Double = 15
             var action: UIAlertAction! = nil
             switch trigger {
             case .endOfChapter:
-                let title = NSLocalizedString("End of Chapter", bundle: Bundle.audiobookToolkit()!, value: "End of Chapter", comment: "End of Chapter")
+                let title = DisplayStrings.endOfChapter
                 action = UIAlertAction(title: title, style: .default, handler: handler)
             case .oneHour:
-                let title = NSLocalizedString("60 Minutes", bundle: Bundle.audiobookToolkit()!, value: "60 Minutes", comment: "60 Minutes")
+                let title = DisplayStrings.oneHour
                 action = UIAlertAction(title: title, style: .default, handler: handler)
             case .thirtyMinutes:
-                let title = NSLocalizedString("30 Minutes", bundle: Bundle.audiobookToolkit()!, value: "30 Minutes", comment: "30 Minutes")
+                let title = DisplayStrings.thirtyMinutes
                 action = UIAlertAction(title: title, style: .default, handler: handler)
             case .fifteenMinutes:
-                let title = NSLocalizedString("15 Minutes", bundle: Bundle.audiobookToolkit()!, value: "15 Minutes", comment: "15 Minutes")
+                let title = DisplayStrings.fifteenMinutes
                 action = UIAlertAction(title: title, style: .default, handler: handler)
             case .never:
-                let title = NSLocalizedString("Off", bundle: Bundle.audiobookToolkit()!, value: "Off", comment: "Off")
+                let title = DisplayStrings.off
                 action = UIAlertAction(title: title, style: .default, handler: handler)
             }
             return action
         }
-        let title = NSLocalizedString("Sleep Timer", bundle: Bundle.audiobookToolkit()!, value: "Sleep Timer", comment: "Sleep Timer")
+        let title = DisplayStrings.sleepTimer
 
         let actionSheet: UIAlertController
         if self.traitCollection.horizontalSizeClass == .regular && UIAccessibility.isVoiceOverRunning {
@@ -413,7 +408,7 @@ let SkipTimeInterval: Double = 15
             let alert = actionFrom(trigger: trigger, sleepTimer: self.audiobookManager.sleepTimer)
             actionSheet.addAction(alert)
         }
-        let cancelActionTitle = NSLocalizedString("Cancel", bundle: Bundle.audiobookToolkit()!, value: "Cancel", comment: "Cancel")
+        let cancelActionTitle = DisplayStrings.cancel
         actionSheet.addAction(UIAlertAction(title: cancelActionTitle, style: .cancel, handler: nil))
         actionSheet.popoverPresentationController?.barButtonItem = self.toolbar.items?[self.sleepTimerBarButtonIndex]
         actionSheet.popoverPresentationController?.sourceView = self.view
@@ -442,8 +437,8 @@ let SkipTimeInterval: Double = 15
         let buttonItem = UIBarButtonItem(customView: view)
         buttonItem.width = audioRouteButtonWidth
         buttonItem.isAccessibilityElement = true
-        buttonItem.accessibilityLabel = NSLocalizedString("Playback Destination", bundle: Bundle.audiobookToolkit()!, value: "Playback Destination", comment: "Describe where the sound can be sent. Example: Bluetooth Speakers.")
-        buttonItem.accessibilityHint = NSLocalizedString("If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", bundle: Bundle.audiobookToolkit()!, value: "If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", comment: "Longer description to describe action of the button.")
+        buttonItem.accessibilityLabel = DisplayStrings.playbackDestination
+        buttonItem.accessibilityHint = DisplayStrings.destinationAvailabilityAccessiblityHint
         buttonItem.accessibilityTraits = UIAccessibilityTraits.button
         return buttonItem
     }
@@ -495,7 +490,7 @@ let SkipTimeInterval: Double = 15
             let voiceOverTimeRemaining = VoiceOverTimestamp(
                 timeInterval: sleepTimer.timeRemaining
             ).value
-            let middleTextFormat = NSLocalizedString("%@ until playback pauses", bundle: Bundle.audiobookToolkit()!, value: "%@ until playback pauses", comment: "localized time until playback pauses, for voice over")
+            let middleTextFormat = DisplayStrings.timeToPause
             accessibilityLabel = String(format: middleTextFormat, voiceOverTimeRemaining)
         } else {
             title = self.sleepTimerDefaultText
@@ -505,15 +500,15 @@ let SkipTimeInterval: Double = 15
     }
 
     func middleTextFor(chapter: ChapterLocation) -> String {
-        let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
-        let middleTextFormat = NSLocalizedString("%@ (file %@ of %d)", bundle: Bundle.audiobookToolkit()!, value: "%@ (file %@ of %d)", comment: "Current chapter and the amount of chapters left in the book")
+        let defaultTitleFormat = DisplayStrings.trackAt
+        let middleTextFormat = DisplayStrings.fileNumber
         let indexString = oneBasedSpineIndex() ?? "--"
         let title = chapter.title ?? String(format: defaultTitleFormat, indexString)
         return String(format: middleTextFormat, title, indexString, self.audiobookManager.audiobook.spine.count)
     }
 
     func playbackSpeedTextFor(speedText: String) -> String {
-        let speedAccessibilityFormatString = NSLocalizedString("Playback Speed: %@", bundle: Bundle.audiobookToolkit()!, value: "Playback Speed: %@", comment: "Announce how fast the speaking in the audiobook plays.")
+        let speedAccessibilityFormatString = DisplayStrings.playbackSpeed
         return String(format: speedAccessibilityFormatString, speedText)
     }
 
@@ -531,12 +526,9 @@ let SkipTimeInterval: Double = 15
 
     fileprivate func presentAlertAndLog(error: NSError?) {
 
-        let genericTitle = NSLocalizedString("A Problem Has Occurred",
-                                             bundle: Bundle.audiobookToolkit()!,
-                                             value: "A Problem Has Occurred",
-                                             comment: "A Problem Has Occurred")
+        let genericTitle = DisplayStrings.problemHasOccurred
         var errorTitle = genericTitle
-        var errorDescription = "Please try again later."
+        var errorDescription = DisplayStrings.tryAgain
         if let error = error {
             if error.domain == OpenAccessPlayerErrorDomain {
                 if let openAccessPlayerError = OpenAccessPlayerError.init(rawValue: error.code) {
@@ -554,7 +546,7 @@ let SkipTimeInterval: Double = 15
         }
 
         let alertController = UIAlertController(title: errorTitle, message: errorDescription, preferredStyle: .alert)
-        let okLocalizedText = NSLocalizedString("OK", bundle: Bundle.audiobookToolkit()!, value: "OK", comment: "Okay")
+        let okLocalizedText = DisplayStrings.ok
 
         let alertAction = UIAlertAction(title: okLocalizedText, style: .default) { _ in
             self.waitingForPlayer = false

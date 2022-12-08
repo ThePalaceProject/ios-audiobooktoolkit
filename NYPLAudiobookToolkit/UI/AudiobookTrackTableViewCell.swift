@@ -23,7 +23,8 @@ class AudiobookTrackTableViewCell: UITableViewCell {
             labelAlpha = 0.4
         } else if progress > 0 && progress < 1  {
             let percentage = HumanReadablePercentage(percentage: progress).value
-            let labelFormat = NSLocalizedString("Downloading: %@%%", bundle: Bundle.audiobookToolkit()!, value: "Downloading: %@%%", comment: "The percentage of the chapter that has been downloaded, formatting for string should be localized at this point.")
+            let labelFormat = Strings.Generic.downloading
+            
             detailLabel = String(format: labelFormat, percentage)
             labelAlpha = 0.4
         } else {

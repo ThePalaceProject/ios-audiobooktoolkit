@@ -15,6 +15,7 @@ public protocol AudiobookTableOfContentsTableViewControllerDelegate {
 }
 
 public class AudiobookTableOfContentsTableViewController: UITableViewController {
+    typealias DisplayStrings = Strings.AudiobookTableOfContentsTableViewController
 
     let tableOfContents: AudiobookTableOfContents
     let delegate: AudiobookTableOfContentsTableViewControllerDelegate
@@ -51,10 +52,7 @@ public class AudiobookTableOfContentsTableViewController: UITableViewController 
     private func announceTrackIfNeeded(track: IndexPath) {
         if UIAccessibility.isVoiceOverRunning {
             let cell = self.tableView.cellForRow(at: track)
-            let accessibleString = NSLocalizedString("Currently Playing: %@",
-                                                     bundle: Bundle.audiobookToolkit()!,
-                                                     value: "Currently Playing: %@",
-                                                     comment: "Announce which track is highlighted in the table of contents.")
+            let accessibleString = DisplayStrings.currentlyPlaying
             if let text = cell?.textLabel?.text {
                 UIAccessibility.post(notification: .screenChanged, argument: String(format: accessibleString, text))
             }
