@@ -76,12 +76,12 @@
 		A97CE13121ED388D00B64305 /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */; };
 		A9DC9CFD220547F800D122F2 /* ErrorDescriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
-		E5158C5D2935B6FA0007ABDB /* PureLayout.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
 		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
+		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E6160DFF2188EBFE0048755C /* BufferActivityIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */; };
@@ -194,8 +194,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
-				E5158C5D2935B6FA0007ABDB /* PureLayout.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -440,6 +440,7 @@
 			);
 			name = NYPLAudiobookToolkit;
 			packageProductDependencies = (
+				E59FCE9929423E73004FD730 /* PureLayout */,
 			);
 			productName = NYPLAudiobookToolkit;
 			productReference = 7B54418C200EA7C20047B6C6 /* NYPLAudiobookToolkit.framework */;
@@ -496,6 +497,7 @@
 			);
 			mainGroup = 7B544182200EA7C20047B6C6;
 			packageReferences = (
+				E56EE121293FCFBD00D0E915 /* XCRemoteSwiftPackageReference "PureLayout" */,
 			);
 			productRefGroup = 7B54418D200EA7C20047B6C6 /* Products */;
 			projectDirPath = "";
@@ -929,6 +931,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E56EE121293FCFBD00D0E915 /* XCRemoteSwiftPackageReference "PureLayout" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PureLayout/PureLayout";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E59FCE9929423E73004FD730 /* PureLayout */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E56EE121293FCFBD00D0E915 /* XCRemoteSwiftPackageReference "PureLayout" */;
+			productName = PureLayout;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7B544183200EA7C20047B6C6 /* Project object */;
 }
