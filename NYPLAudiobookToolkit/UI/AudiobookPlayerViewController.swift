@@ -103,7 +103,7 @@ let SkipTimeInterval: Double = 15
 
         self.view.addSubview(self.audiobookProgressView)
         self.audiobookProgressView.backgroundColor = .black
-        self.audiobookProgressView.autoPin(toTopLayoutGuideOf: self, withInset: 0)
+        self.audiobookProgressView.autoPinEdge(toSuperviewSafeArea: .top, withInset: 0)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .leading)
         self.audiobookProgressView.autoPinEdge(toSuperviewEdge: .trailing)
 
@@ -184,7 +184,8 @@ let SkipTimeInterval: Double = 15
             title: "test title",
             audiobookID: "12345")
 
-        self.toolbar.autoPin(toBottomLayoutGuideOf: self, withInset: 0)
+        self.audiobookProgressView.autoPinEdge(toSuperviewSafeArea: .bottom, withInset: 0)
+
         self.toolbar.autoPinEdge(.left, to: .left, of: self.view)
         self.toolbar.autoPinEdge(.right, to: .right, of: self.view)
         self.toolbar.autoSetDimension(.height, toSize: self.toolbarHeight)

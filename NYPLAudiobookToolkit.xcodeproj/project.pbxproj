@@ -84,6 +84,8 @@
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
+		E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */ = {isa = PBXBuildFile; productRef = E5A7C3A72943A8920083BE1F /* Transifex */; };
+		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
 		E6160DFF2188EBFE0048755C /* BufferActivityIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */; };
 		E67888EA214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
@@ -185,6 +187,7 @@
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
+		E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TXNativeExtensions.swift; sourceTree = "<group>"; };
 		E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BufferActivityIndicator.swift; sourceTree = "<group>"; };
 		E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTrackTableViewCell.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -196,6 +199,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
+				E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -254,10 +258,10 @@
 			children = (
 				7B987FDA201B88FF00A94B12 /* Core */,
 				8C6CD8AB240DB39300E2DFB0 /* DRM */,
-				8C3CDB052422D8460020FC0B /* Extensions */,
 				7BD759C120168FF5004CE65F /* Network */,
 				7B7B3709202274C400030A1E /* Player */,
 				8C7956AB2411757F0063D84F /* Resources */,
+				8C3CDB052422D8460020FC0B /* Extensions */,
 				7B3BD9C62011737B002C5416 /* UI */,
 				8C882C932409B0320000CA59 /* Utils */,
 				7B544190200EA7C20047B6C6 /* Info.plist */,
@@ -389,6 +393,7 @@
 		8C882C932409B0320000CA59 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */,
 				8C882C942409B04F0000CA59 /* DateUtils.swift */,
 				8C6CD8A9240D9F8A00E2DFB0 /* JSONUtils.swift */,
 				8CF57BD9243277180053C31E /* MediaProcessor.swift */,
@@ -441,6 +446,7 @@
 			);
 			name = NYPLAudiobookToolkit;
 			packageProductDependencies = (
+				E5A7C3A72943A8920083BE1F /* Transifex */,
 			);
 			productName = NYPLAudiobookToolkit;
 			productReference = 7B54418C200EA7C20047B6C6 /* NYPLAudiobookToolkit.framework */;
@@ -498,6 +504,7 @@
 			mainGroup = 7B544182200EA7C20047B6C6;
 			packageReferences = (
 				E56EE121293FCFBD00D0E915 /* XCRemoteSwiftPackageReference "PureLayout" */,
+				E5A7C3A62943A8920083BE1F /* XCRemoteSwiftPackageReference "transifex-swift" */,
 			);
 			productRefGroup = 7B54418D200EA7C20047B6C6 /* Products */;
 			projectDirPath = "";
@@ -619,6 +626,7 @@
 				A94E769C219F7B4200E943A2 /* AudiobookCoverImageView.swift in Sources */,
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				E59FCEC929425F81004FD730 /* Strings.swift in Sources */,
+				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
 				7B6C1BD2203F5BE600EB791E /* AudiobookTableOfContentsTableViewController.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				A92FB10421CDF94A004740F4 /* DownloadProgressView.swift in Sources */,
@@ -718,7 +726,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -774,7 +782,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -804,7 +812,7 @@
 				);
 				INFOPLIST_FILE = NYPLAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -840,7 +848,7 @@
 				);
 				INFOPLIST_FILE = NYPLAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -942,7 +950,23 @@
 				minimumVersion = 3.1.0;
 			};
 		};
+		E5A7C3A62943A8920083BE1F /* XCRemoteSwiftPackageReference "transifex-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/transifex/transifex-swift/";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E5A7C3A72943A8920083BE1F /* Transifex */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5A7C3A62943A8920083BE1F /* XCRemoteSwiftPackageReference "transifex-swift" */;
+			productName = Transifex;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7B544183200EA7C20047B6C6 /* Project object */;
 }
