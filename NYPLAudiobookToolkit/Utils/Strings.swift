@@ -22,7 +22,7 @@ struct Strings {
         static let cancel = NSLocalizedString("Cancel", value: "Cancel", comment: "Cancel")
         static let endOfChapter = NSLocalizedString("End of Chapter", value: "End of Chapter", comment: "End of Chapter")
         static let oneHour = NSLocalizedString("60 Minutes", value: "60 Minutes", comment: "60 Minutes")
-        static let thirtyMinutes = NSLocalizedString("30 Minutes", bundle: Bundle.audiobookToolkit()!, value: "30 Minutes", comment: "30 Minutes")
+        static let thirtyMinutes = NSLocalizedString("30 Minutes", value: "30 Minutes", comment: "30 Minutes")
         static let fifteenMinutes = NSLocalizedString("15 Minutes", value: "15 Minutes", comment: "15 Minutes")
         static let off = NSLocalizedString("Off", value: "Off", comment: "Off")
         static let playbackDestination = NSLocalizedString("Playback Destination", value: "Playback Destination", comment: "Describe where the sound can be sent. Example: Bluetooth Speakers.")
@@ -34,7 +34,7 @@ struct Strings {
                                                           value: "A Problem Has Occurred",
                                                           comment: "A Problem Has Occurred")
         static let tryAgain = NSLocalizedString("Please try again later.", comment: "Error message to please try again.")
-        static let ok = NSLocalizedString("OK", bundle: Bundle.audiobookToolkit()!, value: "OK", comment: "Okay")
+        static let ok = NSLocalizedString("OK", value: "OK", comment: "Okay")
     }
     
     struct AudiobookTableOfContentsTableViewController {
@@ -49,7 +49,7 @@ struct Strings {
         static let loading = NSLocalizedString("Downloading: %@%%", value: "Downloading: %@%%", comment: "The percentage of the chapter that has been downloaded, formatting for string should be localized at this point.")
         static let pause = NSLocalizedString("Pause", value: "Pause", comment: "Pause")
         static let play = NSLocalizedString("Play", value: "Play", comment: "Play")
-        static let sec = NSLocalizedString("sec", bundle: Bundle.audiobookToolkit()!, value: "sec", comment: "Abbreviations for seconds")
+        static let sec = NSLocalizedString("sec", value: "sec", comment: "Abbreviations for seconds")
     }
     
     struct PlaybackControlView {

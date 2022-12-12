@@ -184,8 +184,7 @@ let SkipTimeInterval: Double = 15
             title: "test title",
             audiobookID: "12345")
 
-        self.audiobookProgressView.autoPinEdge(toSuperviewSafeArea: .bottom, withInset: 0)
-
+        self.toolbar.autoPinEdge(toSuperviewSafeArea: .bottom, withInset: 0)
         self.toolbar.autoPinEdge(.left, to: .left, of: self.view)
         self.toolbar.autoPinEdge(.right, to: .right, of: self.view)
         self.toolbar.autoSetDimension(.height, toSize: self.toolbarHeight)
