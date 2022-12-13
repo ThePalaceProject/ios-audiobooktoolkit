@@ -24,7 +24,7 @@ final class DownloadProgressView: UIView {
         heightConstraint = autoSetDimension(.height, toSize: 0.0)
 
         downloadLabel.clipsToBounds = true
-        downloadLabel.text = NSLocalizedString("Downloading", comment: "")
+        downloadLabel.text = Strings.Generic.downloading
         downloadLabel.textColor = .white
         downloadLabel.font = UIFont.systemFont(ofSize: 12.0)
 

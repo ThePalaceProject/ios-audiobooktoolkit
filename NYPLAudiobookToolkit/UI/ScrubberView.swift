@@ -34,7 +34,7 @@ struct ScrubberProgress {
 
     var timeLeftInBookText: String {
         let timeLeft = HumanReadableTimestamp(timeInterval: self.timeLeftInBook).stringDescription
-        let formatString = NSLocalizedString("%@ remaining", bundle: Bundle.audiobookToolkit()!, value: "%@ remaining", comment: "The amount of hours and minutes left")
+        let formatString = Strings.ScrubberView.timeRemaining
         return String(format: formatString, timeLeft)
     }
 
@@ -316,10 +316,7 @@ final class ScrubberView: UIView {
     }
 
     private func topLabelVoiceOverDescription() -> String {
-        let accessibleString = NSLocalizedString("%@ remaining in the book.",
-                                                 bundle: Bundle.audiobookToolkit()!,
-                                                 value: "%@ remaining in the book.",
-                                                 comment: "How much time is left in the entire book, not just the chapter.")
+        let accessibleString = Strings.ScrubberView.timeRemainingInBook
         let timestamp = VoiceOverTimestamp(timeInterval: self.state.progress.timeLeftInBook).value
         return String(format: accessibleString, timestamp)
     }
@@ -327,10 +324,7 @@ final class ScrubberView: UIView {
     private func progressBackgroundVoiceOverDescription() -> String {
         let offset = HumanReadableTimestamp(timeInterval: self.state.progress.offset).accessibleDescription
         let remaining = HumanReadableTimestamp(timeInterval: self.state.progress.timeLeft).accessibleDescription
-        let accessibleString = NSLocalizedString("%@ played. %@ remaining.",
-                                                 bundle: Bundle.audiobookToolkit()!,
-                                                 value: "%@ played. %@ remaining.",
-                                                 comment: "Time into the current chapter, then time remaining in the current chapter.")
+        let accessibleString = Strings.ScrubberView.playedVsRemaining
         return String(format: accessibleString, offset, remaining)
     }
 

@@ -32,10 +32,7 @@ class BufferActivityIndicatorView: UIActivityIndicatorView {
     }
 
     @objc func debounceFunction() {
-        let announcementString = NSLocalizedString("Loading",
-                                                   bundle: Bundle.audiobookToolkit()!,
-                                                   value: "Loading",
-                                                   comment: "Quickly announce to VoiceOver that some data is loading and there may be a wait.")
+        let announcementString = Strings.Generic.loading
         UIAccessibility.post(notification: .announcement, argument: announcementString)
     }
 }
