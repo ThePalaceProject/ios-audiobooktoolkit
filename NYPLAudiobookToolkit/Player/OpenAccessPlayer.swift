@@ -156,7 +156,7 @@ class OpenAccessPlayer: NSObject, Player {
 
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> ()
     {
-        guard let currentLocation = self.currentChapterLocation else {
+        guard var currentLocation = self.currentChapterLocation else {
             ATLog(.error, "Invalid chapter information required for skip.")
             return
         }
@@ -167,7 +167,29 @@ class OpenAccessPlayer: NSObject, Player {
                                                     currentChapterDuration: chapterDuration,
                                                     requestedSkipDuration: timeInterval)
 
+        ATLog(.debug, "MyDebugger: Skip playhead, adjustedOffset: \(adjustedOffset)")
+        
+        if adjustedOffset < 0, let previousChapter = cursor.prev()?.currentElement.chapter {
+    
+            let location = ChapterLocation(
+                number: previousChapter.number,
+                part: previousChapter.part,
+                duration: previousChapter.duration,
+                startOffset: previousChapter.chapterOffset ?? 0,
+                playheadOffset: previousChapter.duration - adjustedOffset,
+                title: previousChapter.title,
+                audiobookID: self.audiobookID
+            )
+            
+            self.playAtLocation(location)
+            let newPlayhead = move(cursor: self.cursor, to: location)
+            completion?(newPlayhead.location)
+            return
+        }
+        
         if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset) {
+            ATLog(.debug, "MyDebugger: Skip playhead, newLocation: \(destinationLocation)")
+
             self.playAtLocation(destinationLocation,  completion: nil)
             let newPlayhead = move(cursor: self.cursor, to: destinationLocation)
             completion?(newPlayhead.location)

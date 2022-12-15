@@ -93,7 +93,7 @@ class PlayerManipulationTest: XCTestCase {
             "Attempted to move playhead into next chapter, but playhead was not found in the next chapter"
         )
         XCTAssertTrue(
-            playhead.location.playheadOffset == 0,
+            playhead.location.actualOffset == 0,
             "Attempted to move playhead to start of next chapter, but playhead was not at 0"
         )
     }

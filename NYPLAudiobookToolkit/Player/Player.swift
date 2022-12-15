@@ -143,8 +143,8 @@ extension Player {
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.actualOffset < 0 {
-            timeInterval = abs(self.actualOffset)
+        if self.playheadOffset > self.duration {
+            timeInterval = self.playheadOffset - self.duration
         }
         return timeInterval
     }
@@ -277,6 +277,13 @@ public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElem
 ///   playhead is located in, and a cursor that points to that chapter.
 public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) -> Playhead {
 
+    // Check if location is in immediately adjacent chapters
+    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
+        return nextPlayhead
+    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
+        return prevPlayhead
+    }
+
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
     for (i, element) in cursor.data.enumerated() {
@@ -316,8 +323,17 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
         } else {
             return chapterDuration
         }
-    } else {
-        return max(requestedPlayheadOffset, 0)
+    } else  {
+        if currentOffset > abs(skipTime) {
+            ATLog(.debug, "MyDebugger: currentOffset is greater than skiptime: \(currentOffset) returning requestedPlayheadOffset: \(requestedPlayheadOffset)")
+            return requestedPlayheadOffset
+        } else if abs(requestedPlayheadOffset) > (abs(skipTime) + 4) {
+            ATLog(.debug, "MyDebugger: requestedOffset \(requestedPlayheadOffset) is greater than skiptime + 4: returning 0")
+            return 0
+        } else {
+            ATLog(.debug, "MyDebugger: requestedOffset is less than skiptime + 4: \(requestedPlayheadOffset) returning skipTime: \(skipTime)")
+            return skipTime
+        }
     }
 }
 
