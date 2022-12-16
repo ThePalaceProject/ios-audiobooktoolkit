@@ -153,49 +153,67 @@ class OpenAccessPlayer: NSObject, Player {
         self.avQueuePlayer.removeAllItems()
         self.notifyDelegatesOfUnloadRequest()
     }
-
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> ()
-    {
-        guard var currentLocation = self.currentChapterLocation else {
-            ATLog(.error, "Invalid chapter information required for skip.")
-            return
-        }
-
-        let currentPlayheadOffset = currentLocation.playheadOffset
-        let chapterDuration = currentLocation.duration
-        let adjustedOffset = adjustedPlayheadOffset(currentPlayheadOffset: currentPlayheadOffset,
-                                                    currentChapterDuration: chapterDuration,
-                                                    requestedSkipDuration: timeInterval)
-
-        ATLog(.debug, "MyDebugger: Skip playhead, adjustedOffset: \(adjustedOffset)")
-        
-        if adjustedOffset < 0, let previousChapter = cursor.prev()?.currentElement.chapter {
     
-            let location = ChapterLocation(
-                number: previousChapter.number,
-                part: previousChapter.part,
-                duration: previousChapter.duration,
-                startOffset: previousChapter.chapterOffset ?? 0,
-                playheadOffset: previousChapter.duration - adjustedOffset,
-                title: previousChapter.title,
-                audiobookID: self.audiobookID
-            )
-            
-            self.playAtLocation(location)
-            let newPlayhead = move(cursor: self.cursor, to: location)
-            completion?(newPlayhead.location)
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> () {
+        debugPrint("MYDebugger: Initial location: \(currentChapterLocation?.description)")
+        guard let destination = currentChapterLocation?.update(playheadOffset: (currentChapterLocation?.playheadOffset ?? 0) + timeInterval)  else {
             return
         }
-        
-        if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset) {
-            ATLog(.debug, "MyDebugger: Skip playhead, newLocation: \(destinationLocation)")
 
-            self.playAtLocation(destinationLocation,  completion: nil)
-            let newPlayhead = move(cursor: self.cursor, to: destinationLocation)
-            completion?(newPlayhead.location)
+        self.playAtLocation(destination)
+        let playhead = move(cursor: self.cursor, to: destination)
+        debugPrint("MYDebugger: destination location: \(destination.description)")
+
+        completion?(playhead.location)
+    }
+
+//    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> () {
+//        guard let currentLocation = self.currentChapterLocation,
+//              let updatedLocation = getUpdatedLocation(currentLocation: currentLocation, timeInterval: timeInterval)
+//        else {
+//            ATLog(.error, "Invalid chapter information required for skip.")
+//            return
+//        }
+//
+//        self.playAtLocation(updatedLocation)
+//        let newPlayhead = move(cursor: self.cursor, to: updatedLocation)
+//        completion?(newPlayhead.location)
+//    }
+        
+    func getUpdatedLocation(currentLocation: ChapterLocation, timeInterval: TimeInterval) -> ChapterLocation? {
+        let currentPlayheadOffset = currentLocation.actualOffset
+        if timeInterval < 0, abs(timeInterval) > currentPlayheadOffset {
+            let remainingStepback = Double(timeInterval + currentPlayheadOffset)
+            return findPreviousLocation(currentLocation: currentLocation, interval: remainingStepback)
+        } else if currentPlayheadOffset + timeInterval >= currentLocation.duration {
+            let remainingStepForward = abs(currentLocation.timeRemaining - Double(timeInterval))
+            return findFutureLocation(currentLocation: currentLocation, interval: remainingStepForward)
         } else {
-            ATLog(.error, "New chapter location could not be created from skip.")
-            return
+            return currentLocation.update(playheadOffset: currentLocation.playheadOffset + timeInterval)
+        }
+    }
+
+    func findPreviousLocation(currentLocation: ChapterLocation, interval: TimeInterval) -> ChapterLocation? {
+        if let previousLocation = cursor.element(at: Int(currentLocation.number) - 2)?.chapter {
+            if abs(interval) > previousLocation.duration {
+               return findPreviousLocation(currentLocation: previousLocation, interval: interval + previousLocation.duration)
+            } else {
+                return previousLocation.update(playheadOffset: previousLocation.duration + interval)
+            }
+        } else {
+            return currentLocation.update(playheadOffset: currentLocation.chapterOffset ?? 0)
+        }
+    }
+    
+    func findFutureLocation(currentLocation: ChapterLocation, interval: TimeInterval) -> ChapterLocation? {
+        if let nextLocation = cursor.element(at: Int(currentLocation.number))?.chapter {
+            if interval > nextLocation.duration {
+                return findFutureLocation(currentLocation: nextLocation, interval: interval - nextLocation.duration)
+            } else {
+                return nextLocation.update(playheadOffset: nextLocation.playheadOffset + interval)
+            }
+        } else {
+            return currentLocation.update(playheadOffset: currentLocation.duration)
         }
     }
 

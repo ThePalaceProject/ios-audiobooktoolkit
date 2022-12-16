@@ -2,7 +2,7 @@
 //  ChapterLocationTests.swift
 //  NYPLAudiobookToolkitTests
 //
-//  Created by Maurice Work on 6/30/22.
+//  Created by Maurice Carrier on 6/30/22.
 //  Copyright © 2022 Dean Silfen. All rights reserved.
 //
 

@@ -12,6 +12,10 @@ final public class Cursor<T> {
     public var currentElement: T {
         return self.data[self.index]
     }
+    
+    public func element(at index: Int) -> T? {
+        self.data[safe: index]
+    }
 
     public func prev() -> Cursor<T>? {
         return Cursor(data: self.data, index: self.index - 1)

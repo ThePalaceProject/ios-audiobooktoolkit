@@ -223,6 +223,7 @@ extension Player {
             audiobookID: self.audiobookID
         )
     }
+
     public override var description: String {
         return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
     }
@@ -325,13 +326,10 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
         }
     } else  {
         if currentOffset > abs(skipTime) {
-            ATLog(.debug, "MyDebugger: currentOffset is greater than skiptime: \(currentOffset) returning requestedPlayheadOffset: \(requestedPlayheadOffset)")
             return requestedPlayheadOffset
         } else if abs(requestedPlayheadOffset) > (abs(skipTime) + 4) {
-            ATLog(.debug, "MyDebugger: requestedOffset \(requestedPlayheadOffset) is greater than skiptime + 4: returning 0")
             return 0
         } else {
-            ATLog(.debug, "MyDebugger: requestedOffset is less than skiptime + 4: \(requestedPlayheadOffset) returning skipTime: \(skipTime)")
             return skipTime
         }
     }
