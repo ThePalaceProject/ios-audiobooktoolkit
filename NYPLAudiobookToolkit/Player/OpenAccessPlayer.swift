@@ -156,6 +156,7 @@ class OpenAccessPlayer: NSObject, Player {
     
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> () {
         guard let destination = currentChapterLocation?.update(playheadOffset: (currentChapterLocation?.playheadOffset ?? 0) + timeInterval)  else {
+            ATLog(.error, "New chapter location could not be created from skip.")
             return
         }
 
