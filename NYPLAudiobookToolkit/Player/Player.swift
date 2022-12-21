@@ -143,8 +143,8 @@ extension Player {
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.actualOffset < 0 {
-            timeInterval = abs(self.actualOffset)
+        if self.playheadOffset < self.chapterOffset ?? 0 {
+            timeInterval = abs((self.chapterOffset ?? 0) - self.playheadOffset)
         }
         return timeInterval
     }
@@ -223,6 +223,7 @@ extension Player {
             audiobookID: self.audiobookID
         )
     }
+
     public override var description: String {
         return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
     }
@@ -277,6 +278,13 @@ public typealias Playhead = (location: ChapterLocation, cursor: Cursor<SpineElem
 ///   playhead is located in, and a cursor that points to that chapter.
 public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) -> Playhead {
 
+    // Check if location is in immediately adjacent chapters
+    if let nextPlayhead = attemptToMove(cursor: cursor, forwardTo: destination) {
+        return nextPlayhead
+    } else if let prevPlayhead = attemptToMove(cursor: cursor, backTo: destination) {
+        return prevPlayhead
+    }
+
     // If not, locate the spine index containing the location
     var foundIndex: Int? = nil
     for (i, element) in cursor.data.enumerated() {
@@ -316,8 +324,12 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
         } else {
             return chapterDuration
         }
-    } else {
-        return max(requestedPlayheadOffset, 0)
+    } else  {
+        if currentOffset > abs(skipTime) {
+            return requestedPlayheadOffset
+        } else {
+            return skipTime
+        }
     }
 }
 
@@ -338,15 +350,8 @@ private func attemptToMove(cursor: Cursor<SpineElement>, forwardTo location: Cha
     var possibleDestinationLocation: ChapterLocation?
 
     let newCursor: Cursor<SpineElement>
-    if let nextCursor = cursor.next() {
-        let newChapter = chapterAt(cursor: nextCursor)
-        if newChapter.duration > timeIntoNextChapter {
-            possibleDestinationLocation = newChapter.update(
-                playheadOffset: timeIntoNextChapter
-            )
-        } else {
-            possibleDestinationLocation = newChapter
-        }
+    if let (nextCursor, nextLocation) = findNextChapter(cursor: cursor, timeIntoNextChapter: timeIntoNextChapter) {
+        possibleDestinationLocation = nextLocation
         newCursor = nextCursor
     } else {
         // No chapter exists after the current one
@@ -356,6 +361,18 @@ private func attemptToMove(cursor: Cursor<SpineElement>, forwardTo location: Cha
         newCursor = cursor
     }
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
+}
+
+private func findNextChapter(cursor: Cursor<SpineElement>, timeIntoNextChapter: TimeInterval) -> (Cursor<SpineElement>, ChapterLocation?)? {
+    guard let newCursor = cursor.next() else { return nil }
+    
+    let destinationChapter = chapterAt(cursor: newCursor)
+    guard destinationChapter.duration > timeIntoNextChapter else {
+        let remainingTimeIntoNextChapter = timeIntoNextChapter - destinationChapter.duration
+        return findNextChapter(cursor: newCursor, timeIntoNextChapter: remainingTimeIntoNextChapter)
+    }
+
+    return (newCursor, destinationChapter.update(playheadOffset: destinationChapter.playheadOffset + timeIntoNextChapter))
 }
 
 private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: ChapterLocation) -> Playhead?  {
@@ -368,17 +385,28 @@ private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: Chapte
     var possibleDestinationLocation: ChapterLocation?
 
     let newCursor: Cursor<SpineElement>
-    if let prevCursor = cursor.prev() {
-        newCursor = prevCursor
-        let destinationChapter = chapterAt(cursor: newCursor)
-        let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
-        possibleDestinationLocation = destinationChapter.update(playheadOffset: max(0, playheadOffset))
+    if let (previousCursor, destinationLocation) = findPreviousChapter(cursor: cursor, timeIntoPreviousChapter: timeIntoPreviousChapter) {
+        newCursor = previousCursor
+        possibleDestinationLocation = destinationLocation
     } else {
         // No chapter exists before the current one
         possibleDestinationLocation = chapterAt(cursor: cursor).update(playheadOffset: 0)
         newCursor = cursor
     }
     return playhead(location: possibleDestinationLocation, cursor: newCursor)
+}
+
+private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousChapter: TimeInterval) -> (Cursor<SpineElement>, ChapterLocation?)? {
+    guard let newCursor = cursor.prev() else { return nil }
+    
+    let destinationChapter = chapterAt(cursor: newCursor)
+    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
+    
+    guard playheadOffset > 0 else {
+        return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))
+    }
+
+    return (newCursor, destinationChapter.update(playheadOffset: max(0, playheadOffset)))
 }
 
 

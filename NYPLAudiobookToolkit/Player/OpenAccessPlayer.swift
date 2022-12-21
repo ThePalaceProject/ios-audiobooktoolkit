@@ -153,28 +153,17 @@ class OpenAccessPlayer: NSObject, Player {
         self.avQueuePlayer.removeAllItems()
         self.notifyDelegatesOfUnloadRequest()
     }
-
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> ()
-    {
-        guard let currentLocation = self.currentChapterLocation else {
-            ATLog(.error, "Invalid chapter information required for skip.")
-            return
-        }
-
-        let currentPlayheadOffset = currentLocation.playheadOffset
-        let chapterDuration = currentLocation.duration
-        let adjustedOffset = adjustedPlayheadOffset(currentPlayheadOffset: currentPlayheadOffset,
-                                                    currentChapterDuration: chapterDuration,
-                                                    requestedSkipDuration: timeInterval)
-
-        if let destinationLocation = currentLocation.update(playheadOffset: adjustedOffset) {
-            self.playAtLocation(destinationLocation,  completion: nil)
-            let newPlayhead = move(cursor: self.cursor, to: destinationLocation)
-            completion?(newPlayhead.location)
-        } else {
+    
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> () {
+        guard let destination = currentChapterLocation?.update(playheadOffset: (currentChapterLocation?.playheadOffset ?? 0) + timeInterval)  else {
             ATLog(.error, "New chapter location could not be created from skip.")
             return
         }
+
+        self.playAtLocation(destination)
+        let playhead = move(cursor: self.cursor, to: destination)
+
+        completion?(playhead.location)
     }
 
     /// New Location's playhead offset could be oustide the bounds of audio, so
