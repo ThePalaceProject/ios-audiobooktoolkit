@@ -327,8 +327,6 @@ public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInte
     } else  {
         if currentOffset > abs(skipTime) {
             return requestedPlayheadOffset
-        } else if abs(requestedPlayheadOffset) > (abs(skipTime) + 4) {
-            return 0
         } else {
             return skipTime
         }
