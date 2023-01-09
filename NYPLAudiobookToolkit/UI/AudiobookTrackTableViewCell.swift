@@ -23,7 +23,7 @@ class AudiobookTrackTableViewCell: UITableViewCell {
             labelAlpha = 0.4
         } else if progress > 0 && progress < 1  {
             let percentage = HumanReadablePercentage(percentage: progress).value
-            let labelFormat = Strings.Generic.downloading
+            let labelFormat = Strings.Generic.downloadingFormatted
             
             detailLabel = String(format: labelFormat, percentage)
             labelAlpha = 0.4
