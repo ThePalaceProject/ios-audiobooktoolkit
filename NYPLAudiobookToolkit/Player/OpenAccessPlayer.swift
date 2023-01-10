@@ -161,9 +161,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
 
         self.playAtLocation(destination)
-        let playhead = move(cursor: self.cursor, to: destination)
-
-        completion?(playhead.location)
+        completion?(destination)
     }
 
     /// New Location's playhead offset could be oustide the bounds of audio, so
