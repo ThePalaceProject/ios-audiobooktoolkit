@@ -466,7 +466,7 @@ let SkipTimeInterval: Double = 15
         }
 
         guard currentLocation.timeRemaining >= 0 else {
-            (self.audiobookManager.audiobook.player as? OpenAccessPlayer)?.currentPlayerItemEnded()
+            (self.audiobookManager.audiobook.player as? LCPPlayer)?.currentPlayerItemEnded()
             return
         }
     }
@@ -501,10 +501,8 @@ let SkipTimeInterval: Double = 15
 
     func middleTextFor(chapter: ChapterLocation) -> String {
         let defaultTitleFormat = DisplayStrings.trackAt
-        let middleTextFormat = DisplayStrings.fileNumber
         let indexString = oneBasedSpineIndex() ?? "--"
-        let title = chapter.title ?? String(format: defaultTitleFormat, indexString)
-        return String(format: middleTextFormat, title, indexString, self.audiobookManager.audiobook.spine.count)
+        return chapter.title ?? String(format: defaultTitleFormat, indexString)
     }
 
     func playbackSpeedTextFor(speedText: String) -> String {

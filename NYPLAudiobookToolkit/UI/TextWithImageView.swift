@@ -81,4 +81,17 @@ class TextOverImageView: UIControl {
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+    
+    func disable(for seconds: Double) {
+        self.toggleInteractivity()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            self.toggleInteractivity()
+        }
+    }
+
+    private func toggleInteractivity() {
+        self.isEnabled.toggle()
+        self.layer.opacity = self.isEnabled ? 1.0 : 0.25
+    }
 }
