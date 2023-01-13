@@ -32,6 +32,8 @@ import AVFoundation
 /// above a certain log level in a release build.
 var sharedLogHandler: LogHandler?
 
+private var waitingForPlayer: Bool = false
+
 /// AudiobookManager is the main class for bringing Audiobook Playback to clients.
 /// It is intended to be used by the host app to initiate downloads,
 /// access the player, and manage the filesystem.
@@ -53,8 +55,6 @@ var sharedLogHandler: LogHandler?
     static func setLogHandler(_ handler: @escaping LogHandler)
     var playbackCompletionHandler: (() -> ())? { get set }
 }
-
-private var waitingForPlayer: Bool = false
 
 /// Implementation of the AudiobookManager intended for use by clients. Also intended
 /// to be used by the AudibookDetailViewController to respond to UI events.
