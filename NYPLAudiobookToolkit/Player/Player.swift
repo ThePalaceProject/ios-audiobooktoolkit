@@ -372,7 +372,7 @@ private func findNextChapter(cursor: Cursor<SpineElement>, timeIntoNextChapter: 
         return findNextChapter(cursor: newCursor, timeIntoNextChapter: remainingTimeIntoNextChapter)
     }
 
-    return (newCursor, destinationChapter.update(playheadOffset: destinationChapter.playheadOffset + timeIntoNextChapter))
+    return (newCursor, destinationChapter.update(playheadOffset: (destinationChapter.chapterOffset ?? destinationChapter.playheadOffset) + timeIntoNextChapter))
 }
 
 private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: ChapterLocation) -> Playhead?  {
@@ -400,7 +400,7 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     guard let newCursor = cursor.prev() else { return nil }
     
     let destinationChapter = chapterAt(cursor: newCursor)
-    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
+    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter + (destinationChapter.chapterOffset ?? destinationChapter.playheadOffset)
     
     guard playheadOffset > 0 else {
         return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))

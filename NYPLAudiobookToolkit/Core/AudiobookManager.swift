@@ -54,6 +54,8 @@ var sharedLogHandler: LogHandler?
     var playbackCompletionHandler: (() -> ())? { get set }
 }
 
+private var waitingForPlayer: Bool = false
+
 /// Implementation of the AudiobookManager intended for use by clients. Also intended
 /// to be used by the AudibookDetailViewController to respond to UI events.
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
@@ -100,9 +102,13 @@ var sharedLogHandler: LogHandler?
                 }
                 return .success
         }, skipForwardHandler: { (_) -> MPRemoteCommandHandlerStatus in
+            guard !waitingForPlayer else { return .success }
+            waitingForPlayer = true
             audiobook.player.skipPlayhead(SkipTimeInterval, completion: nil)
             return .success
         }, skipBackHandler: { (_) -> MPRemoteCommandHandlerStatus in
+            guard !waitingForPlayer else { return .success }
+            waitingForPlayer = true
             audiobook.player.skipPlayhead(-SkipTimeInterval, completion: nil)
             return .success
         }, playbackRateHandler: { (rateEvent) -> MPRemoteCommandHandlerStatus in
@@ -181,11 +187,16 @@ var sharedLogHandler: LogHandler?
 
 extension DefaultAudiobookManager: PlayerDelegate {
     public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+        waitingForPlayer = false
         self.mediaControlHandler.enableMediaControlCommands()
     }
-    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) { }
+    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
+        waitingForPlayer = false
+    }
     public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
     public func player(_ player: Player, didComplete chapter: ChapterLocation) {
+        waitingForPlayer = false
+
         let sortedSpine = self.networkService.spine.map{ $0.chapter }.sorted{ $0 < $1 }
         guard let firstChapter = sortedSpine.first,
             let lastChapter = sortedSpine.last else {
