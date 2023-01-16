@@ -201,7 +201,7 @@ extension Player {
         try container.encode(audiobookID, forKey: .audiobookID)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
@@ -217,7 +217,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.chapterOffset ?? 0,
+            startOffset: self.chapterOffset,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
@@ -400,7 +400,7 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     guard let newCursor = cursor.prev() else { return nil }
     
     let destinationChapter = chapterAt(cursor: newCursor)
-    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter + (destinationChapter.chapterOffset ?? destinationChapter.playheadOffset)
+    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
     
     guard playheadOffset > 0 else {
         return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))
