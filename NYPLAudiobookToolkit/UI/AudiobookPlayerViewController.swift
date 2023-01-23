@@ -303,6 +303,7 @@ let SkipTimeInterval: Double = 15
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
             delegate: self)
+        navigationItem.backButtonTitle = Strings.Generic.back
         self.navigationController?.pushViewController(tocVC, animated: true)
     }
     
