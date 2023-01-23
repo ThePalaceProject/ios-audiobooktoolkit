@@ -241,7 +241,6 @@ let SkipTimeInterval: Double = 15
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.audiobookManager.timerDelegate = self
-        self.navigationController?.navigationItem.backButtonTitle = Strings.Generic.back
 
         if self.audiobookManager.audiobook.player.isPlaying {
             self.playbackControlView.showPauseButtonIfNeeded()
