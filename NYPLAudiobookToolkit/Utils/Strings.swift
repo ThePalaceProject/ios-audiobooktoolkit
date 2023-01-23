@@ -51,6 +51,7 @@ struct Strings {
         static let pause = NSLocalizedString("Pause", value: "Pause", comment: "Pause")
         static let play = NSLocalizedString("Play", value: "Play", comment: "Play")
         static let sec = NSLocalizedString("sec", value: "sec", comment: "Abbreviations for seconds")
+        static let back = NSLocalizedString("Back", comment: "Back button")
     }
     
     struct PlaybackControlView {
