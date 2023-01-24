@@ -595,7 +595,7 @@ extension AudiobookPlayerViewController: AudiobookManagerTimerDelegate {
 
 extension AudiobookPlayerViewController: PlaybackControlViewDelegate {
     func playbackControlViewSkipBackButtonWasTapped(_ playbackControlView: PlaybackControlView) {
-        guard !waitingForPlayer else { return }
+        guard !waitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else { return }
 
         self.waitingForPlayer = true
         if self.audiobookManager.audiobook.player.isPlaying {
@@ -612,7 +612,7 @@ extension AudiobookPlayerViewController: PlaybackControlViewDelegate {
     }
     
     func playbackControlViewSkipForwardButtonWasTapped(_ playbackControlView: PlaybackControlView) {
-        guard !waitingForPlayer else { return }
+        guard !waitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else { return }
 
         self.waitingForPlayer = true
         if self.audiobookManager.audiobook.player.isPlaying {

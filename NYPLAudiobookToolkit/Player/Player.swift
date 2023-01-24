@@ -45,7 +45,8 @@ import Foundation
     typealias Completion = (Error?) -> Void
 
     var isPlaying: Bool { get }
-    
+    // Player maintains an internal queue
+    var queuesEvents: Bool { get }
     // When set, should lock down playback
     var isDrmOk: Bool { get set }
     
