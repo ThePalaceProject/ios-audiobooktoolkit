@@ -102,12 +102,12 @@ private var waitingForPlayer: Bool = false
                 }
                 return .success
         }, skipForwardHandler: { (_) -> MPRemoteCommandHandlerStatus in
-            guard !waitingForPlayer else { return .success }
+            guard !waitingForPlayer || audiobook.player.queuesEvents else { return .success }
             waitingForPlayer = true
             audiobook.player.skipPlayhead(SkipTimeInterval, completion: nil)
             return .success
         }, skipBackHandler: { (_) -> MPRemoteCommandHandlerStatus in
-            guard !waitingForPlayer else { return .success }
+            guard !waitingForPlayer || audiobook.player.queuesEvents else { return .success }
             waitingForPlayer = true
             audiobook.player.skipPlayhead(-SkipTimeInterval, completion: nil)
             return .success
