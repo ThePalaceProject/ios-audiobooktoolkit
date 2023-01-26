@@ -402,8 +402,7 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     
     let destinationChapter = chapterAt(cursor: newCursor)
     let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
-    
-    guard playheadOffset > 0 else {
+    guard playheadOffset > 0 || destinationChapter.number == 0 else {
         return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))
     }
 
