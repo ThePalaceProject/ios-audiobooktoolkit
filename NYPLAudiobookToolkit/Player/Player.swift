@@ -45,7 +45,8 @@ import Foundation
     typealias Completion = (Error?) -> Void
 
     var isPlaying: Bool { get }
-    
+    // Player maintains an internal queue
+    var queuesEvents: Bool { get }
     // When set, should lock down playback
     var isDrmOk: Bool { get set }
     
@@ -201,7 +202,7 @@ extension Player {
         try container.encode(audiobookID, forKey: .audiobookID)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
@@ -217,7 +218,7 @@ extension Player {
             number: self.number,
             part: self.part,
             duration: self.duration,
-            startOffset: self.chapterOffset ?? 0,
+            startOffset: self.chapterOffset,
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID
@@ -311,7 +312,7 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
 ///   - skipTime: The requested skip time interval
 /// - Returns: The new Playhead Offset location that should be set
 public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInterval,
-                                   actualPlayheadOffset actualOffset: TimeInterval? = 0,
+                                   actualPlayheadOffset actualOffset: TimeInterval? = nil,
                                    currentChapterDuration chapterDuration: TimeInterval,
                                    requestedSkipDuration skipTime: TimeInterval) -> TimeInterval {
     let requestedPlayheadOffset = currentOffset + skipTime
@@ -372,7 +373,7 @@ private func findNextChapter(cursor: Cursor<SpineElement>, timeIntoNextChapter: 
         return findNextChapter(cursor: newCursor, timeIntoNextChapter: remainingTimeIntoNextChapter)
     }
 
-    return (newCursor, destinationChapter.update(playheadOffset: destinationChapter.playheadOffset + timeIntoNextChapter))
+    return (newCursor, destinationChapter.update(playheadOffset: (destinationChapter.chapterOffset ?? destinationChapter.playheadOffset) + timeIntoNextChapter))
 }
 
 private func attemptToMove(cursor: Cursor<SpineElement>, backTo location: ChapterLocation) -> Playhead?  {
@@ -401,8 +402,7 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     
     let destinationChapter = chapterAt(cursor: newCursor)
     let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
-    
-    guard playheadOffset > 0 else {
+    guard playheadOffset > 0 || destinationChapter.number == 0 else {
         return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))
     }
 

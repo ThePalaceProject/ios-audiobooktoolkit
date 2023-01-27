@@ -3,7 +3,7 @@ import AVFoundation
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 
 class OpenAccessPlayer: NSObject, Player {
-
+    var queuesEvents: Bool = false
     var taskCompletion: Completion? = nil
 
     var errorDomain: String {

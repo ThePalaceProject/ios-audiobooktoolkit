@@ -166,12 +166,10 @@ final class PlaybackControlView: UIView {
     }
 
     @objc public func skipBackButtonWasTapped(_ sender: Any) {
-        self.skipBackView.disable(for: 1.0)
         self.delegate?.playbackControlViewSkipBackButtonWasTapped(self)
     }
 
     @objc public func skipForwardButtonWasTapped(_ sender: Any) {
-        self.skipForwardView.disable(for: 1.0)
         self.delegate?.playbackControlViewSkipForwardButtonWasTapped(self)
     }
 
