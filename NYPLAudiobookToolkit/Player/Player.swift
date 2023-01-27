@@ -312,7 +312,7 @@ public func move(cursor: Cursor<SpineElement>, to destination: ChapterLocation) 
 ///   - skipTime: The requested skip time interval
 /// - Returns: The new Playhead Offset location that should be set
 public func adjustedPlayheadOffset(currentPlayheadOffset currentOffset: TimeInterval,
-                                   actualPlayheadOffset actualOffset: TimeInterval? = 0,
+                                   actualPlayheadOffset actualOffset: TimeInterval? = nil,
                                    currentChapterDuration chapterDuration: TimeInterval,
                                    requestedSkipDuration skipTime: TimeInterval) -> TimeInterval {
     let requestedPlayheadOffset = currentOffset + skipTime
