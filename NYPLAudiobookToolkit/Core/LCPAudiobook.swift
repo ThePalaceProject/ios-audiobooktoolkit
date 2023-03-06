@@ -61,6 +61,7 @@ import Foundation
             }
         self.uniqueIdentifier = id
         if let toc = publication["toc"] as? [[String: Any]] {
+            print("MYDEBUGGER: \(toc)")
             self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
         } else {
             self.spine = LCPAudiobook.getSpineElements(resources: resources, identifier: uniqueIdentifier)

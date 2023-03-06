@@ -690,18 +690,21 @@ extension AudiobookPlayerViewController: AudiobookNetworkServiceDelegate {
 extension AudiobookPlayerViewController: ScrubberViewDelegate {
     func scrubberView(_ scrubberView: ScrubberView, didRequestScrubTo offset: TimeInterval) {
 
+        print("MyDebugger: Scrub to offset: \(offset)")
         guard let requestedOffset = self.currentChapterLocation?.update(playheadOffset: offset),
         let currentOffset = self.currentChapterLocation else {
             ATLog(.error, "Scrubber attempted to scrub without a current chapter.")
             return
         }
 
+        print("MyDebugger: Requested offset: \(requestedOffset)")
         self.waitingForPlayer = true
         if self.audiobookManager.audiobook.player.isPlaying {
             self.activityIndicator.startAnimating()
         }
 
         let offsetMovement = requestedOffset.playheadOffset - currentOffset.actualOffset
+        print("MyDebugger: OffsetMovement: \(offsetMovement)")
 
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
             self.seekBar.setOffset(adjustedLocation.actualOffset,
