@@ -78,6 +78,8 @@
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
+		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
+		E530533929B7D16F005E831F /* FileManager+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E530533829B7D16F005E831F /* FileManager+Extensions.swift */; };
 		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
@@ -182,6 +184,8 @@
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
 		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
+		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
+		E530533829B7D16F005E831F /* FileManager+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileManager+Extensions.swift"; sourceTree = "<group>"; };
 		E549653227FBEAC400913BD6 /* toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = toc_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
@@ -367,6 +371,7 @@
 				8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */,
 				8C3CDB062422D85E0020FC0B /* Data+Base64.swift */,
 				8CF57BDB2432788C0053C31E /* Data+BigEndian.swift */,
+				E530533829B7D16F005E831F /* FileManager+Extensions.swift */,
 				8C3CDB0D2422E7F40020FC0B /* String+Extensions.swift */,
 				8C3F7111242BDDAF00E5C810 /* URLRequest+Curl.swift */,
 				E503256C27FE8EFA00317F68 /* Array+Extensions.swift */,
@@ -410,6 +415,7 @@
 			isa = PBXGroup;
 			children = (
 				E549653227FBEAC400913BD6 /* toc_manifest.json */,
+				E530532F29B69B91005E831F /* snowcrash_manifest.json */,
 				E5A018BE2936887E003F6D01 /* alice_manifest.json */,
 				E549653427FBEB5100913BD6 /* non_toc_manifest.json */,
 				E5A018C029368B17003F6D01 /* the_martian_manifest.json */,
@@ -536,6 +542,7 @@
 				E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
 				E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */,
+				E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -630,6 +637,7 @@
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				E59FCEC929425F81004FD730 /* Strings.swift in Sources */,
 				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
+				E530533929B7D16F005E831F /* FileManager+Extensions.swift in Sources */,
 				7B6C1BD2203F5BE600EB791E /* AudiobookTableOfContentsTableViewController.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				A92FB10421CDF94A004740F4 /* DownloadProgressView.swift in Sources */,
