@@ -112,7 +112,7 @@ extension Player {
     public let duration: TimeInterval
     
     public var actualOffset: TimeInterval {
-        return max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
+        max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -138,7 +138,7 @@ extension Player {
     }
 
     public var timeRemaining: TimeInterval {
-        return self.duration - self.actualOffset
+        self.duration - self.actualOffset
     }
 
     public var secondsBeforeStart: TimeInterval? {
@@ -213,7 +213,7 @@ extension Player {
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
-        return ChapterLocation(
+        ChapterLocation(
             number: self.number,
             part: self.part,
             duration: self.duration,
@@ -225,15 +225,15 @@ extension Player {
     }
 
     public override var description: String {
-        return "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
+        "ChapterLocation P \(self.part) CN \(self.number); PH \(self.playheadOffset) AO \(self.actualOffset) D \(self.duration)"
     }
     
     public func toData() -> Data {
-        return try! JSONEncoder().encode(self)
+        try! JSONEncoder().encode(self)
     }
     
     public class func fromData(_ data: Data) -> ChapterLocation? {
-        return try? JSONDecoder().decode(ChapterLocation.self, from: data)
+        try? JSONDecoder().decode(ChapterLocation.self, from: data)
     }
 
     public static func < (lhs: ChapterLocation, rhs: ChapterLocation) -> Bool {

@@ -46,7 +46,6 @@ final class LCPDownloadTask: DownloadTask {
     
     /// URL for decrypted audio file
     var decryptedUrls: [URL]?
-    var lastTrackDuration: Double?
     
     let urlMediaType: LCPSpineElementMediaType
     
@@ -56,7 +55,6 @@ final class LCPDownloadTask: DownloadTask {
         self.key = spineElement.key
         self.urls = spineElement.urls
         self.urlMediaType = spineElement.mediaType
-        lastTrackDuration = spineElement.combinedFileDuration
         self.decryptedUrls = self.urls.compactMap { decryptedFileURL(for:$0) }
     }
 

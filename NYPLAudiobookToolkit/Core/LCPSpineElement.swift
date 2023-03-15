@@ -48,7 +48,6 @@ final class LCPSpineElement: SpineElement {
     let title: String
     let urls: [URL]
     var offset: Double
-    var combinedFileDuration: Double?
     let mediaType: LCPSpineElementMediaType
     let duration: TimeInterval
     let audiobookID: String
@@ -57,7 +56,6 @@ final class LCPSpineElement: SpineElement {
         chapterNumber: UInt,
         title: String,
         hrefs: [String],
-        combinedFileDuration: Double?,
         offset: Double,
         mediaType: LCPSpineElementMediaType,
         duration: TimeInterval,
@@ -69,8 +67,6 @@ final class LCPSpineElement: SpineElement {
             return nil
         }
     
-        self.combinedFileDuration = combinedFileDuration
-
         self.key = "\(audiobookID)-\(chapterNumber)"
         self.chapterNumber = chapterNumber
         self.title = title

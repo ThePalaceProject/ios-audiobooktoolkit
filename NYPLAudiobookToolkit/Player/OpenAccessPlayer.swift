@@ -117,7 +117,7 @@ class OpenAccessPlayer: NSObject, Player {
                 if let fileStatus = assetFileStatus(self.cursor.currentElement.downloadTask) {
                     switch fileStatus {
                     case .saved(let savedURLs):
-                        let item = createPlayerItem(files: savedURLs, lastTrackDuration: (self.cursor.currentElement.downloadTask as? LCPDownloadTask)?.lastTrackDuration ?? 0) ?? AVPlayerItem(url: savedURLs[0])
+                        let item = createPlayerItem(files: savedURLs) ?? AVPlayerItem(url: savedURLs[0])
                         
                         if self.avQueuePlayer.canInsert(item, after: nil) {
                             self.avQueuePlayer.insert(item, after: nil)
@@ -137,7 +137,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    private func createPlayerItem(files: [URL], lastTrackDuration: Double) -> AVPlayerItem? {
+    private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
 
         let composition = AVMutableComposition()
@@ -425,7 +425,7 @@ class OpenAccessPlayer: NSObject, Player {
             }
             switch fileStatus {
             case .saved(let assetURLs):
-                let playerItem = createPlayerItem(files: assetURLs, lastTrackDuration: (cursor!.currentElement.downloadTask as? LCPDownloadTask)?.lastTrackDuration ?? 0) ?? AVPlayerItem(url: assetURLs[0])
+                let playerItem = createPlayerItem(files: assetURLs) ?? AVPlayerItem(url: assetURLs[0])
                 playerItem.audioTimePitchAlgorithm = .timeDomain
                 items.append(playerItem)
             case .missing(_):
@@ -464,7 +464,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
-    @objc func nextPlayerItem() {
+    @objc func advanceToNextPlayerItem() {
         let currentCursor = self.cursor
         guard let nextCursor = self.cursor.next() else {
             ATLog(.debug, "End of book reached.")
