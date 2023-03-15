@@ -35,7 +35,7 @@ final class OverdriveDownloadTask: DownloadTask {
         case .missing(let missingAssetURL):
             switch urlMediaType {
             case .audioMP3:
-                self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory: missingAssetURL)
+                self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory: missingAssetURL.first!)
             }
         case .unknown:
             self.delegate?.downloadTaskFailed(self, withError: nil)
@@ -46,7 +46,7 @@ final class OverdriveDownloadTask: DownloadTask {
         switch self.assetFileStatus() {
         case .saved(let url):
             do {
-                try FileManager.default.removeItem(at: url)
+                try FileManager.default.removeItem(at: url.first!)
                 self.delegate?.downloadTaskDidDeleteAsset(self)
             } catch {
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
@@ -63,9 +63,9 @@ final class OverdriveDownloadTask: DownloadTask {
             return AssetResult.unknown
         }
         if FileManager.default.fileExists(atPath: localAssetURL.path) {
-            return AssetResult.saved(localAssetURL)
+            return AssetResult.saved([localAssetURL])
         } else {
-            return AssetResult.missing(localAssetURL)
+            return AssetResult.missing([localAssetURL])
         }
     }
 

@@ -112,8 +112,7 @@ extension Player {
     public let duration: TimeInterval
     
     public var actualOffset: TimeInterval {
-        let offset = max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
-        return offset
+        return max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -401,7 +400,7 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     guard let newCursor = cursor.prev() else { return nil }
     
     let destinationChapter = chapterAt(cursor: newCursor)
-    let playheadOffset = destinationChapter.duration - timeIntoPreviousChapter
+    let playheadOffset = (destinationChapter.chapterOffset ?? 0) + destinationChapter.duration - timeIntoPreviousChapter
     guard playheadOffset > 0 || destinationChapter.number == 0 else {
         return findPreviousChapter(cursor: newCursor, timeIntoPreviousChapter: abs(playheadOffset))
     }

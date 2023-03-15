@@ -467,7 +467,7 @@ let SkipTimeInterval: Double = 15
         }
 
         guard currentLocation.timeRemaining >= 0 else {
-            (self.audiobookManager.audiobook.player as? LCPPlayer)?.currentPlayerItemEnded()
+            (self.audiobookManager.audiobook.player as? LCPPlayer)?.nextPlayerItem()
             return
         }
     }

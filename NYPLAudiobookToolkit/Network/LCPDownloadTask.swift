@@ -18,20 +18,23 @@ final class LCPDownloadTask: DownloadTask {
     func fetch() {
         // No need to download files.
     }
-    
+
     /// Delete decrypted file
     func delete() {
         let fileManager = FileManager.default
-        guard let url = decryptedUrl, fileManager.fileExists(atPath: url.path) else {
-            return
-        }
-        do {
-            try fileManager.removeItem(at: url)
-        } catch {
-            ATLog(.warn, "Could not delete decrypted file.", error: error)
+        decryptedUrls?.forEach {
+            guard fileManager.fileExists(atPath: $0.path) else {
+                return
+            }
+
+            do {
+                try fileManager.removeItem(at: $0)
+            } catch {
+                ATLog(.warn, "Could not delete decrypted file.", error: error)
+            }
         }
     }
-    
+
     /// All encrypted files are included in the audiobook, download progress is 1.0
     let downloadProgress: Float = 1.0
     
@@ -39,10 +42,11 @@ final class LCPDownloadTask: DownloadTask {
     let key: String
     
     /// URL of a file inside the audiobook archive (e.g., `media/sound.mp3`)
-    let url: URL
+    let urls: [URL]
     
     /// URL for decrypted audio file
-    var decryptedUrl: URL?
+    var decryptedUrls: [URL]?
+    var lastTrackDuration: Double?
     
     let urlMediaType: LCPSpineElementMediaType
     
@@ -50,9 +54,10 @@ final class LCPDownloadTask: DownloadTask {
     
     init(spineElement: LCPSpineElement) {
         self.key = spineElement.key
-        self.url = spineElement.url
+        self.urls = spineElement.urls
         self.urlMediaType = spineElement.mediaType
-        self.decryptedUrl = decryptedFileURL(for: self.url)
+        lastTrackDuration = spineElement.combinedFileDuration
+        self.decryptedUrls = self.urls.compactMap { decryptedFileURL(for:$0) }
     }
 
     /// URL for decryption delegate to store decrypted file.

@@ -46,8 +46,9 @@ final class LCPSpineElement: SpineElement {
     let key: String
     let chapterNumber: UInt
     let title: String
-    let url: URL
+    let urls: [URL]
     var offset: Double
+    var combinedFileDuration: Double?
     let mediaType: LCPSpineElementMediaType
     let duration: TimeInterval
     let audiobookID: String
@@ -55,20 +56,24 @@ final class LCPSpineElement: SpineElement {
     init?(
         chapterNumber: UInt,
         title: String,
-        href: String,
+        hrefs: [String],
+        combinedFileDuration: Double?,
         offset: Double,
         mediaType: LCPSpineElementMediaType,
         duration: TimeInterval,
         audiobookID: String
     ) {
-        guard let url = URL(string: href) else {
+
+        self.urls = hrefs.compactMap { URL(string: $0) }
+        guard !self.urls.isEmpty else {
             return nil
         }
+    
+        self.combinedFileDuration = combinedFileDuration
 
         self.key = "\(audiobookID)-\(chapterNumber)"
         self.chapterNumber = chapterNumber
         self.title = title
-        self.url = url
         self.offset = offset
         self.mediaType = mediaType
         self.duration = duration
@@ -93,7 +98,7 @@ final class LCPSpineElement: SpineElement {
                 return nil
         }
         
-        self.url = url
+        self.urls = [url]
         let defaultTitleFormat = NSLocalizedString("Track %@", bundle: Bundle.audiobookToolkit()!, value: "Track %@", comment: "Default track title")
         let name = LCPSpineElement.elementName(JSON: payload["title"])
         self.title = name ?? String(format: defaultTitleFormat, "\(index + 1)")

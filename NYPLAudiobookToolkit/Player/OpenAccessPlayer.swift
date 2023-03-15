@@ -116,8 +116,9 @@ class OpenAccessPlayer: NSObject, Player {
             if self.avQueuePlayer.currentItem == nil {
                 if let fileStatus = assetFileStatus(self.cursor.currentElement.downloadTask) {
                     switch fileStatus {
-                    case .saved(let savedURL):
-                        let item = AVPlayerItem(url: savedURL)
+                    case .saved(let savedURLs):
+                        let item = createPlayerItem(files: savedURLs, lastTrackDuration: (self.cursor.currentElement.downloadTask as? LCPDownloadTask)?.lastTrackDuration ?? 0) ?? AVPlayerItem(url: savedURLs[0])
+                        
                         if self.avQueuePlayer.canInsert(item, after: nil) {
                             self.avQueuePlayer.insert(item, after: nil)
                         }
@@ -134,6 +135,29 @@ class OpenAccessPlayer: NSObject, Player {
             self.notifyDelegatesOfPlaybackFailureFor(chapter: self.chapterAtCurrentCursor, error)
             break
         }
+    }
+
+    private func createPlayerItem(files: [URL], lastTrackDuration: Double) -> AVPlayerItem? {
+        guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
+
+        let composition = AVMutableComposition()
+        let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+
+        do {
+            for (index, file) in files.enumerated() {
+                let asset = AVAsset(url: file)
+                if index == files.count - 1 {
+                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                } else {
+                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                }
+            }
+        } catch {
+            ATLog(.error, "Player not yet ready. QueuedToPlay = true.")
+            return nil
+        }
+
+        return AVPlayerItem(asset: composition)
     }
 
     func pause()
@@ -400,8 +424,8 @@ class OpenAccessPlayer: NSObject, Player {
                 continue
             }
             switch fileStatus {
-            case .saved(let assetURL):
-                let playerItem = AVPlayerItem(url: assetURL)
+            case .saved(let assetURLs):
+                let playerItem = createPlayerItem(files: assetURLs, lastTrackDuration: (cursor!.currentElement.downloadTask as? LCPDownloadTask)?.lastTrackDuration ?? 0) ?? AVPlayerItem(url: assetURLs[0])
                 playerItem.audioTimePitchAlgorithm = .timeDomain
                 items.append(playerItem)
             case .missing(_):
@@ -424,18 +448,34 @@ class OpenAccessPlayer: NSObject, Player {
         DispatchQueue.main.async {
             let currentCursor = self.cursor
             if let nextCursor = self.cursor.next() {
-                ATLog(.debug, "Attempting to recover the missing AVPlayerItem.")
                 self.cursor = nextCursor
+                
                 if self.avQueuePlayer.items().count <= 1 {
                     self.pause()
+                    ATLog(.debug, "Attempting to recover the missing AVPlayerItem.")
                     self.attemptToRecoverMissingPlayerItem(cursor: currentCursor)
                 }
             } else {
                 ATLog(.debug, "End of book reached.")
                 self.pause()
             }
+            
             self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
         }
+    }
+    
+    @objc func nextPlayerItem() {
+        let currentCursor = self.cursor
+        guard let nextCursor = self.cursor.next() else {
+            ATLog(.debug, "End of book reached.")
+            self.pause()
+            return
+        }
+
+        self.cursor = nextCursor
+        self.avQueuePlayer.advanceToNextItem()
+        seekWithinCurrentItem(newOffset: Double(self.cursor.currentElement.chapter.chapterOffset?.seconds ?? 0))
+        self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
     }
 
     /// Try and recover from a Cursor missing its player asset.
