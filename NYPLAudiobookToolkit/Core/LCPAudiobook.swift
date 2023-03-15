@@ -97,6 +97,7 @@ import Foundation
         for (index, element) in allTocElements.enumerated() {
             var elementDuration = 0.0
             let section = resourceElements[element.rawLink() ?? ""]
+            var hrefs = [String]()
             
             var nextElement: TocElement?
     
@@ -119,11 +120,14 @@ import Foundation
                     }
                 }
             }
-
+            
+            hrefs.append(element.href)
+            hrefs.append(nextElement?.href)
+    
             let spineElement = LCPSpineElement(
                 chapterNumber: UInt(index + 1),
                 title: element.title ?? "",
-                hrefs: [element.href ?? "", nextElement?.href ?? ""],
+                hrefs: hrefs,
                 offset: element.offset(),
                 mediaType: section?.type ?? .audioMP3,
                 duration: elementDuration,

@@ -312,13 +312,13 @@ class AudiobookTOCTests: XCTestCase {
     private func validate(manifest: String, against results: [TestOutcome]) async {
         let bundle = Bundle(for: AudiobookTOCTests.self)
         let url = bundle.url(forResource: manifest, withExtension: "json")!
-        
+
         guard let lcpAudiobook = try? await fetchAudiobook(url: url),
               let spine = lcpAudiobook?.spine as? [LCPSpineElement] else {
             XCTFail("Failed to create Audiobook spine.")
             return
         }
-        
+
         for (index, element) in spine.enumerated() {
             XCTAssertEqual(element.chapterNumber, results[index].chapter)
             XCTAssertEqual(element.offset, results[index].offset)
