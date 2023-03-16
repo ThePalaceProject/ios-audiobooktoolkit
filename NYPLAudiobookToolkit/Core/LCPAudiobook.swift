@@ -92,12 +92,15 @@ import Foundation
         let resourceElements = LCPAudiobook.extract(resources: resources)
 
         let allTocElements: [TocElement] = extractTOCElements(toc: toc)
-
+        
         // Calculate duration
         for (index, element) in allTocElements.enumerated() {
             var elementDuration = 0.0
             let section = resourceElements[element.rawLink() ?? ""]
+            var hrefs = [String]()
             
+            var nextElement: TocElement?
+    
             if index < allTocElements.count {
                 let next = allTocElements[safe: index + 1]
                 
@@ -110,14 +113,21 @@ import Foundation
                         // calculate duration as the difference between current
                         // element and duration of section plus the offset to the next chapter.
                         elementDuration = section.duration - element.offset() + (next?.offset() ?? 0)
+                        
+                        if next?.offset() ?? 0 > 0 {
+                            nextElement = next
+                        }
                     }
                 }
             }
-
+            
+            hrefs.append(element.href)
+            hrefs.append(nextElement?.href)
+    
             let spineElement = LCPSpineElement(
                 chapterNumber: UInt(index + 1),
                 title: element.title ?? "",
-                href: element.href ?? "",
+                hrefs: hrefs,
                 offset: element.offset(),
                 mediaType: section?.type ?? .audioMP3,
                 duration: elementDuration,

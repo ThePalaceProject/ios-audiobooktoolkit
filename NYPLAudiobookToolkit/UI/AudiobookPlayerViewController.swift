@@ -467,7 +467,7 @@ let SkipTimeInterval: Double = 15
         }
 
         guard currentLocation.timeRemaining >= 0 else {
-            (self.audiobookManager.audiobook.player as? LCPPlayer)?.currentPlayerItemEnded()
+            (self.audiobookManager.audiobook.player as? LCPPlayer)?.advanceToNextPlayerItem()
             return
         }
     }
@@ -689,7 +689,6 @@ extension AudiobookPlayerViewController: AudiobookNetworkServiceDelegate {
 
 extension AudiobookPlayerViewController: ScrubberViewDelegate {
     func scrubberView(_ scrubberView: ScrubberView, didRequestScrubTo offset: TimeInterval) {
-
         guard let requestedOffset = self.currentChapterLocation?.update(playheadOffset: offset),
         let currentOffset = self.currentChapterLocation else {
             ATLog(.error, "Scrubber attempted to scrub without a current chapter.")

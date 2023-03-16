@@ -22,26 +22,42 @@ class LCPPlayer: OpenAccessPlayer {
     /// - Parameter task: `LCPDownloadTask` containing internal url (e.g., `media/sound.mp3`) for decryption.
     /// - Returns: Status of the file, .unknown in case of an error, .missing if the file needs decryption, .saved when accessing an already decrypted file.
     override func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
-        if let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrl = task.decryptedUrl {
-            // Return file URL if it already decrypted
-            if FileManager.default.fileExists(atPath: decryptedUrl.path) {
-                return .saved(decryptedUrl)
-            }
-            // Decrypt, return .missing to wait for decryption
-            delegate.decrypt(url: task.url, to: decryptedUrl) { error in
-                if let error = error {
-                    ATLog(.error, "Error decrypting file", error: error)
-                    return
-                }
-                DispatchQueue.main.async {
-                    // taskCompleteNotification notifies the player to call `play` function again.
-                    NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
+        if let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls {
+            var savedUrls = [URL]()
+            var missingUrls = [URL]()
 
+            for (index, decryptedUrl) in decryptedUrls.enumerated() {
+                // Return file URL if it already decrypted
+                if FileManager.default.fileExists(atPath: decryptedUrl.path) {
+                    savedUrls.append(decryptedUrl)
+                    continue
                 }
+                
+                // Decrypt, return .missing to wait for decryption
+                delegate.decrypt(url: task.urls[index], to: decryptedUrl) { error in
+                    if let error = error {
+                        ATLog(.error, "Error decrypting file", error: error)
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        // taskCompleteNotification notifies the player to call `play` function again.
+                        NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
+                        
+                    }
+                }
+
+                missingUrls.append(task.urls[index])
             }
-            return .missing(task.url)
+            
+            guard missingUrls.count == 0  else {
+                return .missing(missingUrls)
+            }
+
+            return .saved(savedUrls)
+        } else {
+            return .unknown
         }
-        return .unknown
+            
     }
     
     @available(*, deprecated, message: "Use init(cursor: Cursor<SpineElement>, audiobookID: String, decryptor: DRMDecryptor?) instead")
@@ -55,7 +71,7 @@ class LCPPlayer: OpenAccessPlayer {
     ///   - audiobookID: Audiobook identifier.
     ///   - decryptor: LCP DRM decryptor.
     init(cursor: Cursor<SpineElement>, audiobookID: String, decryptor: DRMDecryptor?) {
-        super.init(cursor: cursor, audiobookID: audiobookID, drmOk: true)
         self.decryptionDelegate = decryptor
+        super.init(cursor: cursor, audiobookID: audiobookID, drmOk: true)
     }
 }

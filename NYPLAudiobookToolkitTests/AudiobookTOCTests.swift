@@ -96,7 +96,7 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(38), offset: 910.0, duration: 234.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(39), offset: 1144.0, duration: 211.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(40), offset: 1355.0, duration: 117.0, mediaType: .audioMPEG),
-        TestOutcome(chapter: UInt(41), offset: 1472.0, duration: 222.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(41), offset: 1472.0, duration: 216.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(42), offset: 6.0, duration: 1394.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(43), offset: 6.0, duration: 4.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(44), offset: 10.0, duration: 225.0, mediaType: .audioMPEG),
@@ -217,25 +217,104 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(159), offset: 873.0, duration: 711.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(160), offset: 1584.0, duration: 30.0, mediaType: .audioMPEG)
     ]
+    
+    var snowCrashManifestExpectedResult = [
+        TestOutcome(chapter: UInt(1), offset: 0.0, duration: 75.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 75.0, duration: 1388.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 1463.0, duration: 955.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 2418.0, duration: 1146.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 626.0, duration: 1161.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 1787.0, duration: 1158.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 12.0, duration: 1278.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(8), offset: 1290.0, duration: 1196.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(9), offset: 2486.0, duration: 699.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(10), offset: 326.0, duration: 945.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(11), offset: 1271.0, duration: 961.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(12), offset: 2232.0, duration: 538.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(13), offset: 13.0, duration: 1621.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(14), offset: 1634.0, duration: 1214.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(15), offset: 13.0, duration: 1411.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(16), offset: 1424.0, duration: 1089.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(17), offset: 2513.0, duration: 1054.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(18), offset: 768.0, duration: 884.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(19), offset: 1652.0, duration: 591.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(20), offset: 2243.0, duration: 1267.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(21), offset: 939.0, duration: 535.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(22), offset: 1474.0, duration: 1102.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(23), offset: 15.0, duration: 806.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(24), offset: 821.0, duration: 786.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(25), offset: 1607.0, duration: 1157.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(26), offset: 280.0, duration: 787.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(27), offset: 1067.0, duration: 837.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(28), offset: 1904.0, duration: 1084.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(29), offset: 686.0, duration: 799.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(30), offset: 1485.0, duration: 1006.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(31), offset: 17.0, duration: 1046.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(32), offset: 1063.0, duration: 882.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(33), offset: 18.0, duration: 988.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(34), offset: 1006.0, duration: 1199.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(35), offset: 2205.0, duration: 1066.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(36), offset: 751.0, duration: 584.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(37), offset: 1335.0, duration: 1133.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(38), offset: 19.0, duration: 1214.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(39), offset: 1233.0, duration: 470.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(40), offset: 1703.0, duration: 1110.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(41), offset: 19.0, duration: 668.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(42), offset: 687.0, duration: 1234.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(43), offset: 1921.0, duration: 656.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(44), offset: 20.0, duration: 808.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(45), offset: 828.0, duration: 937.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(46), offset: 1765.0, duration: 686.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(47), offset: 20.0, duration: 350.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(48), offset: 370.0, duration: 691.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(49), offset: 1061.0, duration: 1197.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(50), offset: 20.0, duration: 1321.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(51), offset: 1341.0, duration: 494.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(52), offset: 1835.0, duration: 1017.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(53), offset: 21.0, duration: 1018.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(54), offset: 1039.0, duration: 743.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(55), offset: 1782.0, duration: 68.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(56), offset: 1850.0, duration: 522.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(57), offset: 21.0, duration: 1232.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(58), offset: 1253.0, duration: 738.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(59), offset: 1991.0, duration: 883.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(60), offset: 21.0, duration: 528.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(61), offset: 549.0, duration: 910.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(62), offset: 1459.0, duration: 666.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(63), offset: 2125.0, duration: 105.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(64), offset: 2230.0, duration: 720.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(65), offset: 398.0, duration: 186.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(66), offset: 584.0, duration: 653.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(67), offset: 1237.0, duration: 560.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(68), offset: 1797.0, duration: 642.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(69), offset: 22.0, duration: 532.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(70), offset: 554.0, duration: 656.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(71), offset: 1210.0, duration: 461.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(72), offset: 1671.0, duration: 323.0, mediaType: .audioMPEG),
+    ]
 
-    func testTocManifest() throws {
-        validate(manifest: "toc_manifest", against: tocManaifestExpectedResults)
+    func testTocManifest() async throws {
+        await validate(manifest: "toc_manifest", against: tocManaifestExpectedResults)
     }
 
-    func testNonTockManifest() throws {
-        validate(manifest: "non_toc_manifest", against: nonTocManifestExpectedResults)
+    func testNonTockManifest() async throws {
+        await validate(manifest: "non_toc_manifest", against: nonTocManifestExpectedResults)
     }
 
-    func testMartianManifest() throws {
-        validate(manifest: "the_martian_manifest", against: martianManifestExpectedResult)
+    func testMartianManifest() async throws {
+        await validate(manifest: "the_martian_manifest", against: martianManifestExpectedResult)
     }
 
-    private func validate(manifest: String, against results: [TestOutcome]) {
+    func testSnowCrashManifest() async throws {
+        await validate(manifest: "snowcrash_manifest", against: snowCrashManifestExpectedResult)
+    }
+
+    private func validate(manifest: String, against results: [TestOutcome]) async {
         let bundle = Bundle(for: AudiobookTOCTests.self)
         let url = bundle.url(forResource: manifest, withExtension: "json")!
 
-        guard let lcpAudiobook = try? fetchAudiobook(url: url),
-                let spine = lcpAudiobook?.spine as? [LCPSpineElement] else {
+        guard let lcpAudiobook = try? await fetchAudiobook(url: url),
+              let spine = lcpAudiobook?.spine as? [LCPSpineElement] else {
             XCTFail("Failed to create Audiobook spine.")
             return
         }
@@ -246,9 +325,10 @@ class AudiobookTOCTests: XCTestCase {
             XCTAssertEqual(element.duration, results[index].duration)
             XCTAssertEqual(element.mediaType, results[index].mediaType)
         }
+        
     }
 
-    private func fetchAudiobook(url: URL) throws -> LCPAudiobook? {
+    private func fetchAudiobook(url: URL) async throws -> LCPAudiobook? {
         let jsonData = try Data(contentsOf: url, options: .mappedIfSafe)
         let string = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any]
         return LCPAudiobook(JSON: string, decryptor: nil)

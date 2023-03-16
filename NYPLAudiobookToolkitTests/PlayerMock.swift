@@ -10,6 +10,7 @@ import UIKit
 import NYPLAudiobookToolkit
 
 class PlayerMock: Player {
+    var queuesEvents: Bool = false
     
     var isDrmOk: Bool = true
 

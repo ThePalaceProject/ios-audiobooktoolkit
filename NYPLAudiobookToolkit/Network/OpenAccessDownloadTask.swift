@@ -4,9 +4,9 @@ let OpenAccessTaskCompleteNotification = NSNotification.Name(rawValue: "OpenAcce
 
 enum AssetResult {
     /// The file exists at the given URL.
-    case saved(URL)
+    case saved([URL])
     /// The file is missing at the given URL.
-    case missing(URL)
+    case missing([URL])
     /// Could not create a valid URL to check.
     case unknown
 }
@@ -52,14 +52,18 @@ final class OpenAccessDownloadTask: DownloadTask {
         case .saved(_):
             downloadProgress = 1.0
             self.delegate?.downloadTaskReadyForPlayback(self)
-        case .missing(let missingAssetURL):
+        case .missing(let missingAssetURLs):
             switch urlMediaType {
             case .rbDigital:
-                self.downloadAssetForRBDigital(toLocalDirectory: missingAssetURL)
+                missingAssetURLs.forEach {
+                    self.downloadAssetForRBDigital(toLocalDirectory: $0)
+                }
             case .audioMPEG:
                 fallthrough
             case .audioMP4:
-                self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory: missingAssetURL)
+                missingAssetURLs.forEach {
+                    self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory:  $0)
+                }
             }
         case .unknown:
             self.delegate?.downloadTaskFailed(self, withError: nil)
@@ -68,10 +72,12 @@ final class OpenAccessDownloadTask: DownloadTask {
 
     func delete() {
         switch self.assetFileStatus() {
-        case .saved(let url):
+        case .saved(let urls):
             do {
-                try FileManager.default.removeItem(at: url)
-                self.delegate?.downloadTaskDidDeleteAsset(self)
+               try urls.forEach {
+                    try FileManager.default.removeItem(at: $0)
+                    self.delegate?.downloadTaskDidDeleteAsset(self)
+                }
             } catch {
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
             }
@@ -87,9 +93,9 @@ final class OpenAccessDownloadTask: DownloadTask {
             return AssetResult.unknown
         }
         if FileManager.default.fileExists(atPath: localAssetURL.path) {
-            return AssetResult.saved(localAssetURL)
+            return AssetResult.saved([localAssetURL])
         } else {
-            return AssetResult.missing(localAssetURL)
+            return AssetResult.missing([localAssetURL])
         }
     }
 
