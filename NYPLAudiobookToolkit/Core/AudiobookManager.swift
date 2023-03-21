@@ -24,7 +24,7 @@ import AVFoundation
     func audiobookManagerDidRequestRefresh()
 }
 
-@objc public protocol PlaybackPositionDelegate {
+@objc public protocol AudiobookPlaybackPositionDelegate {
     func post(location: String, for book: String)
 }
 
@@ -45,7 +45,7 @@ private var waitingForPlayer: Bool = false
 /// center / airplay.
 @objc public protocol AudiobookManager {
     var refreshDelegate: RefreshDelegate? { get set }
-    var annotationsDelegate: PlaybackPositionDelegate? { get set }
+    var annotationsDelegate: AudiobookPlaybackPositionDelegate? { get set }
     var timerDelegate: AudiobookManagerTimerDelegate? { get set }
 
     var networkService: AudiobookNetworkService { get }
@@ -67,7 +67,7 @@ private var waitingForPlayer: Bool = false
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
     public weak var refreshDelegate: RefreshDelegate?
-    public var annotationsDelegate: PlaybackPositionDelegate?
+    public var annotationsDelegate: AudiobookPlaybackPositionDelegate?
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
