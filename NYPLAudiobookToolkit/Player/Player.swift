@@ -165,8 +165,6 @@ extension Player {
     }
     
     public init(from decoder: Decoder) throws {
-        chapterOffset = 0
-
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
         // Legacy bookmarks will not have a type property and need to be decoded
@@ -179,6 +177,7 @@ extension Player {
             part = try legacyValues.decode(UInt.self, forKey: .part)
             duration = Double(try legacyValues.decode(Float.self, forKey: .duration))
             playheadOffset = Double(try legacyValues.decode(Float.self, forKey: .playheadOffset))
+            chapterOffset = Double(try legacyValues.decode(Float.self, forKey: .startOffset))
             return
         }
 
@@ -188,6 +187,7 @@ extension Player {
         part = try values.decode(UInt.self, forKey: .part)
         duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
         playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
+        chapterOffset = Double(try values.decode(Int.self, forKey: .startOffset)/1000)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -196,6 +196,7 @@ extension Player {
         try container.encode(number, forKey: .number)
         try container.encode(part, forKey: .part)
         try container.encode(Int(duration.milliseconds), forKey: .duration)
+        try container.encode(Int((chapterOffset ?? 0).milliseconds), forKey: .startOffset)
         try container.encode(Int(playheadOffset.milliseconds), forKey: .playheadOffset)
         try container.encode(type, forKey: .type)
         try container.encode(audiobookID, forKey: .audiobookID)
