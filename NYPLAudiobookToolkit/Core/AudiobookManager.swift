@@ -24,10 +24,6 @@ import AVFoundation
     func audiobookManagerDidRequestRefresh()
 }
 
-@objc public protocol AnnotationsDelegate {
-    func post(listeningPosition: String, for book: String)
-}
-
 @objc public protocol AudiobookManagerTimerDelegate {
     func audiobookManager(_ audiobookManager: AudiobookManager, didUpdate timer: Timer?)
 }
@@ -45,7 +41,6 @@ private var waitingForPlayer: Bool = false
 /// center / airplay.
 @objc public protocol AudiobookManager {
     var refreshDelegate: RefreshDelegate? { get set }
-    var annotationsDelegate: AnnotationsDelegate? { get set }
     var timerDelegate: AudiobookManagerTimerDelegate? { get set }
 
     var networkService: AudiobookNetworkService { get }
@@ -58,7 +53,6 @@ private var waitingForPlayer: Bool = false
     var timer: Timer? { get }
 
     static func setLogHandler(_ handler: @escaping LogHandler)
-    func saveLocation()
     var playbackCompletionHandler: (() -> ())? { get set }
 }
 
@@ -67,7 +61,6 @@ private var waitingForPlayer: Bool = false
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
     public weak var refreshDelegate: RefreshDelegate?
-    public var annotationsDelegate: AnnotationsDelegate?
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
@@ -189,15 +182,6 @@ private var waitingForPlayer: Bool = false
     
     public func updateAudiobook(with spine: [SpineElement]) {
         self.networkService = DefaultAudiobookNetworkService(spine: spine)
-    }
-    
-    public func saveLocation()  {
-        guard let data = audiobook.player.currentChapterLocation?.toData(),
-                let string = String(data: data, encoding: .utf8) else {
-            ATLog(.error, "Failed to save to post current location.")
-            return
-        }
-        annotationsDelegate?.post(listeningPosition: string, for: audiobook.uniqueIdentifier)
     }
 }
 

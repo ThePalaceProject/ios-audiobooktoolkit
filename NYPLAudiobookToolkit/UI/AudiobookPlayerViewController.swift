@@ -584,8 +584,6 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         } else {
             self.shouldBeginToAutoPlay = false
         }
-        
-        self.audiobookManager.saveLocation()
         self.navigationController?.popViewController(animated: true)
     }
 }
@@ -611,7 +609,6 @@ extension AudiobookPlayerViewController: PlaybackControlViewDelegate {
                                    timeLeftInBook: self.timeLeftAfter(chapter: adjustedLocation),
                                    middleText: self.middleTextFor(chapter: adjustedLocation)
             )
-            self.audiobookManager.saveLocation()
         }
     }
     
@@ -629,7 +626,6 @@ extension AudiobookPlayerViewController: PlaybackControlViewDelegate {
                                    timeLeftInBook: self.timeLeftAfter(chapter: adjustedLocation),
                                    middleText: self.middleTextFor(chapter: adjustedLocation)
             )
-            self.audiobookManager.saveLocation()
         }
     }
 
@@ -637,14 +633,12 @@ extension AudiobookPlayerViewController: PlaybackControlViewDelegate {
         self.waitingForPlayer = true
         self.activityIndicator.startAnimating()
         self.audiobookManager.audiobook.player.play()
-        self.audiobookManager.saveLocation()
     }
 
     func playbackControlViewPauseButtonWasTapped(_ playbackControlView: PlaybackControlView) {
         self.waitingForPlayer = true
         self.activityIndicator.startAnimating()
         self.audiobookManager.audiobook.player.pause()
-        self.audiobookManager.saveLocation()
     }
 }
 
@@ -714,8 +708,6 @@ extension AudiobookPlayerViewController: ScrubberViewDelegate {
                                    timeLeftInBook: self.timeLeftAfter(chapter: adjustedLocation),
                                    middleText: self.middleTextFor(chapter: adjustedLocation)
             )
-
-            self.audiobookManager.saveLocation()
         }
      }
 
