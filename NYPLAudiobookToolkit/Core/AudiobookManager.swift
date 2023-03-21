@@ -25,7 +25,7 @@ import AVFoundation
 }
 
 @objc public protocol AnnotationsDelegate {
-    func post(listeningPosition: String, for book: String)
+    func post(location: String, for book: String)
 }
 
 @objc public protocol AudiobookManagerTimerDelegate {
@@ -197,7 +197,7 @@ private var waitingForPlayer: Bool = false
             ATLog(.error, "Failed to save to post current location.")
             return
         }
-        annotationsDelegate?.post(listeningPosition: string, for: audiobook.uniqueIdentifier)
+        annotationsDelegate?.post(location: string, for: audiobook.uniqueIdentifier)
     }
 }
 
