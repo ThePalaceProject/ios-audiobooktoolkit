@@ -256,6 +256,7 @@ let SkipTimeInterval: Double = 15
 
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        self.audiobookManager.saveLocation()
         self.audiobookManager.timerDelegate = nil
     }
 
