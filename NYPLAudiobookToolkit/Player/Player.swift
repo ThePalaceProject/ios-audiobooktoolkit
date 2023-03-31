@@ -110,7 +110,8 @@ extension Player {
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
-    
+    public var lastSavedTimeStamp: String? = nil
+
     public var actualOffset: TimeInterval {
         max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
     }
@@ -202,7 +203,7 @@ extension Player {
         try container.encode(audiobookID, forKey: .audiobookID)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String? = nil) {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
@@ -210,6 +211,7 @@ extension Player {
         self.chapterOffset = startOffset
         self.playheadOffset = playheadOffset
         self.title = title
+        self.lastSavedTimeStamp = lastSavedTimeStamp
         
     }
 
