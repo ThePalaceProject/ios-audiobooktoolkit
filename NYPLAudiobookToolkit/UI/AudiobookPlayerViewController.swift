@@ -29,12 +29,13 @@ let SkipTimeInterval: Double = 15
 
     private let toolbar = UIToolbar()
     private let toolbarHeight: CGFloat = 44
-    private let toolbarButtonWidth: CGFloat = 100.0
+    private let toolbarButtonWidth: CGFloat = 75.0
 
     private let audioRouteButtonWidth: CGFloat = 50.0
-    private let audioRoutingBarButtonIndex = 3
     private let speedBarButtonIndex = 1
+    private let audioRoutingBarButtonIndex = 3
     private let sleepTimerBarButtonIndex = 5
+    private let addBookmarBarButtonindex = 7
     private let sleepTimerDefaultText = "☾"
     private let sleepTimerDefaultAccessibilityLabel = DisplayStrings.sleepTimer
 
@@ -60,6 +61,21 @@ let SkipTimeInterval: Double = 15
 
     private var compactWidthConstraints: [NSLayoutConstraint]!
     private var regularWidthConstraints: [NSLayoutConstraint]!
+    
+    private var bookmarkButton: UIBarButtonItem {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(named: "bookmark", in: Bundle.audiobookToolkit(), compatibleWith: nil), for: .normal)
+        button.sizeToFit()
+        button.addTarget(self, action: #selector(addBookmark), for: .touchUpInside)
+        let buttonItem = UIBarButtonItem(customView: button)
+        
+        buttonItem.isAccessibilityElement = true
+        buttonItem.accessibilityLabel = DisplayStrings.addBookmark
+        buttonItem.accessibilityHint = DisplayStrings.addBookmarkAccessiblityHint
+        buttonItem.accessibilityTraits = UIAccessibilityTraits.button
+        buttonItem.width = toolbarButtonWidth
+        return buttonItem
+    }
 
     //MARK:-
 
@@ -189,7 +205,7 @@ let SkipTimeInterval: Double = 15
         self.toolbar.autoPinEdge(.right, to: .right, of: self.view)
         self.toolbar.autoSetDimension(.height, toSize: self.toolbarHeight)
         let flexibleSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        var items: [UIBarButtonItem] = [flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace]
+        var items: [UIBarButtonItem] = [flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace]
         var playbackSpeedText = HumanReadablePlaybackRate(rate: self.audiobookManager.audiobook.player.playbackRate).value
         if self.audiobookManager.audiobook.player.playbackRate == .normalTime {
             playbackSpeedText = NSLocalizedString("1.0×",
@@ -222,6 +238,8 @@ let SkipTimeInterval: Double = 15
         sleepTimer.accessibilityLabel = texts.accessibilityLabel
 
         items.insert(sleepTimer, at: self.sleepTimerBarButtonIndex)
+        items.insert(self.bookmarkButton, at: self.addBookmarBarButtonindex)
+        
         self.toolbar.setItems(items, animated: true)
         self.seekBar.setOffset(
             chapter.actualOffset,
@@ -444,7 +462,79 @@ let SkipTimeInterval: Double = 15
         buttonItem.accessibilityTraits = UIAccessibilityTraits.button
         return buttonItem
     }
+
+    @MainActor
+    @objc func addBookmark() async {
+        do {
+            try self.audiobookManager.saveBookmark()
+            await showToast(DisplayStrings.bookmarkAdded)
+        } catch {
+            await showToast((error as? BookmarkError)?.localizedDescription ?? "")
+        }
+    }
     
+    private var toastView: UIView?
+    private func showToast(_ message: String) async {
+        if toastView != nil {
+            await dismissToast()
+        }
+
+        toastView = UIView()
+        toastView!.backgroundColor = UIColor.darkGray
+        toastView!.layer.cornerRadius = 10
+        toastView!.clipsToBounds = true
+        toastView!.alpha = 1.0
+
+        let textLabel = UILabel()
+        textLabel.textColor = UIColor.white
+        textLabel.font = UIFont.systemFont(ofSize: 14.0)
+        textLabel.text = message
+        textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        textLabel.setContentHuggingPriority(.required, for: .vertical)
+
+        let closeButton = UIButton()
+        closeButton.setImage(UIImage(systemName: "xmark.circle"), for: .normal)
+        closeButton.tintColor = .white
+        closeButton.addTarget(self, action: #selector(dismissToast), for: .touchUpInside)
+
+        let stackView = UIStackView(arrangedSubviews: [textLabel, closeButton])
+        stackView.axis = .horizontal
+        stackView.alignment = .center
+        stackView.distribution = .equalSpacing
+        
+        toastView!.addSubview(stackView)
+        self.view.addSubview(toastView!)
+        
+        toastView!.translatesAutoresizingMaskIntoConstraints = false
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+    
+        NSLayoutConstraint.activate([
+            toastView!.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+            toastView!.heightAnchor.constraint(equalToConstant: 40),
+            toastView!.widthAnchor.constraint(equalToConstant: self.view.frame.width * 0.85),
+            toastView!.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -75),
+            stackView.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
+            stackView.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10),
+            stackView.centerYAnchor.constraint(equalTo: toastView!.centerYAnchor)
+        ])
+    }
+    
+    @objc func dismissToast() async {
+        await withCheckedContinuation { continuation in
+            UIView.animate(
+                withDuration: 1.0,
+                delay: 0.1,
+                options: .curveEaseOut,
+                animations: {
+                    self.toastView?.alpha = 0.0
+                }, completion: {(isCompleted) in
+                    self.toastView?.removeFromSuperview()
+                    continuation.resume()
+                }
+            )
+        }
+    }
+
     func updateUI() {
         guard let currentLocation = self.currentChapterLocation else {
             return

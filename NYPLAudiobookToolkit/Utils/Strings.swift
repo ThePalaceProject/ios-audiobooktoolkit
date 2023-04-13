@@ -26,6 +26,13 @@ struct Strings {
         static let fifteenMinutes = NSLocalizedString("15 Minutes", value: "15 Minutes", comment: "15 Minutes")
         static let off = NSLocalizedString("Off", value: "Off", comment: "Off")
         static let playbackDestination = NSLocalizedString("Playback Destination", value: "Playback Destination", comment: "Describe where the sound can be sent. Example: Bluetooth Speakers.")
+        static let addBookmark = NSLocalizedString("Add Bookmark", value: "Add Bookmark", comment: "Button enbaling user to add a bookmark.")
+        static let addBookmarkAccessiblityHint = NSLocalizedString("Save the current location bookmark for later listening.",
+                                                                  value: "Save the current location bookmark for later listening.",
+                                                                  comment: "Explain how to set a bookmark.")
+        static let bookmarkAdded = NSLocalizedString("Bookmark added",
+                                                     value: "Bookmark added",
+                                                     comment: "Notifies user that a bookmark has been set")
         static let destinationAvailabilityAccessiblityHint = NSLocalizedString("If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", value: "If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", comment: "Longer description to describe action of the button.")
         static let timeToPause = NSLocalizedString("%@ until playback pauses", value: "%@ until playback pauses", comment: "localized time until playback pauses, for voice over")
         static let trackAt = NSLocalizedString("Track %@", value: "Track %@", comment: "Default track title")
@@ -52,6 +59,10 @@ struct Strings {
         static let play = NSLocalizedString("Play", value: "Play", comment: "Play")
         static let sec = NSLocalizedString("sec", value: "sec", comment: "Abbreviations for seconds")
         static let back = NSLocalizedString("Back", comment: "Back button")
+    }
+    
+    struct Error {
+        static let bookmarkAlreadyExistsError = NSLocalizedString("A bookmark has already been saved at this location.", comment: "Alert notifying user that location has already been saved.")
     }
     
     struct PlaybackControlView {
