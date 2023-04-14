@@ -48,7 +48,9 @@ struct Strings {
         static let currentlyPlaying = NSLocalizedString("Currently Playing: %@",
                                                         value: "Currently Playing: %@",
                                                         comment: "Announce which track is highlighted in the table of contents.")
-        
+        static let chapters = NSLocalizedString("Chapters", comment: "")
+        static let bookmarks = NSLocalizedString("Bookmarks", comment: "")
+
     }
     
     struct Generic {

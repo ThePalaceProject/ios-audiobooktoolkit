@@ -83,6 +83,8 @@
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
 		E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */; };
+		E5870E6F29E902A000C45154 /* BookmarkDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5870E6E29E902A000C45154 /* BookmarkDataSource.swift */; };
+		E5870E7129E9112400C45154 /* BookmarkTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5870E7029E9112400C45154 /* BookmarkTableViewCell.swift */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
@@ -189,6 +191,8 @@
 		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
 		E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
+		E5870E6E29E902A000C45154 /* BookmarkDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkDataSource.swift; sourceTree = "<group>"; };
+		E5870E7029E9112400C45154 /* BookmarkTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkTableViewCell.swift; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
@@ -349,6 +353,8 @@
 				17576CAD248E8A0100E18B4C /* OverdriveSpineElement.swift */,
 				21D623A0257E6BBE006F5DCE /* LCPAudiobook.swift */,
 				21C0F15925768E9A001E51EF /* LCPSpineElement.swift */,
+				E5870E6E29E902A000C45154 /* BookmarkDataSource.swift */,
+				E5870E7029E9112400C45154 /* BookmarkTableViewCell.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -636,10 +642,12 @@
 				A94E769C219F7B4200E943A2 /* AudiobookCoverImageView.swift in Sources */,
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				E59FCEC929425F81004FD730 /* Strings.swift in Sources */,
+				E5870E7129E9112400C45154 /* BookmarkTableViewCell.swift in Sources */,
 				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
 				7B6C1BD2203F5BE600EB791E /* AudiobookTableOfContentsTableViewController.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				A92FB10421CDF94A004740F4 /* DownloadProgressView.swift in Sources */,
+				E5870E6F29E902A000C45154 /* BookmarkDataSource.swift in Sources */,
 				A934D08E22065B9500724200 /* NYPLStringAdditions.m in Sources */,
 				178707C824DA505700649567 /* RSAUtils.swift in Sources */,
 				7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */,

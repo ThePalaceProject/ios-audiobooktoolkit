@@ -12,6 +12,7 @@ protocol AudiobookTableOfContentsDelegate: class {
     func audiobookTableOfContentsDidRequestReload(_ audiobookTableOfContents: AudiobookTableOfContents)
     func audiobookTableOfContentsPendingStatusDidUpdate(inProgress: Bool)
     func audiobookTableOfContentsUserSelected(spineItem: SpineElement)
+    func audiobookBookmarksUserSelected(location: ChapterLocation)
 }
 
 /// This class may be used in conjunction with a UITableView to create a fully functioning Table of

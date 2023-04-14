@@ -321,7 +321,8 @@ let SkipTimeInterval: Double = 15
     @objc public func tocWasPressed(_ sender: Any) {
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
-            delegate: self)
+            delegate: self,
+            bookmarkDataSource: BookmarkDataSource(player: self.audiobookManager.audiobook.player, bookmarks: audiobookManager.audiobookBookmarks))
         navigationItem.backButtonTitle = Strings.Generic.back
         self.navigationController?.pushViewController(tocVC, animated: true)
     }
@@ -463,20 +464,19 @@ let SkipTimeInterval: Double = 15
         return buttonItem
     }
 
-    @MainActor
-    @objc func addBookmark() async {
+    @objc func addBookmark() {
         do {
             try self.audiobookManager.saveBookmark()
-            await showToast(DisplayStrings.bookmarkAdded)
+            showToast(DisplayStrings.bookmarkAdded)
         } catch {
-            await showToast((error as? BookmarkError)?.localizedDescription ?? "")
+            showToast((error as? BookmarkError)?.localizedDescription ?? "")
         }
     }
     
     private var toastView: UIView?
-    private func showToast(_ message: String) async {
-        if toastView != nil {
-            await dismissToast()
+    private func showToast(_ message: String) {
+        guard toastView == nil else {
+            return
         }
 
         toastView = UIView()
@@ -489,6 +489,8 @@ let SkipTimeInterval: Double = 15
         textLabel.textColor = UIColor.white
         textLabel.font = UIFont.systemFont(ofSize: 14.0)
         textLabel.text = message
+        textLabel.lineBreakMode = .byWordWrapping
+        textLabel.numberOfLines = 0
         textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         textLabel.setContentHuggingPriority(.required, for: .vertical)
 
@@ -497,42 +499,42 @@ let SkipTimeInterval: Double = 15
         closeButton.tintColor = .white
         closeButton.addTarget(self, action: #selector(dismissToast), for: .touchUpInside)
 
-        let stackView = UIStackView(arrangedSubviews: [textLabel, closeButton])
-        stackView.axis = .horizontal
-        stackView.alignment = .center
-        stackView.distribution = .equalSpacing
-        
-        toastView!.addSubview(stackView)
+        toastView!.addSubview(textLabel)
+        toastView!.addSubview(closeButton)
         self.view.addSubview(toastView!)
         
         toastView!.translatesAutoresizingMaskIntoConstraints = false
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-    
+        textLabel.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+
         NSLayoutConstraint.activate([
             toastView!.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
-            toastView!.heightAnchor.constraint(equalToConstant: 40),
+            toastView!.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
             toastView!.widthAnchor.constraint(equalToConstant: self.view.frame.width * 0.85),
             toastView!.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -75),
-            stackView.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
-            stackView.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10),
-            stackView.centerYAnchor.constraint(equalTo: toastView!.centerYAnchor)
+            
+            textLabel.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
+            textLabel.topAnchor.constraint(equalTo: toastView!.topAnchor, constant: 10),
+            textLabel.bottomAnchor.constraint(equalTo: toastView!.bottomAnchor, constant: -10),
+            
+            closeButton.centerYAnchor.constraint(equalTo: textLabel.centerYAnchor),
+            closeButton.leadingAnchor.constraint(equalTo: textLabel.trailingAnchor, constant: 10),
+            closeButton.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10)
         ])
     }
-    
-    @objc func dismissToast() async {
-        await withCheckedContinuation { continuation in
-            UIView.animate(
-                withDuration: 1.0,
-                delay: 0.1,
-                options: .curveEaseOut,
-                animations: {
-                    self.toastView?.alpha = 0.0
-                }, completion: {(isCompleted) in
-                    self.toastView?.removeFromSuperview()
-                    continuation.resume()
-                }
-            )
-        }
+
+    @objc func dismissToast() {
+        UIView.animate(
+            withDuration: 1.0,
+            delay: 0.1,
+            options: .curveEaseOut,
+            animations: {
+                self.toastView?.alpha = 0.0
+            }, completion: {(isCompleted) in
+                self.toastView?.removeFromSuperview()
+                self.toastView = nil
+            }
+        )
     }
 
     func updateUI() {
@@ -654,22 +656,22 @@ let SkipTimeInterval: Double = 15
 }
 
 extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewControllerDelegate {
-    public func userSelectedSpineItem(item: SpineElement) {
 
+    public func userSelected(location: ChapterLocation) {
+        
         self.waitingForPlayer = true
         self.activityIndicator.startAnimating()
-
+        
         self.playbackControlView.showPauseButtonIfNeeded()
-
-        let selectedChapter = item.chapter
-        let timeLeftInBook = self.timeLeftAfter(chapter: selectedChapter)
+        
+        let timeLeftInBook = self.timeLeftAfter(chapter: location)
         self.seekBar.setOffset(
-            selectedChapter.actualOffset,
-            duration: selectedChapter.duration,
+            location.actualOffset,
+            duration: location.duration,
             timeLeftInBook: timeLeftInBook,
-            middleText: self.middleTextFor(chapter: selectedChapter)
+            middleText: self.middleTextFor(chapter: location)
         )
-
+        
         if self.audiobookManager.audiobook.player.isPlaying {
             self.shouldBeginToAutoPlay = true
         } else {

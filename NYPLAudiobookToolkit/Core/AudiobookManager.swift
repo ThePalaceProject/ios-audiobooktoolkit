@@ -83,7 +83,7 @@ enum BookmarkError: Error {
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
     public weak var refreshDelegate: RefreshDelegate?
-    public var annotationsDelegate: AudiobookPlaybackPositionDelegate?
+    public weak var annotationsDelegate: AudiobookPlaybackPositionDelegate?
     public var audiobookBookmarks: [ChapterLocation] = []
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {

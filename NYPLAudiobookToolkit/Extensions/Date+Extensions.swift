@@ -31,6 +31,12 @@ public extension DateFormatter {
         return formatter
     }()
     
+    static let bookmarkTimeFormatter: DateFormatter = {
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "mm:ss"
+        return timeFormatter
+    }()
+
     static func iso8601Formatter(for string: String) -> DateFormatter {
         // On iOS 10 and later, this API should be treated withFullTime or withTimeZone for different cases.
         // Otherwise it will accept bad format, for exmaple 2018-04-24XXXXXXXXX
@@ -63,5 +69,19 @@ public extension DateFormatter {
         formatter.dateFormat = format
         return formatter
     }
+    
+    static func convertISO8601String(_ dateString: String) -> String? {
+           // Check if the input string can be converted to a date
+           guard let date = iso8601.date(from: dateString) else {
+               return nil
+           }
+           
+           // Create a date formatter for the output format
+           let outputFormatter = DateFormatter()
+           outputFormatter.dateFormat = "MMMM d, yyyy"
+           
+           // Return the formatted date string
+           return outputFormatter.string(from: date)
+       }
 }
 
