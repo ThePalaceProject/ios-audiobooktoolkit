@@ -26,6 +26,17 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
     private let activityIndicator: UIActivityIndicatorView
     let segmentedControl = UISegmentedControl(items: [DisplayStrings.chapters, DisplayStrings.bookmarks])
     let tableView = UITableView()
+    private var isLoading: Bool = false {
+        didSet {
+            DispatchQueue.main.async {
+                if self.isLoading {
+                    self.activityIndicator.startAnimating()
+                } else {
+                    self.activityIndicator.stopAnimating()
+                }
+            }
+        }
+    }
 
     public init(
         tableOfContents: AudiobookTableOfContents,
@@ -117,7 +128,10 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
     }
 
     private func reloadData() {
+        isLoading = true
+    
         delegate?.fetchBookmarks { [unowned self] bookmarks in
+            isLoading = false
             DispatchQueue.main.async {
                 if bookmarks.isEmpty {
                     self.view.addSubview(self.emptyView)
@@ -125,7 +139,7 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
                     NSLayoutConstraint.activate([
                         self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
                         self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                        self.emptyView.topAnchor.constraint(equalTo: self.view.topAnchor, constant: self.segmentedControl.frame.height),
+                        self.emptyView.topAnchor.constraint(equalTo: self.segmentedControl.bottomAnchor),
                         self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
                     ])
                 } else {

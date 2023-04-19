@@ -49,7 +49,7 @@ let SkipTimeInterval: Double = 15
     }()
     private let seekBar = ScrubberView()
     private let playbackControlView = PlaybackControlView()
-
+    private var shouldBeginToAutoPlay = false
     private var waitingForPlayer = false {
         didSet {
             if !waitingForPlayer {
@@ -57,7 +57,6 @@ let SkipTimeInterval: Double = 15
             }
         }
     }
-    private var shouldBeginToAutoPlay = false
 
     private var compactWidthConstraints: [NSLayoutConstraint]!
     private var regularWidthConstraints: [NSLayoutConstraint]!
@@ -320,10 +319,14 @@ let SkipTimeInterval: Double = 15
     }
 
     @objc public func tocWasPressed(_ sender: Any) {
-        var bookmarkDataSource = BookmarkDataSource(player: self.audiobookManager.audiobook.player, bookmarks: audiobookManager.audiobookBookmarks)
+        let bookmarkDataSource = BookmarkDataSource(
+            player: self.audiobookManager.audiobook.player,
+            bookmarks: audiobookManager.audiobookBookmarks
+        )
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
-            bookmarkDataSource: bookmarkDataSource, delegate: self)
+            bookmarkDataSource: bookmarkDataSource, delegate: self
+        )
         navigationItem.backButtonTitle = Strings.Generic.back
         self.navigationController?.pushViewController(tocVC, animated: true)
     }
@@ -476,65 +479,83 @@ let SkipTimeInterval: Double = 15
     
     private var toastView: UIView?
     private func showToast(_ message: String) {
-        toastView?.removeFromSuperview()
-        toastView = nil
+        Task {
+            await asyncDismissToast()
 
-        toastView = UIView()
-        toastView!.backgroundColor = UIColor.darkGray
-        toastView!.layer.cornerRadius = 10
-        toastView!.clipsToBounds = true
-        toastView!.alpha = 1.0
-
-        let textLabel = UILabel()
-        textLabel.textColor = UIColor.white
-        textLabel.font = UIFont.systemFont(ofSize: 14.0)
-        textLabel.text = message
-        textLabel.lineBreakMode = .byWordWrapping
-        textLabel.numberOfLines = 0
-        textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
-        textLabel.setContentHuggingPriority(.required, for: .vertical)
-
-        let closeButton = UIButton()
-        closeButton.setImage(UIImage(systemName: "xmark.circle"), for: .normal)
-        closeButton.tintColor = .white
-        closeButton.addTarget(self, action: #selector(dismissToast), for: .touchUpInside)
-
-        toastView!.addSubview(textLabel)
-        toastView!.addSubview(closeButton)
-        self.view.addSubview(toastView!)
-        
-        toastView!.translatesAutoresizingMaskIntoConstraints = false
-        textLabel.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            toastView!.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
-            toastView!.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
-            toastView!.widthAnchor.constraint(equalToConstant: self.view.frame.width * 0.85),
-            toastView!.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -75),
+            toastView = UIView()
+            toastView!.backgroundColor = UIColor.darkGray
+            toastView!.layer.cornerRadius = 10
+            toastView!.clipsToBounds = true
+            toastView!.alpha = 1.0
             
-            textLabel.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
-            textLabel.topAnchor.constraint(equalTo: toastView!.topAnchor, constant: 10),
-            textLabel.bottomAnchor.constraint(equalTo: toastView!.bottomAnchor, constant: -10),
+            let textLabel = UILabel()
+            textLabel.textColor = UIColor.white
+            textLabel.font = UIFont.systemFont(ofSize: 14.0)
+            textLabel.text = message
+            textLabel.lineBreakMode = .byWordWrapping
+            textLabel.numberOfLines = 0
+            textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+            textLabel.setContentHuggingPriority(.required, for: .vertical)
             
-            closeButton.centerYAnchor.constraint(equalTo: textLabel.centerYAnchor),
-            closeButton.leadingAnchor.constraint(equalTo: textLabel.trailingAnchor, constant: 10),
-            closeButton.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10)
-        ])
+            let closeButton = UIButton()
+            closeButton.setImage(UIImage(systemName: "xmark.circle"), for: .normal)
+            closeButton.tintColor = .white
+            closeButton.addTarget(self, action: #selector(dismissToast), for: .touchUpInside)
+            
+            toastView!.addSubview(textLabel)
+            toastView!.addSubview(closeButton)
+            self.view.addSubview(toastView!)
+            
+            toastView!.translatesAutoresizingMaskIntoConstraints = false
+            textLabel.translatesAutoresizingMaskIntoConstraints = false
+            closeButton.translatesAutoresizingMaskIntoConstraints = false
+            
+            NSLayoutConstraint.activate([
+                toastView!.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+                toastView!.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
+                toastView!.widthAnchor.constraint(equalToConstant: self.view.frame.width * 0.85),
+                toastView!.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -75),
+                
+                textLabel.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
+                textLabel.topAnchor.constraint(equalTo: toastView!.topAnchor, constant: 10),
+                textLabel.bottomAnchor.constraint(equalTo: toastView!.bottomAnchor, constant: -10),
+                
+                closeButton.centerYAnchor.constraint(equalTo: textLabel.centerYAnchor),
+                closeButton.leadingAnchor.constraint(equalTo: textLabel.trailingAnchor, constant: 10),
+                closeButton.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10)
+            ])
+        }
+    }
+    
+    @objc func dismissToast() {
+        Task {
+            dismissToast(nil)
+        }
     }
 
-    @objc func dismissToast() {
-        UIView.animate(
-            withDuration: 1.0,
-            delay: 0.1,
-            options: .curveEaseOut,
-            animations: {
-                self.toastView?.alpha = 0.0
-            }, completion: { _ in
-                self.toastView?.removeFromSuperview()
-                self.toastView = nil
+    func asyncDismissToast() async {
+        await withUnsafeContinuation { continuation in
+            dismissToast {
+                continuation.resume()
             }
-        )
+        }
+    }
+
+    func dismissToast(_ completion: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            UIView.animate(
+                withDuration: 0.4,
+                delay: 0.1,
+                options: .curveEaseOut,
+                animations: {
+                    self.toastView?.alpha = 0.0
+                }, completion: { _ in
+                    self.toastView?.removeFromSuperview()
+                    self.toastView = nil
+                    completion?()
+                }
+            )
+        }
     }
 
     func updateUI() {
