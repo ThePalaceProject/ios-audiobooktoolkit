@@ -26,9 +26,10 @@ import Combine
 }
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
-    func post(location: String)
-    func saveBookmark(at location: String)
-    func fetchBookmarks(for audiobook: String, completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> ())
+    func post(location: String, completion: ((_ serverID: String?) -> Void)?)
+    func saveBookmark(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
+    func fetchBookmarks(for audiobook: String, completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
 }
 
 @objc public protocol AudiobookManagerTimerDelegate {
@@ -215,7 +216,13 @@ enum BookmarkError: Error {
             ATLog(.error, "Failed to save to post current location.")
             return
         }
-        annotationsDelegate?.post(location: string)
+
+        annotationsDelegate?.post(location: string) {
+            guard let _ = $0 else {
+                ATLog(.error, "Failed to save to post current location.")
+                return
+            }
+        }
     }
 
     public func saveBookmark() throws {
@@ -229,8 +236,15 @@ enum BookmarkError: Error {
             return
         }
 
-        annotationsDelegate?.saveBookmark(at: string)
-        audiobookBookmarks.append(audiobook.player.currentChapterLocation)
+        annotationsDelegate?.saveBookmark(at: string) { [unowned self] annotationId in
+            guard let annotationId = annotationId else {
+                ATLog(.error, "Failed to save to post bookmark at current location.")
+                return
+            }
+
+            self.audiobook.player.currentChapterLocation?.annotationId = annotationId
+            self.audiobookBookmarks.append(self.audiobook.player.currentChapterLocation)
+        }
     }
 
     public func fetchBookmarks() async throws -> [ChapterLocation] {

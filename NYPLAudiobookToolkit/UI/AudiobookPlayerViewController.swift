@@ -255,7 +255,7 @@ let SkipTimeInterval: Double = 15
         super.viewDidLayoutSubviews()
         self.gradient.frame = self.view.bounds
     }
-    
+
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.audiobookManager.timerDelegate = self
@@ -276,6 +276,7 @@ let SkipTimeInterval: Double = 15
         super.viewDidDisappear(animated)
         self.audiobookManager.saveLocation()
         self.audiobookManager.timerDelegate = nil
+        self.dismissToast()
     }
 
     override public func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -319,10 +320,10 @@ let SkipTimeInterval: Double = 15
     }
 
     @objc public func tocWasPressed(_ sender: Any) {
+        var bookmarkDataSource = BookmarkDataSource(player: self.audiobookManager.audiobook.player, bookmarks: audiobookManager.audiobookBookmarks)
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
-            delegate: self,
-            bookmarkDataSource: BookmarkDataSource(player: self.audiobookManager.audiobook.player, bookmarks: audiobookManager.audiobookBookmarks))
+            bookmarkDataSource: bookmarkDataSource, delegate: self)
         navigationItem.backButtonTitle = Strings.Generic.back
         self.navigationController?.pushViewController(tocVC, animated: true)
     }
@@ -475,9 +476,8 @@ let SkipTimeInterval: Double = 15
     
     private var toastView: UIView?
     private func showToast(_ message: String) {
-        guard toastView == nil else {
-            return
-        }
+        toastView?.removeFromSuperview()
+        toastView = nil
 
         toastView = UIView()
         toastView!.backgroundColor = UIColor.darkGray
@@ -530,7 +530,7 @@ let SkipTimeInterval: Double = 15
             options: .curveEaseOut,
             animations: {
                 self.toastView?.alpha = 0.0
-            }, completion: {(isCompleted) in
+            }, completion: { _ in
                 self.toastView?.removeFromSuperview()
                 self.toastView = nil
             }
@@ -656,7 +656,6 @@ let SkipTimeInterval: Double = 15
 }
 
 extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewControllerDelegate {
-
     public func userSelected(location: ChapterLocation) {
         
         self.waitingForPlayer = true
@@ -680,6 +679,14 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         
         self.audiobookManager.saveLocation()
         self.navigationController?.popViewController(animated: true)
+    }
+
+    public func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void) {
+        self.audiobookManager.annotationsDelegate?.fetchBookmarks(for: audiobookManager.audiobook.uniqueIdentifier, completion: completion)
+    }
+
+    public func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
+        self.audiobookManager.annotationsDelegate?.deleteBookmark(at: location, completion: completion)
     }
 }
 

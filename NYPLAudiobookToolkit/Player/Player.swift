@@ -110,7 +110,8 @@ extension Player {
     public let title: String?
     public let audiobookID: String
     public let duration: TimeInterval
-    public var lastSavedTimeStamp: String? = nil
+    public var lastSavedTimeStamp: String = ""
+    public var annotationId: String = ""
 
     public var actualOffset: TimeInterval {
         max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
@@ -125,6 +126,7 @@ extension Player {
         case title
         case audiobookID
         case duration
+        case annotationId
     }
 
     enum LegacyKeys: String, CodingKey {
@@ -189,6 +191,7 @@ extension Player {
         duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
         playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
         chapterOffset = Double(try values.decode(Int.self, forKey: .startOffset)/1000)
+        annotationId = try values.decode(String.self, forKey: .annotationId)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -201,9 +204,10 @@ extension Player {
         try container.encode(Int(playheadOffset.milliseconds), forKey: .playheadOffset)
         try container.encode(type, forKey: .type)
         try container.encode(audiobookID, forKey: .audiobookID)
+        try container.encode(annotationId, forKey: .annotationId)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String? = nil) {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String = Date().iso8601, annotationId: String = "") {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
@@ -212,7 +216,7 @@ extension Player {
         self.playheadOffset = playheadOffset
         self.title = title
         self.lastSavedTimeStamp = lastSavedTimeStamp
-        
+        self.annotationId = annotationId
     }
 
     public func update(playheadOffset offset: TimeInterval) -> ChapterLocation? {
@@ -223,7 +227,8 @@ extension Player {
             startOffset: self.chapterOffset,
             playheadOffset: offset,
             title: self.title,
-            audiobookID: self.audiobookID
+            audiobookID: self.audiobookID,
+            annotationId: annotationId
         )
     }
 

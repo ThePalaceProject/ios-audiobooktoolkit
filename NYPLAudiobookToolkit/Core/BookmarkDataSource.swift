@@ -10,27 +10,30 @@ import UIKit
 
 public class BookmarkDataSource: NSObject, UITableViewDataSource {
     weak var delegate: AudiobookTableOfContentsDelegate?
-    private var bookmarks: [ChapterLocation]
+    var bookmarks: [ChapterLocation]
     private let player: Player
 
     init(player: Player, bookmarks: [ChapterLocation]) {
         self.player = player
-        self.bookmarks = bookmarks
+        self.bookmarks = bookmarks.sorted {
+            let formatter = ISO8601DateFormatter()
+            guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
+                  let date2 = formatter.date(from: $1.lastSavedTimeStamp)
+            else {
+                return false
+            }
+            return date1 > date2
+        }
     }
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: BookmarkDataSourceCellIdentifier, for: indexPath) as? BookmarkTableViewCell else { return UITableViewCell() }
         
-        let bookmark = bookmarks[indexPath.row]
+        guard let bookmark = bookmarks[safe: indexPath.row] else { return cell }
         cell.titleLabel.text = bookmark.title
-        
-        if let lastSavedTimeStamp = bookmark.lastSavedTimeStamp {
-            cell.subtitleLabel.text = DateFormatter.convertISO8601String(lastSavedTimeStamp)
-        } else {
-            cell.subtitleLabel.text = ""
-        }
-        
-        let time = Date(timeIntervalSinceReferenceDate: bookmark.playheadOffset)
+        cell.subtitleLabel.text = DateFormatter.convertISO8601String(bookmark.lastSavedTimeStamp)
+
+        let time = Date(timeIntervalSinceReferenceDate: bookmark.actualOffset)
         cell.rightLabel.text = DateFormatter.bookmarkTimeFormatter.string(from: time)
         
         return cell
@@ -43,7 +46,7 @@ extension BookmarkDataSource: UITableViewDelegate {
     }
 
     public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return bookmarks.count
+        bookmarks.count
     }
 
     public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -54,18 +57,25 @@ extension BookmarkDataSource: UITableViewDelegate {
     }
 
     private func tableView(_ tableView: UITableView, canFocusRowAt indexPath: IndexPath) -> Bool {
-        return true
+        true
     }
-
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+    
+    private func tableView(tableView: UITableView, canEditRowAtIndexPath indexPath: NSIndexPath) -> Bool {
+        true
+    }
+    public func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
-            deleteBookmark(at: indexPath.row)
-            tableView.deleteRows(at: [indexPath], with: .automatic)
-        }
-    }
+            delegate?.audiobookBookmarksUserDeletedBookmark(at: bookmarks[indexPath.row]) { success in
+                guard success else {
+                    return
+                }
 
-    private func deleteBookmark(at index: Int) {
-        bookmarks.remove(at: index)
+                DispatchQueue.main.async {
+                    self.bookmarks.remove(at: indexPath.row)
+                    tableView.reloadData()
+                }
+            }
+        }
     }
 }
 

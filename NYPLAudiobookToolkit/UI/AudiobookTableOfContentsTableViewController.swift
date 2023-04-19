@@ -11,8 +11,10 @@ import UIKit
 let AudiobookTableOfContentsTableViewControllerCellIdentifier = "AudiobookTableOfContentsTableViewControllerCellIdentifier"
 let BookmarkDataSourceCellIdentifier = "BookmarkDataSourceCellIdentifier"
 
-public protocol AudiobookTableOfContentsTableViewControllerDelegate {
+public protocol AudiobookTableOfContentsTableViewControllerDelegate: class {
     func userSelected(location: ChapterLocation)
+    func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void)
+    func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
 }
 
 public class AudiobookTableOfContentsTableViewController: UIViewController {
@@ -20,12 +22,15 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
 
     let tableOfContents: AudiobookTableOfContents
     let bookmarkDataSource: BookmarkDataSource
-    let delegate: AudiobookTableOfContentsTableViewControllerDelegate
+    weak var delegate: AudiobookTableOfContentsTableViewControllerDelegate?
     private let activityIndicator: UIActivityIndicatorView
     let segmentedControl = UISegmentedControl(items: [DisplayStrings.chapters, DisplayStrings.bookmarks])
     let tableView = UITableView()
 
-    public init(tableOfContents: AudiobookTableOfContents, delegate: AudiobookTableOfContentsTableViewControllerDelegate, bookmarkDataSource: BookmarkDataSource) {
+    public init(
+        tableOfContents: AudiobookTableOfContents,
+        bookmarkDataSource: BookmarkDataSource,
+        delegate: AudiobookTableOfContentsTableViewControllerDelegate) {
         self.tableOfContents = tableOfContents
         self.delegate = delegate
         self.bookmarkDataSource = bookmarkDataSource
@@ -73,11 +78,15 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        scrollToSelectedRow()
+    }
+
+    private func scrollToSelectedRow(_ animated: Bool = false) {
         if let index = self.tableOfContents.currentSpineIndex() {
             self.tableView.reloadData()
             if self.tableView.numberOfRows(inSection: 0) > index {
                 let indexPath = IndexPath(row: index, section: 0)
-                self.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .top)
+                self.tableView.selectRow(at: indexPath, animated: animated, scrollPosition: .top)
                 self.announceTrackIfNeeded(track: indexPath)
             }
         }
@@ -92,17 +101,61 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
             }
         }
     }
-    
+
     @objc func segmentChanged() {
         if segmentedControl.selectedSegmentIndex == 0 {
             tableView.dataSource = self.tableOfContents
             tableView.delegate = self.tableOfContents
+            scrollToSelectedRow(true)
+            tableView.reloadData()
         } else {
             tableView.dataSource = self.bookmarkDataSource
             tableView.delegate = self.bookmarkDataSource
+            tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+            reloadData()
         }
-        tableView.reloadData()
     }
+
+    private func reloadData() {
+        delegate?.fetchBookmarks { [unowned self] bookmarks in
+            DispatchQueue.main.async {
+                if bookmarks.isEmpty {
+                    self.view.addSubview(self.emptyView)
+                    
+                    NSLayoutConstraint.activate([
+                        self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                        self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                        self.emptyView.topAnchor.constraint(equalTo: self.view.topAnchor, constant: self.segmentedControl.frame.height),
+                        self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+                    ])
+                } else {
+                    self.emptyView.removeFromSuperview()
+                }
+
+                self.bookmarkDataSource.bookmarks = bookmarks
+                self.tableView.reloadData()
+            }
+        }
+    }
+
+    private let emptyView: UIView = {
+        let view = UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+
+        let messageLabel = UILabel()
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageLabel.text = NSLocalizedString("There are no bookmarks for this book.", comment: "")
+        messageLabel.textAlignment = .center
+        messageLabel.numberOfLines = 0
+        view.addSubview(messageLabel)
+
+        NSLayoutConstraint.activate([
+            messageLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            messageLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        
+        return view
+    }()
 }
 
 extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsDelegate {
@@ -111,7 +164,7 @@ extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsD
             self.tableView.reloadData()
             self.tableView.selectRow(at: selectedIndexPath, animated: false, scrollPosition: .none)
         } else {
-            self.tableView.reloadData()
+            reloadData()
         }
     }
 
@@ -122,13 +175,19 @@ extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsD
             self.activityIndicator.stopAnimating()
         }
     }
-    
 
     func audiobookTableOfContentsUserSelected(spineItem: SpineElement) {
-        self.delegate.userSelected(location: spineItem.chapter)
+        self.delegate?.userSelected(location: spineItem.chapter)
     }
 
     func audiobookBookmarksUserSelected(location: ChapterLocation) {
-        self.delegate.userSelected(location: location)
+        self.delegate?.userSelected(location: location)
+    }
+
+    func audiobookBookmarksUserDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
+        self.delegate?.userDeletedBookmark(at: location) { success in
+            self.reloadData()
+            completion(success)
+        }
     }
 }
