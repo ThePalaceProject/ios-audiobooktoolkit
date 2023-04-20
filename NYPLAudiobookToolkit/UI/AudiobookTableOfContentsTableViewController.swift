@@ -115,6 +115,7 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
 
     @objc func segmentChanged() {
         if segmentedControl.selectedSegmentIndex == 0 {
+            emptyView.removeFromSuperview()
             tableView.dataSource = self.tableOfContents
             tableView.delegate = self.tableOfContents
             scrollToSelectedRow(true)
