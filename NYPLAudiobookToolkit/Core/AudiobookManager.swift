@@ -9,7 +9,6 @@
 import UIKit
 import MediaPlayer
 import AVFoundation
-import Combine
 
 /// If the AudiobookManager runs into an error that may
 /// be resolved by fetching a new audiobook manifest from

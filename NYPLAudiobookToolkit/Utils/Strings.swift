@@ -2,7 +2,7 @@
 //  Strings.swift
 //  NYPLAudiobookToolkit
 //
-//  Created by Maurice Work on 12/8/22.
+//  Created by Maurice Carrier on 12/8/22.
 //  Copyright © 2022 Dean Silfen. All rights reserved.
 //
 
