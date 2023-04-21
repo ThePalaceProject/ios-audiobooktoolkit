@@ -36,17 +36,17 @@ public extension DateFormatter {
         timeFormatter.dateFormat = "mm:ss"
         return timeFormatter
     }()
-
+    
     static func iso8601Formatter(for string: String) -> DateFormatter {
         // On iOS 10 and later, this API should be treated withFullTime or withTimeZone for different cases.
         // Otherwise it will accept bad format, for exmaple 2018-04-24XXXXXXXXX
         // Because it will only test the part you asssigned, date, time, timezone.
         // But we should also cover the optional cases. So there is not too much benefit.
-//        if #available(iOS 10.0, *) {
-//            let formatter = ISO8601DateFormatter()
-//            formatter.formatOptions = [.withFullDate]
-//            return formatter
-//        }
+        //        if #available(iOS 10.0, *) {
+        //            let formatter = ISO8601DateFormatter()
+        //            formatter.formatOptions = [.withFullDate]
+        //            return formatter
+        //        }
         
         // https://developer.apple.com/documentation/foundation/dateformatter
         // Doesn't support millisecond or uncompleted part for date, time, timezone offset.
@@ -71,17 +71,17 @@ public extension DateFormatter {
     }
     
     static func convertISO8601String(_ dateString: String) -> String? {
-           // Check if the input string can be converted to a date
-           guard let date = iso8601.date(from: dateString) else {
-               return nil
-           }
-           
-           // Create a date formatter for the output format
-           let outputFormatter = DateFormatter()
-           outputFormatter.dateFormat = "MMMM d, yyyy"
-           
-           // Return the formatted date string
-           return outputFormatter.string(from: date)
-       }
+        // Check if the input string can be converted to a date
+        guard let date = iso8601.date(from: dateString) else {
+            return nil
+        }
+        
+        // Create a date formatter for the output format
+        let outputFormatter = DateFormatter()
+        outputFormatter.dateFormat = "MMMM d, yyyy"
+        
+        // Return the formatted date string
+        return outputFormatter.string(from: date)
+    }
 }
 
