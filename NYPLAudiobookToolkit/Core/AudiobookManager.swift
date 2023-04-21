@@ -25,7 +25,10 @@ import AVFoundation
 }
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
-    func post(location: String)
+    func saveListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func saveBookmark(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
+    func fetchBookmarks(for audiobook: String, completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
 }
 
 @objc public protocol AudiobookManagerTimerDelegate {
@@ -54,12 +57,25 @@ private var waitingForPlayer: Bool = false
 
     var tableOfContents: AudiobookTableOfContents { get }
     var sleepTimer: SleepTimer { get }
-
+    var audiobookBookmarks: [ChapterLocation] { get }
     var timer: Timer? { get }
 
     static func setLogHandler(_ handler: @escaping LogHandler)
     func saveLocation()
+    func saveBookmark() throws
+    func fetchBookmarks() async throws -> [ChapterLocation]
     var playbackCompletionHandler: (() -> ())? { get set }
+}
+
+enum BookmarkError: Error {
+    case bookmarkAlreadyExists
+    
+    var localizedDescription: String {
+        switch self {
+        case .bookmarkAlreadyExists:
+            return Strings.Error.bookmarkAlreadyExistsError
+        }
+    }
 }
 
 /// Implementation of the AudiobookManager intended for use by clients. Also intended
@@ -67,7 +83,8 @@ private var waitingForPlayer: Bool = false
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
     public weak var refreshDelegate: RefreshDelegate?
-    public var annotationsDelegate: AudiobookPlaybackPositionDelegate?
+    public weak var annotationsDelegate: AudiobookPlaybackPositionDelegate?
+    public var audiobookBookmarks: [ChapterLocation] = []
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
@@ -140,6 +157,7 @@ private var waitingForPlayer: Bool = false
         })
         super.init()
         self.audiobook.player.registerDelegate(self)
+        self.setBookmarks()
         DispatchQueue.main.async {
             self.timer = Timer.scheduledTimer(
                 timeInterval: 1,
@@ -197,7 +215,49 @@ private var waitingForPlayer: Bool = false
             ATLog(.error, "Failed to save to post current location.")
             return
         }
-        annotationsDelegate?.post(location: string)
+
+        annotationsDelegate?.saveListeningPosition(at: string) {
+            guard let _ = $0 else {
+                ATLog(.error, "Failed to save to post current location.")
+                return
+            }
+        }
+    }
+
+    public func saveBookmark() throws {
+        guard audiobookBookmarks.first(where: { $0.description == audiobook.player.currentChapterLocation?.description } ) == nil else {
+            throw BookmarkError.bookmarkAlreadyExists
+        }
+
+        guard let data = audiobook.player.currentChapterLocation?.toData(),
+                let string = String(data: data, encoding: .utf8) else {
+            ATLog(.error, "Failed to save to post bookmark at current location.")
+            return
+        }
+
+        annotationsDelegate?.saveBookmark(at: string) { [unowned self] annotationId in
+            guard let annotationId = annotationId else {
+                ATLog(.error, "Failed to save to post bookmark at current location.")
+                return
+            }
+
+            self.audiobook.player.currentChapterLocation?.annotationId = annotationId
+            self.audiobookBookmarks.append(self.audiobook.player.currentChapterLocation)
+        }
+    }
+
+    public func fetchBookmarks() async throws -> [ChapterLocation] {
+        return try await withUnsafeThrowingContinuation { continuation in
+            annotationsDelegate?.fetchBookmarks(for: audiobook.uniqueIdentifier, completion: { bookmarks in
+                continuation.resume(returning: bookmarks)
+            })
+        }
+    }
+    
+    private func setBookmarks() {
+        Task {
+            audiobookBookmarks = try await fetchBookmarks()
+        }
     }
 }
 

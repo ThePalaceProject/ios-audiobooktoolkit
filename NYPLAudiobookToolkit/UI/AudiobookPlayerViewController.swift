@@ -29,12 +29,13 @@ let SkipTimeInterval: Double = 15
 
     private let toolbar = UIToolbar()
     private let toolbarHeight: CGFloat = 44
-    private let toolbarButtonWidth: CGFloat = 100.0
+    private let toolbarButtonWidth: CGFloat = 75.0
 
     private let audioRouteButtonWidth: CGFloat = 50.0
-    private let audioRoutingBarButtonIndex = 3
     private let speedBarButtonIndex = 1
+    private let audioRoutingBarButtonIndex = 3
     private let sleepTimerBarButtonIndex = 5
+    private let addBookmarBarButtonindex = 7
     private let sleepTimerDefaultText = "☾"
     private let sleepTimerDefaultAccessibilityLabel = DisplayStrings.sleepTimer
 
@@ -48,7 +49,7 @@ let SkipTimeInterval: Double = 15
     }()
     private let seekBar = ScrubberView()
     private let playbackControlView = PlaybackControlView()
-
+    private var shouldBeginToAutoPlay = false
     private var waitingForPlayer = false {
         didSet {
             if !waitingForPlayer {
@@ -56,10 +57,24 @@ let SkipTimeInterval: Double = 15
             }
         }
     }
-    private var shouldBeginToAutoPlay = false
 
     private var compactWidthConstraints: [NSLayoutConstraint]!
     private var regularWidthConstraints: [NSLayoutConstraint]!
+    
+    private var bookmarkButton: UIBarButtonItem {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(named: "bookmark", in: Bundle.audiobookToolkit(), compatibleWith: nil), for: .normal)
+        button.sizeToFit()
+        button.addTarget(self, action: #selector(addBookmark), for: .touchUpInside)
+        let buttonItem = UIBarButtonItem(customView: button)
+        
+        buttonItem.isAccessibilityElement = true
+        buttonItem.accessibilityLabel = DisplayStrings.addBookmark
+        buttonItem.accessibilityHint = DisplayStrings.addBookmarkAccessiblityHint
+        buttonItem.accessibilityTraits = UIAccessibilityTraits.button
+        buttonItem.width = toolbarButtonWidth
+        return buttonItem
+    }
 
     //MARK:-
 
@@ -189,7 +204,7 @@ let SkipTimeInterval: Double = 15
         self.toolbar.autoPinEdge(.right, to: .right, of: self.view)
         self.toolbar.autoSetDimension(.height, toSize: self.toolbarHeight)
         let flexibleSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        var items: [UIBarButtonItem] = [flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace]
+        var items: [UIBarButtonItem] = [flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace, flexibleSpace]
         var playbackSpeedText = HumanReadablePlaybackRate(rate: self.audiobookManager.audiobook.player.playbackRate).value
         if self.audiobookManager.audiobook.player.playbackRate == .normalTime {
             playbackSpeedText = NSLocalizedString("1.0×",
@@ -222,6 +237,8 @@ let SkipTimeInterval: Double = 15
         sleepTimer.accessibilityLabel = texts.accessibilityLabel
 
         items.insert(sleepTimer, at: self.sleepTimerBarButtonIndex)
+        items.insert(self.bookmarkButton, at: self.addBookmarBarButtonindex)
+        
         self.toolbar.setItems(items, animated: true)
         self.seekBar.setOffset(
             chapter.actualOffset,
@@ -237,7 +254,7 @@ let SkipTimeInterval: Double = 15
         super.viewDidLayoutSubviews()
         self.gradient.frame = self.view.bounds
     }
-    
+
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.audiobookManager.timerDelegate = self
@@ -258,6 +275,7 @@ let SkipTimeInterval: Double = 15
         super.viewDidDisappear(animated)
         self.audiobookManager.saveLocation()
         self.audiobookManager.timerDelegate = nil
+        self.dismissToast()
     }
 
     override public func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -301,9 +319,14 @@ let SkipTimeInterval: Double = 15
     }
 
     @objc public func tocWasPressed(_ sender: Any) {
+        let bookmarkDataSource = BookmarkDataSource(
+            player: self.audiobookManager.audiobook.player,
+            bookmarks: audiobookManager.audiobookBookmarks
+        )
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
-            delegate: self)
+            bookmarkDataSource: bookmarkDataSource, delegate: self
+        )
         navigationItem.backButtonTitle = Strings.Generic.back
         self.navigationController?.pushViewController(tocVC, animated: true)
     }
@@ -444,7 +467,97 @@ let SkipTimeInterval: Double = 15
         buttonItem.accessibilityTraits = UIAccessibilityTraits.button
         return buttonItem
     }
+
+    @objc func addBookmark() {
+        do {
+            try self.audiobookManager.saveBookmark()
+            showToast(DisplayStrings.bookmarkAdded)
+        } catch {
+            showToast((error as? BookmarkError)?.localizedDescription ?? "")
+        }
+    }
     
+    private var toastView: UIView?
+    private func showToast(_ message: String) {
+        Task {
+            await asyncDismissToast()
+
+            toastView = UIView()
+            toastView!.backgroundColor = UIColor.darkGray
+            toastView!.layer.cornerRadius = 10
+            toastView!.clipsToBounds = true
+            toastView!.alpha = 1.0
+            
+            let textLabel = UILabel()
+            textLabel.textColor = UIColor.white
+            textLabel.font = UIFont.systemFont(ofSize: 14.0)
+            textLabel.text = message
+            textLabel.lineBreakMode = .byWordWrapping
+            textLabel.numberOfLines = 0
+            textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+            textLabel.setContentHuggingPriority(.required, for: .vertical)
+            
+            let closeButton = UIButton()
+            closeButton.setImage(UIImage(systemName: "xmark.circle"), for: .normal)
+            closeButton.tintColor = .white
+            closeButton.addTarget(self, action: #selector(dismissToast), for: .touchUpInside)
+            
+            toastView!.addSubview(textLabel)
+            toastView!.addSubview(closeButton)
+            self.view.addSubview(toastView!)
+            
+            toastView!.translatesAutoresizingMaskIntoConstraints = false
+            textLabel.translatesAutoresizingMaskIntoConstraints = false
+            closeButton.translatesAutoresizingMaskIntoConstraints = false
+            
+            NSLayoutConstraint.activate([
+                toastView!.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+                toastView!.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
+                toastView!.widthAnchor.constraint(equalToConstant: self.view.frame.width * 0.85),
+                toastView!.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor, constant: -75),
+                
+                textLabel.leadingAnchor.constraint(equalTo: toastView!.leadingAnchor, constant: 10),
+                textLabel.topAnchor.constraint(equalTo: toastView!.topAnchor, constant: 10),
+                textLabel.bottomAnchor.constraint(equalTo: toastView!.bottomAnchor, constant: -10),
+                
+                closeButton.centerYAnchor.constraint(equalTo: textLabel.centerYAnchor),
+                closeButton.leadingAnchor.constraint(equalTo: textLabel.trailingAnchor, constant: 10),
+                closeButton.trailingAnchor.constraint(equalTo: toastView!.trailingAnchor, constant: -10)
+            ])
+        }
+    }
+    
+    @objc func dismissToast() {
+        Task {
+            dismissToast(nil)
+        }
+    }
+
+    func asyncDismissToast() async {
+        await withUnsafeContinuation { continuation in
+            dismissToast {
+                continuation.resume()
+            }
+        }
+    }
+
+    func dismissToast(_ completion: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            UIView.animate(
+                withDuration: 0.4,
+                delay: 0.1,
+                options: .curveEaseOut,
+                animations: {
+                    self.toastView?.alpha = 0.0
+                }, completion: { _ in
+                    self.toastView?.removeFromSuperview()
+                    self.toastView = nil
+                    completion?()
+                }
+            )
+        }
+    }
+
     func updateUI() {
         guard let currentLocation = self.currentChapterLocation else {
             return
@@ -564,22 +677,21 @@ let SkipTimeInterval: Double = 15
 }
 
 extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewControllerDelegate {
-    public func userSelectedSpineItem(item: SpineElement) {
-
+    public func userSelected(location: ChapterLocation) {
+        
         self.waitingForPlayer = true
         self.activityIndicator.startAnimating()
-
+        
         self.playbackControlView.showPauseButtonIfNeeded()
-
-        let selectedChapter = item.chapter
-        let timeLeftInBook = self.timeLeftAfter(chapter: selectedChapter)
+        
+        let timeLeftInBook = self.timeLeftAfter(chapter: location)
         self.seekBar.setOffset(
-            selectedChapter.actualOffset,
-            duration: selectedChapter.duration,
+            location.actualOffset,
+            duration: location.duration,
             timeLeftInBook: timeLeftInBook,
-            middleText: self.middleTextFor(chapter: selectedChapter)
+            middleText: self.middleTextFor(chapter: location)
         )
-
+        
         if self.audiobookManager.audiobook.player.isPlaying {
             self.shouldBeginToAutoPlay = true
         } else {
@@ -588,6 +700,14 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         
         self.audiobookManager.saveLocation()
         self.navigationController?.popViewController(animated: true)
+    }
+
+    public func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void) {
+        self.audiobookManager.annotationsDelegate?.fetchBookmarks(for: audiobookManager.audiobook.uniqueIdentifier, completion: completion)
+    }
+
+    public func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
+        self.audiobookManager.annotationsDelegate?.deleteBookmark(at: location, completion: completion)
     }
 }
 
