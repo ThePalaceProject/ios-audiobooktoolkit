@@ -63,7 +63,9 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
 
         segmentedControl.selectedSegmentIndex = 0
         segmentedControl.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+        segmentedControl.backgroundColor = UIColor.systemBackground
         view.addSubview(segmentedControl)
+        view.backgroundColor = UIColor.systemBackground
 
         tableView.dataSource = self.tableOfContents
         tableView.delegate = self.tableOfContents
