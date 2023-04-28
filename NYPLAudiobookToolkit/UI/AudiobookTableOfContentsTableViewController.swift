@@ -131,6 +131,7 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
     }
 
     private func reloadData() {
+        guard !isLoading else { return }
         isLoading = true
     
         delegate?.fetchBookmarks { [unowned self] bookmarks in
