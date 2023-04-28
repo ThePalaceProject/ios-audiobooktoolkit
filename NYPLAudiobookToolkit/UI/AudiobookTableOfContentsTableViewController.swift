@@ -136,7 +136,7 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
         delegate?.fetchBookmarks { [unowned self] bookmarks in
             isLoading = false
             DispatchQueue.main.async {
-                if bookmarks.isEmpty {
+                if bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
                     self.view.addSubview(self.emptyView)
                     
                     NSLayoutConstraint.activate([
