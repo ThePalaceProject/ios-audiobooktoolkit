@@ -134,8 +134,9 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
         guard !isLoading else { return }
         isLoading = true
     
-        delegate?.fetchBookmarks { [unowned self] bookmarks in
-            isLoading = false
+        delegate?.fetchBookmarks { [weak self] bookmarks in
+            guard let self = self else { return }
+            self.isLoading = false
             DispatchQueue.main.async {
                 if bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
                     self.view.addSubview(self.emptyView)

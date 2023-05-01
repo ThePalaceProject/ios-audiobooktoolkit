@@ -703,7 +703,7 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
     }
 
     public func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void) {
-        self.audiobookManager.annotationsDelegate?.fetchBookmarks(for: audiobookManager.audiobook.uniqueIdentifier, completion: completion)
+        self.audiobookManager.annotationsDelegate?.fetchBookmarks(for: audiobookManager.audiobook.annotationsId, completion: completion)
     }
 
     public func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {

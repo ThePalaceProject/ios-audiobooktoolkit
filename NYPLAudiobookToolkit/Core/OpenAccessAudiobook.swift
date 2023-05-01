@@ -3,7 +3,8 @@ final class OpenAccessAudiobook: Audiobook {
     var spine: [SpineElement]
     let uniqueIdentifier: String
     var token: String? = nil
-    
+    var annotationsId: String { uniqueIdentifier }
+
     private var drmData: [String: Any]
     
     var drmStatus: DrmStatus {
@@ -20,7 +21,7 @@ final class OpenAccessAudiobook: Audiobook {
     }
 
     @available(*, deprecated, message: "Use init?(JSON: Any?, token: String?) instead")
-    public required convenience init?(JSON: Any?) {
+    public required convenience init?(JSON: Any?, audiobookId: String?) {
         self.init(JSON: JSON, token: nil)
     }
 
