@@ -248,7 +248,7 @@ enum BookmarkError: Error {
 
     public func fetchBookmarks() async throws -> [ChapterLocation] {
         return try await withUnsafeThrowingContinuation { continuation in
-            annotationsDelegate?.fetchBookmarks(for: audiobook.uniqueIdentifier, completion: { bookmarks in
+            annotationsDelegate?.fetchBookmarks(for: audiobook.annotationsId, completion: { bookmarks in
                 continuation.resume(returning: bookmarks)
             })
         }

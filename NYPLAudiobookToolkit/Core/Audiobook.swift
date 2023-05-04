@@ -34,12 +34,13 @@ import UIKit
 
 @objc public protocol Audiobook: class {
     var uniqueIdentifier: String { get }
+    var annotationsId: String { get }
     var spine: [SpineElement] { get }
     var player: Player { get }
     var drmStatus: DrmStatus { get set }
     func checkDrmAsync()
     func deleteLocalContent()
-    init?(JSON: Any?)
+    init?(JSON: Any?, audiobookId: String?)
 }
 
 /// Host app should instantiate a audiobook object with JSON.
@@ -52,7 +53,7 @@ import UIKit
     ///   - decryptor: Optional DRM decryptor for encrypted audio files
     ///   - token: Optional bearer token for protected audio files
     /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
+    public static func audiobook(_ JSON: Any?, bookID: String? = nil, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
         guard let JSON = JSON as? [String: Any] else { return nil }
         let metadata = JSON["metadata"] as? [String: Any]
         let drm = metadata?["encrypted"] as? [String: Any]
@@ -61,10 +62,10 @@ import UIKit
 
         if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
             let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
-            audiobook = FindawayAudiobookClass?.init(JSON: JSON)
+            audiobook = FindawayAudiobookClass?.init(JSON: JSON, audiobookId: bookID ?? "")
         } else if let type = JSON["formatType"] as? String,
                   type == "audiobook-overdrive" {
-            audiobook = OverdriveAudiobook(JSON: JSON)
+            audiobook = OverdriveAudiobook(JSON: JSON, audiobookId: nil)
         } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext, let decryptor = decryptor {
             audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {

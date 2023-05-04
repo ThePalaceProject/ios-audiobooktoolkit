@@ -9,6 +9,7 @@
 import Foundation
 
 @objc public class LCPAudiobook: NSObject, Audiobook {
+    public var annotationsId: String { uniqueIdentifier }
 
     /// Readium @context parameter value for LCP audiobooks
     static let manifestContext = "https://readium.org/webpub-manifest/context.jsonld"
@@ -42,7 +43,7 @@ import Foundation
     }
     
     @available(*, deprecated, message: "Use init?(JSON: Any?, decryptor: DRMDecryptor?) instead")
-    public required convenience init?(JSON: Any?) {
+    public required convenience init?(JSON: Any?, audiobookId: String?) {
         self.init(JSON: JSON, decryptor: nil)
     }
     
