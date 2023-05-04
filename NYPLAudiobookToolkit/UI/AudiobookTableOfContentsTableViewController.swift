@@ -151,7 +151,16 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
                     self.emptyView.removeFromSuperview()
                 }
 
-                self.bookmarkDataSource.bookmarks = bookmarks
+                self.bookmarkDataSource.bookmarks = bookmarks.sorted {
+                    let formatter = ISO8601DateFormatter()
+                    guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
+                          let date2 = formatter.date(from: $1.lastSavedTimeStamp)
+                    else {
+                        return false
+                    }
+                    return date1 > date2
+                }
+
                 self.tableView.reloadData()
             }
         }

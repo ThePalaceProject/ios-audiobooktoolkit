@@ -242,6 +242,8 @@ enum BookmarkError: Error {
             }
 
             self.audiobook.player.currentChapterLocation?.annotationId = annotationId
+            self.audiobook.player.currentChapterLocation?.lastSavedTimeStamp = Date().iso8601
+
             self.audiobookBookmarks.append(self.audiobook.player.currentChapterLocation)
         }
     }

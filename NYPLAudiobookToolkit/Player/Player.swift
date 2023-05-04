@@ -127,6 +127,7 @@ extension Player {
         case audiobookID
         case duration
         case annotationId
+        case lastSavedTimeStamp
     }
 
     enum LegacyKeys: String, CodingKey {
@@ -138,6 +139,7 @@ extension Player {
         case title
         case audiobookID
         case duration
+        case lastSavedTimeStamp
     }
 
     public var timeRemaining: TimeInterval {
@@ -181,6 +183,7 @@ extension Player {
             duration = Double(try legacyValues.decode(Float.self, forKey: .duration))
             playheadOffset = Double(try legacyValues.decode(Float.self, forKey: .playheadOffset))
             chapterOffset = Double(try legacyValues.decode(Float.self, forKey: .startOffset))
+            lastSavedTimeStamp = try legacyValues.decode(String.self, forKey: .lastSavedTimeStamp)
             return
         }
 
@@ -192,6 +195,7 @@ extension Player {
         playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
         chapterOffset = Double(try values.decode(Int.self, forKey: .startOffset)/1000)
         annotationId = try values.decode(String.self, forKey: .annotationId)
+        lastSavedTimeStamp = try values.decode(String.self, forKey: .lastSavedTimeStamp)
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -205,6 +209,7 @@ extension Player {
         try container.encode(type, forKey: .type)
         try container.encode(audiobookID, forKey: .audiobookID)
         try container.encode(annotationId, forKey: .annotationId)
+        try container.encode(lastSavedTimeStamp, forKey: .lastSavedTimeStamp)
     }
 
     public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String = Date().iso8601, annotationId: String = "") {
