@@ -13,7 +13,7 @@ let BookmarkDataSourceCellIdentifier = "BookmarkDataSourceCellIdentifier"
 
 public protocol AudiobookTableOfContentsTableViewControllerDelegate: class {
     func userSelected(location: ChapterLocation)
-    func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void)
+    func fetchBookmarks(completion: (() -> Void)?)
     func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
 }
 
@@ -134,11 +134,11 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
         guard !isLoading else { return }
         isLoading = true
     
-        delegate?.fetchBookmarks { [weak self] bookmarks in
+        delegate?.fetchBookmarks { [weak self] in
             guard let self = self else { return }
             self.isLoading = false
             DispatchQueue.main.async {
-                if bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
+                if self.bookmarkDataSource.bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
                     self.view.addSubview(self.emptyView)
                     
                     NSLayoutConstraint.activate([
@@ -149,16 +149,6 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
                     ])
                 } else {
                     self.emptyView.removeFromSuperview()
-                }
-
-                self.bookmarkDataSource.bookmarks = bookmarks.sorted {
-                    let formatter = ISO8601DateFormatter()
-                    guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
-                          let date2 = formatter.date(from: $1.lastSavedTimeStamp)
-                    else {
-                        return false
-                    }
-                    return date1 > date2
                 }
 
                 self.tableView.reloadData()

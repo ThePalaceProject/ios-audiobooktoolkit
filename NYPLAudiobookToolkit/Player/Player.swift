@@ -169,6 +169,18 @@ extension Player {
             self.part == rhs.part
     }
     
+    public func isSimilar(to location: ChapterLocation?) -> Bool {
+        guard let location = location else { return false }
+        return self.type == location.type &&
+        self.number == location.number &&
+        self.part == location.part &&
+        self.chapterOffset == location.chapterOffset &&
+        self.playheadOffset == location.playheadOffset &&
+        self.title == location.title &&
+        self.audiobookID == location.audiobookID &&
+        self.duration == location.duration
+    }
+    
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
 
