@@ -13,8 +13,6 @@ let BookmarkDataSourceCellIdentifier = "BookmarkDataSourceCellIdentifier"
 
 public protocol AudiobookTableOfContentsTableViewControllerDelegate: class {
     func userSelected(location: ChapterLocation)
-    func fetchBookmarks(completion: (() -> Void)?)
-    func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
 }
 
 public class AudiobookTableOfContentsTableViewController: UIViewController {
@@ -134,25 +132,28 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
         guard !isLoading else { return }
         isLoading = true
     
-        delegate?.fetchBookmarks { [weak self] in
+        bookmarkDataSource.fetchBookmarks { [weak self] in
             guard let self = self else { return }
             self.isLoading = false
             DispatchQueue.main.async {
-                if self.bookmarkDataSource.bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
-                    self.view.addSubview(self.emptyView)
-                    
-                    NSLayoutConstraint.activate([
-                        self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-                        self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                        self.emptyView.topAnchor.constraint(equalTo: self.segmentedControl.bottomAnchor),
-                        self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
-                    ])
-                } else {
-                    self.emptyView.removeFromSuperview()
-                }
-
+                self.toggleEmptyView()
                 self.tableView.reloadData()
             }
+        }
+    }
+    
+    private func toggleEmptyView() {
+        if self.bookmarkDataSource.bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
+            self.view.addSubview(self.emptyView)
+            
+            NSLayoutConstraint.activate([
+                self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                self.emptyView.topAnchor.constraint(equalTo: self.segmentedControl.bottomAnchor),
+                self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+            ])
+        } else {
+            self.emptyView.removeFromSuperview()
         }
     }
 
@@ -197,15 +198,14 @@ extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsD
     func audiobookTableOfContentsUserSelected(spineItem: SpineElement) {
         self.delegate?.userSelected(location: spineItem.chapter)
     }
+}
 
+extension AudiobookTableOfContentsTableViewController: BookmarkDataSourceDelegate {
     func audiobookBookmarksUserSelected(location: ChapterLocation) {
         self.delegate?.userSelected(location: location)
     }
-
-    func audiobookBookmarksUserDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
-        self.delegate?.userDeletedBookmark(at: location) { success in
-            self.reloadData()
-            completion(success)
-        }
+    
+    func reloadBookmarks() {
+        reloadData()
     }
 }
