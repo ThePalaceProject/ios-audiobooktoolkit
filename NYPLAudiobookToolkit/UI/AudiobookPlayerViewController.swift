@@ -321,7 +321,7 @@ let SkipTimeInterval: Double = 15
     @objc public func tocWasPressed(_ sender: Any) {
         let bookmarkDataSource = BookmarkDataSource(
             player: self.audiobookManager.audiobook.player,
-            bookmarks: audiobookManager.audiobookBookmarks
+            audiobookManager: audiobookManager
         )
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
@@ -701,14 +701,6 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         
         self.audiobookManager.saveLocation()
         self.navigationController?.popViewController(animated: true)
-    }
-
-    public func fetchBookmarks(completion: (() -> Void)?) {
-        self.audiobookManager.fetchBookmarks(completion: completion)
-    }
-
-    public func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
-        self.audiobookManager.deleteBookmark(at: location, completion: completion)
     }
 }
 

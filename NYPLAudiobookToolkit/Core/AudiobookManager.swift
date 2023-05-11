@@ -28,7 +28,7 @@ import AVFoundation
     func saveListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
     func saveBookmark(at location: ChapterLocation, completion: ((_ location: ChapterLocation?) -> Void)?)
     func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
-    func fetchBookmarks(for audiobook: String, completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
+    func fetchBookmarks(completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
 }
 
 @objc public protocol AudiobookManagerTimerDelegate {
@@ -63,7 +63,7 @@ private var waitingForPlayer: Bool = false
     static func setLogHandler(_ handler: @escaping LogHandler)
     func saveLocation()
     func saveBookmark(completion: @escaping (Error?) -> Void)
-    func fetchBookmarks(completion: (() -> Void)?)
+    func fetchBookmarks(completion: (([ChapterLocation]) -> Void)?)
     func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
     var playbackCompletionHandler: (() -> ())? { get set }
 }
@@ -86,6 +86,7 @@ enum BookmarkError: Error {
 /// to be used by the AudibookDetailViewController to respond to UI events.
 @objcMembers public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
+    weak var tocDelegate: AudiobookTableOfContentsDelegate?
     public weak var refreshDelegate: RefreshDelegate?
     public weak var annotationsDelegate: AudiobookPlaybackPositionDelegate?
     public var audiobookBookmarks: [ChapterLocation] = []
@@ -258,8 +259,8 @@ enum BookmarkError: Error {
         })
     }
 
-    public func fetchBookmarks(completion: (() -> Void)? = nil) {
-        annotationsDelegate?.fetchBookmarks(for: audiobook.annotationsId) { [weak self] bookmarks in
+    public func fetchBookmarks(completion: (([ChapterLocation]) -> Void)? = nil) {
+        annotationsDelegate?.fetchBookmarks { [weak self] bookmarks in
             self?.audiobookBookmarks = bookmarks.sorted {
                 let formatter = ISO8601DateFormatter()
                 guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
@@ -270,7 +271,7 @@ enum BookmarkError: Error {
                 return date1 > date2
             }
             
-            completion?()
+            completion?(self?.audiobookBookmarks ?? [])
         }
     }
 }

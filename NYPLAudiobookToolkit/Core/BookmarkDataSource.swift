@@ -8,22 +8,21 @@
 
 import UIKit
 
+protocol BookmarkDataSourceDelegate: class {
+    func audiobookBookmarksUserSelected(location: ChapterLocation)
+    func reloadBookmarks()
+}
+
 public class BookmarkDataSource: NSObject, UITableViewDataSource {
-    weak var delegate: AudiobookTableOfContentsDelegate?
-    var bookmarks: [ChapterLocation]
+    weak var delegate: BookmarkDataSourceDelegate?
+    var bookmarks: [ChapterLocation] { audiobookManager.audiobookBookmarks }
+    var audiobookManager: AudiobookManager
+    
     private let player: Player
 
-    init(player: Player, bookmarks: [ChapterLocation]) {
+    init(player: Player, audiobookManager: AudiobookManager) {
         self.player = player
-        self.bookmarks = bookmarks.sorted {
-            let formatter = ISO8601DateFormatter()
-            guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
-                  let date2 = formatter.date(from: $1.lastSavedTimeStamp)
-            else {
-                return false
-            }
-            return date1 > date2
-        }
+        self.audiobookManager = audiobookManager
     }
 
     public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -37,6 +36,12 @@ public class BookmarkDataSource: NSObject, UITableViewDataSource {
         cell.rightLabel.text = DateFormatter.bookmarkTimeFormatter.string(from: time)
         
         return cell
+    }
+    
+    func fetchBookmarks(completion: @escaping () -> Void) {
+        audiobookManager.fetchBookmarks { _ in
+            completion()
+        }
     }
 }
 
@@ -53,7 +58,6 @@ extension BookmarkDataSource: UITableViewDelegate {
         let chapterLocation = self.bookmarks[indexPath.row]
         self.player.playAtLocation(chapterLocation, completion: nil)
         self.delegate?.audiobookBookmarksUserSelected(location: chapterLocation)
-        self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: true)
     }
 
     private func tableView(_ tableView: UITableView, canFocusRowAt indexPath: IndexPath) -> Bool {
@@ -63,17 +67,11 @@ extension BookmarkDataSource: UITableViewDelegate {
     private func tableView(tableView: UITableView, canEditRowAtIndexPath indexPath: NSIndexPath) -> Bool {
         true
     }
+
     public func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
-            delegate?.audiobookBookmarksUserDeletedBookmark(at: bookmarks[indexPath.row]) { success in
-                guard success else {
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    self.bookmarks.remove(at: indexPath.row)
-                    tableView.reloadData()
-                }
+            audiobookManager.deleteBookmark(at: bookmarks[indexPath.row]) { _ in
+                self.delegate?.reloadBookmarks()
             }
         }
     }
