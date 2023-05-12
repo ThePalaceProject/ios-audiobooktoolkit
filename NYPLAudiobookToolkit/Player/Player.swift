@@ -433,4 +433,3 @@ private func findPreviousChapter(cursor: Cursor<SpineElement>, timeIntoPreviousC
     return (newCursor, destinationChapter.update(playheadOffset: max(0, playheadOffset)))
 }
 
-

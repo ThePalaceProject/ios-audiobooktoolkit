@@ -26,6 +26,9 @@ import AVFoundation
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
     func saveListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
+}
+
+@objc public protocol AudiobookBookmarkDelegate {
     func saveBookmark(at location: ChapterLocation, completion: ((_ location: ChapterLocation?) -> Void)?)
     func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
     func fetchBookmarks(completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
@@ -48,7 +51,8 @@ private var waitingForPlayer: Bool = false
 /// center / airplay.
 @objc public protocol AudiobookManager {
     var refreshDelegate: RefreshDelegate? { get set }
-    var annotationsDelegate: AudiobookPlaybackPositionDelegate? { get set }
+    var playbackPositionDelegate: AudiobookPlaybackPositionDelegate? { get set }
+    var bookmarkDelegate: AudiobookBookmarkDelegate? { get set }
     var timerDelegate: AudiobookManagerTimerDelegate? { get set }
 
     var networkService: AudiobookNetworkService { get }
@@ -88,7 +92,8 @@ enum BookmarkError: Error {
     public weak var timerDelegate: AudiobookManagerTimerDelegate?
     weak var tocDelegate: AudiobookTableOfContentsDelegate?
     public weak var refreshDelegate: RefreshDelegate?
-    public weak var annotationsDelegate: AudiobookPlaybackPositionDelegate?
+    public weak var playbackPositionDelegate: AudiobookPlaybackPositionDelegate?
+    public weak var bookmarkDelegate: AudiobookBookmarkDelegate?
     public var audiobookBookmarks: [ChapterLocation] = []
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {
@@ -221,7 +226,7 @@ enum BookmarkError: Error {
             return
         }
 
-        annotationsDelegate?.saveListeningPosition(at: string) {
+        playbackPositionDelegate?.saveListeningPosition(at: string) {
             guard let _ = $0 else {
                 ATLog(.error, "Failed to save to post current location.")
                 return
@@ -230,7 +235,7 @@ enum BookmarkError: Error {
     }
     
     public func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
-        annotationsDelegate?.deleteBookmark(at: location, completion: { [weak self] success in
+        bookmarkDelegate?.deleteBookmark(at: location, completion: { [weak self] success in
             if success {
                 self?.audiobookBookmarks.removeAll(where: { $0.isSimilar(to: location) })
             }
@@ -251,7 +256,7 @@ enum BookmarkError: Error {
             return
         }
 
-        annotationsDelegate?.saveBookmark(at: currentLocation, completion: { location in
+        bookmarkDelegate?.saveBookmark(at: currentLocation, completion: { location in
             if let savedLocation = location {
                 self.audiobookBookmarks.append(savedLocation)
                 completion(nil)
@@ -260,7 +265,7 @@ enum BookmarkError: Error {
     }
 
     public func fetchBookmarks(completion: (([ChapterLocation]) -> Void)? = nil) {
-        annotationsDelegate?.fetchBookmarks { [weak self] bookmarks in
+        bookmarkDelegate?.fetchBookmarks { [weak self] bookmarks in
             self?.audiobookBookmarks = bookmarks.sorted {
                 let formatter = ISO8601DateFormatter()
                 guard let date1 = formatter.date(from: $0.lastSavedTimeStamp),
