@@ -224,7 +224,7 @@ extension Player {
         try container.encode(lastSavedTimeStamp, forKey: .lastSavedTimeStamp)
     }
 
-    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String = Date().iso8601, annotationId: String = "") {
+    public init(number: UInt, part: UInt, duration: TimeInterval, startOffset: TimeInterval?, playheadOffset: TimeInterval, title: String?, audiobookID: String, lastSavedTimeStamp: String = "", annotationId: String = "") {
         self.audiobookID = audiobookID
         self.number = number
         self.part = part
