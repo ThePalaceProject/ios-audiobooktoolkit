@@ -30,7 +30,7 @@ import AVFoundation
 
 @objc public protocol AudiobookBookmarkDelegate {
     func saveBookmark(at location: ChapterLocation, completion: ((_ location: ChapterLocation?) -> Void)?)
-    func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
+    func deleteBookmark(at location: ChapterLocation, completion: ((Bool) -> Void)?)
     func fetchBookmarks(completion: @escaping ([NYPLAudiobookToolkit.ChapterLocation]) -> Void)
 }
 
