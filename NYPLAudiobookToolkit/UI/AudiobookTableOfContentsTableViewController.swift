@@ -22,8 +22,10 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
     let bookmarkDataSource: BookmarkDataSource
     weak var delegate: AudiobookTableOfContentsTableViewControllerDelegate?
     private let activityIndicator: UIActivityIndicatorView
+    private let refreshControl = UIRefreshControl()
     let segmentedControl = UISegmentedControl(items: [DisplayStrings.chapters, DisplayStrings.bookmarks])
     let tableView = UITableView()
+
     private var isLoading: Bool = false {
         didSet {
             DispatchQueue.main.async {
@@ -119,16 +121,21 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
             tableView.dataSource = self.tableOfContents
             tableView.delegate = self.tableOfContents
             scrollToSelectedRow(true)
+            tableView.refreshControl = nil
+
             tableView.reloadData()
         } else {
             tableView.dataSource = self.bookmarkDataSource
             tableView.delegate = self.bookmarkDataSource
             tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+
+            tableView.refreshControl = refreshControl
+            refreshControl.addTarget(self, action: #selector(reloadData), for: .valueChanged)
             reloadData()
         }
     }
 
-    private func reloadData() {
+    @objc private func reloadData() {
         guard !isLoading else { return }
         isLoading = true
     
@@ -138,6 +145,7 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
             DispatchQueue.main.async {
                 self.toggleEmptyView()
                 self.tableView.reloadData()
+                self.refreshControl.endRefreshing()
             }
         }
     }
