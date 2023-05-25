@@ -65,6 +65,7 @@ struct Strings {
     
     struct Error {
         static let bookmarkAlreadyExistsError = NSLocalizedString("A bookmark has already been saved at this location.", comment: "Alert notifying user that location has already been saved.")
+        static let failedToSaveBookmarkError = NSLocalizedString("Internal Error, bookmark failed to save.", comment: "Alert notifying user that bookmark save failed.")
     }
     
     struct PlaybackControlView {

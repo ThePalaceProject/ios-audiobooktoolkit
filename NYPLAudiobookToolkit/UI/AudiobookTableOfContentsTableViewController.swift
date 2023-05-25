@@ -13,8 +13,6 @@ let BookmarkDataSourceCellIdentifier = "BookmarkDataSourceCellIdentifier"
 
 public protocol AudiobookTableOfContentsTableViewControllerDelegate: class {
     func userSelected(location: ChapterLocation)
-    func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void)
-    func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void)
 }
 
 public class AudiobookTableOfContentsTableViewController: UIViewController {
@@ -24,8 +22,10 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
     let bookmarkDataSource: BookmarkDataSource
     weak var delegate: AudiobookTableOfContentsTableViewControllerDelegate?
     private let activityIndicator: UIActivityIndicatorView
+    private let refreshControl = UIRefreshControl()
     let segmentedControl = UISegmentedControl(items: [DisplayStrings.chapters, DisplayStrings.bookmarks])
     let tableView = UITableView()
+
     private var isLoading: Bool = false {
         didSet {
             DispatchQueue.main.async {
@@ -121,39 +121,47 @@ public class AudiobookTableOfContentsTableViewController: UIViewController {
             tableView.dataSource = self.tableOfContents
             tableView.delegate = self.tableOfContents
             scrollToSelectedRow(true)
+            tableView.refreshControl = nil
+
             tableView.reloadData()
         } else {
             tableView.dataSource = self.bookmarkDataSource
             tableView.delegate = self.bookmarkDataSource
             tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: true)
+
+            tableView.refreshControl = refreshControl
+            refreshControl.addTarget(self, action: #selector(reloadData), for: .valueChanged)
             reloadData()
         }
     }
 
-    private func reloadData() {
+    @objc private func reloadData() {
         guard !isLoading else { return }
         isLoading = true
     
-        delegate?.fetchBookmarks { [weak self] bookmarks in
+        bookmarkDataSource.fetchBookmarks { [weak self] in
             guard let self = self else { return }
             self.isLoading = false
             DispatchQueue.main.async {
-                if bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
-                    self.view.addSubview(self.emptyView)
-                    
-                    NSLayoutConstraint.activate([
-                        self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-                        self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                        self.emptyView.topAnchor.constraint(equalTo: self.segmentedControl.bottomAnchor),
-                        self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
-                    ])
-                } else {
-                    self.emptyView.removeFromSuperview()
-                }
-
-                self.bookmarkDataSource.bookmarks = bookmarks
+                self.toggleEmptyView()
                 self.tableView.reloadData()
+                self.refreshControl.endRefreshing()
             }
+        }
+    }
+    
+    private func toggleEmptyView() {
+        if self.bookmarkDataSource.bookmarks.isEmpty && self.segmentedControl.selectedSegmentIndex == 1 {
+            self.view.addSubview(self.emptyView)
+            
+            NSLayoutConstraint.activate([
+                self.emptyView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                self.emptyView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
+                self.emptyView.topAnchor.constraint(equalTo: self.segmentedControl.bottomAnchor),
+                self.emptyView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
+            ])
+        } else {
+            self.emptyView.removeFromSuperview()
         }
     }
 
@@ -198,15 +206,14 @@ extension AudiobookTableOfContentsTableViewController: AudiobookTableOfContentsD
     func audiobookTableOfContentsUserSelected(spineItem: SpineElement) {
         self.delegate?.userSelected(location: spineItem.chapter)
     }
+}
 
+extension AudiobookTableOfContentsTableViewController: BookmarkDataSourceDelegate {
     func audiobookBookmarksUserSelected(location: ChapterLocation) {
         self.delegate?.userSelected(location: location)
     }
-
-    func audiobookBookmarksUserDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
-        self.delegate?.userDeletedBookmark(at: location) { success in
-            self.reloadData()
-            completion(success)
-        }
+    
+    func reloadBookmarks() {
+        reloadData()
     }
 }

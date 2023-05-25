@@ -321,7 +321,7 @@ let SkipTimeInterval: Double = 15
     @objc public func tocWasPressed(_ sender: Any) {
         let bookmarkDataSource = BookmarkDataSource(
             player: self.audiobookManager.audiobook.player,
-            bookmarks: audiobookManager.audiobookBookmarks
+            audiobookManager: audiobookManager
         )
         let tocVC = AudiobookTableOfContentsTableViewController(
             tableOfContents: self.audiobookManager.tableOfContents,
@@ -469,11 +469,12 @@ let SkipTimeInterval: Double = 15
     }
 
     @objc func addBookmark() {
-        do {
-            try self.audiobookManager.saveBookmark()
-            showToast(DisplayStrings.bookmarkAdded)
-        } catch {
-            showToast((error as? BookmarkError)?.localizedDescription ?? "")
+        self.audiobookManager.saveBookmark { [weak self] error in
+            if let error = error {
+                self?.showToast((error as? BookmarkError)?.localizedDescription ?? "")
+            } else {
+                self?.showToast(DisplayStrings.bookmarkAdded)
+            }
         }
     }
     
@@ -700,14 +701,6 @@ extension AudiobookPlayerViewController: AudiobookTableOfContentsTableViewContro
         
         self.audiobookManager.saveLocation()
         self.navigationController?.popViewController(animated: true)
-    }
-
-    public func fetchBookmarks(completion: @escaping ([ChapterLocation]) -> Void) {
-        self.audiobookManager.annotationsDelegate?.fetchBookmarks(for: audiobookManager.audiobook.annotationsId, completion: completion)
-    }
-
-    public func userDeletedBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
-        self.audiobookManager.annotationsDelegate?.deleteBookmark(at: location, completion: completion)
     }
 }
 
