@@ -583,6 +583,7 @@ let SkipTimeInterval: Double = 15
 
         guard currentLocation.timeRemaining >= 0 else {
             (self.audiobookManager.audiobook.player as? LCPPlayer)?.advanceToNextPlayerItem()
+            self.audiobookManager.playbackCompletionHandler?()
             return
         }
     }
