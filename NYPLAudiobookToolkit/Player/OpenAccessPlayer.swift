@@ -1,6 +1,7 @@
 import AVFoundation
 
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
+let AudioRouteChangeNotification =  AVAudioSession.routeChangeNotification
 
 class OpenAccessPlayer: NSObject, Player {
     var queuesEvents: Bool = false
@@ -16,6 +17,10 @@ class OpenAccessPlayer: NSObject, Player {
     
     var interruptionNotification: Notification.Name {
         return AudioInterruptionNotification
+    }
+    
+    var routeChangeNotification: Notification.Name {
+        return AudioRouteChangeNotification
     }
     
     var isPlaying: Bool {
@@ -38,6 +43,11 @@ class OpenAccessPlayer: NSObject, Player {
         nc.addObserver(self,
                        selector: #selector(handleInterruption),
                        name: interruptionNotification,
+                       object: nil)
+        
+        nc.addObserver(self,
+                       selector: #selector(handleRouteChange),
+                       name: routeChangeNotification,
                        object: nil)
     }
 
@@ -715,5 +725,36 @@ extension OpenAccessPlayer{
                 }
             default: ()
             }
+    }
+    
+    @objc func handleRouteChange(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue:reasonValue) else {
+            return
+        }
+        
+        switch reason {
+        case .newDeviceAvailable:
+            let session = AVAudioSession.sharedInstance()
+            for output in session.currentRoute.outputs {
+                switch output.portType {
+                case AVAudioSession.Port.headphones, AVAudioSession.Port.bluetoothA2DP:
+                    play()
+                default: ()
+                }
+            }
+        case .oldDeviceUnavailable:
+            if let previousRoute = userInfo[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription {
+                for output in previousRoute.outputs {
+                    switch output.portType {
+                    case AVAudioSession.Port.headphones, AVAudioSession.Port.bluetoothA2DP:
+                        pause()
+                    default: ()
+                    }
+                }
+            }
+        default: ()
+        }
     }
 }
