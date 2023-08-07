@@ -95,6 +95,7 @@ enum BookmarkError: Error {
     public weak var playbackPositionDelegate: AudiobookPlaybackPositionDelegate?
     public weak var bookmarkDelegate: AudiobookBookmarkDelegate?
     public var audiobookBookmarks: [ChapterLocation] = []
+    private var playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate?
 
     static public func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
@@ -123,10 +124,11 @@ enum BookmarkError: Error {
 
     private(set) public var timer: Timer?
     private let mediaControlHandler: MediaControlHandler
-    public init (metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService) {
+    public init (metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
         self.metadata = metadata
         self.audiobook = audiobook
         self.networkService = networkService
+        self.playbackTrackerDelegate = playbackTrackerDelegate
         self.mediaControlHandler = MediaControlHandler(
             togglePlaybackHandler: { (_) -> MPRemoteCommandHandlerStatus in
                 if audiobook.player.isPlaying {
@@ -183,11 +185,12 @@ enum BookmarkError: Error {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
     }
 
-    public convenience init(metadata: AudiobookMetadata, audiobook: Audiobook) {
+    public convenience init(metadata: AudiobookMetadata, audiobook: Audiobook, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
         self.init(
             metadata: metadata,
             audiobook: audiobook,
-            networkService: DefaultAudiobookNetworkService(spine: audiobook.spine)
+            networkService: DefaultAudiobookNetworkService(spine: audiobook.spine),
+            playbackTrackerDelegate: playbackTrackerDelegate
         )
     }
 
@@ -285,19 +288,24 @@ extension DefaultAudiobookManager: PlayerDelegate {
     public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
         waitingForPlayer = false
         self.mediaControlHandler.enableMediaControlCommands()
+        playbackTrackerDelegate?.playbackStarted()
     }
     public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
         waitingForPlayer = false
+        playbackTrackerDelegate?.playbackStopped()
     }
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
+    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
+        playbackTrackerDelegate?.playbackStopped()
+    }
     public func player(_ player: Player, didComplete chapter: ChapterLocation) {
         waitingForPlayer = false
+        playbackTrackerDelegate?.playbackStopped()
 
         let sortedSpine = self.networkService.spine.map{ $0.chapter }.sorted{ $0 < $1 }
         guard let firstChapter = sortedSpine.first,
-            let lastChapter = sortedSpine.last else {
-                ATLog(.error, "Audiobook Spine is corrupt.")
-                return
+              let lastChapter = sortedSpine.last else {
+            ATLog(.error, "Audiobook Spine is corrupt.")
+            return
         }
         if lastChapter.inSameChapter(other: chapter) {
             self.playbackCompletionHandler?()
@@ -305,8 +313,9 @@ extension DefaultAudiobookManager: PlayerDelegate {
         }
     }
     public func playerDidUnload(_ player: Player) {
-      self.mediaControlHandler.teardown()
-      self.timer?.invalidate()
+        self.mediaControlHandler.teardown()
+        self.timer?.invalidate()
+        playbackTrackerDelegate?.playbackStopped()
     }
 }
 

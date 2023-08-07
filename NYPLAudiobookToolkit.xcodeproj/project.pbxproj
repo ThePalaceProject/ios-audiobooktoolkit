@@ -95,6 +95,7 @@
 		E6160DFF2188EBFE0048755C /* BufferActivityIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */; };
 		E67888EA214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
+		E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E72707E82A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -202,6 +203,7 @@
 		E6160DFE2188EBFE0048755C /* BufferActivityIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BufferActivityIndicator.swift; sourceTree = "<group>"; };
 		E67888E9214AF9C700C48D82 /* AudiobookTrackTableViewCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTrackTableViewCell.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
+		E72707E82A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlaybackTrackerDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -272,6 +274,7 @@
 				8C6CD8AB240DB39300E2DFB0 /* DRM */,
 				7BD759C120168FF5004CE65F /* Network */,
 				7B7B3709202274C400030A1E /* Player */,
+				E72707EA2A54A3A80088B86A /* Tracker */,
 				8C7956AB2411757F0063D84F /* Resources */,
 				8C3CDB052422D8460020FC0B /* Extensions */,
 				7B3BD9C62011737B002C5416 /* UI */,
@@ -432,6 +435,14 @@
 			path = TestResources;
 			sourceTree = "<group>";
 		};
+		E72707EA2A54A3A80088B86A /* Tracker */ = {
+			isa = PBXGroup;
+			children = (
+				E72707E82A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift */,
+			);
+			path = Tracker;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -497,7 +508,7 @@
 			attributes = {
 				LastSwiftUpdateCheck = 0920;
 				LastUpgradeCheck = 0930;
-				ORGANIZATIONNAME = "Dean Silfen";
+				ORGANIZATIONNAME = "The Palace Project";
 				TargetAttributes = {
 					7B54418B200EA7C20047B6C6 = {
 						CreatedOnToolsVersion = 9.2;
@@ -610,6 +621,7 @@
 				178707CE24DA5E1300649567 /* Constants.m in Sources */,
 				7B5441E4200EA82C0047B6C6 /* AudiobookPlayerViewController.swift in Sources */,
 				E67CA9A5215C0D320081A10B /* Log.swift in Sources */,
+				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
 				7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
 				7B8026A3206AB0AF00012808 /* HumanReadablePlaybackRate.swift in Sources */,
