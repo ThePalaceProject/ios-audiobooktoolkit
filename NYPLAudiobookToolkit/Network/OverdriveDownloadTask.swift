@@ -90,7 +90,7 @@ final class OverdriveDownloadTask: DownloadTask {
     
     private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL)
     {
-        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".overdriveBackgroundIdentifier")
+        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".overdriveBackgroundIdentifier.\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
         let delegate = OverdriveDownloadTaskURLSessionDelegate(downloadTask: self,
                                                                delegate: self.delegate,

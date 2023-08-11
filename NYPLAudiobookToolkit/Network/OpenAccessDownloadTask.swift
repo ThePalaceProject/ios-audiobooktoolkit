@@ -158,7 +158,7 @@ final class OpenAccessDownloadTask: DownloadTask {
 
     private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL)
     {
-        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".openAccessBackgroundIdentifier")
+        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
         let delegate = OpenAccessDownloadTaskURLSessionDelegate(downloadTask: self,
                                                                 delegate: self.delegate,
