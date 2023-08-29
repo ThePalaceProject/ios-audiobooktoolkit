@@ -66,7 +66,7 @@ private enum TimerState {
                 return date.timeIntervalSinceNow
             case .playing(until: .endOfChapter),
                  .paused(with: .restOfChapter):
-                return self.player.currentChapterLocation?.timeRemaining ?? 0.0
+                return self.player.currentChapterLocation?.timeRemaining ?? TimeInterval()
             case .paused(with: .timeInterval(let timeInterval)):
                 return timeInterval
             }
