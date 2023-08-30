@@ -53,9 +53,9 @@ import Foundation
     }
     
     public var timeRemaining: TimeInterval {
-        self.duration - self.actualOffset
+        max(self.duration - self.actualOffset, 0.0)
     }
-    
+
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
         if self.playheadOffset < self.chapterOffset ?? 0 {
