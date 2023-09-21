@@ -8,7 +8,7 @@
 
 import UIKit
 
-@objc public enum SleepTimerTriggerAt: Int {
+@objc public enum SleepTimerTriggerAt: Int, CaseIterable {
     case never
     case fifteenMinutes
     case thirtyMinutes

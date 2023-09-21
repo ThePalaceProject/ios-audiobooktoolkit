@@ -139,6 +139,14 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         }
     }
     
+    func setPlaybackRate(_ playbackRate: PlaybackRate) {
+        audiobookManager.audiobook.player.playbackRate = playbackRate
+    }
+    
+    func setSleepTimer(_ trigger: SleepTimerTriggerAt) {
+        audiobookManager.sleepTimer.setTimerTo(trigger: trigger)
+    }
+    
     func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
         audiobookManager.saveBookmark(completion: completion)
     }

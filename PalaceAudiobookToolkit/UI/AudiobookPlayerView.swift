@@ -21,11 +21,13 @@ struct AudiobookPlayerView: View {
     @State private var selectedLocation: ChapterLocation = .emptyLocation
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
+    @State private var showPlaybackSpeed = false
+    @State private var showSleepTimer = false
     
     init(model: AudiobookPlaybackModel) {
         self.playback = model
     }
-        
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 15) {
@@ -70,59 +72,28 @@ struct AudiobookPlayerView: View {
                 
                 Spacer()
                 
-                HStack(spacing: 40) {
-                    skipButton("skip_back", textLabel: "", action: playback.skipBack)
-                    playButton(isPlaying: playback.isPlaying, textLabel: "", action: playback.playPause)
-                    skipButton("skip_forward", textLabel: "", action: playback.skipForward)
-                }
-                .frame(height: 66)
-                .padding(.bottom)
+                playbackControlsView
+                    .padding(.bottom)
                 
-                VStack {
-                    HStack {
-                        Text(playbackRateText)
-                        Spacer()
-                        AVRoutePickerViewWrapper()
-                        Spacer()
-                        Button {
-                            
-                            
-                        } label: { Text("☾") }
-                        Spacer()
-                        Button {
-                            playback.addBookmark { error in
-                                showToast(message: error == nil ? "Bookmark saved" : (error as? BookmarkError)?.localizedDescription ?? "")
-                            }
-                        } label: {
-                            ToolkitImage(name: "bookmark", renderingMode: .template)
-                                .frame(maxHeight: 20)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .foregroundColor(.white)
-                    .padding()
-                }
-                .background(
-                    Rectangle()
-                        .fill(Color(.darkGray))
-                        .edgesIgnoringSafeArea([.bottom])
-                )
-            }
-            .navigationBarTitle(Text(""), displayMode: .inline)
-            .navigationBarItems(trailing: tocButton)
-            .onChange(of: selectedLocation) { newValue in
-                playback.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
-                    // present error
-                }
+                controlPanelView
             }
             
             bookmarkAddedToastView
         }
+        .navigationBarTitle(Text(""), displayMode: .inline)
+        .navigationBarItems(trailing: tocButton)
+        .onChange(of: selectedLocation) { newValue in
+            playback.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
+                // present error
+            }
+        }
     }
     
     private func showToast(message: String) {
-        toastMessage = message
-        showToast.value = true
+        Task {
+            toastMessage = message
+            showToast.value = true
+        }
     }
     
     // MARK: - Controls
@@ -235,11 +206,83 @@ struct AudiobookPlayerView: View {
         .animation(.easeInOut, value: showToast.value)
     }
     
+    @ViewBuilder
+    private var playbackControlsView: some View {
+        HStack(spacing: 40) {
+            skipButton("skip_back", textLabel: "skip back", action: playback.skipBack)
+            playButton(isPlaying: playback.isPlaying, textLabel: "play button", action: playback.playPause)
+            skipButton("skip_forward", textLabel: "skip forward", action: playback.skipForward)
+        }
+        .frame(height: 66)
+    }
+    
+    @ViewBuilder
+    private var controlPanelView: some View {
+        VStack {
+            HStack {
+                // Playback speed
+                // This makes buttons remain at the same position
+                // when the size of one changes
+                Spacer()
+                    .overlay(
+                        Button {
+                            showPlaybackSpeed.toggle()
+                        } label: {
+                            Text(playbackRateText)
+                        }
+                            .actionSheet(isPresented: $showPlaybackSpeed) {
+                                ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
+                            }
+                    )
+                
+                // AirPlay
+                Spacer()
+                    .overlay(
+                        AVRoutePickerViewWrapper()
+                    )
+                
+                // Sleep Timer
+                Spacer()
+                    .overlay(
+                        Button {
+                            showSleepTimer.toggle()
+                        } label: {
+                            Text(sleepTimerText)
+                        }
+                            .accessibility(label: Text(sleepTimerAccessibilityLabel))
+                            .actionSheet(isPresented: $showSleepTimer) {
+                                ActionSheet(title: Text(DisplayStrings.sleepTimer), buttons: sleepTimerButtons)
+                            }
+                    )
+                Spacer()
+                    .overlay(
+                        // Bookmarks
+                        Button {
+                            playback.addBookmark { error in
+                                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
+                            }
+                        } label: {
+                            ToolkitImage(name: "bookmark", renderingMode: .template)
+                                .frame(height: 20)
+                        }
+                    )
+            }
+            .frame(minHeight: 40)
+            .foregroundColor(.white)
+            .padding()
+        }
+        .background(
+            Rectangle()
+                .fill(Color(.darkGray))
+                .edgesIgnoringSafeArea([.bottom])
+        )
+    }
+    
     // MARK: - Property labels
-
+    
     typealias DisplayStrings = Strings.AudiobookPlayerViewController
     
-    var chapterTitle: String {
+    private var chapterTitle: String {
         guard let currentLocation = playback.currentLocation else {
             return "--"
         }
@@ -261,26 +304,83 @@ struct AudiobookPlayerView: View {
         return nil
     }
     
-    var playbackRateText: String {
-        HumanReadablePlaybackRate(rate: playback.audiobookManager.audiobook.player.playbackRate).value
+    private var playbackRateText: String {
+        if playback.audiobookManager.audiobook.player.playbackRate == .normalTime {
+            return NSLocalizedString("1.0×",
+                                     bundle: Bundle.audiobookToolkit()!,
+                                     value: "1.0×",
+                                     comment: "Default title to explain that button changes the speed of playback.")
+        } else {
+            return HumanReadablePlaybackRate(rate: playback.audiobookManager.audiobook.player.playbackRate).value
+        }
     }
     
-    var playbackRateDescription: String {
+    
+    private var sleepTimerDefaultText = "☾"
+    
+    private var sleepTimerText: String {
+        playback.audiobookManager.sleepTimer.isActive ?
+        HumanReadableTimestamp(timeInterval: playback.audiobookManager.sleepTimer.timeRemaining).timecode :
+        sleepTimerDefaultText
+    }
+    
+    private var sleepTimerAccessibilityLabel: String {
+        playback.audiobookManager.sleepTimer.isActive ?
+        String(format: DisplayStrings.timeToPause, VoiceOverTimestamp(timeInterval: playback.audiobookManager.sleepTimer.timeRemaining)) :
+        DisplayStrings.sleepTimer
+    }
+    
+    private var playbackRateDescription: String {
         HumanReadablePlaybackRate(rate: playback.audiobookManager.audiobook.player.playbackRate).accessibleDescription
     }
     
-    var playheadOffsetText: String {
+    private var playheadOffsetText: String {
         HumanReadableTimestamp(timeInterval: playback.offset).timecode
     }
     
-    var timeLeftText: String {
+    private var timeLeftText: String {
         HumanReadableTimestamp(timeInterval: playback.timeLeft).timecode
     }
     
-    var timeLeftInBookText: String {
+    private var timeLeftInBookText: String {
         let timeLeft = HumanReadableTimestamp(timeInterval: playback.timeLeftInBook).stringDescription
         let formatString = Strings.ScrubberView.timeRemaining
         return String(format: formatString, timeLeft)
+    }
+    
+    private var playbackRateButtons: [ActionSheet.Button] {
+        var buttons = [ActionSheet.Button]()
+        for playbackRate in PlaybackRate.allCases {
+            buttons.append(
+                .default(Text(HumanReadablePlaybackRate(rate: playbackRate).value), action: { playback.setPlaybackRate(playbackRate)
+                })
+            )
+        }
+        buttons.append(.cancel())
+        return buttons
+    }
+    
+    private var sleepTimerButtons: [ActionSheet.Button] {
+        var buttons = [ActionSheet.Button]()
+        for sleepTimer in SleepTimerTriggerAt.allCases {
+            buttons.append(
+                .default(Text(sleepTimerTitle(for: sleepTimer)), action: {
+                    playback.setSleepTimer(sleepTimer)
+                })
+            )
+        }
+        buttons.append(.cancel())
+        return buttons
+    }
+    
+    private func sleepTimerTitle(for sleepTimer: SleepTimerTriggerAt) -> String {
+        switch sleepTimer {
+        case .endOfChapter: return DisplayStrings.endOfChapter
+        case .oneHour: return DisplayStrings.oneHour
+        case .thirtyMinutes: return DisplayStrings.thirtyMinutes
+        case .fifteenMinutes: return DisplayStrings.fifteenMinutes
+        case .never: return DisplayStrings.off
+        }
     }
 }
 
