@@ -15,9 +15,7 @@ struct AudiobookPlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     @State private var uiTabarController: UITabBarController?
-    private let skipTimeInterval: TimeInterval = 15
-    
-    @ObservedObject var playback: AudiobookPlaybackModel
+    @ObservedObject var playbackModel: AudiobookPlaybackeModel
     @State private var selectedLocation: ChapterLocation = .emptyLocation
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
@@ -25,27 +23,27 @@ struct AudiobookPlayerView: View {
     @State private var showSleepTimer = false
     
     init(model: AudiobookPlaybackModel) {
-        self.playback = model
+        self.playbackModel = model
     }
     
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 15) {
                 Group {
-                    downloadProgressView(value: playback.overallDownloadProgress)
+                    downloadProgressView(value: playbackModel.overallDownloadProgress)
                     
                     VStack {
-                        Text(playback.audiobookManager.metadata.title ?? "")
+                        Text(playbackModel.audiobookManager.metadata.title ?? "")
                             .font(.headline)
-                        Text((playback.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
+                        Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                     }
                     
                     VStack(spacing: 5) {
                         Text(timeLeftInBookText)
                             .font(.caption)
                         
-                        PlaybackSliderView(value: playback.playbackProgress) { newValue in
-                            playback.move(to: newValue)
+                        PlaybackSliderView(value: playbackModel.playbackProgress) { newValue in
+                            playbackModel.move(to: newValue)
                         }
                         .padding(.horizontal)
                         
@@ -65,10 +63,10 @@ struct AudiobookPlayerView: View {
                     
                     Spacer()
                     
-                    ToolkitImage(name: "example_cover", uiImage: playback.coverImage)
+                    ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
                         .padding(.horizontal)
                 }
-                .animation(.easeInOut(duration: 0.2), value: playback.isDownloading)
+                .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
                 
                 Spacer()
                 
@@ -83,7 +81,7 @@ struct AudiobookPlayerView: View {
         .navigationBarTitle(Text(""), displayMode: .inline)
         .navigationBarItems(trailing: tocButton)
         .onChange(of: selectedLocation) { newValue in
-            playback.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
+            playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
                 // present error
             }
         }
@@ -101,7 +99,7 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var tocButton: some View {
         NavigationLink {
-            AudiobookNavigationView(model: playback, selectedLocation: $selectedLocation)
+            AudiobookNavigationView(model: playbackModel, selectedLocation: $selectedLocation)
         } label: {
             ToolkitImage(name: "table_of_contents", renderingMode: .template)
                 .accessibility(label: Text("Table of contents"))
@@ -118,7 +116,7 @@ struct AudiobookPlayerView: View {
             ToolkitImage(name: imageName, renderingMode: .template)
                 .overlay(
                     VStack(spacing: -4) {
-                        Text("\(Int(skipTimeInterval))")
+                        Text("\(Int(playbackModel.skipTimeInterval))")
                             .font(.system(size: 20))
                             .offset(x: -1)
                         Text("sec")
@@ -175,7 +173,7 @@ struct AudiobookPlayerView: View {
             .background(Color.black)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: playback.isDownloading ? nil : 0)
+        .frame(height: playbackModel.isDownloading ? nil : 0)
         .clipped()
     }
     
@@ -209,9 +207,9 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var playbackControlsView: some View {
         HStack(spacing: 40) {
-            skipButton("skip_back", textLabel: "skip back", action: playback.skipBack)
-            playButton(isPlaying: playback.isPlaying, textLabel: "play button", action: playback.playPause)
-            skipButton("skip_forward", textLabel: "skip forward", action: playback.skipForward)
+            skipButton("skip_back", textLabel: "skip back", action: playbackModel.skipBack)
+            playButton(isPlaying: playbackModel.isPlaying, textLabel: "play button", action: playbackModel.playPause)
+            skipButton("skip_forward", textLabel: "skip forward", action: playbackModel.skipForward)
         }
         .frame(height: 66)
     }
@@ -258,7 +256,7 @@ struct AudiobookPlayerView: View {
                     .overlay(
                         // Bookmarks
                         Button {
-                            playback.addBookmark { error in
+                            playbackModel.addBookmark { error in
                                 showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
                             }
                         } label: {
@@ -283,7 +281,7 @@ struct AudiobookPlayerView: View {
     typealias DisplayStrings = Strings.AudiobookPlayerViewController
     
     private var chapterTitle: String {
-        guard let currentLocation = playback.currentLocation else {
+        guard let currentLocation = playbackModel.currentLocation else {
             return "--"
         }
         let defaultTitleFormat = DisplayStrings.trackAt
@@ -292,10 +290,10 @@ struct AudiobookPlayerView: View {
     }
     
     private func oneBasedSpineIndex() -> String? {
-        guard let currentLocation = playback.currentLocation else {
+        guard let currentLocation = playbackModel.currentLocation else {
             return nil
         }
-        let spine = playback.audiobookManager.audiobook.spine
+        let spine = playbackModel.audiobookManager.audiobook.spine
         for index in 0..<spine.count {
             if currentLocation.inSameChapter(other: spine[index].chapter) {
                 return String(index + 1)
@@ -305,13 +303,13 @@ struct AudiobookPlayerView: View {
     }
     
     private var playbackRateText: String {
-        if playback.audiobookManager.audiobook.player.playbackRate == .normalTime {
+        if playbackModel.audiobookManager.audiobook.player.playbackRate == .normalTime {
             return NSLocalizedString("1.0×",
                                      bundle: Bundle.audiobookToolkit()!,
                                      value: "1.0×",
                                      comment: "Default title to explain that button changes the speed of playback.")
         } else {
-            return HumanReadablePlaybackRate(rate: playback.audiobookManager.audiobook.player.playbackRate).value
+            return HumanReadablePlaybackRate(rate: playbackModel.audiobookManager.audiobook.player.playbackRate).value
         }
     }
     
@@ -319,31 +317,31 @@ struct AudiobookPlayerView: View {
     private var sleepTimerDefaultText = "☾"
     
     private var sleepTimerText: String {
-        playback.audiobookManager.sleepTimer.isActive ?
-        HumanReadableTimestamp(timeInterval: playback.audiobookManager.sleepTimer.timeRemaining).timecode :
+        playbackModel.audiobookManager.sleepTimer.isActive ?
+        HumanReadableTimestamp(timeInterval: playbackModel.audiobookManager.sleepTimer.timeRemaining).timecode :
         sleepTimerDefaultText
     }
     
     private var sleepTimerAccessibilityLabel: String {
-        playback.audiobookManager.sleepTimer.isActive ?
-        String(format: DisplayStrings.timeToPause, VoiceOverTimestamp(timeInterval: playback.audiobookManager.sleepTimer.timeRemaining)) :
+        playbackModel.audiobookManager.sleepTimer.isActive ?
+        String(format: DisplayStrings.timeToPause, VoiceOverTimestamp(timeInterval: playbackModel.audiobookManager.sleepTimer.timeRemaining)) :
         DisplayStrings.sleepTimer
     }
     
     private var playbackRateDescription: String {
-        HumanReadablePlaybackRate(rate: playback.audiobookManager.audiobook.player.playbackRate).accessibleDescription
+        HumanReadablePlaybackRate(rate: playbackModel.audiobookManager.audiobook.player.playbackRate).accessibleDescription
     }
     
     private var playheadOffsetText: String {
-        HumanReadableTimestamp(timeInterval: playback.offset).timecode
+        HumanReadableTimestamp(timeInterval: playbackModel.offset).timecode
     }
     
     private var timeLeftText: String {
-        HumanReadableTimestamp(timeInterval: playback.timeLeft).timecode
+        HumanReadableTimestamp(timeInterval: playbackModel.timeLeft).timecode
     }
     
     private var timeLeftInBookText: String {
-        let timeLeft = HumanReadableTimestamp(timeInterval: playback.timeLeftInBook).stringDescription
+        let timeLeft = HumanReadableTimestamp(timeInterval: playbackModel.timeLeftInBook).stringDescription
         let formatString = Strings.ScrubberView.timeRemaining
         return String(format: formatString, timeLeft)
     }
@@ -352,7 +350,7 @@ struct AudiobookPlayerView: View {
         var buttons = [ActionSheet.Button]()
         for playbackRate in PlaybackRate.allCases {
             buttons.append(
-                .default(Text(HumanReadablePlaybackRate(rate: playbackRate).value), action: { playback.setPlaybackRate(playbackRate)
+                .default(Text(HumanReadablePlaybackRate(rate: playbackRate).value), action: { playbackModel.setPlaybackRate(playbackRate)
                 })
             )
         }
@@ -365,7 +363,7 @@ struct AudiobookPlayerView: View {
         for sleepTimer in SleepTimerTriggerAt.allCases {
             buttons.append(
                 .default(Text(sleepTimerTitle(for: sleepTimer)), action: {
-                    playback.setSleepTimer(sleepTimer)
+                    playbackModel.setSleepTimer(sleepTimer)
                 })
             )
         }
@@ -401,7 +399,7 @@ extension AudiobookPlayerView {
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
             audiobook: audiobook
         )
-        self.playback = AudiobookPlaybackModel(audiobookManager: audiobookManager)
+        self.playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
     }
 }
 

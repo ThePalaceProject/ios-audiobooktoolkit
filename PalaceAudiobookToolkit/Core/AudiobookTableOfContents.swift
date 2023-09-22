@@ -62,35 +62,6 @@ public final class AudiobookTableOfContents: NSObject {
     }
 }
 
-extension AudiobookTableOfContents: UITableViewDelegate {
-    public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let spineElement = self.networkService.spine[indexPath.row]
-        self.player.playAtLocation(spineElement.chapter, completion: nil)
-        self.delegate?.audiobookTableOfContentsUserSelected(spineItem: spineElement)
-        self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: true)
-    }
-}
-
-
-extension AudiobookTableOfContents: UITableViewDataSource {
-    public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return self.networkService.spine.count
-    }
-    
-    public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let spineElement = self.networkService.spine[indexPath.row]
-        if let cell = tableView.dequeueReusableCell(withIdentifier: AudiobookTableOfContentsTableViewControllerCellIdentifier) as? AudiobookTrackTableViewCell {
-            cell.configureFor(spineElement)
-            return cell
-        } else {
-            let cell = AudiobookTrackTableViewCell(style: .value1, reuseIdentifier:AudiobookTableOfContentsTableViewControllerCellIdentifier)
-            cell.configureFor(spineElement)
-            return cell
-        }
-    }
-}
-
-
 extension AudiobookTableOfContents: PlayerDelegate {
     public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: false)

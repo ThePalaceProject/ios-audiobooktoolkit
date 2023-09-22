@@ -9,8 +9,9 @@
 import SwiftUI
 import Combine
 
+
 class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
-    
+
     @ObservedObject private var reachability = Reachability()
     
     @Published var isWaitingForPlayer = false
@@ -20,6 +21,8 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
             playbackProgress = offset / duration
         }
     }
+    
+    let skipTimeInterval: TimeInterval = 15
     
     var offset: TimeInterval {
         self.currentLocation?.actualOffset ?? 0
@@ -104,12 +107,17 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         audiobookManager.saveLocation()
     }
     
+    func stop() {
+        audiobookManager.saveLocation()
+        audiobookManager.audiobook.player.unload()
+    }
+    
     func skipBack() {
         guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
             return
         }
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(-SkipTimeInterval) { adjustedLocation in
+        audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
         }
@@ -118,7 +126,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     func skipForward() {
         guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else { return }
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(SkipTimeInterval) { adjustedLocation in
+        audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
         }

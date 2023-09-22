@@ -106,6 +106,8 @@ enum BookmarkError: Error {
     public let metadata: AudiobookMetadata
     public let audiobook: Audiobook
 
+    public static let skipTimeInterval: TimeInterval = 15
+    
     public var tableOfContents: AudiobookTableOfContents {
         return AudiobookTableOfContents(
             networkService: self.networkService,
@@ -140,12 +142,12 @@ enum BookmarkError: Error {
         }, skipForwardHandler: { (_) -> MPRemoteCommandHandlerStatus in
             guard !waitingForPlayer || audiobook.player.queuesEvents else { return .success }
             waitingForPlayer = true
-            audiobook.player.skipPlayhead(SkipTimeInterval, completion: nil)
+            audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval, completion: nil)
             return .success
         }, skipBackHandler: { (_) -> MPRemoteCommandHandlerStatus in
             guard !waitingForPlayer || audiobook.player.queuesEvents else { return .success }
             waitingForPlayer = true
-            audiobook.player.skipPlayhead(-SkipTimeInterval, completion: nil)
+            audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval, completion: nil)
             return .success
         }, playbackRateHandler: { (rateEvent) -> MPRemoteCommandHandlerStatus in
             guard let mpRateCommand = rateEvent as? MPChangePlaybackRateCommandEvent else {
