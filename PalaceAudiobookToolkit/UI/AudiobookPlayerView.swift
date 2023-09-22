@@ -15,7 +15,7 @@ struct AudiobookPlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     @State private var uiTabarController: UITabBarController?
-    @ObservedObject var playbackModel: AudiobookPlaybackeModel
+    @ObservedObject var playbackModel: AudiobookPlaybackModel
     @State private var selectedLocation: ChapterLocation = .emptyLocation
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
