@@ -26,6 +26,14 @@ struct AudiobookPlayerView: View {
         self.playbackModel = model
     }
     
+    public func updateImage(_ image: UIImage) {
+        playbackModel.coverImage = image
+    }
+    
+    public func unload() {
+        playbackModel.stop()
+    }
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 15) {

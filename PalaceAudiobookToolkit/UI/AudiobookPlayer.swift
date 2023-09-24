@@ -8,22 +8,41 @@
 
 import SwiftUI
 
-@objcMembers
-public class AudiobookPlayer: NSObject {
+public class AudiobookPlayer: UIViewController {
     
-    private var model: AudiobookPlaybackModel
-    public let viewController: UIViewController
+    @available(*, unavailable, message: "Use init?(audiobookManager:) instead")
+    public required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+    }
     
     @objc
     public init(audiobookManager: AudiobookManager) {
-        self.model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
-        self.viewController = UIHostingController(rootView: AudiobookPlayerView(model: model))
-        self.viewController.hidesBottomBarWhenPushed = true
-        super.init()
+        let model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
+        super.init(nibName: nil, bundle: nil)
+        let playerViewController =  UIHostingController(rootView: AudiobookPlayerView(model: model))
+        addChild(playerViewController)
+        view.addSubview(playerViewController.view)
+        playerViewController.view.frame = self.view.bounds
+        NSLayoutConstraint.activate([
+            playerViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            playerViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            playerViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            playerViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+        playerViewController.didMove(toParent: self)
+        hidesBottomBarWhenPushed = true
+    }
+
+    private var playerViewController: UIHostingController<AudiobookPlayerView>? {
+        children.first as? UIHostingController<AudiobookPlayerView>
+    }
+    
+    public override func viewWillDisappear(_ animated: Bool) {
+        playerViewController?.rootView.unload()
     }
     
     @objc
     public func updateImage(_ image: UIImage) {
-        self.model.coverImage = image
+        playerViewController?.rootView.updateImage(image)
     }
 }
