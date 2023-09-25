@@ -36,7 +36,7 @@ struct AudiobookPlayerView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 15) {
+            VStack(spacing: 10) {
                 Group {
                     downloadProgressView(value: playbackModel.overallDownloadProgress)
                     
