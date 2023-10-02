@@ -36,8 +36,17 @@ public class AudiobookPlayer: UIViewController {
     private var playerViewController: UIHostingController<AudiobookPlayerView>? {
         children.first as? UIHostingController<AudiobookPlayerView>
     }
-    
+
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // UIKit navigation bar and SwiftUI top toolbar don't play together well
+        // displaying two top toolbars when both are visible
+        navigationController?.setNavigationBarHidden(true, animated: false)
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: false)
         playerViewController?.rootView.unload()
     }
     
