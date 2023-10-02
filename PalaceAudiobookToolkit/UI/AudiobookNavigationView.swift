@@ -60,6 +60,7 @@ struct AudiobookNavigationView: View {
             }
         }
         .foregroundColor(Color(.label))
+        .padding(.leading, -6)
     }
     
     @ViewBuilder
