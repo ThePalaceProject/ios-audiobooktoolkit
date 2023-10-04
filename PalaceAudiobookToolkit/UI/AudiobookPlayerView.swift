@@ -12,6 +12,7 @@ import AVKit
 
 struct AudiobookPlayerView: View {
     
+    @Environment(\.presentationMode) private var presentationMode
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     @State private var uiTabarController: UITabBarController?
@@ -35,59 +36,63 @@ struct AudiobookPlayerView: View {
     }
     
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 10) {
-                Group {
-                    downloadProgressView(value: playbackModel.overallDownloadProgress)
-                    
-                    VStack {
-                        Text(playbackModel.audiobookManager.metadata.title ?? "")
-                            .font(.headline)
-                        Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
-                    }
-                    
-                    VStack(spacing: 5) {
-                        Text(timeLeftInBookText)
-                            .font(.caption)
+        NavigationView {
+            ZStack(alignment: .bottom) {
+                VStack(spacing: 10) {
+                    Group {
+                        downloadProgressView(value: playbackModel.overallDownloadProgress)
                         
-                        PlaybackSliderView(value: playbackModel.playbackProgress) { newValue in
-                            playbackModel.move(to: newValue)
-                        }
-                        .padding(.horizontal)
-                        
-                        ZStack {
-                            HStack {
-                                Text("\(playheadOffsetText)")
-                                    .font(.caption)
-                                Spacer()
-                                Text("\(timeLeftText)")
-                                    .font(.caption)
-                            }
-                            Text(chapterTitle)
+                        VStack {
+                            Text(playbackModel.audiobookManager.metadata.title ?? "")
                                 .font(.headline)
+                            Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                         }
-                        .padding(.horizontal)
+                        
+                        VStack(spacing: 5) {
+                            Text(timeLeftInBookText)
+                                .font(.caption)
+                            
+                            PlaybackSliderView(value: playbackModel.playbackProgress) { newValue in
+                                playbackModel.move(to: newValue)
+                            }
+                            .padding(.horizontal)
+                            
+                            ZStack {
+                                HStack {
+                                    Text("\(playheadOffsetText)")
+                                        .font(.caption)
+                                    Spacer()
+                                    Text("\(timeLeftText)")
+                                        .font(.caption)
+                                }
+                                Text(chapterTitle)
+                                    .font(.headline)
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        Spacer()
+                        
+                        ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
+                            .padding(.horizontal)
                     }
+                    .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
                     
                     Spacer()
                     
-                    ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
-                        .padding(.horizontal)
+                    playbackControlsView
+                        .padding(.bottom)
+                    
+                    controlPanelView
+                    
                 }
-                .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
                 
-                Spacer()
-                
-                playbackControlsView
-                    .padding(.bottom)
-                
-                controlPanelView
+                bookmarkAddedToastView
             }
-            
-            bookmarkAddedToastView
+            .navigationBarTitle(Text(""), displayMode: .inline)
+            .navigationBarItems(trailing: tocButton)
+            .navigationBarItems(leading: backButton)
         }
-        .navigationBarTitle(Text(""), displayMode: .inline)
-        .navigationBarItems(trailing: tocButton)
         .onChange(of: selectedLocation) { newValue in
             playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
                 // present error
@@ -116,6 +121,20 @@ struct AudiobookPlayerView: View {
         }
     }
     
+    @ViewBuilder
+    private var backButton: some View {
+        Button {
+            presentationMode.wrappedValue.dismiss()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                Text("My Books")
+            }
+        }
+        .foregroundColor(Color(.label))
+        .padding(.leading, -6)
+    }
+
     @ViewBuilder
     private func skipButton(_ imageName: String, textLabel: String, action: @escaping () -> Void) -> some View {
         // Button size: 66 compact, 96 regular
