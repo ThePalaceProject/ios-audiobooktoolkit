@@ -433,9 +433,7 @@ extension AudiobookPlayerView {
 
 struct AudiobookPlayerView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            AudiobookPlayerView()
-        }
+        AudiobookPlayerView()
     }
 }
 
