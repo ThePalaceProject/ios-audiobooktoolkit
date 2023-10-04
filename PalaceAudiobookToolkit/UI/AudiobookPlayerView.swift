@@ -173,6 +173,7 @@ struct AudiobookPlayerView: View {
             }
         }
         .foregroundColor(.primary)
+        .accessibility(label: Text(isPlaying ? "Pause" : "Play"))
     }
     
     @ViewBuilder
