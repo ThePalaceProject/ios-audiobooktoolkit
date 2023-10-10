@@ -93,6 +93,7 @@ struct AudiobookPlayerView: View {
             .navigationBarItems(trailing: tocButton)
             .navigationBarItems(leading: backButton)
         }
+        .navigationViewStyle(.stack)
         .onChange(of: selectedLocation) { newValue in
             playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
                 // present error
