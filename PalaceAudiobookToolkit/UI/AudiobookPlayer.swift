@@ -23,6 +23,7 @@ public class AudiobookPlayer: UIViewController {
         addChild(playerViewController)
         view.addSubview(playerViewController.view)
         playerViewController.view.frame = self.view.bounds
+        playerViewController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             playerViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
             playerViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
