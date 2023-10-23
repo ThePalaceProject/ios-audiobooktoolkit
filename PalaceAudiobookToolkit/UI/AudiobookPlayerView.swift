@@ -57,16 +57,17 @@ struct AudiobookPlayerView: View {
                             }
                             .padding(.horizontal)
                             
-                            ZStack {
-                                HStack {
-                                    Text("\(playheadOffsetText)")
-                                        .font(.caption)
-                                    Spacer()
-                                    Text("\(timeLeftText)")
-                                        .font(.caption)
-                                }
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("\(playheadOffsetText)")
+                                    .font(.caption)
+                                Spacer()
                                 Text(chapterTitle)
                                     .font(.headline)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                Spacer()
+                                Text("\(timeLeftText)")
+                                    .font(.caption)
                             }
                             .padding(.horizontal)
                         }
