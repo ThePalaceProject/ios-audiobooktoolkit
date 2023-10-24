@@ -195,7 +195,7 @@ struct AudiobookPlayerView: View {
                     }
                     .frame(maxHeight: 6)
                 }
-                Text("\(Int(value))%")
+                Text("\(Int(value * 100))%")
             }
             .font(.caption)
             .padding(8)
