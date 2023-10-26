@@ -198,6 +198,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     
     func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didReceive error: NSError?, for spineElement: SpineElement) {
         spineErrors[spineElement.key] = error
+        isDownloading = false
     }
     
     func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateProgressFor spineElement: SpineElement) {
