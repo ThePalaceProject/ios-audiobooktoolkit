@@ -106,7 +106,7 @@ enum BookmarkError: Error {
     public let metadata: AudiobookMetadata
     public let audiobook: Audiobook
 
-    public static let skipTimeInterval: TimeInterval = 15
+    public static let skipTimeInterval: TimeInterval = 30
     
     public var tableOfContents: AudiobookTableOfContents {
         return AudiobookTableOfContents(
@@ -334,8 +334,8 @@ private class MediaControlHandler {
 
     func enableMediaControlCommands() {
         if !self.commandsHaveBeenEnabled {
-            self.commandCenter.skipForwardCommand.preferredIntervals = [15]
-            self.commandCenter.skipBackwardCommand.preferredIntervals = [15]
+            self.commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: DefaultAudiobookManager.skipTimeInterval)]
+            self.commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: DefaultAudiobookManager.skipTimeInterval)]
 
             var rates = [NSNumber]()
             for playbackRate in PlaybackRate.allCases {

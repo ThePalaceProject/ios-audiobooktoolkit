@@ -22,7 +22,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         }
     }
     
-    let skipTimeInterval: TimeInterval = 15
+    let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
         self.currentLocation?.actualOffset ?? 0
