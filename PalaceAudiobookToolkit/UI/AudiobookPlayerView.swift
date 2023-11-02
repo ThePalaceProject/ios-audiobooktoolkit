@@ -28,7 +28,7 @@ struct AudiobookPlayerView: View {
     }
     
     public func updateImage(_ image: UIImage) {
-        playbackModel.coverImage = image
+        playbackModel.updateCoverImage(image)
     }
     
     public func unload() {

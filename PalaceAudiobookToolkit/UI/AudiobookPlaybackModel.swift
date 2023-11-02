@@ -8,7 +8,7 @@
 
 import SwiftUI
 import Combine
-
+import MediaPlayer
 
 class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
 
@@ -213,4 +213,33 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         spineErrors.removeValue(forKey: spineElement.key)
     }
     
+    // MARK: - Media Player
+    
+    func updateCoverImage(_ image: UIImage?) {
+        coverImage = image
+        updateLockScreenCoverArtwork(image: image)
+    }
+    
+    private func updateLockScreenCoverArtwork(image: UIImage?) {
+        if let image = image {
+            let itemArtwork = MPMediaItemArtwork.init(boundsSize: image.size) { requestedSize -> UIImage in
+                // Scale aspect fit to size requested by system
+                let rect = AVMakeRect(aspectRatio: image.size, insideRect: CGRect(origin: .zero, size: requestedSize))
+                UIGraphicsBeginImageContextWithOptions(rect.size, true, 0.0)
+                image.draw(in: CGRect(origin: .zero, size: rect.size))
+                let scaledImage = UIGraphicsGetImageFromCurrentImageContext()
+                UIGraphicsEndImageContext()
+                if let scaledImage = scaledImage {
+                    return scaledImage
+                } else {
+                    return image
+                }
+            }
+            
+            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+            info[MPMediaItemPropertyArtwork] = itemArtwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        }
+    }
+
 }
