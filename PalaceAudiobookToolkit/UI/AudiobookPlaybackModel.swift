@@ -86,6 +86,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
                 }
             }
             .store(in: &subscriptions)
+        self.audiobookManager.fetchBookmarks { _ in }
     }
     
     deinit {

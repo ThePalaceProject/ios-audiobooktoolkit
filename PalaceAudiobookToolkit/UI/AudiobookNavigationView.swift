@@ -34,7 +34,6 @@ struct AudiobookNavigationView: View {
     init(model: AudiobookPlaybackModel, selectedLocation: Binding<ChapterLocation>) {
         self.playback = model
         self._selectedLocation = selectedLocation
-        self.playback.audiobookManager.fetchBookmarks { _ in }
     }
     
     var body: some View {
