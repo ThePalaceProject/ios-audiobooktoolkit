@@ -74,6 +74,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
+        self.currentLocation = audiobookManager.audiobook.spine.first?.chapter
         self.audiobookManager.audiobook.player.registerDelegate(self)
         self.audiobookManager.networkService.registerDelegate(self)
         self.audiobookManager.networkService.fetch()
