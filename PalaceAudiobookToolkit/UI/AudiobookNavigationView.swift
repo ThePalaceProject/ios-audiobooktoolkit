@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import PalaceUIKit
 
 struct AudiobookNavigationView: View {
     typealias DisplayStrings = Strings.AudiobookTableOfContentsTableViewController
@@ -149,7 +150,7 @@ struct AudiobookNavigationView: View {
                     .lineLimit(1)
                 Text(DateFormatter.convertISO8601String(bookmark.lastSavedTimeStamp) ?? "")
                     .lineLimit(1)
-                    .font(.subheadline)
+                    .palaceFont(.subheadline)
                     .foregroundColor(.secondary)
             }
             Spacer()

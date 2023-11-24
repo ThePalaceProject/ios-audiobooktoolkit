@@ -9,6 +9,7 @@
 import SwiftUI
 import MediaPlayer
 import AVKit
+import PalaceUIKit
 
 struct AudiobookPlayerView: View {
     
@@ -44,13 +45,14 @@ struct AudiobookPlayerView: View {
                         
                         VStack {
                             Text(playbackModel.audiobookManager.metadata.title ?? "")
-                                .font(.headline)
+                                .palaceFont(.headline)
+//                                .font(.headline)
                             Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                         }
                         
                         VStack(spacing: 5) {
                             Text(timeLeftInBookText)
-                                .font(.caption)
+                                .palaceFont(.caption)
                             
                             PlaybackSliderView(value: playbackModel.playbackProgress) { newValue in
                                 playbackModel.move(to: newValue)
@@ -59,15 +61,15 @@ struct AudiobookPlayerView: View {
                             
                             HStack(alignment: .firstTextBaseline) {
                                 Text("\(playheadOffsetText)")
-                                    .font(.caption)
+                                    .palaceFont(.caption)
                                 Spacer()
                                 Text(chapterTitle)
-                                    .font(.headline)
+                                    .palaceFont(.headline)
                                     .multilineTextAlignment(.center)
                                     .lineLimit(2)
                                 Spacer()
                                 Text("\(timeLeftText)")
-                                    .font(.caption)
+                                    .palaceFont(.caption)
                             }
                             .padding(.horizontal)
                         }
@@ -94,6 +96,7 @@ struct AudiobookPlayerView: View {
             .navigationBarItems(trailing: tocButton)
             .navigationBarItems(leading: backButton)
         }
+        .palaceFont(.body)
         .navigationViewStyle(.stack)
         .onChange(of: selectedLocation) { newValue in
             playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
@@ -146,10 +149,10 @@ struct AudiobookPlayerView: View {
                 .overlay(
                     VStack(spacing: -4) {
                         Text("\(Int(playbackModel.skipTimeInterval))")
-                            .font(.system(size: 20))
+                            .palaceFont(size: 20)
                             .offset(x: -1)
                         Text("sec")
-                            .font(.caption)
+                            .palaceFont(.caption)
                     }
                         .offset(y: 4)
                 )
@@ -197,7 +200,7 @@ struct AudiobookPlayerView: View {
                 }
                 Text("\(Int(value * 100))%")
             }
-            .font(.caption)
+            .palaceFont(.caption)
             .padding(8)
             .foregroundColor(.white)
             .background(Color.black)
@@ -219,7 +222,7 @@ struct AudiobookPlayerView: View {
                 Image(systemName: "xmark.circle")
             }
         }
-        .font(.subheadline)
+        .palaceFont(.subheadline)
         .foregroundColor(.white)
         .padding(.horizontal)
         .padding(.vertical, 10)
