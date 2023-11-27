@@ -86,9 +86,9 @@
 		E71168BE2AB4C4DA00629DC7 /* BoolWithDelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168BD2AB4C4DA00629DC7 /* BoolWithDelay.swift */; };
 		E715993C2AA9185A000800A8 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
 		E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E72707E82A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift */; };
+		E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E7E96BBF2B0E82740036B23A /* PalaceUIKit.framework */; };
 		E79266972AB34315009901B7 /* AudiobookNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79266962AB34315009901B7 /* AudiobookNavigationView.swift */; };
 		E7D1DCDA2ABE273500ADED8D /* AudiobookPlaybackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */; };
-		E7E96BCD2B1002E90036B23A /* PalaceUIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E7E96BBF2B0E82740036B23A /* PalaceUIKit.framework */; };
 		E7E96BD02B10032E0036B23A /* OpenSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7E96BCC2B0FCD450036B23A /* OpenSans-Bold.ttf */; };
 		E7E96BD12B10032E0036B23A /* OpenSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7E96BCA2B0FCD450036B23A /* OpenSans-Regular.ttf */; };
 		E7E96BD22B10032E0036B23A /* OpenSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7E96BCB2B0FCD450036B23A /* OpenSans-SemiBold.ttf */; };
@@ -211,7 +211,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
-				E7E96BCD2B1002E90036B23A /* PalaceUIKit.framework in Frameworks */,
+				E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
 				E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */,
 			);
@@ -252,9 +252,6 @@
 		7B54418E200EA7C20047B6C6 /* PalaceAudiobookToolkit */ = {
 			isa = PBXGroup;
 			children = (
-				E7E96BCC2B0FCD450036B23A /* OpenSans-Bold.ttf */,
-				E7E96BCA2B0FCD450036B23A /* OpenSans-Regular.ttf */,
-				E7E96BCB2B0FCD450036B23A /* OpenSans-SemiBold.ttf */,
 				7B987FDA201B88FF00A94B12 /* Core */,
 				8C6CD8AB240DB39300E2DFB0 /* DRM */,
 				7BD759C120168FF5004CE65F /* Network */,
@@ -264,6 +261,7 @@
 				8C3CDB052422D8460020FC0B /* Extensions */,
 				E7F127B82A992194001ED616 /* UI */,
 				8C882C932409B0320000CA59 /* Utils */,
+				E785BA2D2B152D5700A12EFA /* Supporting Files */,
 				7B544190200EA7C20047B6C6 /* Info.plist */,
 				7B5441F3200FB3EE0047B6C6 /* Media.xcassets */,
 			);
@@ -429,6 +427,16 @@
 				E72707E82A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift */,
 			);
 			path = Tracker;
+			sourceTree = "<group>";
+		};
+		E785BA2D2B152D5700A12EFA /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				E7E96BCC2B0FCD450036B23A /* OpenSans-Bold.ttf */,
+				E7E96BCA2B0FCD450036B23A /* OpenSans-Regular.ttf */,
+				E7E96BCB2B0FCD450036B23A /* OpenSans-SemiBold.ttf */,
+			);
+			path = "Supporting Files";
 			sourceTree = "<group>";
 		};
 		E7F127B82A992194001ED616 /* UI */ = {

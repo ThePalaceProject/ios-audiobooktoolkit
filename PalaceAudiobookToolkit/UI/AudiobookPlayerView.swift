@@ -46,8 +46,8 @@ struct AudiobookPlayerView: View {
                         VStack {
                             Text(playbackModel.audiobookManager.metadata.title ?? "")
                                 .palaceFont(.headline)
-//                                .font(.headline)
                             Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
+                                .palaceFont(.body)
                         }
                         
                         VStack(spacing: 5) {
@@ -260,6 +260,7 @@ struct AudiobookPlayerView: View {
                             showPlaybackSpeed.toggle()
                         } label: {
                             Text(playbackRateText)
+                                .palaceFont(.body)
                         }
                             .actionSheet(isPresented: $showPlaybackSpeed) {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
@@ -279,6 +280,7 @@ struct AudiobookPlayerView: View {
                             showSleepTimer.toggle()
                         } label: {
                             Text(sleepTimerText)
+                                .palaceFont(.body)
                         }
                             .accessibility(label: Text(sleepTimerAccessibilityLabel))
                             .actionSheet(isPresented: $showSleepTimer) {
