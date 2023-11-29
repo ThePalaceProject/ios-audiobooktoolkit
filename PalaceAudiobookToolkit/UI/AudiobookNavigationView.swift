@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import PalaceUIKit
 
 struct AudiobookNavigationView: View {
     typealias DisplayStrings = Strings.AudiobookTableOfContentsTableViewController
@@ -56,6 +57,7 @@ struct AudiobookNavigationView: View {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
                 Text("Back")
+                    .palaceFont(.body)
             }
         }
         .foregroundColor(Color(.label))
@@ -97,16 +99,20 @@ struct AudiobookNavigationView: View {
         let progress = element.downloadTask.downloadProgress
         HStack {
             Text(element.chapter.title ?? "")
+                .palaceFont(.body)
             Spacer()
             if playback.spineErrors[element.key] != nil {
                 Text("Download Error")
+                    .palaceFont(.body)
             } else if progress > 0 && progress < 1 {
                 Text(
                     String(format: Strings.Generic.downloadingFormatted, HumanReadablePercentage(percentage: progress).value)
                 )
+                .palaceFont(.body)
             } else {
                 Text(HumanReadableTimestamp(timeInterval: element.chapter.duration).timecode)
                     .accessibility(label: Text(HumanReadableTimestamp(timeInterval: element.chapter.duration).accessibleDescription))
+                    .palaceFont(.body)
             }
         }
         .contentShape(Rectangle())
@@ -119,6 +125,7 @@ struct AudiobookNavigationView: View {
             VStack {
                 Spacer()
                 Text("There are no bookmarks for this book.")
+                    .palaceFont(.body)
                 Spacer()
             }
         } else {
@@ -147,15 +154,17 @@ struct AudiobookNavigationView: View {
             VStack(alignment: .leading) {
                 Text(bookmark.title ?? "")
                     .lineLimit(1)
+                    .palaceFont(.body)
                 Text(DateFormatter.convertISO8601String(bookmark.lastSavedTimeStamp) ?? "")
                     .lineLimit(1)
-                    .font(.subheadline)
+                    .palaceFont(.subheadline, weight: .regular)
                     .foregroundColor(.secondary)
             }
             Spacer()
             Text(
                 DateFormatter.bookmarkTimeFormatter.string(from: Date(timeIntervalSinceReferenceDate: bookmark.actualOffset))
             )
+            .palaceFont(.body)
             .foregroundColor(.secondary)
         }
         .contentShape(Rectangle())
