@@ -124,7 +124,7 @@ struct AudiobookNavigationView: View {
         if playback.audiobookManager.audiobookBookmarks.isEmpty {
             VStack {
                 Spacer()
-                Text("There are no bookmarks for this book.")
+                Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
                     .palaceFont(.body)
                 Spacer()
             }
