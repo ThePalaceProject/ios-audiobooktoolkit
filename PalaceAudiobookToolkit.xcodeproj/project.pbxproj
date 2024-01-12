@@ -63,6 +63,7 @@
 		A97CE13121ED388D00B64305 /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */; };
 		A9DC9CFD220547F800D122F2 /* ErrorDescriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
+		E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
@@ -171,6 +172,7 @@
 		A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorDescriptions.swift; sourceTree = "<group>"; };
 		E503256C27FE8EFA00317F68 /* Array+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Extensions.swift"; sourceTree = "<group>"; };
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
+		E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Extensions.swift"; sourceTree = "<group>"; };
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
 		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
@@ -399,6 +401,7 @@
 				178707C724DA505700649567 /* RSAUtils.swift */,
 				E59FCEC829425F81004FD730 /* Strings.swift */,
 				E71168BD2AB4C4DA00629DC7 /* BoolWithDelay.swift */,
+				E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -650,6 +653,7 @@
 				21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */,
 				E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */,
 				17576CAC248E89DE00E18B4C /* OverdriveDownloadTask.swift in Sources */,
+				E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */,
 				7BBF4DFC20506FF600700731 /* SleepTimer.swift in Sources */,
 				8C3F7112242BDDAF00E5C810 /* URLRequest+Curl.swift in Sources */,
 				7B7B370820211CE100030A1E /* OpenAccessDownloadTask.swift in Sources */,
