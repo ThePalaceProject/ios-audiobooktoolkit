@@ -99,7 +99,7 @@ final class OverdriveDownloadTask: DownloadTask {
                                 delegate: delegate,
                                 delegateQueue: nil)
         
-        let request = URLRequest(url: remoteURL,
+        var request = URLRequest(url: remoteURL,
                                  cachePolicy: .useProtocolCachePolicy,
                                  timeoutInterval: OverdriveDownloadTask.DownloadTaskTimeoutValue)
         
@@ -107,7 +107,7 @@ final class OverdriveDownloadTask: DownloadTask {
             return
         }
         
-        let task = urlSession.downloadTask(with: request)
+        let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
         task.resume()
     }
 

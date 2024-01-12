@@ -181,7 +181,7 @@ final class OpenAccessDownloadTask: DownloadTask {
             return
         }
         
-        let task = urlSession.downloadTask(with: request)
+        let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
         task.resume()
     }
 
