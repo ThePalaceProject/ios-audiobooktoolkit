@@ -30,6 +30,7 @@ struct AudiobookNavigationView: View {
     @Environment(\.presentationMode) var presentationMode
     @Binding var selectedLocation: ChapterLocation
     @State private var selectedSection: NavigationSection = .toc
+    @State private var bookmarks: [ChapterLocation] = []
     
     @ObservedObject private var playback: AudiobookPlaybackModel
     init(model: AudiobookPlaybackModel, selectedLocation: Binding<ChapterLocation>) {
@@ -121,30 +122,49 @@ struct AudiobookNavigationView: View {
     
     @ViewBuilder
     private var bookmarksList: some View {
-        if playback.audiobookManager.audiobookBookmarks.isEmpty {
-            VStack {
-                Spacer()
-                Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
-                    .palaceFont(.body)
-                Spacer()
-            }
-        } else {
-            List {
-                ForEach(playback.audiobookManager.audiobookBookmarks, id: \.annotationId) { bookmark in
-                    bookmarkCell(for: bookmark)
-                        .onTapGesture {
-                            selectedLocation = bookmark
-                            presentationMode.wrappedValue.dismiss()
-                        }
+        Group {
+            if self.bookmarks.isEmpty {
+                ScrollView {
+                    VStack {
+                        Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
+                            .palaceFont(.body)
+                            .padding(.top, 200)
+                    }
                 }
-                .onDelete { indexSet in
-                    for index in indexSet.reversed() {
-                        let bookmark = playback.audiobookManager.audiobookBookmarks[index]
-                        playback.audiobookManager.deleteBookmark(at: bookmark) { _ in }
+                .refreshable {
+                    playback.audiobookManager.fetchBookmarks { bookmarks in
+                        self.bookmarks = bookmarks
+                    }
+                }
+            } else {
+                List {
+                    ForEach(self.bookmarks, id: \.annotationId) { bookmark in
+                        bookmarkCell(for: bookmark)
+                            .onTapGesture {
+                                selectedLocation = bookmark
+                                presentationMode.wrappedValue.dismiss()
+                            }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet.reversed() {
+                            if let bookmark = playback.audiobookManager.audiobookBookmarks[safe: index] {
+                                playback.audiobookManager.deleteBookmark(at: bookmark) { _ in }
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    playback.audiobookManager.fetchBookmarks { bookmarks in
+                        self.bookmarks = bookmarks
                     }
                 }
             }
-            .listStyle(.plain)
+        }
+        .onAppear {
+            playback.audiobookManager.fetchBookmarks { bookmarks in
+                self.bookmarks = bookmarks
+            }
         }
     }
     
@@ -189,11 +209,9 @@ extension AudiobookNavigationView {
             audiobook: audiobook
         )
         self.playback = AudiobookPlaybackModel(audiobookManager: audiobookManager)
-        if let manager = audiobookManager as? DefaultAudiobookManager {
-            let bookmark = ChapterLocation(number: 0, part: 1, duration: 135, startOffset: nil, playheadOffset: 185, title: "Chapter One", audiobookID: "")
-            bookmark.lastSavedTimeStamp = "2023-01-01T12:34:56Z"
-            manager.audiobookBookmarks.append(bookmark)
-        }
+        let bookmark = ChapterLocation(number: 0, part: 1, duration: 135, startOffset: nil, playheadOffset: 185, title: "Chapter One", audiobookID: "")
+        bookmark.lastSavedTimeStamp = "2023-01-01T12:34:56Z"
+        audiobookManager.audiobookBookmarks.append(bookmark)
         self._selectedLocation = .constant(.emptyLocation)
     }
 }
