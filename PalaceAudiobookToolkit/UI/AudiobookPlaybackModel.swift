@@ -152,22 +152,16 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
             return
         }
         
-        // Calculate the new offset based on the value and chapter offset.
         let newOffset = currentLocation.duration * value
-        
-        // Guard against moving before the start of the chapter.
         let adjustedOffset = (newOffset + (currentLocation.chapterOffset ?? 0.0))
         
-        // Update the current location with the new offset.
         guard let requestedOffset = currentLocation.update(playheadOffset: adjustedOffset) else {
             ATLog(.error, "Failed to update chapter location.")
             return
         }
         
-        // Calculate the offset movement. Can be negative if moving backwards.
         let offsetMovement = requestedOffset.playheadOffset - currentLocation.playheadOffset
         
-        // Check that we are not trying to move beyond the chapter's start or end.
         if offsetMovement + currentLocation.playheadOffset < currentLocation.chapterOffset ?? 0.0 || offsetMovement + currentLocation.playheadOffset > (currentLocation.chapterOffset ?? 0.0) + currentLocation.duration {
             ATLog(.error, "Attempt to move beyond chapter bounds.")
             return
@@ -175,7 +169,6 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         
         self.isWaitingForPlayer = true
         
-        // Perform the skip and handle the result.
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.isWaitingForPlayer = false
