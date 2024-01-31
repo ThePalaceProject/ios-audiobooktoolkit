@@ -188,15 +188,59 @@ class OpenAccessPlayer: NSObject, Player {
         self.notifyDelegatesOfUnloadRequest()
     }
     
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) -> () {
-        guard let destination = currentChapterLocation?.update(playheadOffset: (currentChapterLocation?.playheadOffset ?? 0) + timeInterval)  else {
-            ATLog(.error, "New chapter location could not be created from skip.")
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) {
+        guard let currentLocation = currentChapterLocation else {
+            ATLog(.error, "Current chapter location is not available.")
             return
         }
-
-        self.playAtLocation(destination)
-        completion?(destination)
+        
+        if timeInterval >= 0 {
+            skipForward(timeInterval, from: currentLocation, completion: completion)
+        } else {
+            skipBackward(timeInterval, from: currentLocation, completion: completion)
+        }
     }
+    
+    private func skipForward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
+        let remainingTime = currentLocation.timeRemaining
+        if timeInterval < remainingTime {
+            updatePlayhead(for: currentLocation, withOffset: timeInterval, completion: completion)
+        } else {
+            guard let nextChapter = cursor.next()?.currentElement.chapter,
+                  let newLocation = nextChapter.update(playheadOffset: timeInterval - remainingTime + (nextChapter.chapterOffset ?? 0)) else {
+                ATLog(.error, "Next chapter location could not be determined.")
+                return
+            }
+            playAtLocation(newLocation)
+            completion?(newLocation)
+        }
+    }
+    
+    private func skipBackward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
+        if currentLocation.actualOffset + timeInterval > 0 {
+            updatePlayhead(for: currentLocation, withOffset: timeInterval, completion: completion)
+        } else {
+            let timeIntoPreviousChapter = timeInterval + currentLocation.actualOffset
+            guard let previousChapter = cursor.prev()?.currentElement.chapter,
+                  let newLocation = previousChapter.update(playheadOffset: (previousChapter.chapterOffset ?? 0.0) + previousChapter.duration + timeIntoPreviousChapter) else {
+                ATLog(.error, "Previous chapter location could not be determined.")
+                return
+            }
+            playAtLocation(newLocation)
+            completion?(newLocation)
+        }
+    }
+    
+    private func updatePlayhead(for location: ChapterLocation, withOffset offset: TimeInterval, completion: ((ChapterLocation)->())?) {
+        guard let newLocation = location.update(playheadOffset: location.playheadOffset + offset) else {
+            ATLog(.error, "New chapter location could not be created.")
+            return
+        }
+        playAtLocation(newLocation)
+        completion?(newLocation)
+    }
+
+
 
     /// New Location's playhead offset could be oustide the bounds of audio, so
     /// move and get a reference to the actual new chapter location. Only update
@@ -401,7 +445,7 @@ class OpenAccessPlayer: NSObject, Player {
             for item in items {
                 if self.avQueuePlayer.canInsert(item, after: nil) {
                     NotificationCenter.default.addObserver(self,
-                                                           selector:#selector(currentPlayerItemEnded(item:)),
+                                                           selector:#selector(advanceToNextPlayerItem),
                                                            name: NSNotification.Name.AVPlayerItemDidPlayToEndTime,
                                                            object: item)
                     self.avQueuePlayer.insert(item, after: nil)
@@ -479,6 +523,7 @@ class OpenAccessPlayer: NSObject, Player {
         guard let nextCursor = self.cursor.next() else {
             ATLog(.debug, "End of book reached.")
             self.pause()
+            self.notifyDelegatesOfPlaybackEndFor(chapter: currentCursor.currentElement.chapter)
             return
         }
 

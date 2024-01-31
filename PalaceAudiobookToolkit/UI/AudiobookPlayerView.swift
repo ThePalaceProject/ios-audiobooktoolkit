@@ -54,7 +54,7 @@ struct AudiobookPlayerView: View {
                             Text(timeLeftInBookText)
                                 .palaceFont(.caption)
                             
-                            PlaybackSliderView(value: playbackModel.playbackProgress) { newValue in
+                            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
                                 playbackModel.move(to: newValue)
                             }
                             .padding(.horizontal)
@@ -470,7 +470,8 @@ struct AVRoutePickerViewWrapper: View {
 /// Playback slider
 ///
 struct PlaybackSliderView: View {
-    var value: Double
+    @Binding var value: Double
+    @State private var tempValue: Double?
     var onChange: (_ value: Double) -> Void
     
     var body: some View {
@@ -487,12 +488,19 @@ struct PlaybackSliderView: View {
                 Capsule()
                     .fill(Color.red)
                     .frame(width: thumbWidth, height: thumbHeight)
-                    .offset(x: offsetX(in: geometry.size, for: value))
+                    .offset(x: offsetX(in: geometry.size, for: tempValue ?? value))
                     .gesture(
                         DragGesture()
                             .onChanged { gesture in
-                                let value = max(0, min(1, Double(gesture.location.x / (geometry.size.width - thumbWidth) )))
-                                onChange(value)
+                                let newValue = max(0, min(1, Double(gesture.location.x / geometry.size.width)))
+                                tempValue = newValue
+                            }
+                            .onEnded { _ in
+                                if let finalValue = tempValue {
+                                    value = finalValue
+                                    onChange(finalValue)
+                                    tempValue = nil
+                                }
                             }
                     )
             }

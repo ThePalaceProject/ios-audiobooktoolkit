@@ -13,13 +13,25 @@ import MediaPlayer
 class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
 
     @ObservedObject private var reachability = Reachability()
-    
+    private var debounceTimer: Timer?
+
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
-    @Published var currentLocation: ChapterLocation? {
+    var currentLocation: ChapterLocation? {
         didSet {
-            playbackProgress = offset / duration
+            debounceProgressUpdate()
         }
+    }
+    
+    private func debounceProgressUpdate() {
+        debounceTimer?.invalidate()
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            self?.updateProgress()
+        }
+    }
+    
+    private func updateProgress() {
+        playbackProgress = offset / duration
     }
     
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
@@ -133,18 +145,33 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
             self.audiobookManager.saveLocation()
         }
     }
-    
+
     func move(to value: Double) {
-        let offset = duration * value
-        guard let requestedOffset = self.currentLocation?.update(playheadOffset: offset),
-        let currentOffset = self.currentLocation else {
-            ATLog(.error, "Scrubber attempted to scrub without a current chapter.")
+        guard let currentLocation = self.currentLocation else {
+            ATLog(.error, "Invalid move value or current location is nil.")
             return
         }
+        
+        let newOffset = currentLocation.duration * value
+        let adjustedOffset = (newOffset + (currentLocation.chapterOffset ?? 0.0))
+        
+        guard let requestedOffset = currentLocation.update(playheadOffset: adjustedOffset) else {
+            ATLog(.error, "Failed to update chapter location.")
+            return
+        }
+        
+        let offsetMovement = requestedOffset.playheadOffset - currentLocation.playheadOffset
+        
+        if offsetMovement + currentLocation.playheadOffset < currentLocation.chapterOffset ?? 0.0 || offsetMovement + currentLocation.playheadOffset > (currentLocation.chapterOffset ?? 0.0) + currentLocation.duration {
+            ATLog(.error, "Attempt to move beyond chapter bounds.")
+            return
+        }
+        
         self.isWaitingForPlayer = true
-        let offsetMovement = requestedOffset.playheadOffset - currentOffset.actualOffset
+        
         self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
             self.currentLocation = adjustedLocation
+            self.isWaitingForPlayer = false
             self.audiobookManager.saveLocation()
         }
     }
@@ -170,7 +197,6 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     // MARK: - PlayerDelegate
     
     func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
-        currentLocation = audiobookManager.audiobook.player.currentChapterLocation
         isWaitingForPlayer = false
     }
     
