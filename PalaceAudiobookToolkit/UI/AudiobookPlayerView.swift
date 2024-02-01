@@ -483,7 +483,7 @@ struct PlaybackSliderView: View {
                 
                 Rectangle()
                     .fill(Color( .label))
-                    .frame(width: offsetX(in: geometry.size, for: value), height: trackHeight)
+                    .frame(width: offsetX(in: geometry.size, for: tempValue ?? value), height: trackHeight)
                 
                 Capsule()
                     .fill(Color.red)
