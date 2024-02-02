@@ -18,7 +18,7 @@ class AudiobookTOCTests: XCTestCase {
         var mediaType: LCPSpineElementMediaType
     }
 
-    var tocManaifestExpectedResults = [
+    var tocManifestExpectedResults = [
         TestOutcome(chapter: UInt(0), offset: 71.0, duration: 9.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(1), offset: 80.0, duration: 335.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(2), offset: 415.0, duration: 374.0, mediaType: .audioMPEG),
@@ -293,9 +293,18 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(70), offset: 1210.0, duration: 461.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(71), offset: 1671.0, duration: 323.0, mediaType: .audioMPEG),
     ]
+    
+    var christmasCarolManifestExpectedResults = [
+        TestOutcome(chapter: UInt(0), offset: 0.0, duration: 76.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(1), offset: 76.0, duration: 2982.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 3058.0, duration: 2649.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 2647.0, duration: 3598.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 3594.0, duration: 2375.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 2370.0, duration: 7.0, mediaType: .audioMPEG)
+    ]
 
     func testTocManifest() async throws {
-        await validate(manifest: "toc_manifest", against: tocManaifestExpectedResults)
+        await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
     }
 
     func testNonTockManifest() async throws {
@@ -308,6 +317,10 @@ class AudiobookTOCTests: XCTestCase {
 
     func testSnowCrashManifest() async throws {
         await validate(manifest: "snowcrash_manifest", against: snowCrashManifestExpectedResult)
+    }
+    
+    func testChristmasCarolManifest() async throws {
+        await validate(manifest: "christmas_carol_manifest", against: christmasCarolManifestExpectedResults)
     }
 
     private func validate(manifest: String, against results: [TestOutcome]) async {

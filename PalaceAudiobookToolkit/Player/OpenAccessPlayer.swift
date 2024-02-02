@@ -204,7 +204,7 @@ class OpenAccessPlayer: NSObject, Player {
     private func skipForward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
         let remainingTime = currentLocation.timeRemaining
         if timeInterval < remainingTime {
-            updatePlayhead(for: currentLocation, withOffset: timeInterval, completion: completion)
+            updatePlayhead(for: currentLocation, withOffset: currentLocation.playheadOffset + timeInterval, completion: completion)
         } else {
             guard let nextChapter = cursor.next()?.currentElement.chapter,
                   let newLocation = nextChapter.update(playheadOffset: timeInterval - remainingTime + (nextChapter.chapterOffset ?? 0)) else {
@@ -218,7 +218,7 @@ class OpenAccessPlayer: NSObject, Player {
     
     private func skipBackward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
         if currentLocation.actualOffset + timeInterval > 0 {
-            updatePlayhead(for: currentLocation, withOffset: timeInterval, completion: completion)
+            updatePlayhead(for: currentLocation, withOffset: currentLocation.playheadOffset + timeInterval, completion: completion)
         } else {
             let timeIntoPreviousChapter = timeInterval + currentLocation.actualOffset
             guard let previousChapter = cursor.prev()?.currentElement.chapter,
@@ -232,7 +232,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
     
     private func updatePlayhead(for location: ChapterLocation, withOffset offset: TimeInterval, completion: ((ChapterLocation)->())?) {
-        guard let newLocation = location.update(playheadOffset: location.playheadOffset + offset) else {
+        guard let newLocation = location.update(playheadOffset: offset) else {
             ATLog(.error, "New chapter location could not be created.")
             return
         }
@@ -306,7 +306,6 @@ class OpenAccessPlayer: NSObject, Player {
     func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion? = nil)
     {
         self.playAtLocation(location, completion: completion)
-        self.pause()
     }
 
     /// Moving within the current AVPlayerItem.
