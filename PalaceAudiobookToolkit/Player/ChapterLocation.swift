@@ -58,8 +58,8 @@ import Foundation
 
     public var secondsBeforeStart: TimeInterval? {
         var timeInterval: TimeInterval? = nil
-        if self.playheadOffset < self.chapterOffset ?? 0 {
-            timeInterval = abs((self.chapterOffset ?? 0) - self.playheadOffset)
+        if let chapterOffset = chapterOffset, self.playheadOffset < chapterOffset {
+            timeInterval = chapterOffset - self.playheadOffset
         }
         return timeInterval
     }

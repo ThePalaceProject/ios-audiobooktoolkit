@@ -27,11 +27,18 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         debounceTimer?.invalidate()
         debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
             self?.updateProgress()
+            self?.checkForEndOfChapter()
         }
     }
     
     private func updateProgress() {
         playbackProgress = offset / duration
+    }
+    
+    private func checkForEndOfChapter() {
+        if currentLocation?.timeRemaining ?? 0 <= 0 {
+            (audiobookManager.audiobook.player as? OpenAccessPlayer)?.advanceToNextPlayerItem()
+        }
     }
     
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval

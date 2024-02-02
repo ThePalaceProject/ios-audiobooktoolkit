@@ -1,0 +1,131 @@
+{
+    "@context": "https://readium.org/webpub-manifest/context.jsonld",
+    "metadata": {
+        "author": "Charles Dickens",
+        "duration": 12706,
+        "published": "2010-12-01T00:00:00Z",
+        "@type": "http://schema.org/Audiobook",
+        "title": "A Christmas Carol: A Signature Performance by Tim Curry",
+        "identifier": "urn:isbn:9781603932332",
+        "language": "en",
+        "description": "<![CDATA[<p>This version of Charles Dickens's <i>A Christmas Carol</i>, masterfully narrated by Tim Curry, was available for a limited time last year, and now it's back. This one-of-a-kind performance puts a unique spin on a treasured classic, and served as the inspiration for the exciting new line of Audible Signature Classics, including <i>Adventures of Huckleberry Finn</i> with Elijah Wood, and <i>Heart of Darkness</i> with Kenneth Branagh. Tim Curry performs this timeless holiday story in a deliciously dark tone, returning it to its Dickensian roots with a vivid imagining of Victorian London and just the right touch of outrageous fun. </p><p><i>A Christmas Carol</i> has constantly been in print since its original publication in 1849, and has been adapted for stage, television, film, and opera. It has often been credited with returning the jovial and festive atmosphere to the holiday season in Britain and North America, following the somber period that emerged during the Industrial Revolution.</p><p>The story opens on a bleak and cold Christmas Eve as Ebenezer Scrooge is closing up his office for the day. As the story progresses and Christmas morning approaches, Scrooge encounters the unforgettable characters that make this story a classic: Bob Cratchit, Tiny Tim, and, of course, the ghosts of Christmas Past, Present, and Yet to Come.</p>]]>",
+        "readingProgression": "ltr",
+        "modified": "2022-07-14T14:03:33Z",
+        "publisher": "Audible"
+    },
+    "toc": [
+        {
+            "title": "Opening Credits",
+            "href": "daeccf41-e19e-4e3c-b64d-f231e659d67c.MP3.mp3#t=0"
+        },
+        {
+            "title": "Stave One",
+            "href": "daeccf41-e19e-4e3c-b64d-f231e659d67c.MP3.mp3#t=76"
+        },
+        {
+            "title": "Stave Two",
+            "href": "daeccf41-e19e-4e3c-b64d-f231e659d67c.MP3.mp3#t=3058"
+        },
+        {
+            "title": "Stave Three",
+            "href": "ac5b86b4-9a4b-4844-988e-21dcd518db71.MP3.mp3#t=2647"
+        },
+        {
+            "title": "Stave Four",
+            "href": "552e2e5b-ad67-4977-b8a6-28c4372670d0.MP3.mp3#t=3594"
+        },
+        {
+            "title": "Stave Five",
+            "href": "c7898642-3a23-4db2-a467-fb73bf2fbc88.MP3.mp3#t=2370"
+        }
+    ],
+    "readingOrder": [
+        {
+            "bitrate": 192,
+            "properties": {
+                "encrypted": {
+                    "scheme": "http://readium.org/2014/01/lcp",
+                    "profile": "http://readium.org/lcp/profile-1.0",
+                    "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                }
+            },
+            "title": "9781603932332_001.mp3",
+            "href": "daeccf41-e19e-4e3c-b64d-f231e659d67c.MP3.mp3",
+            "type": "audio/mpeg",
+            "duration": 3060
+        },
+        {
+            "bitrate": 192,
+            "properties": {
+                "encrypted": {
+                    "scheme": "http://readium.org/2014/01/lcp",
+                    "profile": "http://readium.org/lcp/profile-1.0",
+                    "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                }
+            },
+            "title": "9781603932332_002.mp3",
+            "href": "ac5b86b4-9a4b-4844-988e-21dcd518db71.MP3.mp3",
+            "type": "audio/mpeg",
+            "duration": 2651
+        },
+        {
+            "bitrate": 192,
+            "properties": {
+                "encrypted": {
+                    "scheme": "http://readium.org/2014/01/lcp",
+                    "profile": "http://readium.org/lcp/profile-1.0",
+                    "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                }
+            },
+            "title": "9781603932332_003.mp3",
+            "href": "552e2e5b-ad67-4977-b8a6-28c4372670d0.MP3.mp3",
+            "type": "audio/mpeg",
+            "duration": 3599
+        },
+        {
+            "bitrate": 192,
+            "properties": {
+                "encrypted": {
+                    "scheme": "http://readium.org/2014/01/lcp",
+                    "profile": "http://readium.org/lcp/profile-1.0",
+                    "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                }
+            },
+            "title": "9781603932332_004.mp3",
+            "href": "c7898642-3a23-4db2-a467-fb73bf2fbc88.MP3.mp3",
+            "type": "audio/mpeg",
+            "duration": 2377
+        },
+        {
+            "bitrate": 192,
+            "properties": {
+                "encrypted": {
+                    "scheme": "http://readium.org/2014/01/lcp",
+                    "profile": "http://readium.org/lcp/profile-1.0",
+                    "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+                }
+            },
+            "title": "9781603932332_005.mp3",
+            "href": "ca9408cd-cf4e-488a-9ce3-f5c017436f37.MP3.mp3",
+            "type": "audio/mpeg",
+            "duration": 1019
+        }
+    ],
+    "resources": [
+        {
+            "height": 2400,
+            "width": 2400,
+            "href": "9bf8accaa8c6d458fe00faba6ee75bcfdf8543.jpg",
+            "type": "image/jpeg",
+            "rel": "cover"
+        }
+    ],
+    "links": [
+        {
+            "type": "application/audiobook+json",
+            "href": "manifest.json",
+            "rel": "self"
+        }
+    ],
+    "id": "urn:isbn:9781603932332"
+}
