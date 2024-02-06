@@ -42,17 +42,21 @@ final class OpenAccessAudiobook: Audiobook {
             ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON ?? "nil")")
             return nil
         }
-        
-        let mappedSpine = payloadSpine.enumerated().compactMap { (tupleItem:(index: Int, element: Any)) -> OpenAccessSpineElement? in
-            OpenAccessSpineElement(
-                JSON: tupleItem.element,
-                index: UInt(tupleItem.index),
-                audiobookID: identifier,
-                token: token
-            )
-            }.sorted {
-                return $0.chapterNumber < $1.chapterNumber
+
+        let mappedSpine: [OpenAccessSpineElement] = payloadSpine.enumerated().compactMap { (tupleItem:(offset: Int, element: Any)) -> OpenAccessSpineElement? in
+            do {
+                return try OpenAccessSpineElement(
+                    JSON: tupleItem.element,
+                    index: UInt(tupleItem.offset),
+                    audiobookID: identifier,
+                    token: token
+                )
+            } catch {
+                ATLog(.error, "Failed to map element at index \(tupleItem.offset): \(error.localizedDescription)")
+                return nil
             }
+        }.sorted { $0.chapterNumber < $1.chapterNumber }
+    
         if (mappedSpine.count == 0 || mappedSpine.count != payloadSpine.count) {
             ATLog(.error, "Failure to create any or all spine elements from the manifest.")
             return nil
