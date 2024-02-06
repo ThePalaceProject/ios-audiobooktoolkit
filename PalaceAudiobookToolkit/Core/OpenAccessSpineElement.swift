@@ -7,6 +7,29 @@ enum OpenAccessSpineElementMediaType: String {
     case rbDigital = "vnd.librarysimplified/rbdigital-access-document+json"
 }
 
+enum OpenAccessSpineElementError: Error {
+    case invalidJSON
+    case missingURL
+    case missingDuration
+    case unsupportedMediaType
+    case other(String) // For any other error, carrying a message
+    
+    var localizedDescription: String {
+        switch self {
+        case .invalidJSON:
+            return "Invalid or missing JSON data"
+        case .missingURL:
+            return "Missing URL in JSON data"
+        case .missingDuration:
+            return "Missing duration in JSON data"
+        case .unsupportedMediaType:
+            return "Unsupported media type"
+        case .other(let message):
+            return message
+        }
+    }
+}
+
 final class OpenAccessSpineElement: SpineElement {
 
     lazy var downloadTask: DownloadTask = {
@@ -39,17 +62,16 @@ final class OpenAccessSpineElement: SpineElement {
     // which secret to use for the JWT for Feedbooks DRM
     let token: String?
 
-    init?(JSON: Any?, index: UInt, audiobookID: String, token: String? = nil) {
+    init(JSON: Any?, index: UInt, audiobookID: String, token: String? = nil) throws {
         self.key = "\(audiobookID)-\(index)"
         self.chapterNumber = index
         self.audiobookID = audiobookID
 
         guard let payload = JSON as? [String: Any],
             let urlString = payload["href"] as? String,
-            let url = URL(string: urlString),
-            let duration = payload["duration"] as? TimeInterval else {
+            let url = URL(string: urlString) else {
                 ATLog(.error, "OpenAccessSpineElement failed to init from JSON: \n\(JSON ?? "nil")")
-                return nil
+            throw OpenAccessSpineElementError.invalidJSON
         }
         
         self.token = token
@@ -58,7 +80,7 @@ final class OpenAccessSpineElement: SpineElement {
         self.title = payload["title"] as? String ?? String(format: defaultTitleFormat, "\(index + 1)")
         self.url = url
         self.urlString = urlString
-        self.duration = duration
+        self.duration = (payload["duration"]  as? TimeInterval) ?? 0.0
 
         let alternatesJson = payload["alternates"] as? [[String:Any]]
         self.alternateUrls = OpenAccessSpineElement.parseAlternateUrls(alternatesJson)
@@ -71,7 +93,7 @@ final class OpenAccessSpineElement: SpineElement {
             self.mediaType = secondaryMediaType
         } else {
             ATLog(.error, "Media Type of open acess spine element not supported.")
-            return nil
+            throw OpenAccessSpineElementError.unsupportedMediaType
         }
 
         // Feedbooks DRM
