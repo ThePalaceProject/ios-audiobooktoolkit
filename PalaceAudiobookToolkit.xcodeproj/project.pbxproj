@@ -70,6 +70,8 @@
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
 		E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */; };
 		E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */; };
+		E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
+		E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53452B7550B000D861EE /* anathem_manifest.json */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
@@ -178,6 +180,8 @@
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
 		E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = christmas_carol_manifest.json; sourceTree = "<group>"; };
 		E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
+		E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = the_system_of_the_world_manifest.json; sourceTree = "<group>"; };
+		E58C53452B7550B000D861EE /* anathem_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = anathem_manifest.json; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
@@ -408,6 +412,8 @@
 				E549653227FBEAC400913BD6 /* toc_manifest.json */,
 				E530532F29B69B91005E831F /* snowcrash_manifest.json */,
 				E5A018BE2936887E003F6D01 /* alice_manifest.json */,
+				E58C53452B7550B000D861EE /* anathem_manifest.json */,
+				E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */,
 				E549653427FBEB5100913BD6 /* non_toc_manifest.json */,
 				E5A018C029368B17003F6D01 /* the_martian_manifest.json */,
 				E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */,
@@ -561,6 +567,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */,
+				E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */,
 				E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */,
 				E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
