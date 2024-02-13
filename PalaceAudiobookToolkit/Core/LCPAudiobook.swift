@@ -87,60 +87,89 @@ import Foundation
 
         return spineElements
     }
-    
+
     private static func getSpineElements(toc: [[String: Any]], resources: [[String: Any]], identifier: String) -> [LCPSpineElement] {
         var spineElements: [LCPSpineElement] = []
-        let resourceElements = LCPAudiobook.extract(resources: resources)
-
+        let resourceElements = extract(resources: resources)
         let allTocElements: [TocElement] = extractTOCElements(toc: toc)
         
-        // Calculate duration
         for (index, element) in allTocElements.enumerated() {
-            var elementDuration = 0.0
-            let section = resourceElements[element.rawLink() ?? ""]
-            var hrefs = [String]()
+            guard let currentResource = resourceElements[element.rawLink() ?? ""] else { continue }
+            var duration = 0.0
+            var hrefs: [String] = [element.href ?? ""]
             
-            var nextElement: TocElement?
-    
-            if index < allTocElements.count {
-                let next = allTocElements[safe: index + 1]
-                
-                if let current = allTocElements[safe: index] {
-                    if let next = next, current.hasSameParent(as: next) {
-                        // If next element is in same section, calculate duration as difference between current and next
-                        elementDuration = next.offset() - element.offset()
-                    } else if let section = section {
-                        // If current element is not in the same section as the next element,
-                        // calculate duration as the difference between current
-                        // element and duration of section plus the offset to the next chapter.
-                        elementDuration = section.duration - element.offset() + (next?.offset() ?? 0)
-                        
-                        if next?.offset() ?? 0 > 0 {
-                            nextElement = next
-                        }
-                    }
-                }
-            }
+            let additionalDurationAndHrefs = calculateDurationAndHrefsToNextElement(
+                currentElement: element,
+                currentResource: currentResource,
+                nextElement: allTocElements[safe: index + 1],
+                resources: resourceElements
+            )
+
+            duration += additionalDurationAndHrefs.duration
+            hrefs.append(contentsOf: additionalDurationAndHrefs.hrefs)
             
-            hrefs.append(element.href)
-            hrefs.append(nextElement?.href)
-    
             let spineElement = LCPSpineElement(
                 chapterNumber: UInt(index),
                 title: element.title ?? "",
                 hrefs: hrefs,
                 offset: element.offset(),
-                mediaType: section?.type ?? .audioMP3,
-                duration: elementDuration,
+                mediaType: currentResource.type ?? .audioMP3,
+                duration: duration,
                 audiobookID: identifier
             )
-            
             spineElements.append(spineElement)
         }
-
+        
         return spineElements
     }
-    
+
+    private static func calculateDurationAndHrefsToNextElement(
+        currentElement: TocElement,
+        currentResource: ResourceElement,
+        nextElement: TocElement?,
+        resources: [String: ResourceElement]
+    ) -> (duration: Double, hrefs: [String]) {
+        var duration = 0.0
+        var hrefs: [String] = []
+        
+        guard let nextElement = nextElement else {
+            duration = currentResource.duration - currentElement.offset()
+            hrefs.append(currentResource.href)
+            return (duration, hrefs)
+        }
+        
+        let currentElementResourceHref = currentElement.rawLink() ?? ""
+        let nextElementResourceHref = nextElement.rawLink() ?? ""
+        
+        if currentElementResourceHref == nextElementResourceHref {
+            duration = nextElement.offset() - currentElement.offset()
+            hrefs.append(currentResource.href)
+        } else {
+            
+            duration += currentResource.duration - currentElement.offset()
+            hrefs.append(currentResource.href)
+            
+            let sortedResources = resources.values.sorted(by: { $0.chapter ?? 0 < $1.chapter ?? 0 })
+            if let currentIndex = sortedResources.firstIndex(where: { $0.href == currentElementResourceHref }),
+               let nextIndex = sortedResources.firstIndex(where: { $0.href == nextElementResourceHref }) {
+                
+                for resource in sortedResources[(currentIndex + 1)..<nextIndex] {
+                    duration += resource.duration
+                    hrefs.append(resource.href)
+                }
+                
+                if let nextResource = resources[nextElementResourceHref], nextIndex > currentIndex {
+                    duration += nextElement.offset()
+                    if !hrefs.contains(nextResource.href) {
+                        hrefs.append(nextResource.href)
+                    }
+                }
+            }
+        }
+        
+        return (duration, hrefs)
+    }
+
     private static func extractTOCElements(toc: [[String: Any]]) ->[TocElement] {
         var elements: [TocElement] = []
 

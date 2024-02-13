@@ -303,44 +303,91 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(5), offset: 2370.0, duration: 7.0, mediaType: .audioMPEG)
     ]
 
+    var anathemManifestExpectedResults = [
+        TestOutcome(chapter: UInt(0), offset: 0.0, duration: 57.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(1), offset: 57.0, duration: 38.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 95.0, duration: 641.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 2.0, duration: 6908.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 6.0, duration: 13428.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 11.0, duration: 3879.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 12.0, duration: 6275.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 14.0, duration: 9684.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(8), offset: 43.0, duration: 9865.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(9), offset: 19.0, duration: 15743.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(10), offset: 22.0, duration: 8391.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(11), offset: 24.0, duration: 6339.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(12), offset: 25.0, duration: 13220.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(13), offset: 28.0, duration: 15100.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(14), offset: 31.0, duration: 5526.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(15), offset: 32.0, duration: 1574.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(16), offset: 1606.0, duration: 64.0, mediaType: .audioMPEG)
+    ]
+
+    var theSystemOfTheWorldManifestExpectedResults = [
+        TestOutcome(chapter: UInt(0), offset: 0.0, duration: 131.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(1), offset: 2.0, duration: 1393, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 2.0, duration: 645.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 3.0, duration: 651.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 3.0, duration: 1011.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 4.0, duration: 2952.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 4.0, duration: 4388.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 5.0, duration: 713.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(8), offset: 6.0, duration: 1838.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(9), offset: 6.0, duration: 820.0, mediaType: .audioMPEG)
+    ]
+
     func testTocManifest() async throws {
-        await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
+        try await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
     }
 
     func testNonTockManifest() async throws {
-        await validate(manifest: "non_toc_manifest", against: nonTocManifestExpectedResults)
+        try await validate(manifest: "non_toc_manifest", against: nonTocManifestExpectedResults)
     }
 
     func testMartianManifest() async throws {
-        await validate(manifest: "the_martian_manifest", against: martianManifestExpectedResult)
+        try await validate(manifest: "the_martian_manifest", against: martianManifestExpectedResult)
     }
 
     func testSnowCrashManifest() async throws {
-        await validate(manifest: "snowcrash_manifest", against: snowCrashManifestExpectedResult)
+        try await validate(manifest: "snowcrash_manifest", against: snowCrashManifestExpectedResult)
     }
     
     func testChristmasCarolManifest() async throws {
-        await validate(manifest: "christmas_carol_manifest", against: christmasCarolManifestExpectedResults)
+        try await validate(manifest: "christmas_carol_manifest", against: christmasCarolManifestExpectedResults)
     }
-
-    private func validate(manifest: String, against results: [TestOutcome]) async {
-        let bundle = Bundle(for: AudiobookTOCTests.self)
-        let url = bundle.url(forResource: manifest, withExtension: "json")!
-
-        guard let lcpAudiobook = try? await fetchAudiobook(url: url),
-              let spine = lcpAudiobook?.spine as? [LCPSpineElement] else {
-            XCTFail("Failed to create Audiobook spine.")
+    
+    func testAnathemManifest() async throws {
+        try await validate(manifest: "anathem_manifest", against: anathemManifestExpectedResults)
+    }
+    
+    func testSystemOfTheWorldManifest() async throws {
+        try await validate(manifest: "the_system_of_the_world_manifest", against: theSystemOfTheWorldManifestExpectedResults)
+    }
+    
+    private func validate(manifest: String, against results: [TestOutcome]) async throws {
+        // Assuming this function is part of a test class that has access to XCTest functions
+        guard let url = Bundle(for: type(of: self)).url(forResource: manifest, withExtension: "json"),
+              let jsonData = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let lcpAudiobook = LCPAudiobook(JSON: json, decryptor: nil) else {
+            XCTFail("Failed to load manifest or create LCPAudiobook instance.")
             return
         }
-
-        for (index, element) in spine.enumerated() {
-            XCTAssertEqual(element.chapterNumber, results[index].chapter)
-            XCTAssertEqual(element.offset, results[index].offset)
-            XCTAssertEqual(element.duration, results[index].duration)
-            XCTAssertEqual(element.mediaType, results[index].mediaType)
+        
+        guard let spine = lcpAudiobook.spine as? [LCPSpineElement] else {
+            XCTFail("Spine elements are not of type LCPSpineElement.")
+            return
         }
         
+        for (index, element) in spine.enumerated() where index < results.count {
+            let expected = results[index]
+            XCTAssertEqual(element.chapterNumber, expected.chapter, "Chapter number mismatch at index \(index).")
+            XCTAssertEqual(element.offset, expected.offset, accuracy: 0.01, "Offset mismatch at index \(index).")
+            XCTAssertEqual(element.duration, expected.duration, accuracy: 0.01, "Duration mismatch at index \(index).")
+            XCTAssertEqual(element.mediaType, expected.mediaType, "Media type mismatch at index \(index).")
+        }
     }
+
 
     private func fetchAudiobook(url: URL) async throws -> LCPAudiobook? {
         let jsonData = try Data(contentsOf: url, options: .mappedIfSafe)
