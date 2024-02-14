@@ -216,6 +216,7 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(8), offset: 6.0, duration: 1838.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(9), offset: 6.0, duration: 820.0, mediaType: .audioMPEG)
     ]
+<<<<<<< HEAD
     
     var quicksilverManifestExpectedResults = [
             TestOutcome(chapter: UInt(0), offset: 0.0, duration: 125.0, mediaType: .audioMPEG),
@@ -249,6 +250,9 @@ class AudiobookTOCTests: XCTestCase {
             TestOutcome(chapter: UInt(28), offset: 2160.0, duration: 751.0, mediaType: .audioMPEG)
         ]
 
+=======
+>>>>>>> main
+
     func testTocManifest() async throws {
         try await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
     }
@@ -277,10 +281,13 @@ class AudiobookTOCTests: XCTestCase {
         try await validate(manifest: "the_system_of_the_world_manifest", against: theSystemOfTheWorldManifestExpectedResults)
     }
     
+<<<<<<< HEAD
     func testQuickSilverManifest() async throws {
         try await validate(manifest: "quicksilver_manifest", against: quicksilverManifestExpectedResults)
     }
     
+=======
+>>>>>>> main
     private func validate(manifest: String, against results: [TestOutcome]) async throws {
         // Assuming this function is part of a test class that has access to XCTest functions
         guard let url = Bundle(for: type(of: self)).url(forResource: manifest, withExtension: "json"),

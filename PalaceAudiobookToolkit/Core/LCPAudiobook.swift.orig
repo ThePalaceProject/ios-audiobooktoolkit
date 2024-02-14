@@ -132,6 +132,7 @@ import Foundation
         var duration = 0.0
         var hrefs: [String] = []
         
+<<<<<<< HEAD
         let currentElementResourceHref = currentElement.rawLink() ?? ""
         let nextElementResourceHref = nextElement?.rawLink() ?? ""
         
@@ -169,6 +170,38 @@ import Foundation
                         if !hrefs.contains(nextResource.href) {
                             hrefs.append(nextResource.href)
                         }
+=======
+        guard let nextElement = nextElement else {
+            duration = currentResource.duration - currentElement.offset()
+            hrefs.append(currentResource.href)
+            return (duration, hrefs)
+        }
+        
+        let currentElementResourceHref = currentElement.rawLink() ?? ""
+        let nextElementResourceHref = nextElement.rawLink() ?? ""
+        
+        if currentElementResourceHref == nextElementResourceHref {
+            duration = nextElement.offset() - currentElement.offset()
+            hrefs.append(currentResource.href)
+        } else {
+            
+            duration += currentResource.duration - currentElement.offset()
+            hrefs.append(currentResource.href)
+            
+            let sortedResources = resources.values.sorted(by: { $0.chapter ?? 0 < $1.chapter ?? 0 })
+            if let currentIndex = sortedResources.firstIndex(where: { $0.href == currentElementResourceHref }),
+               let nextIndex = sortedResources.firstIndex(where: { $0.href == nextElementResourceHref }) {
+                
+                for resource in sortedResources[(currentIndex + 1)..<nextIndex] {
+                    duration += resource.duration
+                    hrefs.append(resource.href)
+                }
+                
+                if let nextResource = resources[nextElementResourceHref], nextIndex > currentIndex {
+                    duration += nextElement.offset()
+                    if !hrefs.contains(nextResource.href) {
+                        hrefs.append(nextResource.href)
+>>>>>>> main
                     }
                 }
             }
@@ -177,7 +210,10 @@ import Foundation
         return (duration, hrefs)
     }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> main
     private static func extractTOCElements(toc: [[String: Any]]) ->[TocElement] {
         var elements: [TocElement] = []
 
