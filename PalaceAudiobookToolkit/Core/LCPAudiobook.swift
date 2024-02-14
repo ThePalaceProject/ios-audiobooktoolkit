@@ -132,36 +132,43 @@ import Foundation
         var duration = 0.0
         var hrefs: [String] = []
         
-        guard let nextElement = nextElement else {
-            duration = currentResource.duration - currentElement.offset()
-            hrefs.append(currentResource.href)
-            return (duration, hrefs)
-        }
-        
         let currentElementResourceHref = currentElement.rawLink() ?? ""
-        let nextElementResourceHref = nextElement.rawLink() ?? ""
+        let nextElementResourceHref = nextElement?.rawLink() ?? ""
         
-        if currentElementResourceHref == nextElementResourceHref {
+        if let nextElement = nextElement, currentElementResourceHref == nextElementResourceHref {
+            // Next element is in the same resource; calculate duration directly
             duration = nextElement.offset() - currentElement.offset()
             hrefs.append(currentResource.href)
         } else {
-            
+            // Add duration from current element offset to the end of the current resource
             duration += currentResource.duration - currentElement.offset()
             hrefs.append(currentResource.href)
             
-            let sortedResources = resources.values.sorted(by: { $0.chapter ?? 0 < $1.chapter ?? 0 })
-            if let currentIndex = sortedResources.firstIndex(where: { $0.href == currentElementResourceHref }),
-               let nextIndex = sortedResources.firstIndex(where: { $0.href == nextElementResourceHref }) {
-                
-                for resource in sortedResources[(currentIndex + 1)..<nextIndex] {
-                    duration += resource.duration
-                    hrefs.append(resource.href)
+            // If there's no next element, this is the last chapter
+            if nextElement == nil {
+                // Add durations of all subsequent resources
+                let sortedResources = resources.values.sorted(by: { $0.chapter ?? 0 < $1.chapter ?? 0 })
+                if let currentIndex = sortedResources.firstIndex(where: { $0.href == currentElementResourceHref }) {
+                    for resource in sortedResources[(currentIndex + 1)..<sortedResources.count] {
+                        duration += resource.duration
+                        hrefs.append(resource.href)
+                    }
                 }
-                
-                if let nextResource = resources[nextElementResourceHref], nextIndex > currentIndex {
-                    duration += nextElement.offset()
-                    if !hrefs.contains(nextResource.href) {
-                        hrefs.append(nextResource.href)
+            } else {
+                let sortedResources = resources.values.sorted(by: { $0.chapter ?? 0 < $1.chapter ?? 0 })
+                if let currentIndex = sortedResources.firstIndex(where: { $0.href == currentElementResourceHref }),
+                   let nextIndex = sortedResources.firstIndex(where: { $0.href == nextElementResourceHref }) {
+                    
+                    for resource in sortedResources[(currentIndex + 1)..<nextIndex] {
+                        duration += resource.duration
+                        hrefs.append(resource.href)
+                    }
+                    
+                    if let nextResource = resources[nextElementResourceHref], nextIndex > currentIndex {
+                        duration += nextElement?.offset() ?? 0
+                        if !hrefs.contains(nextResource.href) {
+                            hrefs.append(nextResource.href)
+                        }
                     }
                 }
             }
@@ -169,6 +176,7 @@ import Foundation
         
         return (duration, hrefs)
     }
+
 
     private static func extractTOCElements(toc: [[String: Any]]) ->[TocElement] {
         var elements: [TocElement] = []
