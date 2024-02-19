@@ -204,6 +204,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     // MARK: - PlayerDelegate
     
     func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+        currentLocation = chapter
         isWaitingForPlayer = false
     }
     

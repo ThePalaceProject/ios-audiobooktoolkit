@@ -324,7 +324,8 @@ class OpenAccessPlayer: NSObject, Player {
         currentItem.seek(to: CMTimeMakeWithSeconds(Float64(newOffset), preferredTimescale: Int32(1))) { finished in
             if finished {
                 ATLog(.debug, "Seek operation finished.")
-                self.notifyDelegatesOfPlaybackFor(chapter: self.chapterAtCurrentCursor)
+                let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: newOffset)
+                self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
             } else {
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
             }
@@ -371,7 +372,7 @@ class OpenAccessPlayer: NSObject, Player {
                     self.cursorQueuedToPlay = nil
                     self.buildNewPlayerQueue(atCursor: cursor) { success in
                         if success {
-                            self.seekWithinCurrentItem(newOffset: self.chapterAtCurrentCursor.playheadOffset)
+                            self.seekWithinCurrentItem(newOffset: self.queuedSeekOffset ?? self.chapterAtCurrentCursor.playheadOffset)
                             self.play()
                         } else {
                             ATLog(.error, "User attempted to play when the player wasn't ready.")
@@ -379,10 +380,6 @@ class OpenAccessPlayer: NSObject, Player {
                             self.notifyDelegatesOfPlaybackFailureFor(chapter: self.chapterAtCurrentCursor, error)
                         }
                     }
-                }
-                if let seekOffset = self.queuedSeekOffset {
-                    self.queuedSeekOffset = nil
-                    self.seekWithinCurrentItem(newOffset: seekOffset)
                 }
             case .failed:
                 fallthrough
