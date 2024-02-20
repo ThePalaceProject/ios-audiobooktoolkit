@@ -107,6 +107,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
             }
             .store(in: &subscriptions)
         self.audiobookManager.fetchBookmarks { _ in }
+        self.audiobookManager.timerDelegate = self
     }
     
     deinit {
@@ -118,7 +119,6 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     }
     
     func playPause() {
-        self.audiobookManager.timerDelegate = self
         isWaitingForPlayer = true
         if isPlaying {
             audiobookManager.audiobook.player.pause()

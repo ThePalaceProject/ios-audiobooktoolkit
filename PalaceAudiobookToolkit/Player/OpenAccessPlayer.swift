@@ -321,10 +321,11 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         
-        currentItem.seek(to: CMTimeMakeWithSeconds(Float64(newOffset), preferredTimescale: Int32(1))) { finished in
+        currentItem.seek(to: CMTimeMakeWithSeconds(Float64(self.queuedSeekOffset ?? newOffset), preferredTimescale: Int32(1))) { finished in
             if finished {
                 ATLog(.debug, "Seek operation finished.")
-                let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: newOffset)
+                let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: self.queuedSeekOffset ?? newOffset)
+                self.queuedSeekOffset = nil
                 self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
             } else {
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
