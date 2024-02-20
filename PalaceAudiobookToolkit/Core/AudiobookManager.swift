@@ -311,7 +311,9 @@ extension DefaultAudiobookManager: PlayerDelegate {
         }
         if lastChapter.inSameChapter(other: chapter) {
             self.playbackCompletionHandler?()
-            self.audiobook.player.movePlayheadToLocation(firstChapter, completion: nil)
+            self.audiobook.player.movePlayheadToLocation(firstChapter) { _ in
+                self.audiobook.player.pause()
+            }
         }
     }
     public func playerDidUnload(_ player: Player) {
