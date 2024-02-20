@@ -46,13 +46,16 @@ struct AudiobookPlayerView: View {
                         VStack {
                             Text(playbackModel.audiobookManager.metadata.title ?? "")
                                 .palaceFont(.headline)
+                                .accessibilityLabel(Strings.Accessibility.audiobookTitleLabel)
                             Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                                 .palaceFont(.body)
+                                .accessibilityLabel(Strings.Accessibility.audiobookAuthorsLabel)
                         }
                         
                         VStack(spacing: 5) {
                             Text(timeLeftInBookText)
                                 .palaceFont(.caption)
+                                .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
                             
                             PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
                                 playbackModel.move(to: newValue)
@@ -62,14 +65,18 @@ struct AudiobookPlayerView: View {
                             HStack(alignment: .firstTextBaseline) {
                                 Text("\(playheadOffsetText)")
                                     .palaceFont(.caption)
+                                    .accessibilityLabel(Strings.Accessibility.audiobookTimeElapsedLabel)
                                 Spacer()
                                 Text(chapterTitle)
                                     .palaceFont(.headline)
                                     .multilineTextAlignment(.center)
                                     .lineLimit(2)
+                                    .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
+
                                 Spacer()
                                 Text("\(timeLeftText)")
                                     .palaceFont(.caption)
+                                    .accessibilityLabel(Strings.Accessibility.audiobookChapterTimeLeftLabel)
                             }
                             .padding(.horizontal)
                         }
@@ -120,7 +127,7 @@ struct AudiobookPlayerView: View {
             AudiobookNavigationView(model: playbackModel, selectedLocation: $selectedLocation)
         } label: {
             ToolkitImage(name: "table_of_contents", renderingMode: .template)
-                .accessibility(label: Text("Table of contents"))
+                .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
                 .foregroundColor(.primary)
                 .foregroundColor(.black)
         }
@@ -141,7 +148,7 @@ struct AudiobookPlayerView: View {
     }
 
     @ViewBuilder
-    private func skipButton(_ imageName: String, textLabel: String, action: @escaping () -> Void) -> some View {
+    private func skipButton(_ imageName: String, textLabel: String, accessibilityString: String, action: @escaping () -> Void) -> some View {
         // Button size: 66 compact, 96 regular
         let size: CGFloat = horizontalSizeClass == .compact ? 66 : 96
         Button(action: action) {
@@ -158,7 +165,7 @@ struct AudiobookPlayerView: View {
                 )
                 .frame(width: size, height: size)
         }
-        .accessibility(label: Text(textLabel))
+        .accessibility(label: Text(accessibilityString))
         .foregroundColor(.primary)
     }
     
@@ -178,7 +185,7 @@ struct AudiobookPlayerView: View {
             }
         }
         .foregroundColor(.primary)
-        .accessibility(label: Text(isPlaying ? "Pause" : "Play"))
+        .accessibility(label: Text(isPlaying ? Strings.Accessibility.pauseButton : Strings.Accessibility.playButton))
     }
     
     @ViewBuilder
@@ -240,9 +247,23 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var playbackControlsView: some View {
         HStack(spacing: 40) {
-            skipButton("skip_back", textLabel: "skip back", action: playbackModel.skipBack)
-            playButton(isPlaying: playbackModel.isPlaying, textLabel: "play button", action: playbackModel.playPause)
-            skipButton("skip_forward", textLabel: "skip forward", action: playbackModel.skipForward)
+            skipButton(
+                "skip_back",
+                textLabel: "skip back",
+                accessibilityString: Strings.Accessibility.skipBackButton,
+                action: playbackModel.skipBack
+            )
+            playButton(
+                isPlaying: playbackModel.isPlaying,
+                textLabel: "play button",
+                action: playbackModel.playPause
+            )
+            skipButton(
+                "skip_forward",
+                textLabel: "skip forward",
+                accessibilityString: Strings.Accessibility.skipForwardButton,
+                action: playbackModel.skipForward
+            )
         }
         .frame(height: 66)
     }
@@ -265,12 +286,14 @@ struct AudiobookPlayerView: View {
                             .actionSheet(isPresented: $showPlaybackSpeed) {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
                             }
+                            .accessibility(label: Text(Strings.Accessibility.playbackSpeedButton))
                     )
                 
                 // AirPlay
                 Spacer()
                     .overlay(
                         AVRoutePickerViewWrapper()
+                            .accessibility(label: Text(Strings.Accessibility.airplaybutton))
                     )
                 
                 // Sleep Timer
@@ -298,6 +321,7 @@ struct AudiobookPlayerView: View {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)
                         }
+                        .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
                     )
             }
             .frame(minHeight: 40)
@@ -503,6 +527,7 @@ struct PlaybackSliderView: View {
                                 }
                             }
                     )
+                    .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
             }
         }
         .frame(height: thumbHeight)
