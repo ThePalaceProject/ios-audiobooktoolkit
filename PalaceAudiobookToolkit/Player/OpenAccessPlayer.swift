@@ -324,9 +324,15 @@ class OpenAccessPlayer: NSObject, Player {
         currentItem.seek(to: CMTimeMakeWithSeconds(Float64(self.queuedSeekOffset ?? newOffset), preferredTimescale: Int32(1))) { finished in
             if finished {
                 ATLog(.debug, "Seek operation finished.")
-                let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: self.queuedSeekOffset ?? newOffset)
-                self.queuedSeekOffset = nil
-                self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
+                if let queuedSeekOffset = self.queuedSeekOffset, queuedSeekOffset > 0 {
+                    let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: queuedSeekOffset)
+                    self.queuedSeekOffset = nil
+                    self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
+                } else {
+                    let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: newOffset)
+                    self.queuedSeekOffset = nil
+                    self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
+                }
             } else {
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
             }
@@ -373,7 +379,7 @@ class OpenAccessPlayer: NSObject, Player {
                     self.cursorQueuedToPlay = nil
                     self.buildNewPlayerQueue(atCursor: cursor) { success in
                         if success {
-                            self.seekWithinCurrentItem(newOffset: self.queuedSeekOffset ?? self.chapterAtCurrentCursor.playheadOffset)
+                            self.seekWithinCurrentItem(newOffset: (self.queuedSeekOffset ?? 0) > 0 ? self.queuedSeekOffset ?? self.chapterAtCurrentCursor.playheadOffset : self.chapterAtCurrentCursor.playheadOffset)
                             self.play()
                         } else {
                             ATLog(.error, "User attempted to play when the player wasn't ready.")
