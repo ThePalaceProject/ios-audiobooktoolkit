@@ -25,10 +25,11 @@ import AVFoundation
 }
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
-    func saveListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func saveListeningPositionString(at location: String, completion: ((_ serverID: String?) -> Void)?)
 }
 
 @objc public protocol AudiobookBookmarkDelegate {
+    func saveListeningPosition(at location: ChapterLocation, completion: ((_ serverID: String?) -> Void)?)
     func saveBookmark(at location: ChapterLocation, completion: ((_ location: ChapterLocation?) -> Void)?)
     func deleteBookmark(at location: ChapterLocation, completion: ((Bool) -> Void)?)
     func fetchBookmarks(completion: @escaping ([PalaceAudiobookToolkit.ChapterLocation]) -> Void)
@@ -225,30 +226,13 @@ enum BookmarkError: Error {
     }
     
     public func saveLocation()  {
-        guard let data = audiobook.player.currentChapterLocation?.toData(),
-                let string = String(data: data, encoding: .utf8) else {
-            ATLog(.error, "Failed to save to post current location.")
+        guard let location = audiobook.player.currentChapterLocation else {
             return
         }
-        
-//        NSString *const string = [[NSString alloc]
-//                                  initWithData:self.manager.audiobook.player.currentChapterLocation.toData
-//                                  encoding:NSUTF8StringEncoding];
-//        
-//        // Save updated playhead position in audiobook chapter
-//        NSTimeInterval playheadOffset = self.manager.audiobook.player.currentChapterLocation.actualOffset;
-//        if (previousPlayheadOffset != playheadOffset && playheadOffset > 0) {
-//            previousPlayheadOffset = playheadOffset;
-//            
-//            [[TPPBookRegistry shared]
-//             setLocation:[[TPPBookLocation alloc] initWithLocationString:string renderer:@"PalaceAudiobookToolkit"]
-//             forIdentifier:self.book.identifier];
-//            
-        
-//        TPPBookRegistry.shared.setLocation(TPPBookLocation(, forIdentifier: <#T##String#>)
-        playbackPositionDelegate?.saveListeningPosition(at: string) {
+
+        bookmarkDelegate?.saveListeningPosition(at: location) {
             guard let _ = $0 else {
-                ATLog(.error, "Failed to save to post current location.")
+                ATLog(.error, "Failed to post current location.")
                 return
             }
         }
