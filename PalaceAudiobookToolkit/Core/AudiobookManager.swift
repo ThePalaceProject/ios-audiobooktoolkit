@@ -25,10 +25,11 @@ import AVFoundation
 }
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
-    func saveListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func postListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
 }
 
 @objc public protocol AudiobookBookmarkDelegate {
+    func saveListeningPosition(at location: ChapterLocation, completion: ((_ serverID: String?) -> Void)?)
     func saveBookmark(at location: ChapterLocation, completion: ((_ location: ChapterLocation?) -> Void)?)
     func deleteBookmark(at location: ChapterLocation, completion: ((Bool) -> Void)?)
     func fetchBookmarks(completion: @escaping ([PalaceAudiobookToolkit.ChapterLocation]) -> Void)
@@ -225,15 +226,13 @@ enum BookmarkError: Error {
     }
     
     public func saveLocation()  {
-        guard let data = audiobook.player.currentChapterLocation?.toData(),
-                let string = String(data: data, encoding: .utf8) else {
-            ATLog(.error, "Failed to save to post current location.")
+        guard let location = audiobook.player.currentChapterLocation else {
             return
         }
 
-        playbackPositionDelegate?.saveListeningPosition(at: string) {
+        bookmarkDelegate?.saveListeningPosition(at: location) {
             guard let _ = $0 else {
-                ATLog(.error, "Failed to save to post current location.")
+                ATLog(.error, "Failed to post current location.")
                 return
             }
         }
