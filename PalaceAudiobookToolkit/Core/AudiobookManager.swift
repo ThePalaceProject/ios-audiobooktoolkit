@@ -25,7 +25,7 @@ import AVFoundation
 }
 
 @objc public protocol AudiobookPlaybackPositionDelegate {
-    func saveListeningPositionString(at location: String, completion: ((_ serverID: String?) -> Void)?)
+    func postListeningPosition(at location: String, completion: ((_ serverID: String?) -> Void)?)
 }
 
 @objc public protocol AudiobookBookmarkDelegate {

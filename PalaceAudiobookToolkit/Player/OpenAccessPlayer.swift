@@ -309,30 +309,28 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     /// Moving within the current AVPlayerItem.
-    private func seekWithinCurrentItem(newOffset: TimeInterval, forceSync: Bool = false)
-    {
-        if self.avQueuePlayer.currentItem?.status != .readyToPlay && !forceSync {
-            self.queuedSeekOffset = newOffset
+    private func seekWithinCurrentItem(newOffset: TimeInterval, forceSync: Bool = false) {
+        guard let currentItem = avQueuePlayer.currentItem else {
+            ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek.")
             return
         }
         
-        guard let currentItem = self.avQueuePlayer.currentItem else {
-            ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek with.")
+        if currentItem.status != .readyToPlay && !forceSync {
+            ATLog(.debug, "AVPlayerItem not ready to play. Queuing seek offset: \(newOffset)")
+            queuedSeekOffset = newOffset
             return
         }
         
-        currentItem.seek(to: CMTimeMakeWithSeconds(Float64(self.queuedSeekOffset ?? newOffset), preferredTimescale: Int32(1))) { finished in
+        let effectiveOffset = queuedSeekOffset ?? newOffset
+        queuedSeekOffset = nil // Clear queued offset since we're now applying it
+        
+        currentItem.seek(to: CMTime(seconds: effectiveOffset, preferredTimescale: CMTimeScale(NSEC_PER_SEC))) { [weak self] finished in
+            guard let self = self else { return }
+            
             if finished {
-                ATLog(.debug, "Seek operation finished.")
-                if let queuedSeekOffset = self.queuedSeekOffset, queuedSeekOffset > 0 {
-                    let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: queuedSeekOffset)
-                    self.queuedSeekOffset = nil
-                    self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
-                } else {
-                    let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: newOffset)
-                    self.queuedSeekOffset = nil
-                    self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
-                }
+                ATLog(.debug, "Seek operation to offset \(effectiveOffset) finished.")
+                let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: effectiveOffset)
+                self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
             } else {
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
             }
