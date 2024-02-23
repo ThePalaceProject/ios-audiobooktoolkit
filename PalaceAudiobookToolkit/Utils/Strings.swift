@@ -9,6 +9,24 @@
 import Foundation
 
 struct Strings {
+    struct Accessibility {
+        static let addBookmarksButton = "addBookmarksButton"
+        static let tableOfContentsButton = "tableOfContentsButton"
+        static let audiobookPlaybackSlider = "audiobookPlaybackSlider"
+        static let audiobookChapterTimeLeftLabel = "audiobookChapterTimeLeftLabel"
+        static let audiobookTimeRemainingLabel = "audiobookTimeRemainingLabel"
+        static let audiobookTitleLabel = "audiobookTitleLabel"
+        static let audiobookTimeElapsedLabel = "audiobookTimeElapsedLabel"
+        static let audiobookAuthorsLabel = "audiobookAuthorsLabel"
+        static let audiobookChapterTitleLabel = "audiobookChapterTitleLabel"
+        static let skipBackButton = "skipBackButton"
+        static let playButton = "playButton"
+        static let pauseButton = "pauseButton"
+        static let skipForwardButton = "skipForwardButton"
+        static let playbackSpeedButton = "playbackSpeedButton"
+        static let airplaybutton = "airplaybutton"
+    }
+
     struct AudiobookPlayerViewController {
         static let sleepTimer = NSLocalizedString("Sleep Timer", value: "Sleep Timer", comment:"Sleep Timer")
         static let tableOfContents = NSLocalizedString("Table of Contents",
