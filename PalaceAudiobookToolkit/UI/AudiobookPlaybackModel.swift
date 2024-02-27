@@ -137,10 +137,12 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
             return
         }
+
         isWaitingForPlayer = true
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
+            self.isWaitingForPlayer = false
         }
     }
     
@@ -150,6 +152,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
+            self.isWaitingForPlayer = false
         }
     }
 

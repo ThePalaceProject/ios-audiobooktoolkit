@@ -218,36 +218,61 @@ class AudiobookTOCTests: XCTestCase {
     ]
     
     var quicksilverManifestExpectedResults = [
-            TestOutcome(chapter: UInt(0), offset: 0.0, duration: 125.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(1), offset: 2.0, duration: 3.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(2), offset: 5.0, duration: 3435.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(3), offset: 1.0, duration: 1680.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(4), offset: 0.0, duration: 2738.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(5), offset: 2738.0, duration: 2000.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(6), offset: 1999.0, duration: 1141.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(7), offset: 1139.0, duration: 552.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(8), offset: 1691.0, duration: 157.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(9), offset: 1848.0, duration: 309.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(10), offset: 2157.0, duration: 1002.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(11), offset: 3159.0, duration: 1270.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(12), offset: 1267.0, duration: 378.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(13), offset: 1645.0, duration: 3248.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(14), offset: 3244.0, duration: 5413.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(15), offset: 1484.0, duration: 460.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(16), offset: 453.0, duration: 2028.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(17), offset: 2481.0, duration: 781.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(18), offset: 773.0, duration: 2413.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(19), offset: 3186.0, duration: 5518.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(20), offset: 637.0, duration: 723.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(21), offset: 1360.0, duration: 2281.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(22), offset: 0.0, duration: 3556.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(23), offset: 3556.0, duration: 2944.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(24), offset: 1.0, duration: 511.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(25), offset: 512.0, duration: 2885.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(26), offset: 0.0, duration: 806.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(27), offset: 806.0, duration: 3918.0, mediaType: .audioMPEG),
-            TestOutcome(chapter: UInt(28), offset: 2160.0, duration: 751.0, mediaType: .audioMPEG)
-        ]
+        TestOutcome(chapter: UInt(0), offset: 0.0, duration: 125.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(1), offset: 2.0, duration: 3.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 5.0, duration: 3435.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 1.0, duration: 1680.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 0.0, duration: 2738.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 2738.0, duration: 2000.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 1999.0, duration: 1141.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 1139.0, duration: 552.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(8), offset: 1691.0, duration: 157.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(9), offset: 1848.0, duration: 309.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(10), offset: 2157.0, duration: 1002.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(11), offset: 3159.0, duration: 1270.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(12), offset: 1267.0, duration: 378.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(13), offset: 1645.0, duration: 3248.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(14), offset: 3244.0, duration: 5413.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(15), offset: 1484.0, duration: 460.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(16), offset: 453.0, duration: 2028.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(17), offset: 2481.0, duration: 781.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(18), offset: 773.0, duration: 2413.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(19), offset: 3186.0, duration: 5518.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(20), offset: 637.0, duration: 723.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(21), offset: 1360.0, duration: 2281.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(22), offset: 0.0, duration: 3556.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(23), offset: 3556.0, duration: 2944.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(24), offset: 1.0, duration: 511.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(25), offset: 512.0, duration: 2885.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(26), offset: 0.0, duration: 806.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(27), offset: 806.0, duration: 3918.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(28), offset: 2160.0, duration: 751.0, mediaType: .audioMPEG)
+    ]
+    
+    var bigFailManifestExpectedResults = [
+        TestOutcome(chapter: UInt(0), offset: 0.0, duration: 15.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(1), offset: 0.0, duration: 7.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(2), offset: 0.0, duration: 586.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(3), offset: 0.0, duration: 3061.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(4), offset: 0.0, duration: 2740.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(5), offset: 0.0, duration: 2177.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(6), offset: 0.0, duration: 2395.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(7), offset: 0.0, duration: 2230.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(8), offset: 0.0, duration: 4218.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(9), offset: 0.0, duration: 1991.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(10), offset: 0.0, duration: 2830.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(11), offset: 0.0, duration: 1533.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(12), offset: 0.0, duration: 2811.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(13), offset: 0.0, duration: 1752.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(14), offset: 0.0, duration: 2367.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(15), offset: 0.0, duration: 2863.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(16), offset: 0.0, duration: 3025.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(17), offset: 0.0, duration: 2596.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(18), offset: 0.0, duration: 2296.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(19), offset: 0.0, duration: 3019.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(20), offset: 0.0, duration: 2006.0, mediaType: .audioMPEG),
+        TestOutcome(chapter: UInt(21), offset: 0.0, duration: 36.0, mediaType: .audioMPEG)
+    ]
 
     func testTocManifest() async throws {
         try await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
@@ -279,6 +304,10 @@ class AudiobookTOCTests: XCTestCase {
     
     func testQuickSilverManifest() async throws {
         try await validate(manifest: "quicksilver_manifest", against: quicksilverManifestExpectedResults)
+    }
+    
+    func testBigFailManifest() async throws {
+        try await validate(manifest: "theBigFail_manifest", against: bigFailManifestExpectedResults)
     }
     
     private func validate(manifest: String, against results: [TestOutcome]) async throws {

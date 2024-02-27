@@ -70,7 +70,7 @@ import Foundation
     
     /// Skip forward or backward with the desired interval in seconds,
     /// returns the actual time interval delivered to the Player.
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())?) -> ()
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation?)->())?) -> ()
 
     /// Move playhead and immediately start playing
     /// This method is useful for scenarios like a table of contents
