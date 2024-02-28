@@ -13,21 +13,14 @@ import MediaPlayer
 class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
 
     @ObservedObject private var reachability = Reachability()
-    private var debounceTimer: Timer?
+    private var progressUpdateSubject = PassthroughSubject<Void, Never>()
+    private var progressUpdateSubscription: AnyCancellable?
 
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
     var currentLocation: ChapterLocation? {
         didSet {
             debounceProgressUpdate()
-        }
-    }
-    
-    private func debounceProgressUpdate() {
-        debounceTimer?.invalidate()
-        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
-            self?.updateProgress()
-            self?.checkForEndOfChapter()
         }
     }
     
@@ -106,8 +99,18 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
                 }
             }
             .store(in: &subscriptions)
+        progressUpdateSubscription = progressUpdateSubject
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { [weak self] in
+                self?.updateProgress()
+                self?.checkForEndOfChapter()
+            }
         self.audiobookManager.fetchBookmarks { _ in }
         self.audiobookManager.timerDelegate = self
+    }
+    
+    private func debounceProgressUpdate() {
+        progressUpdateSubject.send()
     }
     
     deinit {
@@ -137,10 +140,12 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
             return
         }
+
         isWaitingForPlayer = true
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
+            self.isWaitingForPlayer = false
         }
     }
     
@@ -150,6 +155,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { adjustedLocation in
             self.currentLocation = adjustedLocation
             self.audiobookManager.saveLocation()
+            self.isWaitingForPlayer = false
         }
     }
 

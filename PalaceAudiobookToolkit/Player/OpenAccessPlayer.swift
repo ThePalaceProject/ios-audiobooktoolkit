@@ -188,9 +188,12 @@ class OpenAccessPlayer: NSObject, Player {
         self.notifyDelegatesOfUnloadRequest()
     }
     
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation)->())? = nil) {
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation?)->())? = nil) {
+        queuedSeekOffset = nil
+
         guard let currentLocation = currentChapterLocation else {
             ATLog(.error, "Current chapter location is not available.")
+            completion?(nil)
             return
         }
         
@@ -200,37 +203,97 @@ class OpenAccessPlayer: NSObject, Player {
             skipBackward(timeInterval, from: currentLocation, completion: completion)
         }
     }
-    
-    private func skipForward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
-        let remainingTime = currentLocation.timeRemaining
-        if timeInterval < remainingTime {
-            updatePlayhead(for: currentLocation, withOffset: currentLocation.playheadOffset + timeInterval, completion: completion)
+
+    private func skipForward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation) -> ())?) {
+        var timeIntervalRemaining = timeInterval
+        let remainingTimeInCurrentChapter = currentLocation.duration - currentLocation.actualOffset
+        
+        // Case 1: Skip within the current chapter
+        if timeIntervalRemaining < remainingTimeInCurrentChapter {
+            let newOffset = currentLocation.playheadOffset + timeIntervalRemaining
+            guard let newLocation = currentLocation.update(playheadOffset: newOffset) else { return }
+            updatePlayhead(for: newLocation, withOffset: newOffset, completion: completion)
         } else {
-            guard let nextChapter = cursor.next()?.currentElement.chapter,
-                  let newLocation = nextChapter.update(playheadOffset: timeInterval - remainingTime + (nextChapter.chapterOffset ?? 0)) else {
-                ATLog(.error, "Next chapter location could not be determined.")
-                return
+            // Case 2 & 3: Skip requires moving to next chapter(s)
+            timeIntervalRemaining -= remainingTimeInCurrentChapter
+            
+            var nextChapterCursor = cursor.next()
+            while let nextChapter = nextChapterCursor?.currentElement.chapter, timeIntervalRemaining > 0 {
+                if timeIntervalRemaining < nextChapter.duration {
+                    // Skip is within the next chapter
+                    let newOffset = max(timeIntervalRemaining, nextChapter.chapterOffset ?? 0)
+                    guard let newLocation = nextChapter.update(playheadOffset: newOffset) else { return }
+                    playAtLocation(newLocation)
+                    completion?(newLocation)
+                    return
+                } else {
+                    // Skip exceeds the duration of the next chapter, move to the following chapter
+                    timeIntervalRemaining -= nextChapter.duration
+                    nextChapterCursor = nextChapterCursor?.next()
+                }
             }
-            playAtLocation(newLocation)
-            completion?(newLocation)
+            
+            // Case 4: End of the audiobook or no more chapters to skip through
+            if let lastChapter = nextChapterCursor?.currentElement.chapter {
+                // Attempt to set the playhead to the end of the last available chapter
+                guard let newLocation = lastChapter.update(playheadOffset: lastChapter.duration) else { return }
+                playAtLocation(newLocation)
+                completion?(newLocation)
+            } else {
+                // Handle the scenario where we cannot skip any further
+                ATLog(.error, "Reached the end of the audiobook or no more chapters available for skipping.")
+                let currentChapter = cursor.currentElement.chapter
+                guard let newLocation = currentChapter.update(playheadOffset: currentChapter.duration) else { return }
+                updatePlayhead(for: newLocation, withOffset: currentChapter.duration, completion: completion)
+            }
         }
     }
-    
-    private func skipBackward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation)->())?) {
-        if currentLocation.actualOffset + timeInterval > 0 {
-            updatePlayhead(for: currentLocation, withOffset: currentLocation.playheadOffset + timeInterval, completion: completion)
+
+    private func skipBackward(_ timeInterval: TimeInterval, from currentLocation: ChapterLocation, completion: ((ChapterLocation?) -> ())?) {
+        var timeIntervalRemaining = abs(timeInterval) // Ensure positive value for calculation
+        let actualOffsetInCurrentChapter = currentLocation.actualOffset // Assuming this is correctly calculated
+        
+        // Case 1: Skip within the current chapter
+        if timeIntervalRemaining <= actualOffsetInCurrentChapter {
+            // Calculate new offset ensuring it doesn't go below zero
+            let newOffset = max(currentLocation.playheadOffset - timeIntervalRemaining, 0)
+            guard let newLocation = currentLocation.update(playheadOffset: newOffset) else { return }
+            updatePlayhead(for: newLocation, withOffset: newOffset, completion: completion)
         } else {
-            let timeIntoPreviousChapter = timeInterval + currentLocation.actualOffset
-            guard let previousChapter = cursor.prev()?.currentElement.chapter,
-                  let newLocation = previousChapter.update(playheadOffset: (previousChapter.chapterOffset ?? 0.0) + previousChapter.duration + timeIntoPreviousChapter) else {
-                ATLog(.error, "Previous chapter location could not be determined.")
-                return
+            // Case 2 & 3: Skip requires moving to previous chapter(s)
+            timeIntervalRemaining -= actualOffsetInCurrentChapter
+            
+            var previousChapterCursor = cursor.prev()
+            while let previousChapter = previousChapterCursor?.currentElement.chapter {
+                let chapterDuration = previousChapter.duration
+                if timeIntervalRemaining < chapterDuration {
+                    // Calculate the offset from the end of the chapter
+                    let newOffset = chapterDuration - timeIntervalRemaining
+                    guard let newLocation = previousChapter.update(playheadOffset: newOffset) else { return }
+                    playAtLocation(newLocation)
+                    completion?(newLocation)
+                    return
+                }
+                timeIntervalRemaining -= chapterDuration
+                previousChapterCursor = previousChapterCursor?.prev()
             }
-            playAtLocation(newLocation)
-            completion?(newLocation)
+            
+            // Case 4: Reached the beginning of the audiobook or no more chapters to skip through
+            if let firstChapter = cursor.first()?.currentElement.chapter {
+                // Set the playhead to the beginning of the first chapter
+                guard let newLocation = firstChapter.update(playheadOffset: 0) else { return }
+                playAtLocation(newLocation)
+                completion?(newLocation)
+            } else {
+                // In case the cursor does not have a 'first' method, fallback to current location with offset 0
+                // This case might occur if the audiobook structure is unusual or if there's an issue with the cursor implementation
+                guard let newLocation = currentLocation.update(playheadOffset: 0) else { return }
+                playAtLocation(newLocation)
+                completion?(newLocation)
+            }
         }
     }
-    
+
     private func updatePlayhead(for location: ChapterLocation, withOffset offset: TimeInterval, completion: ((ChapterLocation)->())?) {
         guard let newLocation = location.update(playheadOffset: offset) else {
             ATLog(.error, "New chapter location could not be created.")
@@ -271,7 +334,8 @@ class OpenAccessPlayer: NSObject, Player {
             self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
                 if success {
                     self.cursor = newPlayhead.cursor
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
+                    self.queuedSeekOffset = nil
+                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset, forceSync: true)
                     self.play()
                     completion?(nil)
                 } else {
