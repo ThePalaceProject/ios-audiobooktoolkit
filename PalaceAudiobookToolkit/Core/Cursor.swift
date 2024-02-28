@@ -10,17 +10,21 @@ import UIKit
 
 final public class Cursor<T> {
     public var currentElement: T {
-        return self.data[self.index]
+        self.data[self.index]
     }
 
     public func prev() -> Cursor<T>? {
-        return Cursor(data: self.data, index: self.index - 1)
+        Cursor(data: self.data, index: self.index - 1)
     }
     
     public func next() -> Cursor<T>? {
-        return Cursor(data: self.data, index: self.index + 1)
+        Cursor(data: self.data, index: self.index + 1)
     }
     
+    public func first() -> Cursor<T>? {
+        Cursor(data: self.data, index: self.data.startIndex)
+    }
+
     public func cursor(at: (_ element: T) -> Bool) -> Cursor<T>? {
         var cursor: Cursor<T>?
         for (i, element) in self.data.enumerated() {

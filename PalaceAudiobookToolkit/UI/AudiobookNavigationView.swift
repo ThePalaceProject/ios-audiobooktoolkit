@@ -86,6 +86,7 @@ struct AudiobookNavigationView: View {
                         if playback.spineErrors[spineElement.key] != nil {
                             spineElement.downloadTask.fetch()
                         } else {
+                            selectedLocation = .emptyLocation
                             selectedLocation = spineElement.chapter
                             presentationMode.wrappedValue.dismiss()
                         }
