@@ -115,6 +115,8 @@ class OpenAccessPlayer: NSObject, Player {
 
         switch self.playerIsReady {
         case .readyToPlay:
+            self.cursorQueuedToPlay = self.cursor
+
             self.avQueuePlayer.play()
             let rate = PlaybackRate.convert(rate: self.playbackRate)
             if rate != self.avQueuePlayer.rate {
@@ -190,7 +192,8 @@ class OpenAccessPlayer: NSObject, Player {
     
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation?)->())? = nil) {
         queuedSeekOffset = nil
-
+        cursorQueuedToPlay = nil
+        
         guard let currentLocation = currentChapterLocation else {
             ATLog(.error, "Current chapter location is not available.")
             completion?(nil)
@@ -325,19 +328,20 @@ class OpenAccessPlayer: NSObject, Player {
         case .saved(_):
             // If we're in the same AVPlayerItem, apply seek directly with AVPlayer.
             if newPlayhead.location.inSameChapter(other: self.chapterAtCurrentCursor) {
-                self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset)
-                completion?(nil)
-                return
+                self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset) {
+                    completion?(nil)
+                    return
+                }
             }
             // Otherwise, check for an AVPlayerItem at the new cursor, rebuild the player
             // queue starting from there, and then begin playing at that location.
             self.buildNewPlayerQueue(atCursor: newPlayhead.cursor) { (success) in
                 if success {
                     self.cursor = newPlayhead.cursor
-                    self.queuedSeekOffset = nil
-                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset, forceSync: true)
-                    self.play()
-                    completion?(nil)
+                    self.seekWithinCurrentItem(newOffset: newPlayhead.location.playheadOffset, forceSync: true) {
+                        self.play()
+                        completion?(nil)
+                    }
                 } else {
                     ATLog(.error, "Failed to create a new queue for the player. Keeping playback at the current player item.")
                     let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)
@@ -346,6 +350,9 @@ class OpenAccessPlayer: NSObject, Player {
                 }
             }
         case .missing(_):
+            self.cursor = newPlayhead.cursor
+            self.queuedSeekOffset = newPlayhead.location.playheadOffset
+
             // TODO: Could eventually handle streaming from here.
             guard self.playerIsReady != .readyToPlay || self.playerIsReady != .failed else {
                 let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.downloadNotFinished.rawValue, userInfo: nil)
@@ -354,8 +361,6 @@ class OpenAccessPlayer: NSObject, Player {
                 return
             }
 
-            self.cursor = newPlayhead.cursor
-            self.queuedSeekOffset = newPlayhead.location.playheadOffset
             self.taskCompletion = completion
             rebuildOnFinishedDownload(task: newPlayhead.cursor.currentElement.downloadTask)
             return
@@ -373,7 +378,11 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     /// Moving within the current AVPlayerItem.
-    private func seekWithinCurrentItem(newOffset: TimeInterval, forceSync: Bool = false) {
+    private func seekWithinCurrentItem(newOffset: TimeInterval, forceSync: Bool = false, completion: (() -> Void)? = nil) {
+        defer {
+            completion?()
+        }
+
         guard let currentItem = avQueuePlayer.currentItem else {
             ATLog(.error, "No current AVPlayerItem in AVQueuePlayer to seek.")
             return
@@ -386,16 +395,20 @@ class OpenAccessPlayer: NSObject, Player {
         }
         
         let effectiveOffset = queuedSeekOffset ?? newOffset
-        queuedSeekOffset = nil // Clear queued offset since we're now applying it
         
         currentItem.seek(to: CMTime(seconds: effectiveOffset, preferredTimescale: CMTimeScale(NSEC_PER_SEC))) { [weak self] finished in
             guard let self = self else { return }
             
             if finished {
+                queuedSeekOffset = nil
+                self.cursorQueuedToPlay = nil
                 ATLog(.debug, "Seek operation to offset \(effectiveOffset) finished.")
                 let updatedChapter = self.chapterAtCurrentCursor.update(playheadOffset: effectiveOffset)
                 self.notifyDelegatesOfPlaybackFor(chapter: updatedChapter ?? self.chapterAtCurrentCursor)
             } else {
+                queuedSeekOffset = newOffset
+                self.cursorQueuedToPlay = self.cursor
+
                 ATLog(.error, "Seek operation failed on AVPlayerItem")
             }
         }
@@ -441,8 +454,9 @@ class OpenAccessPlayer: NSObject, Player {
                     self.cursorQueuedToPlay = nil
                     self.buildNewPlayerQueue(atCursor: cursor) { success in
                         if success {
-                            self.seekWithinCurrentItem(newOffset: (self.queuedSeekOffset ?? 0) > 0 ? self.queuedSeekOffset ?? self.chapterAtCurrentCursor.playheadOffset : self.chapterAtCurrentCursor.playheadOffset, forceSync: true)
-                            self.play()
+                            self.seekWithinCurrentItem(newOffset: (self.queuedSeekOffset ?? 0) > 0 ? self.queuedSeekOffset ?? self.chapterAtCurrentCursor.playheadOffset : self.chapterAtCurrentCursor.playheadOffset, forceSync: true) {
+                                self.play()
+                            }
                         } else {
                             ATLog(.error, "User attempted to play when the player wasn't ready.")
                             let error = NSError(domain: errorDomain, code: OpenAccessPlayerError.playerNotReady.rawValue, userInfo: nil)
