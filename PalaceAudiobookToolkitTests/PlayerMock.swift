@@ -34,7 +34,7 @@ class PlayerMock: Player {
     
     func pause() { }
 
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation) -> ())?) { }
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((PalaceAudiobookToolkit.ChapterLocation?) -> ())?) { }
 
     func unload() { }
     

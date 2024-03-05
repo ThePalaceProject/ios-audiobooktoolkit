@@ -10,7 +10,7 @@ import Foundation
 
 /// This class represents a location in a book.
 @objcMembers public final class ChapterLocation: NSObject, Comparable, Codable {
-    public let type: String? = "LocatorAudioBookTime"
+    public var type: String? = "LocatorAudioBookTime"
     public let number: UInt
     public let part: UInt
     // Starting offset for current chapter in the event chapter does not begin at the start of the audio file
@@ -18,10 +18,10 @@ import Foundation
     // Actual offset of the playhead based on location in audio file
     public let playheadOffset: TimeInterval
     public let title: String?
-    public let audiobookID: String
+    public let audiobookID: String?
     public let duration: TimeInterval
     public var lastSavedTimeStamp: String = ""
-    public var annotationId: String = ""
+    public var annotationId: String? = ""
     
     public var actualOffset: TimeInterval {
         max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
@@ -90,35 +90,35 @@ import Foundation
         self.audiobookID == location.audiobookID &&
         self.duration == location.duration
     }
-    
+
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         
-        // Legacy bookmarks will not have a type property and need to be decoded
-        // using legacy keys.
-        guard values.contains(.type) else {
+        if !values.contains(.type) {
+            // Decode using LegacyKeys if @type is not present
             let legacyValues = try decoder.container(keyedBy: LegacyKeys.self)
             audiobookID = try legacyValues.decode(String.self, forKey: .audiobookID)
-            title = try legacyValues.decode(String.self, forKey: .title)
+            title = try legacyValues.decodeIfPresent(String.self, forKey: .title)
             number = try legacyValues.decode(UInt.self, forKey: .number)
             part = try legacyValues.decode(UInt.self, forKey: .part)
-            duration = Double(try legacyValues.decode(Float.self, forKey: .duration))
-            playheadOffset = Double(try legacyValues.decode(Float.self, forKey: .playheadOffset))
-            chapterOffset = Double(try legacyValues.decode(Float.self, forKey: .startOffset))
-            lastSavedTimeStamp = try legacyValues.decode(String.self, forKey: .lastSavedTimeStamp)
-            return
+            duration = try legacyValues.decode(Double.self, forKey: .duration)
+            playheadOffset = try legacyValues.decode(Double.self, forKey: .playheadOffset)
+            chapterOffset = try legacyValues.decodeIfPresent(Double.self, forKey: .startOffset)
+            // Handle other properties like lastSavedTimeStamp and annotationId as needed
+        } else {
+            // Normal decoding for new format
+            audiobookID = try values.decode(String.self, forKey: .audiobookID)
+            title = try values.decodeIfPresent(String.self, forKey: .title)
+            number = try values.decode(UInt.self, forKey: .number)
+            part = try values.decode(UInt.self, forKey: .part)
+            duration = Double(try values.decode(Int.self, forKey: .duration))/1000
+            playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset))/1000
+            chapterOffset = Double(try values.decodeIfPresent(Int.self, forKey: .startOffset) ?? 0)/1000
+            type = try values.decodeIfPresent(String.self, forKey: .type)
+            // Handle other properties like lastSavedTimeStamp and annotationId as needed
         }
-        
-        audiobookID = try values.decode(String.self, forKey: .audiobookID)
-        title = try values.decode(String.self, forKey: .title)
-        number = try values.decode(UInt.self, forKey: .number)
-        part = try values.decode(UInt.self, forKey: .part)
-        duration = Double(try values.decode(Int.self, forKey: .duration)/1000)
-        playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset)/1000)
-        chapterOffset = Double(try values.decode(Int.self, forKey: .startOffset)/1000)
-        annotationId = try values.decode(String.self, forKey: .annotationId)
-        lastSavedTimeStamp = try values.decode(String.self, forKey: .lastSavedTimeStamp)
     }
+
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -154,8 +154,8 @@ import Foundation
             startOffset: self.chapterOffset,
             playheadOffset: offset,
             title: self.title,
-            audiobookID: self.audiobookID,
-            annotationId: annotationId
+            audiobookID: self.audiobookID ?? "",
+            annotationId: annotationId ?? ""
         )
     }
     
@@ -191,10 +191,16 @@ extension ChapterLocation: NSCopying {
             startOffset: chapterOffset,
             playheadOffset: playheadOffset,
             title: title,
-            audiobookID: audiobookID
+            audiobookID: audiobookID ?? ""
         )
         copy.lastSavedTimeStamp = self.lastSavedTimeStamp
         copy.annotationId = self.annotationId
         return copy
+    }
+}
+
+extension ChapterLocation {
+    public var isUnsynced: Bool {
+        return self.annotationId?.isEmpty ?? true
     }
 }
