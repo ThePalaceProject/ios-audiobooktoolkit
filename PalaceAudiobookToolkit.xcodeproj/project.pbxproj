@@ -60,6 +60,7 @@
 		A97CE12F21ED0BF700B64305 /* OpenAccessSpineElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE12E21ED0BF700B64305 /* OpenAccessSpineElement.swift */; };
 		A97CE13121ED388D00B64305 /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */; };
 		A9DC9CFD220547F800D122F2 /* ErrorDescriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */; };
+		D5A0909C2B97986500C0FF2F /* theBigFail_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = D5A0909B2B97986500C0FF2F /* theBigFail_manifest.json */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
 		E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
@@ -79,7 +80,6 @@
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */ = {isa = PBXBuildFile; productRef = E5A7C3A72943A8920083BE1F /* Transifex */; };
 		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
-		E5EC848D2B8D3E4B002450F6 /* theBigFail_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5EC848C2B8D3E4B002450F6 /* theBigFail_manifest.json */; };
 		E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
 		E71168B82AB453A800629DC7 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B72AB453A800629DC7 /* Reachability.swift */; };
@@ -171,6 +171,7 @@
 		A97CE12E21ED0BF700B64305 /* OpenAccessSpineElement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessSpineElement.swift; sourceTree = "<group>"; };
 		A97CE13021ED388D00B64305 /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorDescriptions.swift; sourceTree = "<group>"; };
+		D5A0909B2B97986500C0FF2F /* theBigFail_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = theBigFail_manifest.json; sourceTree = "<group>"; };
 		E503256C27FE8EFA00317F68 /* Array+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Extensions.swift"; sourceTree = "<group>"; };
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
 		E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Extensions.swift"; sourceTree = "<group>"; };
@@ -189,7 +190,6 @@
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
 		E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TXNativeExtensions.swift; sourceTree = "<group>"; };
-		E5EC848C2B8D3E4B002450F6 /* theBigFail_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; name = theBigFail_manifest.json; path = ../../../../../Downloads/theBigFail_manifest.json; sourceTree = "<group>"; };
 		E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocation.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlaybackModel.swift; sourceTree = "<group>"; };
@@ -413,9 +413,9 @@
 		E549653127FBEAA900913BD6 /* TestResources */ = {
 			isa = PBXGroup;
 			children = (
+				D5A0909B2B97986500C0FF2F /* theBigFail_manifest.json */,
 				E549653227FBEAC400913BD6 /* toc_manifest.json */,
 				E530532F29B69B91005E831F /* snowcrash_manifest.json */,
-				E5EC848C2B8D3E4B002450F6 /* theBigFail_manifest.json */,
 				E5A018BE2936887E003F6D01 /* alice_manifest.json */,
 				E58C53452B7550B000D861EE /* anathem_manifest.json */,
 				E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */,
@@ -574,13 +574,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */,
-				E5EC848D2B8D3E4B002450F6 /* theBigFail_manifest.json in Resources */,
 				E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */,
 				E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */,
 				E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
 				E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */,
 				E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */,
+				D5A0909C2B97986500C0FF2F /* theBigFail_manifest.json in Resources */,
 				E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */,
 				E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */,
 			);
