@@ -240,10 +240,7 @@ enum BookmarkError: Error {
     
     public func deleteBookmark(at location: ChapterLocation, completion: @escaping (Bool) -> Void) {
         bookmarkDelegate?.deleteBookmark(at: location, completion: { [weak self] success in
-            if success {
-                self?.audiobookBookmarks.removeAll(where: { $0.isSimilar(to: location) })
-            }
-
+            self?.audiobookBookmarks.removeAll(where: { $0.isSimilar(to: location) })
             completion(success)
         })
     }

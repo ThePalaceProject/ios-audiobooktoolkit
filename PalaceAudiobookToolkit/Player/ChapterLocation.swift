@@ -21,7 +21,7 @@ import Foundation
     public let audiobookID: String?
     public let duration: TimeInterval
     public var lastSavedTimeStamp: String = ""
-    public var annotationId: String? = ""
+    public var annotationId: String = ""
     
     public var actualOffset: TimeInterval {
         max(self.playheadOffset - (self.chapterOffset ?? 0), 0)
@@ -41,7 +41,6 @@ import Foundation
     }
     
     enum LegacyKeys: String, CodingKey {
-        case type = "@type"
         case number
         case part
         case startOffset
@@ -115,7 +114,8 @@ import Foundation
             playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset))/1000
             chapterOffset = Double(try values.decodeIfPresent(Int.self, forKey: .startOffset) ?? 0)/1000
             type = try values.decodeIfPresent(String.self, forKey: .type)
-            // Handle other properties like lastSavedTimeStamp and annotationId as needed
+            annotationId = try values.decode(String.self, forKey: .annotationId)
+            lastSavedTimeStamp = try values.decode(String.self, forKey: .lastSavedTimeStamp)
         }
     }
 
@@ -155,7 +155,7 @@ import Foundation
             playheadOffset: offset,
             title: self.title,
             audiobookID: self.audiobookID ?? "",
-            annotationId: annotationId ?? ""
+            annotationId: annotationId
         )
     }
     
@@ -201,6 +201,6 @@ extension ChapterLocation: NSCopying {
 
 extension ChapterLocation {
     public var isUnsynced: Bool {
-        return self.annotationId?.isEmpty ?? true
+        return self.annotationId.isEmpty
     }
 }

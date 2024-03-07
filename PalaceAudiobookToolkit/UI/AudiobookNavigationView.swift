@@ -149,7 +149,11 @@ struct AudiobookNavigationView: View {
                     .onDelete { indexSet in
                         for index in indexSet.reversed() {
                             if let bookmark = playback.audiobookManager.audiobookBookmarks[safe: index] {
-                                playback.audiobookManager.deleteBookmark(at: bookmark) { _ in }
+                                playback.audiobookManager.deleteBookmark(at: bookmark) { _ in
+                                    playback.audiobookManager.fetchBookmarks { bookmarks in
+                                        self.bookmarks = bookmarks
+                                    }
+                                }
                             }
                         }
                     }
