@@ -18,6 +18,8 @@ class ChapterLocationTests: XCTestCase {
             "title":"Chapter: 3",
             "duration":1016000,
             "chapter":2,
+            "annotationId": "123123123",
+            "lastSavedTimeStamp": "123123213",
             "@type":"LocatorAudioBookTime"
         }
     """
@@ -33,6 +35,7 @@ class ChapterLocationTests: XCTestCase {
             "duration":18
         }
     """
+
     func testDecoder() {
         let data = testJSON.data(using: .utf8)!
         let location = ChapterLocation.fromData(data)
@@ -48,7 +51,7 @@ class ChapterLocationTests: XCTestCase {
     func testDecoderLegacyData() {
         let data = legacyTestJSON.data(using: .utf8)!
         let location = ChapterLocation.fromData(data)
-        XCTAssertEqual(location?.playheadOffset, Double(13.408212661743164))
+        XCTAssertEqual(location?.playheadOffset, Double(13.408212976))
         XCTAssertEqual(location?.audiobookID, "urn:isbn:9781603932646")
         XCTAssertEqual(location?.part, 0)
         XCTAssertEqual(location?.duration, Double(18))

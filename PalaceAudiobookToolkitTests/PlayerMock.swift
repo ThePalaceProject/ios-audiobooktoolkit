@@ -10,8 +10,6 @@ import UIKit
 import PalaceAudiobookToolkit
 
 class PlayerMock: Player {
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((PalaceAudiobookToolkit.ChapterLocation?) -> ())?) { }
-
     var queuesEvents: Bool = false
     
     var isDrmOk: Bool = true
@@ -36,7 +34,7 @@ class PlayerMock: Player {
     
     func pause() { }
 
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation) -> ())?) { }
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation?) -> ())?) { }
 
     func unload() { }
     
