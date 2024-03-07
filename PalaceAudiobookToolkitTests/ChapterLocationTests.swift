@@ -18,6 +18,8 @@ class ChapterLocationTests: XCTestCase {
             "title":"Chapter: 3",
             "duration":1016000,
             "chapter":2,
+            "annotationId": "123123123",
+            "lastSavedTimeStamp": "123123213",
             "@type":"LocatorAudioBookTime"
         }
     """
