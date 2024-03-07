@@ -93,7 +93,7 @@ import Foundation
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         
-        if !values.contains(.type) {
+        guard values.contains(.type) else {
             // Decode using LegacyKeys if @type is not present
             let legacyValues = try decoder.container(keyedBy: LegacyKeys.self)
             audiobookID = try legacyValues.decode(String.self, forKey: .audiobookID)
@@ -103,22 +103,21 @@ import Foundation
             duration = try legacyValues.decode(Double.self, forKey: .duration)
             playheadOffset = try legacyValues.decode(Double.self, forKey: .playheadOffset)
             chapterOffset = try legacyValues.decodeIfPresent(Double.self, forKey: .startOffset)
-            // Handle other properties like lastSavedTimeStamp and annotationId as needed
-        } else {
-            // Normal decoding for new format
-            audiobookID = try values.decode(String.self, forKey: .audiobookID)
-            title = try values.decodeIfPresent(String.self, forKey: .title)
-            number = try values.decode(UInt.self, forKey: .number)
-            part = try values.decode(UInt.self, forKey: .part)
-            duration = Double(try values.decode(Int.self, forKey: .duration))/1000
-            playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset))/1000
-            chapterOffset = Double(try values.decodeIfPresent(Int.self, forKey: .startOffset) ?? 0)/1000
-            type = try values.decodeIfPresent(String.self, forKey: .type)
-            annotationId = try values.decode(String.self, forKey: .annotationId)
-            lastSavedTimeStamp = try values.decode(String.self, forKey: .lastSavedTimeStamp)
+            return
         }
-    }
 
+        // Normal decoding for new format
+        audiobookID = try values.decode(String.self, forKey: .audiobookID)
+        title = try values.decodeIfPresent(String.self, forKey: .title)
+        number = try values.decode(UInt.self, forKey: .number)
+        part = try values.decode(UInt.self, forKey: .part)
+        duration = Double(try values.decode(Int.self, forKey: .duration))/1000
+        playheadOffset = Double(try values.decode(Int.self, forKey: .playheadOffset))/1000
+        chapterOffset = Double(try values.decodeIfPresent(Int.self, forKey: .startOffset) ?? 0)/1000
+        type = try values.decodeIfPresent(String.self, forKey: .type)
+        annotationId = try values.decode(String.self, forKey: .annotationId)
+        lastSavedTimeStamp = try values.decode(String.self, forKey: .lastSavedTimeStamp)
+    }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
