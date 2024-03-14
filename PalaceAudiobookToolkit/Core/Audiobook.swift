@@ -28,8 +28,11 @@ import UIKit
 
 @objc public protocol SpineElement: class {
     var key: String { get }
+    var url: URL { get }
+    var title: String { get }
+    var duration: TimeInterval { get }
+    var index: Int { get }
     var downloadTask: DownloadTask { get }
-    var chapter: ChapterLocation { get }
 }
 
 @objc public protocol Audiobook: class {
@@ -37,11 +40,15 @@ import UIKit
     var annotationsId: String { get }
     var spine: [SpineElement] { get }
     var player: Player { get }
+    var tableOfContents: TableOfContents? { get set }
     var drmStatus: DrmStatus { get set }
     func checkDrmAsync()
     func deleteLocalContent()
     init?(JSON: Any?, audiobookId: String?)
+    func chapter(at position: TrackPosition) -> Chapter 
 }
+
+
 
 /// Host app should instantiate a audiobook object with JSON.
 /// This audiobook should then be able to construct utility classes

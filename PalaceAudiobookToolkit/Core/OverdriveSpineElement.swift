@@ -10,7 +10,7 @@ final class OverdriveSpineElement: SpineElement {
         return OverdriveDownloadTask(spineElement: self)
     }()
     
-    lazy var chapter: ChapterLocation = {
+    lazy var chapter: ChapterLocation? = {
         return ChapterLocation(number: self.chapterNumber,
                                part: 0,
                                duration: self.duration,

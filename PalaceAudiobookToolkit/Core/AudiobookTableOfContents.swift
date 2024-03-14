@@ -48,18 +48,6 @@ public final class AudiobookTableOfContents: NSObject {
         self.player.removeDelegate(self)
         self.networkService.removeDelegate(self)
     }
-
-    func currentSpineIndex() -> Int? {
-        if let currentPlayingChapter = self.player.currentChapterLocation {
-            let spine = self.networkService.spine
-            for index in 0..<spine.count {
-                if currentPlayingChapter.inSameChapter(other: spine[index].chapter) {
-                    return index
-                }
-            }
-        }
-        return nil
-    }
 }
 
 extension AudiobookTableOfContents: PlayerDelegate {

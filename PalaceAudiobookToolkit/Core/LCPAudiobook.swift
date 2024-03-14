@@ -9,6 +9,8 @@
 import Foundation
 
 @objc public class LCPAudiobook: NSObject, Audiobook {
+    public var tableOfContents: TableOfContents?
+    
     public var annotationsId: String { uniqueIdentifier }
 
     /// Readium @context parameter value for LCP audiobooks
@@ -61,11 +63,11 @@ import Foundation
                 return nil
             }
         self.uniqueIdentifier = id
-        if let toc = publication["toc"] as? [[String: Any]] {
-            self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
-        } else {
+//        if let toc = publication["toc"] as? [[String: Any]] {
+//            self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
+//        } else {
             self.spine = LCPAudiobook.getSpineElements(resources: resources, identifier: uniqueIdentifier)
-        }
+//        }
         guard let cursor = Cursor(data: spine) else {
             let title = metadata["title"] as? String ?? ""
             ATLog(.error, "Cursor could not be cast to Cursor<LCPSpineElement> in \(id) \(title)")

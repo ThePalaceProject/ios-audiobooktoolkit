@@ -31,23 +31,23 @@ enum OpenAccessSpineElementError: Error {
 }
 
 final class OpenAccessSpineElement: SpineElement {
-
     lazy var downloadTask: DownloadTask = {
         return OpenAccessDownloadTask(spineElement: self)
     }()
 
-    lazy var chapter: ChapterLocation = {
-        return ChapterLocation(
-            number: self.chapterNumber,
-            part: 0,
-            duration: self.duration,
-            startOffset: 0,
-            playheadOffset: 0,
-            title: self.title,
-            audiobookID: self.audiobookID
-            )
-    }()
+//    lazy var chapter: ChapterLocation = {
+//        return ChapterLocation(
+//            number: self.chapterNumber,
+//            part: 0,
+//            duration: self.duration,
+//            startOffset: 0,
+//            playheadOffset: 0,
+//            title: self.title,
+//            audiobookID: self.audiobookID
+//            )
+//    }()
 
+    var index: Int
     let key: String
     let chapterNumber: UInt
     let title: String
@@ -64,7 +64,7 @@ final class OpenAccessSpineElement: SpineElement {
 
     init(JSON: Any?, index: UInt, audiobookID: String, token: String? = nil) throws {
         self.key = "\(audiobookID)-\(index)"
-        self.chapterNumber = index
+        self.index = Int(index)
         self.audiobookID = audiobookID
 
         guard let payload = JSON as? [String: Any],

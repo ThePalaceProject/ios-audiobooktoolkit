@@ -37,7 +37,7 @@ struct AudiobookNavigationView: View {
         self.playback = model
         self._selectedLocation = selectedLocation
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             navigationPicker

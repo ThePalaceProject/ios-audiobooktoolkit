@@ -31,7 +31,7 @@ final class LCPSpineElement: SpineElement {
         return LCPDownloadTask(spineElement: self)
     }()
     
-    lazy var chapter: ChapterLocation = {
+    lazy var chapter: ChapterLocation? = {
         return ChapterLocation(
             number: self.chapterNumber,
             part: 0,

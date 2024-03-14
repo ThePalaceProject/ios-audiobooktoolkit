@@ -1,4 +1,5 @@
 final class OpenAccessAudiobook: Audiobook {
+    var tableOfContents: TableOfContents? = nil
     let player: Player
     var spine: [SpineElement]
     let uniqueIdentifier: String
@@ -23,6 +24,10 @@ final class OpenAccessAudiobook: Audiobook {
     @available(*, deprecated, message: "Use init?(JSON: Any?, token: String?) instead")
     public required convenience init?(JSON: Any?, audiobookId: String?) {
         self.init(JSON: JSON, token: nil)
+    }
+    
+    func chapter(at position: TrackPosition) -> Chapter {
+        tableOfContents.chapter(at: position)
     }
 
     public init?(JSON: Any?, token: String?) {
