@@ -23,7 +23,7 @@ enum ManifestJSON: String, CaseIterable {
 }
 
 final class ManifestDecodingTests: XCTestCase {
-    private let enableDataLogging = false // Set to false to disable data logging
+    private let enableDataLogging = false
     
     func testManifestDecoding() {
         for manifestJSON in ManifestJSON.allCases {
@@ -111,15 +111,21 @@ final class ManifestDecodingTests: XCTestCase {
             }
         }
         // Handle complex fields like author
-        if let jsonAuthors = jsonMetadata["author"] as? [[String: Any]] {
+        if let jsonAuthors = jsonMetadata["author"] as? [String] {
             for (index, author) in manifestMetadata.author.enumerated() {
                 guard index < jsonAuthors.count else { continue }
                 let jsonAuthor = jsonAuthors[index]
-                XCTAssertEqual(author.name, jsonAuthor["name"] as? String)
-                // Handle other author properties
+                XCTAssertEqual(author.name, jsonAuthor)
+            }
+        } else if let jsonAuthor = jsonMetadata["author"] as? [String: Any] {
+            manifestMetadata.author.forEach {
+                XCTAssertEqual($0.name, jsonAuthor["name"] as? String)
+            }
+        } else if let jsonAuthor =  jsonMetadata["author"] as? String {
+            manifestMetadata.author.forEach {
+                XCTAssertEqual($0.name, jsonAuthor)
             }
         }
-        // Continue for other metadata fields
     }
     
     

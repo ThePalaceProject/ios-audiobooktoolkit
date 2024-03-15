@@ -37,7 +37,7 @@ class TPPTracks {
             let tppTrack = Track(
                 href: track.href,
                 title: track.title,
-                duration: track.duration ?? 0 * 1000,
+                duration: Int(track.duration ?? 0 * 1000),
                 index: idx
             )
             self.tracks.append(tppTrack)

@@ -19,7 +19,7 @@ struct Manifest: Codable {
     
     enum CodingKeys: String, CodingKey {
         case context = "@context"
-        case id, metadata, links, readingOrder, resources, toc
+        case metadata, links, readingOrder, resources, toc, id
     }
     
     static func customDecoder() -> JSONDecoder {
@@ -92,13 +92,30 @@ struct Metadata: Codable {
         publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
         duration = try container.decodeIfPresent(Int.self, forKey: .duration)
         
-        if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
-            author = authorArray ?? []
-        } else if let singleAuthor = try? container.decodeIfPresent(Author.self, forKey: .author) {
+        // Decode author array from different formats
+        if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
+            if let authorStrings {
+                author = authorStrings.map { Author(name: $0) }
+            }
+        } else if let singleAuthor = try? container.decodeIfPresent(String.self, forKey: .author) {
             if let singleAuthor {
-                author = [singleAuthor]
+                author = [Author(name: singleAuthor)]
+            }
+        } else if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
+            if let authorArray {
+                author = authorArray
             }
         }
+        
+//        if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
+//            author = authorArray ?? []
+//        } else if let singleAuthor = try container.decodeIfPresent(String.self, forKey: .author) {
+//            author = [Author(name: singleAuthor)]
+//        } else if let authorStringArray = try container.decodeIfPresent([String].self, forKey: .author) {
+//            authorStringArray.forEach {
+//                author = [Author(name: $0)]
+//            }
+//        }
     }
 }
 
