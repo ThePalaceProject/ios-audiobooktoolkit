@@ -333,11 +333,4 @@ class AudiobookTOCTests: XCTestCase {
             XCTAssertEqual(element.mediaType, expected.mediaType, "Media type mismatch at index \(index).")
         }
     }
-
-
-    private func fetchAudiobook(url: URL) async throws -> LCPAudiobook? {
-        let jsonData = try Data(contentsOf: url, options: .mappedIfSafe)
-        let string = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any]
-        return LCPAudiobook(JSON: string, decryptor: nil)
-    }
 }

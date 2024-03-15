@@ -80,6 +80,13 @@
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */ = {isa = PBXBuildFile; productRef = E5A7C3A72943A8920083BE1F /* Transifex */; };
 		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
+		E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* TableOfContents.swift */; };
+		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
+		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
+		E5DE01A82BA3E4580063E68E /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A72BA3E4580063E68E /* Track.swift */; };
+		E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A92BA3E4610063E68E /* Tracks.swift */; };
+		E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01AB2BA3E47A0063E68E /* Manifest.swift */; };
+		E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */; };
 		E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
 		E71168B82AB453A800629DC7 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B72AB453A800629DC7 /* Reachability.swift */; };
@@ -190,6 +197,13 @@
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
 		E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TXNativeExtensions.swift; sourceTree = "<group>"; };
+		E5DE01A12BA3E4420063E68E /* TableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContents.swift; sourceTree = "<group>"; };
+		E5DE01A32BA3E44A0063E68E /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
+		E5DE01A52BA3E4500063E68E /* TrackPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPosition.swift; sourceTree = "<group>"; };
+		E5DE01A72BA3E4580063E68E /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		E5DE01A92BA3E4610063E68E /* Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tracks.swift; sourceTree = "<group>"; };
+		E5DE01AB2BA3E47A0063E68E /* Manifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manifest.swift; sourceTree = "<group>"; };
+		E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestDecodingTests.swift; sourceTree = "<group>"; };
 		E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocation.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlaybackModel.swift; sourceTree = "<group>"; };
@@ -289,6 +303,7 @@
 				7B78545E204DF12600F6589B /* SpineElementMock.swift */,
 				E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */,
 				E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */,
+				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
 				E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */,
 			);
 			path = PalaceAudiobookToolkitTests;
@@ -310,6 +325,7 @@
 		7B7B3709202274C400030A1E /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				E5DE01A02BA3E1830063E68E /* Helpers */,
 				7B7B370A202274DA00030A1E /* Player.swift */,
 				7B7B370E20227A8200030A1E /* OpenAccessPlayer.swift */,
 				7BBF4DFB20506FF600700731 /* SleepTimer.swift */,
@@ -425,6 +441,27 @@
 				E55470132B7C1814003447B8 /* quicksilver_manifest.json */,
 			);
 			path = TestResources;
+			sourceTree = "<group>";
+		};
+		E5DE01A02BA3E1830063E68E /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				E5DE01A12BA3E4420063E68E /* TableOfContents.swift */,
+				E5DE01A32BA3E44A0063E68E /* Chapter.swift */,
+				E5DE01A52BA3E4500063E68E /* TrackPosition.swift */,
+				E5DE01A72BA3E4580063E68E /* Track.swift */,
+				E5DE01A92BA3E4610063E68E /* Tracks.swift */,
+				E5DE01AD2BA3EE460063E68E /* Models */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
+		E5DE01AD2BA3EE460063E68E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				E5DE01AB2BA3E47A0063E68E /* Manifest.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		E72707EA2A54A3A80088B86A /* Tracker */ = {
@@ -632,11 +669,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */,
 				7BD8E4FC20753BC6008ED3F1 /* Bundle.swift in Sources */,
 				A97CE12F21ED0BF700B64305 /* OpenAccessSpineElement.swift in Sources */,
 				8C6CD8AD240DB3C000E2DFB0 /* FeedbookDRMProcessor.swift in Sources */,
 				177E52FC24908FD80031CCCD /* OverdrivePlayer.swift in Sources */,
 				17576CAA248E898600E18B4C /* OverdriveAudiobook.swift in Sources */,
+				E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */,
 				21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */,
 				E67CA9A5215C0D320081A10B /* Log.swift in Sources */,
 				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
@@ -662,6 +701,8 @@
 				7BDD33B320470A7100CC8807 /* HumanReadablePercentage.swift in Sources */,
 				7B5441E1200EA82C0047B6C6 /* AudiobookMetadata.swift in Sources */,
 				17576CAE248E8A0100E18B4C /* OverdriveSpineElement.swift in Sources */,
+				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
+				E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */,
 				E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */,
 				7B7B370B202274DA00030A1E /* Player.swift in Sources */,
 				21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */,
@@ -682,12 +723,14 @@
 				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				178707C824DA505700649567 /* RSAUtils.swift in Sources */,
+				E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */,
 				7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */,
 				8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */,
 				E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */,
 				7BD759CA2017CEA3004CE65F /* DownloadTask.swift in Sources */,
 				8CF57BDC2432788C0053C31E /* Data+BigEndian.swift in Sources */,
 				7BD8E4FA206EB49D008ED3F1 /* VoiceOverTimestamp.swift in Sources */,
+				E5DE01A82BA3E4580063E68E /* Track.swift in Sources */,
 				7BD759BF20168995004CE65F /* AudiobookTableOfContents.swift in Sources */,
 				E79266972AB34315009901B7 /* AudiobookNavigationView.swift in Sources */,
 			);
@@ -706,6 +749,7 @@
 				E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */,
 				8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */,
 				8CD8A20F243E7A0D009DA4CC /* Data+BigEndianTest.swift in Sources */,
+				E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */,
 				E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */,
 				7B6C1BD420405C4D00EB791E /* CursorTests.swift in Sources */,
 				E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */,
