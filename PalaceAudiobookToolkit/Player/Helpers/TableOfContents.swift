@@ -2,7 +2,7 @@
 //  TableOfContents.swift
 //  PalaceAudiobookToolkit
 //
-//  Created by Maurice Work on 3/14/24.
+//  Created by Maurice Carrier on 3/14/24.
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 

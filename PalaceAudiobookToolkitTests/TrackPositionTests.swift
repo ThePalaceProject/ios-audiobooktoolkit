@@ -2,7 +2,7 @@
 //  TrackPositionTests.swift
 //  PalaceAudiobookToolkitTests
 //
-//  Created by Maurice Work on 3/18/24.
+//  Created by Maurice Carrier on 3/18/24.
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
