@@ -27,7 +27,6 @@ class TableOfContentsTests: XCTestCase {
         }
     }
     
-    // Tests the expected chapter counts for each manifest.
     func testChapterCounts() {
         for manifestJSON in ManifestJSON.allCases {
             do {
@@ -35,7 +34,6 @@ class TableOfContentsTests: XCTestCase {
                 let tracks = TPPTracks(manifest: manifest)
                 let tableOfContents = TableOfContents(manifest: manifest, tracks: tracks)
                 
-                // Directly access the chapterCount for the manifestJSON case.
                 let expectedCount = manifestJSON.chapterCount
                 XCTAssertEqual(tableOfContents.toc.count, expectedCount, "Expected \(expectedCount) chapters in \(manifestJSON.rawValue), but found \(tableOfContents.toc.count)")
             } catch {
@@ -44,7 +42,6 @@ class TableOfContentsTests: XCTestCase {
         }
     }
     
-    // Tests for specific chapter titles to ensure they match expectations.
     func testSpecificChapterTitles() {
         let expectedFirstChapterTitles: [ManifestJSON: String] = [
             .alice: "Opening Credits",

@@ -34,7 +34,7 @@ struct TableOfContents: TableOfContentsProtocol {
 
     private mutating func loadToc() {
         let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
-            return flattenChapter(entry: entry, tracks: tracks)
+            return flattenChapters(entry: entry, tracks: tracks)
         } ?? []
         
         self.toc = flatChapters
@@ -47,8 +47,7 @@ struct TableOfContents: TableOfContentsProtocol {
         }
     }
 
-    // Function to flatten chapters, including nested ones, into a single array
-    private func flattenChapter(entry: TOCItem, tracks: Tracks) -> [Chapter] {
+    private func flattenChapters(entry: TOCItem, tracks: Tracks) -> [Chapter] {
         var chapters: [Chapter] = []
         if let track = tracks.byHref(entry.href) {
             let offset = Int(entry.href.replacingOccurrences(of: "t=", with: "")) ?? 0
@@ -58,7 +57,7 @@ struct TableOfContents: TableOfContentsProtocol {
         
         // Recursively flatten any nested children into the same list
         entry.children?.forEach { childEntry in
-            chapters.append(contentsOf: flattenChapter(entry: childEntry, tracks: tracks))
+            chapters.append(contentsOf: flattenChapters(entry: childEntry, tracks: tracks))
         }
         
         return chapters

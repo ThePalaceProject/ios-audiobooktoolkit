@@ -30,7 +30,7 @@ struct TrackPosition: Equatable, Comparable {
         var diff = lhs.timestamp
         guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == lhs.track }),
               let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == rhs.track }) else {
-            throw TrackPositionError.differentTracks // or a more specific error
+            throw TrackPositionError.differentTracks
         }
         
         if lhsTrackIndex <= rhsTrackIndex {
@@ -51,7 +51,7 @@ struct TrackPosition: Equatable, Comparable {
         var newTimestamp = lhs.timestamp + other
         var currentTrack = lhs.track
         
-        // Handle negative addition (effectively subtraction)
+        // Handle subtraction
         while newTimestamp < 0 {
             guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
                 throw TrackPositionError.outOfBounds

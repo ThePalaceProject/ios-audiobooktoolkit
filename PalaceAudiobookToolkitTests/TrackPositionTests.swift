@@ -28,17 +28,14 @@ class TrackPositionTests: XCTestCase {
         try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
     }
     
-    // Perform addition and subtraction tests for each track in the given TPPTracks
     private func testAdditionAndSubtractionForAllTracks(_ tracks: TPPTracks) throws {
         for (index, track) in tracks.tracks.enumerated() {
             let startPosition = TrackPosition(track: track, timestamp: 0, tracks: tracks)
             let middlePosition = TrackPosition(track: track, timestamp: track.duration / 2, tracks: tracks)
             
-            // Test time addition and subtraction within the same track
             try testTimeAdditionWithinTrack(middlePosition)
             try testTimeSubtractionWithinTrack(middlePosition)
             
-            // Test moving to next and previous tracks, if applicable
             if index < tracks.tracks.count - 1 {
                 try testMovingToNextTrack(from: startPosition, in: tracks)
             }
