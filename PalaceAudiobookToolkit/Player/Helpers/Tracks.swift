@@ -15,7 +15,7 @@ protocol Tracks {
     var totalDuration: Int { get }
     var count: Int { get }
     subscript(index: Int) -> Track { get }
-
+    
     func byHref(_ href: String) -> Track?
     func previousTrack(_ track: Track) -> Track?
     func nextTrack(_ trAack: Track) -> Track?

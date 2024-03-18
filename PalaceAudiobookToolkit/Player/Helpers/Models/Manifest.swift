@@ -22,6 +22,24 @@ struct Manifest: Codable {
         case metadata, links, readingOrder, resources, toc, id
     }
     
+    init(
+        context: String? = nil,
+        id: String?,
+        metdata: Metadata,
+        links: [Link] = [],
+        readingOrder: [ReadingOrderItem] = [],
+        resources: [Link]? = nil,
+        toc: [TOCItem]? = nil
+    ) {
+        self.context = context
+        self.id = id
+        self.metadata = metdata
+        self.links = links
+        self.readingOrder = readingOrder
+        self.resources = resources
+        self.toc = toc
+    }
+    
     static func customDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         
@@ -106,16 +124,6 @@ struct Metadata: Codable {
                 author = authorArray
             }
         }
-        
-//        if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
-//            author = authorArray ?? []
-//        } else if let singleAuthor = try container.decodeIfPresent(String.self, forKey: .author) {
-//            author = [Author(name: singleAuthor)]
-//        } else if let authorStringArray = try container.decodeIfPresent([String].self, forKey: .author) {
-//            authorStringArray.forEach {
-//                author = [Author(name: $0)]
-//            }
-//        }
     }
 }
 

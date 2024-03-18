@@ -8,14 +8,14 @@
 
 import Foundation
 
-protocol TableOfContentsSource {
+protocol TableOfContentsProtocol {
     var manifest: Manifest { get }
     var tracks: Tracks { get }
     var toc: [Chapter] { get }
 }
 
 
-struct TableOfContents: TableOfContentsSource {
+struct TableOfContents: TableOfContentsProtocol {
     var manifest: Manifest
     var tracks: Tracks
     var toc: [Chapter]
@@ -70,7 +70,7 @@ struct TableOfContents: TableOfContentsSource {
                 timestamp: tracks[tracks.count - 1].duration,
                 tracks: tracks
             )
-            toc[idx].duration = nextTocPosition - toc[idx].position
+            toc[idx].duration = try? nextTocPosition - toc[idx].position
         }
     }
 

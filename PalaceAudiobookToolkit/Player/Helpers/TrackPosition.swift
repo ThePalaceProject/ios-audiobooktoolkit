@@ -8,45 +8,84 @@
 
 import Foundation
 
-struct TrackPosition: Equatable {
+enum TrackPositionError: Error, Equatable {
+    case outOfBounds
+    case trackOrderCorrupted
+    case differentTracks
+    case calculationError(String)
+}
+
+struct TrackPosition: Equatable, Comparable {
     var track: Track
     var timestamp: Int
     var tracks: Tracks
     
-    static func - (lhs: TrackPosition, rhs: TrackPosition) -> Int? {
-        guard lhs.track == rhs.track else {
-            return nil
-        }
-        return lhs.timestamp - rhs.timestamp
-    }
+    // MARK: - Operators
     
-    static func + (lhs: TrackPosition, other: Int) -> TrackPosition {
+    static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Int {
+        if lhs.track == rhs.track {
+            return lhs.timestamp - rhs.timestamp
+        }
+        
+        var diff = lhs.timestamp
+        guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == lhs.track }),
+              let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == rhs.track }) else {
+            throw TrackPositionError.differentTracks // or a more specific error
+        }
+        
+        if lhsTrackIndex <= rhsTrackIndex {
+            throw TrackPositionError.trackOrderCorrupted
+        }
+        
+        for index in (rhsTrackIndex + 1)...lhsTrackIndex {
+            diff += lhs.tracks.tracks[index].duration
+        }
+        
+        diff += (lhs.tracks.tracks[rhsTrackIndex].duration - rhs.timestamp)
+        
+        return diff
+    }
+
+    
+    static func + (lhs: TrackPosition, other: Int) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
-        var newTrack = lhs.track
+        var currentTrack = lhs.track
         
-        if other < 0 {
-            while newTimestamp < 0 {
-                guard let prevTrack = lhs.tracks.previousTrack(newTrack) else {
-                    fatalError("TrackPosition would be out of bounds")
-                }
-                newTrack = prevTrack
-                newTimestamp += prevTrack.duration
+        // Handle negative addition (effectively subtraction)
+        while newTimestamp < 0 {
+            guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
+                throw TrackPositionError.outOfBounds
             }
-        } else {
-            while newTimestamp > newTrack.duration {
-                newTimestamp -= newTrack.duration
-                guard let nextTrack = lhs.tracks.nextTrack(newTrack) else {
-                    fatalError("TrackPosition would be out of bounds")
-                }
-                newTrack = nextTrack
-            }
+            currentTrack = prevTrack
+            newTimestamp += currentTrack.duration // Assuming `duration` is in the same unit as `timestamp`
         }
         
-        return TrackPosition(track: newTrack, timestamp: newTimestamp, tracks: lhs.tracks)
+        // Handle positive addition
+        while newTimestamp >= currentTrack.duration {
+            newTimestamp -= currentTrack.duration
+            guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
+                if newTimestamp == 0 {
+                    // If exactly at the end of the last track, return this position
+                    return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
+                }
+                throw TrackPositionError.outOfBounds
+            }
+            currentTrack = nextTrack
+        }
+        
+        return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
     
-    // Equatable protocol conformance
+    // MARK: - Comparable and Equatable Protocols
+    
+    static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
+        if lhs.track == rhs.track {
+            return lhs.timestamp < rhs.timestamp
+        }
+        return lhs.track < rhs.track
+    }
+    
     static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        return lhs.track == rhs.track && lhs.timestamp == rhs.timestamp
+        lhs.track == rhs.track && lhs.timestamp == rhs.timestamp
     }
 }

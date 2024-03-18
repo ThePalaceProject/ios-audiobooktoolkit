@@ -28,4 +28,8 @@ extension Track: Comparable {
     static func < (lhs: Track, rhs: Track) -> Bool {
         lhs.href < rhs.href
     }
+
+    static func > (lhs: Track, rhs: Track) -> Bool {
+        lhs.href > rhs.href
+    }
 }
