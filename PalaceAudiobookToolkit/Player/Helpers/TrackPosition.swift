@@ -10,7 +10,7 @@ import Foundation
 
 enum TrackPositionError: Error, Equatable {
     case outOfBounds
-    case trackOrderCorrupted
+    case tracksOutOfOrder
     case differentTracks
     case calculationError(String)
 }
@@ -34,7 +34,7 @@ struct TrackPosition: Equatable, Comparable {
         }
         
         if lhsTrackIndex <= rhsTrackIndex {
-            throw TrackPositionError.trackOrderCorrupted
+            throw TrackPositionError.tracksOutOfOrder
         }
         
         for index in (rhsTrackIndex + 1)...lhsTrackIndex {
@@ -57,7 +57,7 @@ struct TrackPosition: Equatable, Comparable {
                 throw TrackPositionError.outOfBounds
             }
             currentTrack = prevTrack
-            newTimestamp += currentTrack.duration // Assuming `duration` is in the same unit as `timestamp`
+            newTimestamp += currentTrack.duration
         }
         
         // Handle positive addition

@@ -14,11 +14,14 @@ protocol TableOfContentsProtocol {
     var toc: [Chapter] { get }
 }
 
-
 struct TableOfContents: TableOfContentsProtocol {
     var manifest: Manifest
     var tracks: Tracks
     var toc: [Chapter]
+
+    var count: Int {
+        return toc.count
+    }
 
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
@@ -26,7 +29,6 @@ struct TableOfContents: TableOfContentsProtocol {
         self.toc = []
 
         self.loadToc()
-        
         self.calculateDurations()
     }
 
@@ -73,14 +75,6 @@ struct TableOfContents: TableOfContentsProtocol {
             toc[idx].duration = try? nextTocPosition - toc[idx].position
         }
     }
-
-    subscript(index: Int) -> Chapter {
-        return toc[index]
-    }
-    
-    var count: Int {
-        return toc.count
-    }
     
     func nextChapter(after chapter: Chapter) -> Chapter? {
         guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index + 1 < toc.count else {
@@ -105,9 +99,13 @@ struct TableOfContents: TableOfContentsProtocol {
         }
         throw ChapterError.noChapterFoundForPosition
     }
-    
+
     func index(of chapter: Chapter) -> Int? {
         return toc.firstIndex(where: { $0.title == chapter.title })
+    }
+
+    subscript(index: Int) -> Chapter {
+        return toc[index]
     }
 }
 
