@@ -23,22 +23,43 @@ struct TableOfContents: TableOfContentsSource {
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
         self.tracks = tracks
-        self.toc = manifest.toc?.compactMap { entry -> Chapter? in
-            guard let track = tracks.byHref(entry.href) else {
-                    return nil
-            }
+        self.toc = []
 
-            let offset = Int(entry.href.replacingOccurrences(of: "t=", with: "")) ?? 0
-
-            return Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timeStamp: offset * 1000, tracks: tracks))
-        } ?? []
-        
-        if let firstEntry = self.toc.first, firstEntry.position.timeStamp != 0 || firstEntry.position.track.index != 0 {
-            let firstTrackPosition = TrackPosition(track: tracks[0], timeStamp: 0, tracks: tracks)
-            self.toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
-        }
+        self.loadToc()
         
         self.calculateDurations()
+    }
+
+    private mutating func loadToc() {
+        let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
+            return flattenChapter(entry: entry, tracks: tracks)
+        } ?? []
+        
+        self.toc = flatChapters
+        
+        if let firstEntry = self.toc.first,
+           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0
+        {
+            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
+            self.toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
+        }
+    }
+
+    // Function to flatten chapters, including nested ones, into a single array
+    private func flattenChapter(entry: TOCItem, tracks: Tracks) -> [Chapter] {
+        var chapters: [Chapter] = []
+        if let track = tracks.byHref(entry.href) {
+            let offset = Int(entry.href.replacingOccurrences(of: "t=", with: "")) ?? 0
+            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offset * 1000, tracks: tracks))
+            chapters.append(chapter)
+        }
+        
+        // Recursively flatten any nested children into the same list
+        entry.children?.forEach { childEntry in
+            chapters.append(contentsOf: flattenChapter(entry: childEntry, tracks: tracks))
+        }
+        
+        return chapters
     }
     
     mutating func calculateDurations() {
@@ -46,7 +67,7 @@ struct TableOfContents: TableOfContentsSource {
             let nextTocPosition = idx + 1 < toc.count ? toc[idx + 1].position :
             TrackPosition(
                 track: tracks[tracks.count - 1],
-                timeStamp: tracks[tracks.count - 1].duration,
+                timestamp: tracks[tracks.count - 1].duration,
                 tracks: tracks
             )
             toc[idx].duration = nextTocPosition - toc[idx].position
@@ -77,8 +98,8 @@ struct TableOfContents: TableOfContentsSource {
     
     func chapter(forPosition position: TrackPosition) throws -> Chapter {
         for chapter in toc {
-            if position.track == chapter.position.track && position.timeStamp >= chapter.position.timeStamp &&
-                position.timeStamp < chapter.position.timeStamp + (chapter.duration ?? 0) {
+            if position.track == chapter.position.track && position.timestamp >= chapter.position.timestamp &&
+                position.timestamp < chapter.position.timestamp + (chapter.duration ?? 0) {
                 return chapter
             }
         }

@@ -11,15 +11,31 @@ import XCTest
 
 
 enum ManifestJSON: String, CaseIterable {
-    case bigFail = "theBigFail_manifest"
-    case tocManifest = "toc_manifest"
-    case snowcrash = "snowcrash_manifest"
     case alice = "alice_manifest"
     case anathem = "anathem_manifest"
-    case theSystemOfTheWorld = "the_system_of_the_world_manifest"
-    case nonTocManifest = "non_toc_manifest"
+    case bigFail = "theBigFail_manifest"
     case christmasCarol = "christmas_carol_manifest"
+    case flatland = "flatland_manifest"
+    case nonTocManifest = "non_toc_manifest"
     case quickSilver = "quicksilver_manifest"
+    case martian = "the_martian_manifest"
+    case snowcrash = "snowcrash_manifest"
+    case theSystemOfTheWorld = "the_system_of_the_world_manifest"
+
+    var chapterCount: Int {
+        switch self {
+        case .alice: return 13
+        case .anathem: return 17
+        case .bigFail: return 22
+        case .christmasCarol: return 6
+        case .martian: return 41
+        case .nonTocManifest: return 7
+        case .quickSilver: return 29
+        case .snowcrash: return 72
+        case .theSystemOfTheWorld: return 47
+        case .flatland: return 24
+        }
+    }
 }
 
 final class ManifestDecodingTests: XCTestCase {
@@ -27,18 +43,14 @@ final class ManifestDecodingTests: XCTestCase {
     
     func testManifestDecoding() {
         for manifestJSON in ManifestJSON.allCases {
-            guard let url = Bundle(for: type(of: self)).url(forResource: manifestJSON.rawValue, withExtension: "json"),
-                  let jsonData = try? Data(contentsOf: url),
-                  let jsonDictionary = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                XCTFail("Failed to load or parse \(manifestJSON.rawValue).json")
-                continue
-            }
-            
-            let decoder = Manifest.customDecoder()
-            
             do {
-                let manifest = try decoder.decode(Manifest.self, from: jsonData)
-                validate(manifest: manifest, against: jsonDictionary!)
+                let manifest = try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
+                guard let jsonData = try? Data(contentsOf: Bundle(for: type(of: self)).url(forResource: manifestJSON.rawValue, withExtension: "json")!),
+                      let jsonDictionary = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                    XCTFail("Failed to load or parse \(manifestJSON.rawValue).json")
+                    continue
+                }
+                validate(manifest: manifest, against: jsonDictionary)
             } catch {
                 XCTFail("Decoding failed for \(manifestJSON.rawValue) with error: \(error)")
             }
@@ -197,3 +209,16 @@ final class ManifestDecodingTests: XCTestCase {
         }
     }
 }
+
+extension Manifest {
+    static func from(jsonFileName: String, bundle: Bundle = .main) throws -> Manifest {
+        guard let url = bundle.url(forResource: jsonFileName, withExtension: "json"),
+              let jsonData = try? Data(contentsOf: url) else {
+            throw NSError(domain: "ManifestLoadingError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Failed to load \(jsonFileName).json"])
+        }
+        
+        let decoder = Manifest.customDecoder()
+        return try decoder.decode(Manifest.self, from: jsonData)
+    }
+}
+

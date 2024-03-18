@@ -10,7 +10,7 @@ import Foundation
 
 protocol Tracks {
     var manifest: Manifest { get }
-    var tracks: [Tracks] { get }
+    var tracks: [Track] { get }
     var hrefToIndex: [String: Int] { get }
     var totalDuration: Int { get }
     var count: Int { get }
@@ -21,23 +21,23 @@ protocol Tracks {
     func nextTrack(_ trAack: Track) -> Track?
 }
 
-class TPPTracks {
+class TPPTracks: Tracks {
     var manifest: Manifest
     var tracks: [Track]
     var hrefToIndex: [String: Int]
-    var totalDurationMs: Int
+    var totalDuration: Int
     
     init(manifest: Manifest) {
         self.manifest = manifest
         self.tracks = []
         self.hrefToIndex = [:]
-        self.totalDurationMs = 0
+        self.totalDuration = 0
         
         for (idx, track) in manifest.readingOrder.enumerated() {
             let tppTrack = Track(
                 href: track.href,
                 title: track.title,
-                duration: Int(track.duration ?? 0 * 1000),
+                duration: Int(track.duration ?? 0) * 1000,
                 index: idx
             )
             self.tracks.append(tppTrack)
@@ -48,7 +48,8 @@ class TPPTracks {
     }
     
     func byHref(_ href: String) -> Track? {
-        guard let index = hrefToIndex[href] else { return nil }
+        let cleanHref = href.components(separatedBy: "#").first ?? href
+        guard let index = hrefToIndex[cleanHref] else { return nil }
         return tracks[index]
     }
     
@@ -71,6 +72,6 @@ class TPPTracks {
     }
     
     private func calculateTotalDuration() {
-        self.totalDurationMs = tracks.reduce(0) { $0 + $1.duration }
+        self.totalDuration = tracks.reduce(0) { $0 + $1.duration }
     }
 }

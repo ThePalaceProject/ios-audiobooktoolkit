@@ -66,7 +66,7 @@
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
-		E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* toc_manifest.json */; };
+		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
@@ -80,6 +80,7 @@
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */ = {isa = PBXBuildFile; productRef = E5A7C3A72943A8920083BE1F /* Transifex */; };
 		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
+		E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */; };
 		E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* TableOfContents.swift */; };
 		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
 		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
@@ -185,7 +186,7 @@
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
 		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
-		E549653227FBEAC400913BD6 /* toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = toc_manifest.json; sourceTree = "<group>"; };
+		E549653227FBEAC400913BD6 /* flatland_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = flatland_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
 		E55470132B7C1814003447B8 /* quicksilver_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = quicksilver_manifest.json; sourceTree = "<group>"; };
@@ -197,6 +198,7 @@
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
 		E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TXNativeExtensions.swift; sourceTree = "<group>"; };
+		E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContentsTests.swift; sourceTree = "<group>"; };
 		E5DE01A12BA3E4420063E68E /* TableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContents.swift; sourceTree = "<group>"; };
 		E5DE01A32BA3E44A0063E68E /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		E5DE01A52BA3E4500063E68E /* TrackPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPosition.swift; sourceTree = "<group>"; };
@@ -304,6 +306,7 @@
 				E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */,
 				E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */,
 				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
+				E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */,
 				E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */,
 			);
 			path = PalaceAudiobookToolkitTests;
@@ -430,7 +433,7 @@
 			isa = PBXGroup;
 			children = (
 				D5A0909B2B97986500C0FF2F /* theBigFail_manifest.json */,
-				E549653227FBEAC400913BD6 /* toc_manifest.json */,
+				E549653227FBEAC400913BD6 /* flatland_manifest.json */,
 				E530532F29B69B91005E831F /* snowcrash_manifest.json */,
 				E5A018BE2936887E003F6D01 /* alice_manifest.json */,
 				E58C53452B7550B000D861EE /* anathem_manifest.json */,
@@ -612,7 +615,7 @@
 			files = (
 				E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */,
 				E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */,
-				E549653327FBEAC400913BD6 /* toc_manifest.json in Resources */,
+				E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */,
 				E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */,
 				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
 				E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */,
@@ -747,6 +750,7 @@
 				7B78545F204DF12600F6589B /* SpineElementMock.swift in Sources */,
 				8CB60C1524071CBF006EF568 /* FeedbookAudiobookTest.swift in Sources */,
 				E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */,
+				E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */,
 				8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */,
 				8CD8A20F243E7A0D009DA4CC /* Data+BigEndianTest.swift in Sources */,
 				E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */,

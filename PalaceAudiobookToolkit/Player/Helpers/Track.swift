@@ -23,3 +23,9 @@ extension Track: Equatable {
         lhs.title == rhs.title
     }
 }
+
+extension Track: Comparable {
+    static func < (lhs: Track, rhs: Track) -> Bool {
+        lhs.href < rhs.href
+    }
+}
