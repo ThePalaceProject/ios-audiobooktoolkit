@@ -67,7 +67,7 @@
 		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
 		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
-		E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* non_toc_manifest.json */; };
+		E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */; };
 		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
 		E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */; };
@@ -83,7 +83,6 @@
 		E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */; };
 		E5CC0CFC2BA8ABD9001BF751 /* TrackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFB2BA8ABD9001BF751 /* TrackTests.swift */; };
 		E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */; };
-		E5CC0D012BA8B700001BF751 /* MockTracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0D002BA8B700001BF751 /* MockTracks.swift */; };
 		E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* TableOfContents.swift */; };
 		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
 		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
@@ -190,7 +189,7 @@
 		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
 		E549653227FBEAC400913BD6 /* flatland_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = flatland_manifest.json; sourceTree = "<group>"; };
-		E549653427FBEB5100913BD6 /* non_toc_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = non_toc_manifest.json; sourceTree = "<group>"; };
+		E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = best_new_horror_manifest.json; sourceTree = "<group>"; };
 		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
 		E55470132B7C1814003447B8 /* quicksilver_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = quicksilver_manifest.json; sourceTree = "<group>"; };
 		E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = christmas_carol_manifest.json; sourceTree = "<group>"; };
@@ -204,7 +203,6 @@
 		E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContentsTests.swift; sourceTree = "<group>"; };
 		E5CC0CFB2BA8ABD9001BF751 /* TrackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackTests.swift; sourceTree = "<group>"; };
 		E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPositionTests.swift; sourceTree = "<group>"; };
-		E5CC0D002BA8B700001BF751 /* MockTracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTracks.swift; sourceTree = "<group>"; };
 		E5DE01A12BA3E4420063E68E /* TableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContents.swift; sourceTree = "<group>"; };
 		E5DE01A32BA3E44A0063E68E /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		E5DE01A52BA3E4500063E68E /* TrackPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPosition.swift; sourceTree = "<group>"; };
@@ -442,12 +440,12 @@
 			isa = PBXGroup;
 			children = (
 				D5A0909B2B97986500C0FF2F /* theBigFail_manifest.json */,
+				E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */,
 				E549653227FBEAC400913BD6 /* flatland_manifest.json */,
 				E530532F29B69B91005E831F /* snowcrash_manifest.json */,
 				E5A018BE2936887E003F6D01 /* alice_manifest.json */,
 				E58C53452B7550B000D861EE /* anathem_manifest.json */,
 				E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */,
-				E549653427FBEB5100913BD6 /* non_toc_manifest.json */,
 				E5A018C029368B17003F6D01 /* the_martian_manifest.json */,
 				E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */,
 				E55470132B7C1814003447B8 /* quicksilver_manifest.json */,
@@ -458,7 +456,6 @@
 		E5CC0CFF2BA8B6EC001BF751 /* Mocks */ = {
 			isa = PBXGroup;
 			children = (
-				E5CC0D002BA8B700001BF751 /* MockTracks.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -634,7 +631,7 @@
 				E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */,
 				E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */,
 				E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */,
-				E549653527FBEB5100913BD6 /* non_toc_manifest.json in Resources */,
+				E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */,
 				E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */,
 				E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */,
 				D5A0909C2B97986500C0FF2F /* theBigFail_manifest.json in Resources */,
@@ -777,7 +774,6 @@
 				E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */,
 				E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */,
 				7B87DCC52087AE5D00256331 /* PlayerManipulationTest.swift in Sources */,
-				E5CC0D012BA8B700001BF751 /* MockTracks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

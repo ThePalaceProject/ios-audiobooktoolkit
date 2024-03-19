@@ -19,9 +19,7 @@ struct TrackPosition: Equatable, Comparable {
     var track: Track
     var timestamp: Int
     var tracks: Tracks
-    
-    // MARK: - Operators
-    
+        
     static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Int {
         if lhs.track == rhs.track {
             return lhs.timestamp - rhs.timestamp
@@ -42,10 +40,8 @@ struct TrackPosition: Equatable, Comparable {
         }
         
         diff += (lhs.tracks.tracks[rhsTrackIndex].duration - rhs.timestamp)
-        
         return diff
     }
-
     
     static func + (lhs: TrackPosition, other: Int) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
@@ -75,16 +71,14 @@ struct TrackPosition: Equatable, Comparable {
         
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
-    
-    // MARK: - Comparable and Equatable Protocols
-    
+
     static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
         if lhs.track == rhs.track {
             return lhs.timestamp < rhs.timestamp
         }
         return lhs.track < rhs.track
     }
-    
+
     static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
         lhs.track == rhs.track && lhs.timestamp == rhs.timestamp
     }

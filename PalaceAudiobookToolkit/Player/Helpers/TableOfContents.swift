@@ -20,7 +20,7 @@ struct TableOfContents: TableOfContentsProtocol {
     var toc: [Chapter]
 
     var count: Int {
-        return toc.count
+        toc.count
     }
 
     init(manifest: Manifest, tracks: Tracks) {

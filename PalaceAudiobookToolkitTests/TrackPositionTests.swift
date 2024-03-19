@@ -15,7 +15,7 @@ class TrackPositionTests: XCTestCase {
         for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tracks = TPPTracks(manifest: manifest)
+                let tracks = Tracks(manifest: manifest)
                 
                 try testAdditionAndSubtractionForAllTracks(tracks)
             } catch {
@@ -28,7 +28,7 @@ class TrackPositionTests: XCTestCase {
         try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
     }
     
-    private func testAdditionAndSubtractionForAllTracks(_ tracks: TPPTracks) throws {
+    private func testAdditionAndSubtractionForAllTracks(_ tracks: Tracks) throws {
         for (index, track) in tracks.tracks.enumerated() {
             let startPosition = TrackPosition(track: track, timestamp: 0, tracks: tracks)
             let middlePosition = TrackPosition(track: track, timestamp: track.duration / 2, tracks: tracks)
@@ -55,12 +55,12 @@ class TrackPositionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(newPosition.timestamp, 0, "Subtraction should not result in a negative timestamp.")
     }
     
-    private func testMovingToNextTrack(from position: TrackPosition, in tracks: TPPTracks) throws {
+    private func testMovingToNextTrack(from position: TrackPosition, in tracks: Tracks) throws {
         let newPosition = try position + (position.track.duration - position.timestamp + 1000)
         XCTAssertNotEqual(newPosition.track, position.track, "Should move to the next track.")
     }
     
-    private func testMovingToPreviousTrack(from position: TrackPosition, in tracks: TPPTracks) throws {
+    private func testMovingToPreviousTrack(from position: TrackPosition, in tracks: Tracks) throws {
         let newPosition = try position + (-1 * (position.timestamp + 1))
         XCTAssertNotEqual(newPosition.track, position.track, "Should move to the previous track.")
     }

@@ -15,7 +15,7 @@ class TableOfContentsTests: XCTestCase {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
                 
-                let tableOfContents = TableOfContents(manifest: manifest, tracks: TPPTracks(manifest: manifest))
+                let tableOfContents = TableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
                 XCTAssertFalse(tableOfContents.toc.isEmpty, "TOC should not be empty for \(manifestJSON.rawValue)")
                 
                 if let firstChapter = tableOfContents.toc.first {
@@ -31,7 +31,7 @@ class TableOfContentsTests: XCTestCase {
         for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tracks = TPPTracks(manifest: manifest)
+                let tracks = Tracks(manifest: manifest)
                 let tableOfContents = TableOfContents(manifest: manifest, tracks: tracks)
                 
                 let expectedCount = manifestJSON.chapterCount
@@ -50,7 +50,7 @@ class TableOfContentsTests: XCTestCase {
             .christmasCarol: "Opening Credits",
             .flatland: "Part 1 - This World",
             .martian: "Opening Credits",
-            .nonTocManifest: "Chapter 1",
+            .bestNewHorror: "Chapter 1",
             .quickSilver: "Invocation",
             .snowcrash: "Opening Credits",
             .theSystemOfTheWorld: "Chapter 1"
@@ -59,7 +59,7 @@ class TableOfContentsTests: XCTestCase {
         for (manifestJSON, expectedTitle) in expectedFirstChapterTitles {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tableOfContents = TableOfContents(manifest: manifest, tracks: TPPTracks(manifest: manifest))
+                let tableOfContents = TableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
                 
                 let firstChapterTitle = tableOfContents.toc.first?.title ?? ""
                 XCTAssertEqual(firstChapterTitle, expectedTitle, "Expected first chapter title to be \"\(expectedTitle)\" in \(manifestJSON.rawValue), but found \"\(firstChapterTitle)\"")

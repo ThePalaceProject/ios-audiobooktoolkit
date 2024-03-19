@@ -8,20 +8,7 @@
 
 import Foundation
 
-protocol Tracks {
-    var manifest: Manifest { get }
-    var tracks: [Track] { get }
-    var hrefToIndex: [String: Int] { get }
-    var totalDuration: Int { get }
-    var count: Int { get }
-    subscript(index: Int) -> Track { get }
-    
-    func byHref(_ href: String) -> Track?
-    func previousTrack(_ track: Track) -> Track?
-    func nextTrack(_ trAack: Track) -> Track?
-}
-
-class TPPTracks: Tracks {
+class Tracks {
     var manifest: Manifest
     var tracks: [Track]
     var hrefToIndex: [String: Int]

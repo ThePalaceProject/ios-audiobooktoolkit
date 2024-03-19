@@ -10,7 +10,6 @@ import XCTest
 @testable import PalaceAudiobookToolkit
 
 class AudiobookTOCTests: XCTestCase {
-
     struct TestOutcome {
         var chapter: UInt
         var offset: Double
@@ -18,7 +17,7 @@ class AudiobookTOCTests: XCTestCase {
         var mediaType: LCPSpineElementMediaType
     }
 
-    var tocManifestExpectedResults = [
+    var flatlandManifestExpectedResults = [
         TestOutcome(chapter: UInt(0), offset: 71.0, duration: 9.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(1), offset: 80.0, duration: 335.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(2), offset: 415.0, duration: 374.0, mediaType: .audioMPEG),
@@ -46,7 +45,7 @@ class AudiobookTOCTests: XCTestCase {
 
     ]
 
-    var nonTocManifestExpectedResults = [
+    var bestNewHorrorManifestExpectedResults = [
         TestOutcome(chapter: UInt(0), offset: 0.0, duration: 487.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(1), offset: 0.0, duration: 437.0, mediaType: .audioMPEG),
         TestOutcome(chapter: UInt(2), offset: 0.0, duration: 364.0, mediaType: .audioMPEG),
@@ -274,44 +273,43 @@ class AudiobookTOCTests: XCTestCase {
         TestOutcome(chapter: UInt(21), offset: 0.0, duration: 36.0, mediaType: .audioMPEG)
     ]
 
-    func testTocManifest() async throws {
-        try await validate(manifest: "toc_manifest", against: tocManifestExpectedResults)
+    func testFlatlandManifest() async throws {
+        try await validate(manifest: ManifestJSON.flatland.rawValue, against: flatlandManifestExpectedResults)
     }
 
     func testNonTockManifest() async throws {
-        try await validate(manifest: "non_toc_manifest", against: nonTocManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.bestNewHorror.rawValue, against: bestNewHorrorManifestExpectedResults)
     }
 
     func testMartianManifest() async throws {
-        try await validate(manifest: "the_martian_manifest", against: martianManifestExpectedResult)
+        try await validate(manifest: ManifestJSON.martian.rawValue, against: martianManifestExpectedResult)
     }
 
     func testSnowCrashManifest() async throws {
-        try await validate(manifest: "snowcrash_manifest", against: snowCrashManifestExpectedResult)
+        try await validate(manifest: ManifestJSON.snowcrash.rawValue, against: snowCrashManifestExpectedResult)
     }
     
     func testChristmasCarolManifest() async throws {
-        try await validate(manifest: "christmas_carol_manifest", against: christmasCarolManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.christmasCarol.rawValue, against: christmasCarolManifestExpectedResults)
     }
     
     func testAnathemManifest() async throws {
-        try await validate(manifest: "anathem_manifest", against: anathemManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.anathem.rawValue, against: anathemManifestExpectedResults)
     }
     
     func testSystemOfTheWorldManifest() async throws {
-        try await validate(manifest: "the_system_of_the_world_manifest", against: theSystemOfTheWorldManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.theSystemOfTheWorld.rawValue, against: theSystemOfTheWorldManifestExpectedResults)
     }
     
     func testQuickSilverManifest() async throws {
-        try await validate(manifest: "quicksilver_manifest", against: quicksilverManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.quickSilver.rawValue, against: quicksilverManifestExpectedResults)
     }
     
     func testBigFailManifest() async throws {
-        try await validate(manifest: "theBigFail_manifest", against: bigFailManifestExpectedResults)
+        try await validate(manifest: ManifestJSON.bigFail.rawValue, against: bigFailManifestExpectedResults)
     }
     
     private func validate(manifest: String, against results: [TestOutcome]) async throws {
-        // Assuming this function is part of a test class that has access to XCTest functions
         guard let url = Bundle(for: type(of: self)).url(forResource: manifest, withExtension: "json"),
               let jsonData = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
