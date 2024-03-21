@@ -3,30 +3,36 @@ import AVFoundation
 let OverdriveTaskCompleteNotification = NSNotification.Name(rawValue: "OverdriveDownloadTaskCompleteNotification")
 
 final class OverdriveDownloadTask: DownloadTask {
-
+    
     private static let DownloadTaskTimeoutValue = 60.0
-
+    
     private var urlSession: URLSession?
     
     weak var delegate: DownloadTaskDelegate?
-
+    
     /// Progress should be set to 1 if the file already exists.
     var downloadProgress: Float = 0 {
         didSet {
             self.delegate?.downloadTaskDidUpdateDownloadPercentage(self)
         }
     }
-
+    
     let key: String
     let url: URL
     let urlMediaType: OverdriveSpineElementMediaType
-
+    
     init(spineElement: OverdriveSpineElement) {
         self.key = spineElement.key
         self.url = spineElement.url
         self.urlMediaType = spineElement.mediaType
     }
-    
+
+    init(key: String, url: URL, urlMediaType: OverdriveSpineElementMediaType) {
+        self.key = key
+        self.url = url
+        self.urlMediaType = urlMediaType
+    }
+
     func fetch() {
         switch self.assetFileStatus() {
         case .saved(_):

@@ -21,7 +21,7 @@ enum ManifestJSON: String, CaseIterable {
     case martian = "the_martian_manifest"
     case snowcrash = "snowcrash_manifest"
     case theSystemOfTheWorld = "the_system_of_the_world_manifest"
-
+    
     var chapterCount: Int {
         switch self {
         case .alice: return 13
@@ -39,7 +39,7 @@ enum ManifestJSON: String, CaseIterable {
 }
 
 final class ManifestDecodingTests: XCTestCase {
-    private let enableDataLogging = false
+    private let enableDataLogging = true
     
     func testManifestDecoding() {
         for manifestJSON in ManifestJSON.allCases {
@@ -58,12 +58,10 @@ final class ManifestDecodingTests: XCTestCase {
     }
     
     private func validate(manifest: Manifest, against jsonDictionary: [String: Any]) {
-        // Reflect Manifest object to access its properties
         let mirror = Mirror(reflecting: manifest)
         
-        // Check if each key in the JSON dictionary has a corresponding property in the Manifest object
         for (key, value) in jsonDictionary {
-            let adjustedKey = (key == "@context") ? "context" : key
+            let adjustedKey = key == "@context" ? "context" : key
             guard let manifestProperty = mirror.children.first(where: { $0.label == adjustedKey }) else {
                 XCTFail("Manifest does not contain a property for key: \(key)")
                 continue
@@ -76,9 +74,16 @@ final class ManifestDecodingTests: XCTestCase {
                 print("Test data: \(value)")
                 print("Actual data: \(manifestProperty.value)")
             }
-            
-            // Custom checks for nested structures like arrays or dictionaries
-            if let readingOrder = value as? [[String: Any]], adjustedKey == "readingOrder" {
+
+            if adjustedKey == "context" {
+                if let jsonContexts = value as? [Any] {
+                    validateContext(manifestContexts: manifest.context, against: jsonContexts)
+                } else if let jsonContext = value as? String {
+                    validateContext(manifestContexts: manifest.context, against: [jsonContext])
+                } else {
+                    XCTFail("Unexpected @context format")
+                }
+            } else if let readingOrder = value as? [[String: Any]], adjustedKey == "readingOrder" {
                 validateReadingOrderItems(manifest.readingOrder, against: readingOrder)
             } else if let toc = value as? [[String: Any]], adjustedKey == "toc" {
                 validateTOCItems(manifest.toc, against: toc)
@@ -107,106 +112,136 @@ final class ManifestDecodingTests: XCTestCase {
             }
         }
     }
-    
-    private func validateMetadata(_ manifestMetadata: Metadata, against jsonMetadata: [String: Any]) {
-        XCTAssertEqual(manifestMetadata.type, jsonMetadata["@type"] as? String)
-        XCTAssertEqual(manifestMetadata.identifier, jsonMetadata["identifier"] as? String)
-        XCTAssertEqual(manifestMetadata.title, jsonMetadata["title"] as? String)
-        XCTAssertEqual(manifestMetadata.subtitle, jsonMetadata["subtitle"] as? String)
-        XCTAssertEqual(manifestMetadata.language, jsonMetadata["language"] as? String)
-        XCTAssertEqual(manifestMetadata.duration, jsonMetadata["duration"] as? Int)
-        // Handle dates
-        if let modifiedString = jsonMetadata["modified"] as? String {
-            let dateFormatter = ISO8601DateFormatter()
-            if let modifiedDate = dateFormatter.date(from: modifiedString) {
-                XCTAssertEqual(manifestMetadata.modified, modifiedDate)
-            }
+}
+
+private func validateContext(manifestContexts: [ManifestContext], against jsonContexts: [Any]) {
+    for (index, jsonContext) in jsonContexts.enumerated() {
+        guard index < manifestContexts.count else {
+            XCTFail("Manifest context array shorter than expected")
+            return
         }
-        // Handle complex fields like author
-        if let jsonAuthors = jsonMetadata["author"] as? [String] {
-            for (index, author) in manifestMetadata.author.enumerated() {
-                guard index < jsonAuthors.count else { continue }
-                let jsonAuthor = jsonAuthors[index]
-                XCTAssertEqual(author.name, jsonAuthor)
-            }
-        } else if let jsonAuthor = jsonMetadata["author"] as? [String: Any] {
-            manifestMetadata.author.forEach {
-                XCTAssertEqual($0.name, jsonAuthor["name"] as? String)
-            }
-        } else if let jsonAuthor =  jsonMetadata["author"] as? String {
-            manifestMetadata.author.forEach {
-                XCTAssertEqual($0.name, jsonAuthor)
-            }
-        }
-    }
-    
-    
-    private func validateReadingOrderItems(_ items: [ReadingOrderItem], against json: [[String: Any]]) {
-        XCTAssertEqual(items.count, json.count, "ReadingOrder count does not match")
-        for (index, item) in items.enumerated() {
-            let itemJson = json[index]
-            XCTAssertEqual(item.href, itemJson["href"] as! String, "ReadingOrderItem href does not match at index \(index)")
-            XCTAssertEqual(item.title, itemJson["title"] as? String, "ReadingOrderItem title does not match at index \(index)")
-        }
-    }
-    
-    private func validateTOCItems(_ items: [TOCItem]?, against json: [[String: Any]]?) {
-        XCTAssertEqual(items?.count ?? 0, json?.count ?? 0, "TOC count does not match")
-        for (index, item) in (items ?? []).enumerated() {
-            guard let itemJson = json?[index] else { continue }
-            XCTAssertEqual(item.href, itemJson["href"] as? String, "TOCItem href does not match at index \(index)")
-            XCTAssertEqual(item.title, itemJson["title"] as? String, "TOCItem title does not match at index \(index)")
-        }
-    }
-    
-    private func validateLinks(_ manifestLinks: [Link], against jsonLinks: [[String: Any]]) {
-        XCTAssertEqual(manifestLinks.count, jsonLinks.count, "Link count mismatch")
         
-        for (index, manifestLink) in manifestLinks.enumerated() {
-            guard index < jsonLinks.count else {
-                XCTFail("Index out of bounds for JSON links array")
-                break
-            }
-            
-            let jsonLink = jsonLinks[index]
-            
-            if let rel = jsonLink["rel"] as? String {
-                XCTAssertEqual(manifestLink.rel, rel, "Rel mismatch in link at index \(index)")
-            }
-            
-            if let href = jsonLink["href"] as? String {
-                XCTAssertEqual(manifestLink.href, href, "Href mismatch in link at index \(index)")
-            }
-            
-            if let type = jsonLink["type"] as? String {
-                XCTAssertEqual(manifestLink.type, type, "Type mismatch in link at index \(index)")
-            }
-            
-            if let height = jsonLink["height"] as? Int {
-                XCTAssertEqual(manifestLink.height, height, "Height mismatch in link at index \(index)")
+        let manifestContext = manifestContexts[index]
+        
+        if let contextString = jsonContext as? String {
+            // Handle string URLs in @context
+            if case .other(let urlString) = manifestContext {
+                XCTAssertEqual(urlString, contextString, "Context URL string mismatch at index \(index)")
             } else {
-                XCTAssertNil(manifestLink.height, "Expected height to be nil in link at index \(index)")
+                XCTFail("Expected a URL string at index \(index)")
             }
-            
-            if let width = jsonLink["width"] as? Int {
-                XCTAssertEqual(manifestLink.width, width, "Width mismatch in link at index \(index)")
+        } else if let contextDict = jsonContext as? [String: String], contextDict.count == 1 {
+            // Handle key-value pairs in @context
+            let (key, value) = contextDict.first!
+            if case .object(let objectDict) = manifestContext, let objectValue = objectDict[key] {
+                XCTAssertEqual(objectValue, value, "Context object value mismatch for key '\(key)' at index \(index)")
             } else {
-                XCTAssertNil(manifestLink.width, "Expected width to be nil in link at index \(index)")
+                XCTFail("Expected an object with key '\(key)' at index \(index)")
             }
+        } else {
+            XCTFail("Unexpected @context content at index \(index)")
         }
     }
-    
-    func testFalseNegative() {
-        // Simulate a false negative case
-        let jsonData = Data()
-        let decoder = Manifest.customDecoder()
-        do {
-            _ = try decoder.decode(Manifest.self, from: jsonData)
-            XCTFail("False negative test succeeded unexpectedly")
-        } catch {
-            // This is the expected behavior
-            XCTAssert(true)
+}
+
+private func validateMetadata(_ manifestMetadata: Metadata, against jsonMetadata: [String: Any]) {
+    XCTAssertEqual(manifestMetadata.type, jsonMetadata["@type"] as? String)
+    XCTAssertEqual(manifestMetadata.identifier, jsonMetadata["identifier"] as? String)
+    XCTAssertEqual(manifestMetadata.title, jsonMetadata["title"] as? String)
+    XCTAssertEqual(manifestMetadata.subtitle, jsonMetadata["subtitle"] as? String)
+    XCTAssertEqual(manifestMetadata.language, jsonMetadata["language"] as? String)
+    XCTAssertEqual(manifestMetadata.duration, jsonMetadata["duration"] as? Double)
+    // Handle dates
+    if let modifiedString = jsonMetadata["modified"] as? String {
+        let dateFormatter = ISO8601DateFormatter()
+        if let modifiedDate = dateFormatter.date(from: modifiedString) {
+            XCTAssertEqual(manifestMetadata.modified, modifiedDate)
         }
+    }
+    // Handle complex fields like author
+    if let jsonAuthors = jsonMetadata["author"] as? [String] {
+        for (index, author) in manifestMetadata.author.enumerated() {
+            guard index < jsonAuthors.count else { continue }
+            let jsonAuthor = jsonAuthors[index]
+            XCTAssertEqual(author.name, jsonAuthor)
+        }
+    } else if let jsonAuthor = jsonMetadata["author"] as? [String: Any] {
+        manifestMetadata.author.forEach {
+            XCTAssertEqual($0.name, jsonAuthor["name"] as? String)
+        }
+    } else if let jsonAuthor =  jsonMetadata["author"] as? String {
+        manifestMetadata.author.forEach {
+            XCTAssertEqual($0.name, jsonAuthor)
+        }
+    }
+}
+
+
+private func validateReadingOrderItems(_ items: [ReadingOrderItem], against json: [[String: Any]]) {
+    XCTAssertEqual(items.count, json.count, "ReadingOrder count does not match")
+    for (index, item) in items.enumerated() {
+        let itemJson = json[index]
+        XCTAssertEqual(item.href, itemJson["href"] as! String, "ReadingOrderItem href does not match at index \(index)")
+        XCTAssertEqual(item.title, itemJson["title"] as? String, "ReadingOrderItem title does not match at index \(index)")
+    }
+}
+
+private func validateTOCItems(_ items: [TOCItem]?, against json: [[String: Any]]?) {
+    XCTAssertEqual(items?.count ?? 0, json?.count ?? 0, "TOC count does not match")
+    for (index, item) in (items ?? []).enumerated() {
+        guard let itemJson = json?[index] else { continue }
+        XCTAssertEqual(item.href, itemJson["href"] as? String, "TOCItem href does not match at index \(index)")
+        XCTAssertEqual(item.title, itemJson["title"] as? String, "TOCItem title does not match at index \(index)")
+    }
+}
+
+private func validateLinks(_ manifestLinks: [Link], against jsonLinks: [[String: Any]]) {
+    XCTAssertEqual(manifestLinks.count, jsonLinks.count, "Link count mismatch")
+    
+    for (index, manifestLink) in manifestLinks.enumerated() {
+        guard index < jsonLinks.count else {
+            XCTFail("Index out of bounds for JSON links array")
+            break
+        }
+        
+        let jsonLink = jsonLinks[index]
+        
+        if let rel = jsonLink["rel"] as? String {
+            XCTAssertEqual(manifestLink.rel, rel, "Rel mismatch in link at index \(index)")
+        }
+        
+        if let href = jsonLink["href"] as? String {
+            XCTAssertEqual(manifestLink.href, href, "Href mismatch in link at index \(index)")
+        }
+        
+        if let type = jsonLink["type"] as? String {
+            XCTAssertEqual(manifestLink.type, type, "Type mismatch in link at index \(index)")
+        }
+        
+        if let height = jsonLink["height"] as? Int {
+            XCTAssertEqual(manifestLink.height, height, "Height mismatch in link at index \(index)")
+        } else {
+            XCTAssertNil(manifestLink.height, "Expected height to be nil in link at index \(index)")
+        }
+        
+        if let width = jsonLink["width"] as? Int {
+            XCTAssertEqual(manifestLink.width, width, "Width mismatch in link at index \(index)")
+        } else {
+            XCTAssertNil(manifestLink.width, "Expected width to be nil in link at index \(index)")
+        }
+    }
+}
+
+func testFalseNegative() {
+    // Simulate a false negative case
+    let jsonData = Data()
+    let decoder = Manifest.customDecoder()
+    do {
+        _ = try decoder.decode(Manifest.self, from: jsonData)
+        XCTFail("False negative test succeeded unexpectedly")
+    } catch {
+        // This is the expected behavior
+        XCTAssert(true)
     }
 }
 

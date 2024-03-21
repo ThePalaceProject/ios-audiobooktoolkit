@@ -11,51 +11,81 @@ import Foundation
 class Tracks {
     var manifest: Manifest
     var tracks: [Track]
-    var hrefToIndex: [String: Int]
     var totalDuration: Int
+    
+    var count: Int {
+        return tracks.count
+    }
     
     init(manifest: Manifest) {
         self.manifest = manifest
         self.tracks = []
-        self.hrefToIndex = [:]
         self.totalDuration = 0
         
-        for (idx, track) in manifest.readingOrder.enumerated() {
-            let tppTrack = Track(
-                href: track.href,
-                title: track.title,
-                duration: Int(track.duration ?? 0) * 1000,
-                index: idx
-            )
-            self.tracks.append(tppTrack)
-            self.hrefToIndex[track.href] = idx
+        for (idx, item) in manifest.readingOrder.enumerated() {
+            var track: Track?
+            
+            if let href = item.href {
+                track = Track(type: .href(href),
+                              title: item.title,
+                              duration: Int(item.duration) * 1000,
+                              index: idx)
+            } else if let part = item.findawayPart, let sequence = item.findawaySequence {
+                track = Track(type: .findaway(part: part, sequence: sequence),
+                              title: item.title,
+                              duration: Int(item.duration) * 1000,
+                              index: idx)
+            }
+            
+            if let track = track {
+                self.tracks.append(track)
+            }
         }
         
         self.calculateTotalDuration()
     }
     
-    func byHref(_ href: String) -> Track? {
-        let cleanHref = href.components(separatedBy: "#").first ?? href
-        guard let index = hrefToIndex[cleanHref] else { return nil }
-        return tracks[index]
+    func track(forHref href: String) -> Track? {
+        return tracks.first(where: { track in
+            if case let .href(trackHref) = track.type, trackHref == href {
+                return true
+            }
+            return false
+        })
+    }
+    
+    func track(forPart part: Int, sequence: Int) -> Track? {
+        return tracks.first(where: { track in
+            if case let .findaway(trackPart, trackSequence) = track.type,
+               trackPart == part && trackSequence == sequence {
+                return true
+            }
+            return false
+        })
     }
     
     func previousTrack(_ track: Track) -> Track? {
-        let idx = track.index
-        return (idx - 1 >= 0) ? tracks[idx - 1] : nil
+        guard let currentIndex = tracks.firstIndex(of: track), currentIndex > 0 else {
+            return nil
+        }
+        return tracks[currentIndex - 1]
     }
     
     func nextTrack(_ track: Track) -> Track? {
-        let idx = track.index
-        return (idx + 1 < tracks.count) ? tracks[idx + 1] : nil
+        guard let currentIndex = tracks.firstIndex(of: track), currentIndex < tracks.count - 1 else {
+            return nil
+        }
+        return tracks[currentIndex + 1]
     }
     
     subscript(index: Int) -> Track {
         return tracks[index]
     }
     
-    var count: Int {
-        return tracks.count
+    func deleteTracks() {
+        tracks.forEach { track in
+            track.downloadTask?.delete()
+        }
     }
     
     private func calculateTotalDuration() {

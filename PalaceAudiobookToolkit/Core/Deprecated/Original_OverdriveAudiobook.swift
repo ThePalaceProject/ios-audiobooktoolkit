@@ -1,6 +1,6 @@
 import Foundation
 
-@objcMembers public final class OverdriveAudiobook: NSObject, Audiobook {
+@objcMembers public final class Original_OverdriveAudiobook: NSObject, Original_Audiobook {
     
     public let uniqueIdentifier: String
     public var annotationsId: String { uniqueIdentifier }
@@ -65,7 +65,7 @@ import Foundation
             task.delete()
         }
     }
-    
+
     public func updateManifest(JSON: Any?) {
         guard let payload = JSON as? [String: Any],
         let identifier = payload["id"] as? String,

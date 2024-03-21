@@ -26,7 +26,7 @@ class TableOfContentsTests: XCTestCase {
             }
         }
     }
-    
+
     func testChapterCounts() {
         for manifestJSON in ManifestJSON.allCases {
             do {

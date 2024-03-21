@@ -10,7 +10,6 @@ import XCTest
 @testable import PalaceAudiobookToolkit
 
 class TrackPositionTests: XCTestCase {
-    
     func testTrackPositionAcrossAllManifests() {
         for manifestJSON in ManifestJSON.allCases {
             do {
@@ -23,11 +22,11 @@ class TrackPositionTests: XCTestCase {
             }
         }
     }
-    
+
     private func loadManifest(for manifestJSON: ManifestJSON) throws -> Manifest {
         try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
     }
-    
+
     private func testAdditionAndSubtractionForAllTracks(_ tracks: Tracks) throws {
         for (index, track) in tracks.tracks.enumerated() {
             let startPosition = TrackPosition(track: track, timestamp: 0, tracks: tracks)
@@ -65,4 +64,3 @@ class TrackPositionTests: XCTestCase {
         XCTAssertNotEqual(newPosition.track, position.track, "Should move to the previous track.")
     }
 }
-

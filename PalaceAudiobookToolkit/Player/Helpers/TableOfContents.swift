@@ -14,25 +14,32 @@ protocol TableOfContentsProtocol {
     var toc: [Chapter] { get }
 }
 
-struct TableOfContents: TableOfContentsProtocol {
+public struct TableOfContents: TableOfContentsProtocol {
     var manifest: Manifest
     var tracks: Tracks
     var toc: [Chapter]
-
+    
     var count: Int {
         toc.count
     }
-
+    
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
         self.tracks = tracks
         self.toc = []
-
-        self.loadToc()
+        
+        if manifest.toc?.isEmpty == false {
+            loadTraditionalToc()
+        } else {
+            loadTocFromReadingOrder()
+        }
+        
         self.calculateDurations()
     }
-
-    private mutating func loadToc() {
+    
+    private mutating func loadTraditionalToc() {
+        // Implement traditional TOC loading here. This was your initial approach.
+        // Iterate through `manifest.toc` and construct chapters.
         let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
             return flattenChapters(entry: entry, tracks: tracks)
         } ?? []
@@ -40,22 +47,30 @@ struct TableOfContents: TableOfContentsProtocol {
         self.toc = flatChapters
         
         if let firstEntry = self.toc.first,
-           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0
-        {
+           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
             let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
             self.toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
         }
     }
+    
+    private mutating func loadTocFromReadingOrder() {
+        for item in manifest.readingOrder {
+            guard let part = item.findawayPart, let sequence = item.findawaySequence else { continue }
+            guard let track = tracks.track(forPart: part, sequence: sequence) else { continue }
+            let chapter = Chapter(title: item.title ?? "", position: TrackPosition(track: track, timestamp: 0, tracks: tracks), duration: Int(item.duration))
+            self.toc.append(chapter)
+        }
+    }
 
     private func flattenChapters(entry: TOCItem, tracks: Tracks) -> [Chapter] {
+        guard let href = entry.href else { return [] }
         var chapters: [Chapter] = []
-        if let track = tracks.byHref(entry.href) {
-            let offset = Int(entry.href.replacingOccurrences(of: "t=", with: "")) ?? 0
+        if let track = tracks.track(forHref: href) {
+            let offset = Int((entry.href ?? "").replacingOccurrences(of: "t=", with: "")) ?? 0
             let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offset * 1000, tracks: tracks))
             chapters.append(chapter)
         }
         
-        // Recursively flatten any nested children into the same list
         entry.children?.forEach { childEntry in
             chapters.append(contentsOf: flattenChapters(entry: childEntry, tracks: tracks))
         }

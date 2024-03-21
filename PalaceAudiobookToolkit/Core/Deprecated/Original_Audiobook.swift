@@ -15,16 +15,16 @@ import UIKit
     case succeeded
 }
 
-/// DRM Decryptor protocol - decrypts protected files
-@objc public protocol DRMDecryptor {
-
-    /// Decrypt protected file
-    /// - Parameters:
-    ///   - url: encrypted file URL.
-    ///   - resultUrl: URL to save decrypted file at.
-    ///   - completion: decryptor callback with optional `Error`.
-    func decrypt(url: URL, to resultUrl: URL, completion: @escaping (_ error: Error?) -> Void)
-}
+///// DRM Decryptor protocol - decrypts protected files
+//@objc public protocol DRMDecryptor {
+//
+//    /// Decrypt protected file
+//    /// - Parameters:
+//    ///   - url: encrypted file URL.
+//    ///   - resultUrl: URL to save decrypted file at.
+//    ///   - completion: decryptor callback with optional `Error`.
+//    func decrypt(url: URL, to resultUrl: URL, completion: @escaping (_ error: Error?) -> Void)
+//}
 
 @objc public protocol SpineElement: class {
     var key: String { get }
@@ -32,7 +32,7 @@ import UIKit
     var chapter: ChapterLocation { get }
 }
 
-@objc public protocol Audiobook: class {
+@objc public protocol Original_Audiobook: class {
     var uniqueIdentifier: String { get }
     var annotationsId: String { get }
     var spine: [SpineElement] { get }
@@ -53,23 +53,30 @@ import UIKit
     ///   - decryptor: Optional DRM decryptor for encrypted audio files
     ///   - token: Optional bearer token for protected audio files
     /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?, bookID: String? = nil, decryptor: DRMDecryptor?, token: String? = nil) -> Audiobook? {
+    public static func audiobook(_ JSON: Any?, bookID: String? = nil, decryptor: DRMDecryptor?, token: String? = nil) -> Original_Audiobook? {
         guard let JSON = JSON as? [String: Any] else { return nil }
         let metadata = JSON["metadata"] as? [String: Any]
         let drm = metadata?["encrypted"] as? [String: Any]
         let possibleScheme = drm?["scheme"] as? String
-        let audiobook: Audiobook?
+        let audiobook: Original_Audiobook?
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: JSON, options: .prettyPrinted),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return nil
+        }
+        
+        print(jsonString)
 
         if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
-            let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Audiobook.Type
+            let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Original_Audiobook.Type
             audiobook = FindawayAudiobookClass?.init(JSON: JSON, audiobookId: bookID ?? "")
         } else if let type = JSON["formatType"] as? String,
                   type == "audiobook-overdrive" {
-            audiobook = OverdriveAudiobook(JSON: JSON, audiobookId: nil)
-        } else if let manifestContext = JSON["@context"] as? String, manifestContext == LCPAudiobook.manifestContext, let decryptor = decryptor {
-            audiobook = LCPAudiobook(JSON: JSON, decryptor: decryptor)
+            audiobook = Original_OverdriveAudiobook(JSON: JSON, audiobookId: nil)
+        } else if let manifestContext = JSON["@context"] as? String, manifestContext == Original_LCPAudiobook.manifestContext, let decryptor = decryptor {
+            audiobook = Original_LCPAudiobook(JSON: JSON, decryptor: decryptor)
         } else {
-            audiobook = OpenAccessAudiobook(JSON: JSON, token: token)
+            audiobook = Original_OpenAccessAudiobook(JSON: JSON, token: token)
         }
 
         ATLog(.debug, "checkDrmAsync")
@@ -81,7 +88,7 @@ import UIKit
     /// - Parameters:
     ///   - JSON: Audiobook and spine elements data
     /// - Returns: Audiobook object
-    public static func audiobook(_ JSON: Any?) -> Audiobook? {
+    public static func audiobook(_ JSON: Any?) -> Original_Audiobook? {
         return self.audiobook(JSON, decryptor: nil)
     }
 }
