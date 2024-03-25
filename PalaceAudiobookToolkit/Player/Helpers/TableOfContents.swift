@@ -29,7 +29,7 @@ public struct TableOfContents: TableOfContentsProtocol {
         self.toc = []
         
         if manifest.toc?.isEmpty == false {
-            loadTraditionalToc()
+            loadToc()
         } else {
             loadTocFromReadingOrder()
         }
@@ -37,9 +37,7 @@ public struct TableOfContents: TableOfContentsProtocol {
         self.calculateDurations()
     }
     
-    private mutating func loadTraditionalToc() {
-        // Implement traditional TOC loading here. This was your initial approach.
-        // Iterate through `manifest.toc` and construct chapters.
+    private mutating func loadToc() {
         let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
             return flattenChapters(entry: entry, tracks: tracks)
         } ?? []
@@ -63,11 +61,19 @@ public struct TableOfContents: TableOfContentsProtocol {
     }
 
     private func flattenChapters(entry: TOCItem, tracks: Tracks) -> [Chapter] {
-        guard let href = entry.href else { return [] }
+        guard let fullHref = entry.href else { return [] }
         var chapters: [Chapter] = []
-        if let track = tracks.track(forHref: href) {
-            let offset = Int((entry.href ?? "").replacingOccurrences(of: "t=", with: "")) ?? 0
-            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offset * 1000, tracks: tracks))
+        
+        let components = fullHref.components(separatedBy: "#")
+        let hrefWithoutFragment = components.first ?? ""
+        
+        let timestampString = components.last?.replacingOccurrences(of: "t=", with: "")
+        let offsetInSeconds = Int(timestampString ?? "") ?? 0
+        
+        let offsetInMilliseconds = offsetInSeconds * 1000
+        
+        if let track = tracks.track(forHref: hrefWithoutFragment) {
+            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offsetInMilliseconds, tracks: tracks))
             chapters.append(chapter)
         }
         

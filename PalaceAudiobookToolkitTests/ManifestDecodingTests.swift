@@ -33,7 +33,7 @@ enum ManifestJSON: String, CaseIterable {
         case .quickSilver: return 29
         case .snowcrash: return 72
         case .theSystemOfTheWorld: return 47
-        case .flatland: return 24
+        case .flatland: return 25
         }
     }
 }
