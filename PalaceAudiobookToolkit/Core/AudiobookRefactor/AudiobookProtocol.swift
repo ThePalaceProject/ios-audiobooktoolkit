@@ -34,7 +34,7 @@ public protocol AudiobookProtocol {
     var player: Player? { get } //TODO: This should not be optional. temporary for buildout
     var drmStatus: DRMStatus { get set }
     
-    func checkDrmAsync(completion: @escaping (Bool, Error?) -> Void)
+    func checkDrmAsync()
     func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void)
     init?(manifest: Manifest, audiobookId: String)
 }

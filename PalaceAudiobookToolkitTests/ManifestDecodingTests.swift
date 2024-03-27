@@ -9,10 +9,10 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
-
 enum ManifestJSON: String, CaseIterable {
     case alice = "alice_manifest"
     case anathem = "anathem_manifest"
+    case animalFarm = "animarlFarm_manifest"
     case bigFail = "theBigFail_manifest"
     case christmasCarol = "christmas_carol_manifest"
     case flatland = "flatland_manifest"
@@ -20,20 +20,23 @@ enum ManifestJSON: String, CaseIterable {
     case quickSilver = "quicksilver_manifest"
     case martian = "the_martian_manifest"
     case snowcrash = "snowcrash_manifest"
+    case secretLives = "secret_lives_manifest"
     case theSystemOfTheWorld = "the_system_of_the_world_manifest"
-    
+
     var chapterCount: Int {
         switch self {
         case .alice: return 13
         case .anathem: return 17
+        case .animalFarm: return 3
         case .bigFail: return 22
         case .christmasCarol: return 6
+        case .flatland: return 25
         case .martian: return 41
         case .bestNewHorror: return 7
         case .quickSilver: return 29
         case .snowcrash: return 72
+        case .secretLives: return 10
         case .theSystemOfTheWorld: return 47
-        case .flatland: return 25
         }
     }
 }
@@ -124,19 +127,16 @@ private func validateContext(manifestContexts: [ManifestContext], against jsonCo
         let manifestContext = manifestContexts[index]
         
         if let contextString = jsonContext as? String {
-            // Handle string URLs in @context
-            if case .other(let urlString) = manifestContext {
-                XCTAssertEqual(urlString, contextString, "Context URL string mismatch at index \(index)")
+            validateStringContext(manifestContext, contextString: contextString, index: index)
+        } else if let contextDict = jsonContext as? [String: String] {
+            if let findawayContext = contextDict["findaway"] {
+                if case .object(let objectDict) = manifestContext, let objectValue = objectDict["findaway"] {
+                    XCTAssertEqual(objectValue, findawayContext, "Findaway context mismatch at index \(index)")
+                } else {
+                    XCTFail("Expected an object with key 'findaway' at index \(index)")
+                }
             } else {
-                XCTFail("Expected a URL string at index \(index)")
-            }
-        } else if let contextDict = jsonContext as? [String: String], contextDict.count == 1 {
-            // Handle key-value pairs in @context
-            let (key, value) = contextDict.first!
-            if case .object(let objectDict) = manifestContext, let objectValue = objectDict[key] {
-                XCTAssertEqual(objectValue, value, "Context object value mismatch for key '\(key)' at index \(index)")
-            } else {
-                XCTFail("Expected an object with key '\(key)' at index \(index)")
+                validateDictionaryContext(manifestContext, contextDict: contextDict, index: index)
             }
         } else {
             XCTFail("Unexpected @context content at index \(index)")
@@ -144,7 +144,27 @@ private func validateContext(manifestContexts: [ManifestContext], against jsonCo
     }
 }
 
-private func validateMetadata(_ manifestMetadata: Metadata, against jsonMetadata: [String: Any]) {
+private func validateStringContext(_ manifestContext: ManifestContext, contextString: String, index: Int) {
+    if case .uri(let urlString) = manifestContext {
+        XCTAssertEqual(urlString.absoluteString, contextString, "Context URL string mismatch at index \(index)")
+    } else if case .other(let urlString) = manifestContext {
+        XCTAssertEqual(urlString, contextString, "Context URL string mismatch at index \(index)")
+    } else {
+        XCTFail("Expected a URL string at index \(index)")
+    }
+}
+
+private func validateDictionaryContext(_ manifestContext: ManifestContext, contextDict: [String: String], index: Int) {
+    // This assumes dictionary context always contains a single key-value pair.
+    let (key, value) = contextDict.first!
+    if case .object(let objectDict) = manifestContext, let objectValue = objectDict[key] {
+        XCTAssertEqual(objectValue, value, "Context object value mismatch for key '\(key)' at index \(index)")
+    } else {
+        XCTFail("Expected an object with key '\(key)' at index \(index)")
+    }
+}
+
+private func validateMetadata(_ manifestMetadata: Manifest.Metadata, against jsonMetadata: [String: Any]) {
     XCTAssertEqual(manifestMetadata.type, jsonMetadata["@type"] as? String)
     XCTAssertEqual(manifestMetadata.identifier, jsonMetadata["identifier"] as? String)
     XCTAssertEqual(manifestMetadata.title, jsonMetadata["title"] as? String)
@@ -174,14 +194,30 @@ private func validateMetadata(_ manifestMetadata: Metadata, against jsonMetadata
             XCTAssertEqual($0.name, jsonAuthor)
         }
     }
+    
+    if let drmInfo = jsonMetadata["encrypted"] as? [String: Any] {
+        switch manifestMetadata.drmInformation {
+        case .findaway(let findawayInfo):
+            XCTAssertEqual(findawayInfo.scheme, drmInfo["scheme"] as? String, "DRM scheme does not match")
+            XCTAssertEqual(findawayInfo.licenseId, drmInfo["findaway:licenseId"] as? String, "Findaway licenseId does not match")
+            XCTAssertEqual(findawayInfo.sessionKey, drmInfo["findaway:sessionKey"] as? String, "Findaway sessionKey does not match")
+            XCTAssertEqual(findawayInfo.checkoutId, drmInfo["findaway:checkoutId"] as? String, "Findaway checkoutId does not match")
+            XCTAssertEqual(findawayInfo.fulfillmentId, drmInfo["findaway:fulfillmentId"] as? String, "Findaway fulfillmentId does not match")
+            XCTAssertEqual(findawayInfo.accountId, drmInfo["findaway:accountId"] as? String, "Findaway accountId does not match")
+        default:
+            XCTFail("Expected Findaway DRM information")
+        }
+    } else {
+        XCTAssertNil(manifestMetadata.drmInformation, "Expected nil DRM information")
+    }
 }
 
 
-private func validateReadingOrderItems(_ items: [ReadingOrderItem], against json: [[String: Any]]) {
+private func validateReadingOrderItems(_ items: [Manifest.ReadingOrderItem], against json: [[String: Any]]) {
     XCTAssertEqual(items.count, json.count, "ReadingOrder count does not match")
     for (index, item) in items.enumerated() {
         let itemJson = json[index]
-        XCTAssertEqual(item.href, itemJson["href"] as! String, "ReadingOrderItem href does not match at index \(index)")
+        XCTAssertEqual(item.href, itemJson["href"] as? String, "ReadingOrderItem href does not match at index \(index)")
         XCTAssertEqual(item.title, itemJson["title"] as? String, "ReadingOrderItem title does not match at index \(index)")
     }
 }
@@ -195,7 +231,7 @@ private func validateTOCItems(_ items: [TOCItem]?, against json: [[String: Any]]
     }
 }
 
-private func validateLinks(_ manifestLinks: [Link], against jsonLinks: [[String: Any]]) {
+private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: [[String: Any]]) {
     XCTAssertEqual(manifestLinks.count, jsonLinks.count, "Link count mismatch")
     
     for (index, manifestLink) in manifestLinks.enumerated() {

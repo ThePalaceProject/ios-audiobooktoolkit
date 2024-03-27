@@ -44,7 +44,7 @@ public enum ManifestContext: Codable {
 public struct Manifest: Codable {
     let context: [ManifestContext]
     let id: String?
-    let metadata: Metadata
+    public let metadata: Metadata
     let links: [Link]
     let readingOrder: [ReadingOrderItem]
     let resources: [Link]?
@@ -107,98 +107,103 @@ public struct Manifest: Codable {
         
         return decoder
     }
-}
 
-struct ReadingOrderItem: Codable {
-    let title: String?
-    let type: String
-    let duration: Double
-    let href: String?
-
-    let findawayPart: Int?
-    let findawaySequence: Int?
-    
-    enum CodingKeys: String, CodingKey {
-        case title, type, duration, href
-        case findawayPart = "findaway:part"
-        case findawaySequence = "findaway:sequence"
-    }
-}
-
-struct Metadata: Codable {
-    let type: String?
-    let identifier: String?
-    let title: String
-    let subtitle: String?
-    let language: String?
-    let modified: Date?
-    let published: Date?
-    let publisher: String?
-    var author: [Author] = []
-    let duration: Double?
-    
-    enum CodingKeys: String, CodingKey {
-        case type = "@type"
-        case identifier, title, subtitle, language, modified, published, publisher, author, duration
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        type = try container.decodeIfPresent(String.self, forKey: .type)
-        identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
-        title = try container.decode(String.self, forKey: .title)
-        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
-        language = try container.decodeIfPresent(String.self, forKey: .language)
-        modified = try container.decodeIfPresent(Date.self, forKey: .modified)
-        published = try container.decodeIfPresent(Date.self, forKey: .published)
-        publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
-        duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+    struct ReadingOrderItem: Codable {
+        let title: String?
+        let type: String
+        let duration: Double
+        let href: String?
         
-        // Decode author array from different formats
-        if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
-            if let authorStrings {
-                author = authorStrings.map { Author(name: $0) }
-            }
-        } else if let singleAuthor = try? container.decodeIfPresent(String.self, forKey: .author) {
-            if let singleAuthor {
-                author = [Author(name: singleAuthor)]
-            }
-        } else if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
-            if let authorArray {
-                author = authorArray
-            }
+        let findawayPart: Int?
+        let findawaySequence: Int?
+        
+        enum CodingKeys: String, CodingKey {
+            case title, type, duration, href
+            case findawayPart = "findaway:part"
+            case findawaySequence = "findaway:sequence"
         }
     }
+    
+    public struct Author: Codable {
+        let name: String
+    }
+    
+    public struct Link: Codable {
+        let rel: String?
+        let href: String
+        let type: String?
+        let height: Int?
+        let width: Int?
+        let bitrate: Int?
+        let title: String?
+        let duration: Int?
+        let properties: Properties?
+    }
+    
+    public struct Properties: Codable {
+        let encrypted: Encrypted?
+    }
+    
+    public struct Encrypted: Codable {
+        let scheme: String?
+        let profile: String?
+        let algorithm: String?
+    }
 }
 
-struct Author: Codable {
-    let name: String
-}
-
-struct Link: Codable {
-    let rel: String?
-    let href: String
-    let type: String?
-    let height: Int?
-    let width: Int?
-    let bitrate: Int?
-    let title: String?
-    let duration: Int?
-    let properties: Properties?
-}
-
-struct Properties: Codable {
-    let encrypted: Encrypted?
-}
-
-struct Encrypted: Codable {
-    let scheme: String?
-    let profile: String?
-    let algorithm: String?
-}
-
-struct TOCItem: Codable {
+public struct TOCItem: Codable {
     let href: String?
     let title: String?
     let children: [TOCItem]?
+}
+
+extension Manifest {
+    func toJSONDictionary() -> [String: Any]? {
+        let encoder = JSONEncoder()
+        guard let jsonData = try? encoder.encode(self),
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []) else {
+            return nil
+        }
+
+        return jsonObject as? [String: Any]
+    }
+}
+
+extension Manifest {
+    enum AudiobookType {
+        case overdrive
+        case findaway
+        case lcp
+        case openAccess
+        case unknown
+    }
+    
+    var audiobookType: AudiobookType {
+        if let scheme = metadata.drmInformation?.scheme, scheme.contains("FAE") {
+            return .findaway
+        }
+        
+        if metadata.formatType?.contains("overdrive") == true {
+            return .overdrive
+        }
+        
+        if context.contains(where: { contextItem in
+            switch contextItem {
+            case .uri(let url):
+                return url.absoluteString.contains("readium.org/lcp")
+            case .object(let dict):
+                return dict.values.contains(where: { $0.contains("readium.org/lcp") })
+            case .other(let string):
+                return string.contains("readium.org/lcp")
+            }
+        }) {
+            return .lcp
+        }
+        
+        if metadata.drmInformation == nil {
+            return .openAccess
+        }
+        
+        return .unknown
+    }
 }

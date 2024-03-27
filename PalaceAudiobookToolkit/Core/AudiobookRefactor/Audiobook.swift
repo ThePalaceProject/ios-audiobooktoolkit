@@ -8,11 +8,11 @@
 
 import Foundation
 
-public final class Audiobook: NSObject, AudiobookProtocol {
-    public let uniqueId: String
+open class Audiobook: NSObject, AudiobookProtocol {
+    public var uniqueId: String
     public var annotationsId: String { uniqueId }
     public var tableOfContents: TableOfContents
-    public let player: Player? = nil
+    public var player: Player? = nil
     public var drmStatus: DRMStatus {
         get {
             return DRMStatus.succeeded
@@ -31,16 +31,14 @@ public final class Audiobook: NSObject, AudiobookProtocol {
         super.init()
     }
     
-    public func checkDrmAsync(completion: @escaping (Bool, Error?) -> Void) {
-        completion(true, nil)
-    }
+    open func checkDrmAsync() {}
     
-    public func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void) {
+    open func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void) {
         tableOfContents.tracks.deleteTracks()
         completion(true, nil)
     }
     
-    public func update(manifest: Manifest) {
+    open func update(manifest: Manifest) {
         let tracks = Tracks(manifest: manifest)
         self.tableOfContents = TableOfContents(manifest: manifest, tracks: tracks)
     }

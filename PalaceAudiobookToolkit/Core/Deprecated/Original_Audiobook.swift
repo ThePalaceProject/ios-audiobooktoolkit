@@ -46,7 +46,7 @@ import UIKit
 /// Host app should instantiate a audiobook object with JSON.
 /// This audiobook should then be able to construct utility classes
 /// using data in the spine of that JSON.
-@objcMembers public final class AudiobookFactory: NSObject {
+@objcMembers public final class Original_AudiobookFactory: NSObject {
     /// Instatiate an audiobook object with JSON data containing spine elements of the book
     /// - Parameters:
     ///   - JSON: Audiobook and spine elements data
@@ -66,7 +66,7 @@ import UIKit
         }
         
         print(jsonString)
-
+        
         if let scheme = possibleScheme, scheme == "http://librarysimplified.org/terms/drm/scheme/FAE" {
             let FindawayAudiobookClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobook") as? Original_Audiobook.Type
             audiobook = FindawayAudiobookClass?.init(JSON: JSON, audiobookId: bookID ?? "")
@@ -78,12 +78,12 @@ import UIKit
         } else {
             audiobook = Original_OpenAccessAudiobook(JSON: JSON, token: token)
         }
-
+        
         ATLog(.debug, "checkDrmAsync")
         audiobook?.checkDrmAsync()
         return audiobook
     }
-
+    
     /// Instatiate an audiobook object with JSON data containing spine elements of the book
     /// - Parameters:
     ///   - JSON: Audiobook and spine elements data

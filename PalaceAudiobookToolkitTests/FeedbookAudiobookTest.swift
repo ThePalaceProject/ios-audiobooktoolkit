@@ -52,7 +52,7 @@ class FeedbookAudiobookTest: XCTestCase {
       return
     }
 
-    XCTAssertNil(AudiobookFactory.audiobook(feedbookObj) , "AudiobookFactory should return nil for expired book")
+    XCTAssertNil(Original_AudiobookFactory.audiobook(feedbookObj) , "AudiobookFactory should return nil for expired book")
   }
   
   // This test is disabled until we populate `feedbookJson` with some json data

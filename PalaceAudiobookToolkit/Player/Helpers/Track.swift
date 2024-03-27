@@ -8,7 +8,7 @@
 
 import Foundation
 
-class Track {
+public class Track {
     enum TrackType {
         case href(String)
         case findaway(part: Int, sequence: Int)
@@ -29,7 +29,7 @@ class Track {
 }
 
 extension Track: Equatable {
-    static func == (lhs: Track, rhs: Track) -> Bool {
+   public static func == (lhs: Track, rhs: Track) -> Bool {
         let typeMatches: Bool = {
             switch (lhs.type, rhs.type) {
             case (.href(let lhsHref), .href(let rhsHref)):
@@ -50,7 +50,7 @@ extension Track: Equatable {
 
 
 extension Track: Comparable {
-    static func < (lhs: Track, rhs: Track) -> Bool {
+    public static func < (lhs: Track, rhs: Track) -> Bool {
         switch (lhs.type, rhs.type) {
         case (.href(let lhsHref), .href(let rhsHref)):
             return lhsHref < rhsHref

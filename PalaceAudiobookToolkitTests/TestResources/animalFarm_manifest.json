@@ -1,0 +1,29 @@
+{
+    "id": "urn:librarysimplified.org/terms/id/Overdrive%20ID/61963fad-1f22-442b-9b80-4feb16f602f8",
+    "reserveId": "61963fad-1f22-442b-9b80-4feb16f602f8",
+    "crossRefId": 132037,
+    "formatType": "audiobook-overdrive",
+    "links": {
+        "contentlinks": [
+            {
+                "type": "text/html",
+                "href": "https://ofsdirect.api.overdrive.com/contentfile?body=eyJjb250ZW50SUQiOiI2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjgtNjI1IiwiY29udGVudElEVHlwZSI6IkNvbnRlbnRSZXNlcnZlSUQiLCJjb250ZW50RXhwaXJhdGlvblVUQyI6IjIwMjQtMDMtMjhUMTc6NDc6MDMuMTkyNzMzN1oiLCJVUkxFeHBpcmF0aW9uVVRDIjoiMjAyNC0wMy0yN1QxODo0NzowMy4zMTk0Njg1WiIsInNvdXJjZUludGVyYWN0aW9uSUQiOiI5OTgyODg0MzgzNzYuNzI3LjQ2ZWYzOWMwLTQ2NGQtNDhjMy1hNGUyLWQzYTE3NDNkYWNhMSIsInNvdXJjZUFQSVVzZXIiOiJvZHBsdXRvIiwiZm9ybWF0U3BlY2lmaWMiOnsiQlVJRCI6Ijc3NTlkMTllYmFjMjQ0MWU1ZTdlMzVmMGI3NTNhODY1IiwicGF0aCI6Ins2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjh9Rm10NDI1LVBhcnQwMS5tcDMifX0%3D&s=42517a5e67cbed67f9425fab31bf855542b658fd1c7d669ec6c5f91de8eb57dc",
+                "physicalFileLengthInBytes": 29109185
+            },
+            {
+                "type": "text/html",
+                "href": "https://ofsdirect.api.overdrive.com/contentfile?body=eyJjb250ZW50SUQiOiI2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjgtNjI1IiwiY29udGVudElEVHlwZSI6IkNvbnRlbnRSZXNlcnZlSUQiLCJjb250ZW50RXhwaXJhdGlvblVUQyI6IjIwMjQtMDMtMjhUMTc6NDc6MDMuMTkyNzMzN1oiLCJVUkxFeHBpcmF0aW9uVVRDIjoiMjAyNC0wMy0yN1QxODo0NzowMy4zMTk0Njg1WiIsInNvdXJjZUludGVyYWN0aW9uSUQiOiI5OTgyODg0MzgzNzYuNzI3LjQ2ZWYzOWMwLTQ2NGQtNDhjMy1hNGUyLWQzYTE3NDNkYWNhMSIsInNvdXJjZUFQSVVzZXIiOiJvZHBsdXRvIiwiZm9ybWF0U3BlY2lmaWMiOnsiQlVJRCI6Ijc3NTlkMTllYmFjMjQ0MWU1ZTdlMzVmMGI3NTNhODY1IiwicGF0aCI6Ins2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjh9Rm10NDI1LVBhcnQwMi5tcDMifX0%3D&s=a0007d44b6b12aa8538345fd972e7140dde0e0c9189f66bde20587f68e6f4128",
+                "physicalFileLengthInBytes": 31647242
+            },
+            {
+                "type": "text/html",
+                "href": "https://ofsdirect.api.overdrive.com/contentfile?body=eyJjb250ZW50SUQiOiI2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjgtNjI1IiwiY29udGVudElEVHlwZSI6IkNvbnRlbnRSZXNlcnZlSUQiLCJjb250ZW50RXhwaXJhdGlvblVUQyI6IjIwMjQtMDMtMjhUMTc6NDc6MDMuMTkyNzMzN1oiLCJVUkxFeHBpcmF0aW9uVVRDIjoiMjAyNC0wMy0yN1QxODo0NzowMy4zMTk0Njg1WiIsInNvdXJjZUludGVyYWN0aW9uSUQiOiI5OTgyODg0MzgzNzYuNzI3LjQ2ZWYzOWMwLTQ2NGQtNDhjMy1hNGUyLWQzYTE3NDNkYWNhMSIsInNvdXJjZUFQSVVzZXIiOiJvZHBsdXRvIiwiZm9ybWF0U3BlY2lmaWMiOnsiQlVJRCI6Ijc3NTlkMTllYmFjMjQ0MWU1ZTdlMzVmMGI3NTNhODY1IiwicGF0aCI6Ins2MTk2M0ZBRC0xRjIyLTQ0MkItOUI4MC00RkVCMTZGNjAyRjh9Rm10NDI1LVBhcnQwMy5tcDMifX0%3D&s=6ae083da250988f34d8dbc74759d7217589d7e89b1c48f06af35af91d3569474",
+                "physicalFileLengthInBytes": 31304933
+            }
+        ],
+        "self": {
+            "type": "application/vnd.overdrive.circulation.api+json",
+            "href": "https://patron.api.overdrive.com/v1/patrons/me/checkouts/61963fad-1f22-442b-9b80-4feb16f602f8/formats/audiobook-overdrive/downloadlink?contentFile=true"
+        }
+    }
+}
