@@ -28,35 +28,48 @@ public struct TableOfContents: TableOfContentsProtocol {
         self.tracks = tracks
         self.toc = []
         
-        if manifest.toc?.isEmpty == false {
-            loadToc()
-        } else {
-            loadTocFromReadingOrder()
+        if let tocItems = manifest.toc, !tocItems.isEmpty {
+            loadTocFromTocItems(tocItems)
+        } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
+            loadTocFromReadingOrder(readingOrder)
+        } else if let linksDictionary = manifest.linksDictionary {
+            loadTocFromLinks(linksDictionary)
         }
         
         self.calculateDurations()
     }
     
-    private mutating func loadToc() {
-        let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
-            return flattenChapters(entry: entry, tracks: tracks)
-        } ?? []
-        
-        self.toc = flatChapters
-        
-        if let firstEntry = self.toc.first,
-           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
-            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
-            self.toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
+    private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
+        tocItems.forEach { tocItem in
+            toc.append(contentsOf: flattenChapters(entry: tocItem, tracks: tracks))
+        }
+        prependForwardChapterIfNeeded()
+    }
+    
+    private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
+        readingOrder.forEach { item in
+            if let track = tracks.track(forHref: item.href ?? "") {
+                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
+                toc.append(chapter)
+            }
+        }
+        prependForwardChapterIfNeeded()
+    }
+
+    private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
+        links.contentLinks?.forEach { item in
+            if let track = tracks.track(forHref: item.href ?? "") {
+                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
+                toc.append(chapter)
+            }
         }
     }
     
-    private mutating func loadTocFromReadingOrder() {
-        for item in manifest.readingOrder {
-            guard let part = item.findawayPart, let sequence = item.findawaySequence else { continue }
-            guard let track = tracks.track(forPart: part, sequence: sequence) else { continue }
-            let chapter = Chapter(title: item.title ?? "", position: TrackPosition(track: track, timestamp: 0, tracks: tracks), duration: Int(item.duration))
-            self.toc.append(chapter)
+    private mutating func prependForwardChapterIfNeeded() {
+        if let firstEntry = toc.first,
+           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
+            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
+            toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
         }
     }
 
@@ -88,8 +101,8 @@ public struct TableOfContents: TableOfContentsProtocol {
         for idx in toc.indices {
             let nextTocPosition = idx + 1 < toc.count ? toc[idx + 1].position :
             TrackPosition(
-                track: tracks[tracks.count - 1],
-                timestamp: tracks[tracks.count - 1].duration,
+                track: tracks[tracks.tracks.count - 1],
+                timestamp: tracks[tracks.tracks.count - 1].duration,
                 tracks: tracks
             )
             toc[idx].duration = try? nextTocPosition - toc[idx].position

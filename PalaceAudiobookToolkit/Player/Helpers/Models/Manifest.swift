@@ -44,40 +44,54 @@ public enum ManifestContext: Codable {
 public struct Manifest: Codable {
     let context: [ManifestContext]
     let id: String?
-    public let metadata: Metadata
-    let links: [Link]
-    let readingOrder: [ReadingOrderItem]
+    let reserveId: String?
+    let crossRefId: Int?
+    public let metadata: Metadata?
+    let  links: [Link]?
+    var linksDictionary: LinksDictionary?
+    let readingOrder: [ReadingOrderItem]?
     let resources: [Link]?
     let toc: [TOCItem]?
+    public let formatType: String?
     
     enum CodingKeys: String, CodingKey {
         case context = "@context"
-        case id, metadata, links, readingOrder, resources, toc
+        case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Handle both a single string or an array for `@context`
+
         if let contextString = try? container.decode(String.self, forKey: .context) {
             context = [.other(contextString)]
         } else if let contextArray = try? container.decode([ManifestContext].self, forKey: .context) {
             context = contextArray
         } else {
-            throw DecodingError.typeMismatch(
-                [ManifestContext].self,
-                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Expected to decode String or Array for @context"))
+            context = []
         }
         
-        // Decode other properties
         id = try container.decodeIfPresent(String.self, forKey: .id)
-        metadata = try container.decode(Metadata.self, forKey: .metadata)
-        links = try container.decode([Link].self, forKey: .links)
-        readingOrder = try container.decode([ReadingOrderItem].self, forKey: .readingOrder)
+        reserveId = try container.decodeIfPresent(String.self, forKey: .reserveId)
+        crossRefId = try container.decodeIfPresent(Int.self, forKey: .crossRefId)
+        metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
+        readingOrder = try container.decodeIfPresent([ReadingOrderItem].self, forKey: .readingOrder)
         resources = try container.decodeIfPresent([Link].self, forKey: .resources)
         toc = try container.decodeIfPresent([TOCItem].self, forKey: .toc)
+        formatType = try container.decodeIfPresent(String.self, forKey: .formatType)
         
+        if let linksArray = try? container.decode([Link].self, forKey: .links) {
+            links = linksArray
+            linksDictionary = nil
+        } else if let linksDict = try? container.decodeIfPresent(LinksDictionary.self, forKey: .links) {
+            linksDictionary = linksDict
+            links = nil
+        } else {
+            links = nil
+            linksDictionary = nil
+        }
     }
-        static func customDecoder() -> JSONDecoder {
+    
+    static func customDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in
@@ -140,6 +154,16 @@ public struct Manifest: Codable {
         let properties: Properties?
     }
     
+    struct LinksDictionary: Codable {
+        var contentLinks: [Link]?
+        var selfLink: Link?
+        
+        enum CodingKeys: String, CodingKey {
+            case contentLinks = "contentlinks"
+            case selfLink = "self"
+        }
+    }
+
     public struct Properties: Codable {
         let encrypted: Encrypted?
     }
@@ -149,6 +173,7 @@ public struct Manifest: Codable {
         let profile: String?
         let algorithm: String?
     }
+    
 }
 
 public struct TOCItem: Codable {
@@ -179,31 +204,37 @@ extension Manifest {
     }
     
     var audiobookType: AudiobookType {
-        if let scheme = metadata.drmInformation?.scheme, scheme.contains("FAE") {
-            return .findaway
+        if let scheme = metadata?.drmInformation?.scheme {
+            if scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
+                return .findaway
+            }
         }
         
-        if metadata.formatType?.contains("overdrive") == true {
+        if formatType?.contains("overdrive") == true {
             return .overdrive
         }
         
-        if context.contains(where: { contextItem in
-            switch contextItem {
-            case .uri(let url):
-                return url.absoluteString.contains("readium.org/lcp")
-            case .object(let dict):
-                return dict.values.contains(where: { $0.contains("readium.org/lcp") })
-            case .other(let string):
-                return string.contains("readium.org/lcp")
-            }
-        }) {
+        if !context.isEmpty && context.contains(where: { $0.matchesLCPContext }) {
             return .lcp
         }
         
-        if metadata.drmInformation == nil {
+        if metadata?.drmInformation == nil {
             return .openAccess
         }
         
         return .unknown
+    }
+}
+
+private extension ManifestContext {
+    var matchesLCPContext: Bool {
+        switch self {
+        case .uri(let url):
+            return url.absoluteString.contains("readium.org/lcp")
+        case .object(let dict):
+            return dict.values.contains(where: { $0.contains("readium.org/lcp") })
+        case .other(let string):
+            return string.contains("readium.org/lcp")
+        }
     }
 }

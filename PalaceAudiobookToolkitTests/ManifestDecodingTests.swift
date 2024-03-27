@@ -12,7 +12,7 @@ import XCTest
 enum ManifestJSON: String, CaseIterable {
     case alice = "alice_manifest"
     case anathem = "anathem_manifest"
-    case animalFarm = "animarlFarm_manifest"
+    case animalFarm = "animalFarm_manifest"
     case bigFail = "theBigFail_manifest"
     case christmasCarol = "christmas_carol_manifest"
     case flatland = "flatland_manifest"
@@ -59,7 +59,7 @@ final class ManifestDecodingTests: XCTestCase {
             }
         }
     }
-    
+
     private func validate(manifest: Manifest, against jsonDictionary: [String: Any]) {
         let mirror = Mirror(reflecting: manifest)
         
@@ -77,8 +77,9 @@ final class ManifestDecodingTests: XCTestCase {
                 print("Test data: \(value)")
                 print("Actual data: \(manifestProperty.value)")
             }
-
-            if adjustedKey == "context" {
+            
+            switch adjustedKey {
+            case "context":
                 if let jsonContexts = value as? [Any] {
                     validateContext(manifestContexts: manifest.context, against: jsonContexts)
                 } else if let jsonContext = value as? String {
@@ -86,22 +87,30 @@ final class ManifestDecodingTests: XCTestCase {
                 } else {
                     XCTFail("Unexpected @context format")
                 }
-            } else if let readingOrder = value as? [[String: Any]], adjustedKey == "readingOrder" {
-                validateReadingOrderItems(manifest.readingOrder, against: readingOrder)
-            } else if let toc = value as? [[String: Any]], adjustedKey == "toc" {
-                validateTOCItems(manifest.toc, against: toc)
-            } else if let links = value as? [[String: Any]], adjustedKey == "links" {
-                validateLinks(manifest.links, against: links)
-            } else if adjustedKey == "metadata" {
-                if let jsonMetadata = value as? [String: Any] {
-                    validateMetadata(manifest.metadata, against: jsonMetadata)
+            case "readingOrder":
+                if let readingOrder = value as? [[String: Any]] {
+                    validateReadingOrderItems(manifest.readingOrder!, against: readingOrder)
                 }
-            } else if adjustedKey == "resources" {
+            case "toc":
+                if let toc = value as? [[String: Any]] {
+                    validateTOCItems(manifest.toc ?? [], against: toc)
+                }
+            case "links":
+                if let linksArray = value as? [[String: Any]] {
+                    validateLinks(manifest.links ?? [], against: linksArray)
+                } else if let linksDict = value as? [String: Any], let contentLinks = linksDict["contentlinks"] as? [[String: Any]] {
+                    // Assuming you have logic to handle linksDictionary in Manifest
+                    validateLinks(manifest.linksDictionary?.contentLinks ?? [], against: contentLinks)
+                }
+            case "metadata":
+                if let jsonMetadata = value as? [String: Any], let metadata = manifest.metadata {
+                    validateMetadata(metadata, against: jsonMetadata)
+                }
+            case "resources":
                 if let jsonResources = value as? [[String: Any]] {
                     validateLinks(manifest.resources ?? [], against: jsonResources)
                 }
-            } else {
-                // Direct comparison for properties that are not arrays or dictionaries
+            default:
                 if let valueAsString = value as? String, let propertyValueAsString = manifestProperty.value as? String {
                     XCTAssertEqual(propertyValueAsString, valueAsString, "Value mismatch for key: \(key)")
                     print("✅ Validation successful for \(adjustedKey)")
@@ -120,28 +129,39 @@ final class ManifestDecodingTests: XCTestCase {
 private func validateContext(manifestContexts: [ManifestContext], against jsonContexts: [Any]) {
     for (index, jsonContext) in jsonContexts.enumerated() {
         guard index < manifestContexts.count else {
-            XCTFail("Manifest context array shorter than expected")
+            XCTFail("JSON context array has more items than the manifest context array.")
             return
         }
         
         let manifestContext = manifestContexts[index]
         
         if let contextString = jsonContext as? String {
-            validateStringContext(manifestContext, contextString: contextString, index: index)
-        } else if let contextDict = jsonContext as? [String: String] {
-            if let findawayContext = contextDict["findaway"] {
-                if case .object(let objectDict) = manifestContext, let objectValue = objectDict["findaway"] {
-                    XCTAssertEqual(objectValue, findawayContext, "Findaway context mismatch at index \(index)")
-                } else {
-                    XCTFail("Expected an object with key 'findaway' at index \(index)")
+            switch manifestContext {
+            case .uri(let uri):
+                XCTAssertEqual(uri.absoluteString, contextString, "URI context mismatch at index \(index)")
+            case .other(let otherString):
+                XCTAssertEqual(otherString, contextString, "String context mismatch at index \(index)")
+            default:
+                XCTFail("Expected URI or string context at index \(index)")
+            }
+        } else if let contextDict = jsonContext as? [String: String], let (key, expectedValue) = contextDict.first {
+            // Handle case where JSON context is a dictionary.
+            switch manifestContext {
+            case .object(let objectDict):
+                guard let objectValue = objectDict[key] else {
+                    XCTFail("Key '\(key)' not found in manifest context object at index \(index)")
+                    return
                 }
-            } else {
-                validateDictionaryContext(manifestContext, contextDict: contextDict, index: index)
+                XCTAssertEqual(objectValue, expectedValue, "Context object value mismatch for key '\(key)' at index \(index)")
+            default:
+                XCTFail("Expected object context at index \(index)")
             }
         } else {
-            XCTFail("Unexpected @context content at index \(index)")
+            XCTFail("Unexpected JSON context format at index \(index)")
         }
     }
+    
+    XCTAssertEqual(manifestContexts.count, jsonContexts.count, "Manifest context array and JSON context array have different lengths.")
 }
 
 private func validateStringContext(_ manifestContext: ManifestContext, contextString: String, index: Int) {

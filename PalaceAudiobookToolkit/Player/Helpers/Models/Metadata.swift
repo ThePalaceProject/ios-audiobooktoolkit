@@ -21,11 +21,10 @@ extension Manifest {
         public var author: [Author] = []
         public let duration: Double?
         public let drmInformation: DRMType?
-        public let formatType: String?
         
         enum CodingKeys: String, CodingKey {
             case type = "@type"
-            case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted, formatType
+            case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted
         }
         
         public init(from decoder: Decoder) throws {
@@ -40,7 +39,6 @@ extension Manifest {
             publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
             duration = try container.decodeIfPresent(Double.self, forKey: .duration)
             drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
-            formatType = try container.decodeIfPresent(String.self, forKey: .formatType)
             
             // Decode author array from different formats
             if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
@@ -123,7 +121,6 @@ extension Manifest.Metadata {
         try container.encodeIfPresent(published, forKey: .published)
         try container.encodeIfPresent(publisher, forKey: .publisher)
         try container.encodeIfPresent(duration, forKey: .duration)
-        try container.encodeIfPresent(formatType, forKey: .formatType)
         
         if !author.isEmpty {
             try container.encode(author, forKey: .author)
