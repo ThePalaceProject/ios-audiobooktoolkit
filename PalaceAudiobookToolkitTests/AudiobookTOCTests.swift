@@ -313,7 +313,7 @@ class AudiobookTOCTests: XCTestCase {
         guard let url = Bundle(for: type(of: self)).url(forResource: manifest, withExtension: "json"),
               let jsonData = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-              let lcpAudiobook = LCPAudiobook(JSON: json, decryptor: nil) else {
+              let lcpAudiobook = Original_LCPAudiobook(JSON: json, decryptor: nil) else {
             XCTFail("Failed to load manifest or create LCPAudiobook instance.")
             return
         }

@@ -14,48 +14,93 @@ protocol TableOfContentsProtocol {
     var toc: [Chapter] { get }
 }
 
-struct TableOfContents: TableOfContentsProtocol {
+public struct TableOfContents: TableOfContentsProtocol {
     var manifest: Manifest
     var tracks: Tracks
     var toc: [Chapter]
-
+    
     var count: Int {
         toc.count
     }
-
+    
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
         self.tracks = tracks
         self.toc = []
-
-        self.loadToc()
+        
+        if let tocItems = manifest.toc, !tocItems.isEmpty {
+            loadTocFromTocItems(tocItems)
+        } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
+            loadTocFromReadingOrder(readingOrder)
+        } else if let linksDictionary = manifest.linksDictionary {
+            loadTocFromLinks(linksDictionary)
+        }
+        
         self.calculateDurations()
     }
+    
+    private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
+        tocItems.forEach { tocItem in
+            toc.append(contentsOf: flattenChapters(entry: tocItem, tracks: tracks))
+        }
+        prependForwardChapterIfNeeded()
+    }
+    
+    private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
+        readingOrder.forEach { item in
+            var track: Track? = nil
+            
+            if let href = item.href {
+                track = tracks.track(forHref: href)
+            }
+            else if let part = item.findawayPart, let sequence = item.findawaySequence {
+                track = tracks.track(forPart: part, sequence: sequence)
+            }
+            
+            if let validTrack = track {
+                let chapterTitle = item.title ?? "Untitled"
+                let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0, tracks: tracks))
+                toc.append(chapter)
+            }
+        }
 
-    private mutating func loadToc() {
-        let flatChapters = manifest.toc?.flatMap { entry -> [Chapter] in
-            return flattenChapters(entry: entry, tracks: tracks)
-        } ?? []
-        
-        self.toc = flatChapters
-        
-        if let firstEntry = self.toc.first,
-           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0
-        {
+        prependForwardChapterIfNeeded()
+    }
+
+    private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
+        links.contentLinks?.forEach { item in
+            if let track = tracks.track(forHref: item.href) {
+                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
+                toc.append(chapter)
+            }
+        }
+    }
+    
+    private mutating func prependForwardChapterIfNeeded() {
+        if let firstEntry = toc.first,
+           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
             let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
-            self.toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
+            toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
         }
     }
 
     private func flattenChapters(entry: TOCItem, tracks: Tracks) -> [Chapter] {
+        guard let fullHref = entry.href else { return [] }
         var chapters: [Chapter] = []
-        if let track = tracks.byHref(entry.href) {
-            let offset = Int(entry.href.replacingOccurrences(of: "t=", with: "")) ?? 0
-            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offset * 1000, tracks: tracks))
+        
+        let components = fullHref.components(separatedBy: "#")
+        let hrefWithoutFragment = components.first ?? ""
+        
+        let timestampString = components.last?.replacingOccurrences(of: "t=", with: "")
+        let offsetInSeconds = Int(timestampString ?? "") ?? 0
+        
+        let offsetInMilliseconds = offsetInSeconds * 1000
+        
+        if let track = tracks.track(forHref: hrefWithoutFragment) {
+            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offsetInMilliseconds, tracks: tracks))
             chapters.append(chapter)
         }
         
-        // Recursively flatten any nested children into the same list
         entry.children?.forEach { childEntry in
             chapters.append(contentsOf: flattenChapters(entry: childEntry, tracks: tracks))
         }
@@ -67,8 +112,8 @@ struct TableOfContents: TableOfContentsProtocol {
         for idx in toc.indices {
             let nextTocPosition = idx + 1 < toc.count ? toc[idx + 1].position :
             TrackPosition(
-                track: tracks[tracks.count - 1],
-                timestamp: tracks[tracks.count - 1].duration,
+                track: tracks[tracks.tracks.count - 1],
+                timestamp: tracks[tracks.tracks.count - 1].duration,
                 tracks: tracks
             )
             toc[idx].duration = try? nextTocPosition - toc[idx].position

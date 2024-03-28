@@ -1,0 +1,184 @@
+{
+    "toc": [
+        {
+            "title": "Chapter: 1",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0013_64k.mp3"
+        },
+        {
+            "title": "Chapter: 2",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0001_64k.mp3"
+        },
+        {
+            "title": "Chapter: 3",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0004_64k.mp3"
+        },
+        {
+            "title": "Chapter: 4",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0005_64k.mp3"
+        },
+        {
+            "title": "Chapter: 5",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0006_64k.mp3"
+        },
+        {
+            "title": "Chapter: 6",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0007_64k.mp3"
+        },
+        {
+            "title": "Chapter: 7",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0008_64k.mp3"
+        },
+        {
+            "title": "Chapter: 8",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0009_64k.mp3"
+        },
+        {
+            "title": "Chapter: 9",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0010_64k.mp3"
+        },
+        {
+            "title": "Chapter: 10",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0011_64k.mp3"
+        },
+        {
+            "title": "Chapter: 11",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0002_64k.mp3"
+        },
+        {
+            "title": "Chapter: 12",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0003_64k.mp3"
+        },
+        {
+            "title": "Chapter: 13",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0012_64k.mp3"
+        },
+        {
+            "title": "Chapter: 14",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0014_64k.mp3"
+        }
+    ],
+    "@context": "https://readium.org/webpub-manifest/context.jsonld",
+    "metadata": {
+        "subtitle": "a novel",
+        "@type": "http://schema.org/Audiobook",
+        "title": "Bocas : a novel",
+        "identifier": "urn:uuid:fc01ec05-5599-48a3-9264-866cc9921aba",
+        "scheme:license": "Copyright held by content provider",
+        "description": "George thought he’d finally escaped Shawna by picking up an easy bartending gig in Bocas del Toro, Panama.   With an extra $400/month to edit an online love column keeping him afloat, he spends his days swimming and sinking beers with his roommate PJ.   Does the occasional female tourist ever sleep over? Sure. But that’s nothing compared to PJ’s scorecard. PJ should be registered with the Center for Disease Control.  Warm water, cold beers and no Shawna—life couldn’t be better on the island. Until George takes a little road trip to Colombia. Raúl, his boss at the bar, offered him a free ride. He always knew Raúl moved a little bit of cocaine. Who doesn’t? But guns?   So… he absolutely should not write Shawna. That clever soul-crushing beauty destroyed him. Maybe it would be OK if she came for just a week? Just one week...",
+        "publisher": "Garbage Wagon",
+        "language": "en",
+        "conformsTo": "https://readium.org/webpub-manifest/profiles/audiobook"
+    },
+    "links": [
+        {
+            "rel": "self",
+            "href": "https://catalog.biblioboard.com/opds/items/fc01ec05-5599-48a3-9264-866cc9921aba/manifest.json",
+            "type": "application/audiobook+json"
+        },
+        {
+            "rel": "cover",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/thumbnail.jpg",
+            "type": "image/jpeg"
+        }
+    ],
+    "readingOrder": [
+        {
+            "duration": 6,
+            "title": "Chapter: 1",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0013_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1433,
+            "title": "Chapter: 2",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0001_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1572,
+            "title": "Chapter: 3",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0004_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 2045,
+            "title": "Chapter: 4",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0005_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 2166,
+            "title": "Chapter: 5",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0006_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1351,
+            "title": "Chapter: 6",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0007_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1568,
+            "title": "Chapter: 7",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0008_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 2643,
+            "title": "Chapter: 8",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0009_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1463,
+            "title": "Chapter: 9",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0010_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1598,
+            "title": "Chapter: 10",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0011_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 1221,
+            "title": "Chapter: 11",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0002_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 306,
+            "title": "Chapter: 12",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0003_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 15,
+            "title": "Chapter: 13",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0012_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        },
+        {
+            "duration": 298,
+            "title": "Chapter: 14",
+            "href": "https://library.biblioboard.com/ext/api/media/fc01ec05-5599-48a3-9264-866cc9921aba/assets/content/SID-0000003603910_0014_64k.mp3",
+            "type": "audio/mpeg",
+            "bitrate": 64
+        }
+    ]
+}

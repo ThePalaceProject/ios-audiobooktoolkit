@@ -450,7 +450,7 @@ extension AudiobookPlayerView {
         guard let resource = Bundle.audiobookToolkit()?.url(forResource: "alice_manifest", withExtension: "json"),
               let audiobookData = try? Data(contentsOf: resource),
               let audiobookJSON = try? JSONSerialization.jsonObject(with: audiobookData) as? [String: Any],
-              let audiobook = OpenAccessAudiobook(JSON: audiobookJSON, token: nil) else
+              let audiobook = Original_OpenAccessAudiobook(JSON: audiobookJSON, token: nil) else
         {
             return nil
         }
@@ -471,7 +471,7 @@ struct AudiobookPlayerView_Previews: PreviewProvider {
 // MARK: - Controls
 
 /// Airplay button
-struct AVRoutePickerViewRepresentable: UIViewRepresentable {
+struct AVRoutePickerViewRepresentable: UIViewRepresentable {    
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView()
         picker.tintColor = .white

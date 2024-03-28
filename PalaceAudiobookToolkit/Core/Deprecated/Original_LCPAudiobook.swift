@@ -8,7 +8,7 @@
 
 import Foundation
 
-@objc public class LCPAudiobook: NSObject, Audiobook {
+@objc public class Original_LCPAudiobook: NSObject, Original_Audiobook {
     public var annotationsId: String { uniqueIdentifier }
 
     /// Readium @context parameter value for LCP audiobooks
@@ -62,9 +62,9 @@ import Foundation
             }
         self.uniqueIdentifier = id
         if let toc = publication["toc"] as? [[String: Any]] {
-            self.spine = LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
+            self.spine = Original_LCPAudiobook.getSpineElements(toc: toc, resources: resources, identifier: uniqueIdentifier)
         } else {
-            self.spine = LCPAudiobook.getSpineElements(resources: resources, identifier: uniqueIdentifier)
+            self.spine = Original_LCPAudiobook.getSpineElements(resources: resources, identifier: uniqueIdentifier)
         }
         guard let cursor = Cursor(data: spine) else {
             let title = metadata["title"] as? String ?? ""
