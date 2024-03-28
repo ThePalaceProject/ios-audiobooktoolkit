@@ -14,6 +14,7 @@ enum ManifestJSON: String, CaseIterable {
     case anathem = "anathem_manifest"
     case animalFarm = "animalFarm_manifest"
     case bigFail = "theBigFail_manifest"
+    case bocas = "bocas_manifest"
     case christmasCarol = "christmas_carol_manifest"
     case flatland = "flatland_manifest"
     case bestNewHorror = "best_new_horror_manifest"
@@ -29,6 +30,7 @@ enum ManifestJSON: String, CaseIterable {
         case .anathem: return 17
         case .animalFarm: return 3
         case .bigFail: return 22
+        case .bocas: return 14
         case .christmasCarol: return 6
         case .flatland: return 25
         case .martian: return 41

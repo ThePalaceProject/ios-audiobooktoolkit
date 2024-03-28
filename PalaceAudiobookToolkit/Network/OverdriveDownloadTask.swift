@@ -27,12 +27,6 @@ final class OverdriveDownloadTask: DownloadTask {
         self.urlMediaType = spineElement.mediaType
     }
 
-    init(key: String, url: URL, urlMediaType: OverdriveSpineElementMediaType) {
-        self.key = key
-        self.url = url
-        self.urlMediaType = urlMediaType
-    }
-
     func fetch() {
         switch self.assetFileStatus() {
         case .saved(_):

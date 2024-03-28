@@ -47,6 +47,7 @@ class TableOfContentsTests: XCTestCase {
             .alice: "Opening Credits",
             .anathem: "Epigraph",
             .bigFail: "Chapter 1",
+            .bocas: "Chapter: 1",
             .christmasCarol: "Opening Credits",
             .flatland: "Forward",
             .martian: "Opening Credits",
