@@ -9,7 +9,6 @@
 import Foundation
 
 class Tracks {
-
     var manifest: Manifest
     var tracks: [Track] = []
     var totalDuration: Int = 0
@@ -19,43 +18,63 @@ class Tracks {
         self.initializeTracks()
         self.calculateTotalDuration()
     }
-    
+
     private func initializeTracks() {
         if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
             addTracksFromReadingOrder(readingOrder)
-        } else {
-            // If readingOrder is not available, attempt to initialize tracks from links.
-            // You might need additional logic here if your manifest contains other fields that can be used to create tracks.
-            addTracksFromLinks()
+        } else if let linksDict = manifest.linksDictionary, let contentLinks = linksDict.contentLinks, !contentLinks.isEmpty {
+            addTracksFromLinks(contentLinks)
+        } else if let linksArray = manifest.links, !linksArray.isEmpty {
+            addTracksFromLinks(linksArray)
         }
     }
     
     private func addTracksFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
-        for (idx, item) in readingOrder.enumerated() {
-            guard let track = createTrack(from: item, index: idx) else { continue }
-            tracks.append(track)
+        for (index, item) in readingOrder.enumerated() {
+            if let track = createTrack(from: item, index: index) {
+                tracks.append(track)
+            }
         }
     }
     
-    private func addTracksFromLinks() {
-        // This function assumes that links can directly represent tracks.
-        // Adjust the implementation as necessary based on the actual structure of your manifest.
-        for (idx, link) in (manifest.links ?? []).enumerated() {
-            if let type = link.type, type.contains("audio") {
-                let title = link.title ?? link.href.components(separatedBy: "/").last ?? "Untitled"
-                let duration = link.duration ?? 0 // Assume a default or calculate duration if possible.
-                let track = Track(type: .href(link.href), title: title, duration: duration, index: idx)
+    private func addTracksFromLinks(_ links: [Manifest.Link]) {
+        for (index, link) in links.enumerated() {
+            if let track = createTrack(from: link, index: index) {
                 tracks.append(track)
             }
         }
     }
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> Track? {
-        guard let href = item.href else { return nil }
         let title = item.title ?? "Untitled"
-        let duration = Int(item.duration) * 1000 // Convert to milliseconds if needed
-        return Track(type: .href(href), title: title, duration: duration, index: index)
+        let duration = Int(item.duration * 1000)
+        
+        if let part = item.findawayPart, let sequence = item.findawaySequence {
+            return Track(type: .findaway(part: part, sequence: sequence), title: title, duration: duration, index: index)
+        } else if let href = item.href {
+            return Track(type: .href(href), title: title, duration: duration, index: index)
+        }
+        
+        return nil
     }
+
+    private func createTrack(from link: Manifest.Link, index: Int) -> Track? {
+        let title = link.title ?? "Untitled"
+        let bitrate = 64 * 1024
+        var duration: Int
+        
+        if let explicitDuration = link.duration {
+            duration = explicitDuration
+        } else if let fileSizeInBytes = link.physicalFileLengthInBytes {
+            let fileSizeInBits = fileSizeInBytes * 8
+            duration = (fileSizeInBits / bitrate) * 1000
+        } else {
+            duration = 0
+        }
+
+        return Track(type: .href(link.href), title: title, duration: duration, index: index)
+    }
+
 
     func track(forHref href: String) -> Track? {
         return tracks.first(where: { track in

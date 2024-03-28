@@ -48,17 +48,28 @@ public struct TableOfContents: TableOfContentsProtocol {
     
     private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
         readingOrder.forEach { item in
-            if let track = tracks.track(forHref: item.href ?? "") {
-                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
+            var track: Track? = nil
+            
+            if let href = item.href {
+                track = tracks.track(forHref: href)
+            }
+            else if let part = item.findawayPart, let sequence = item.findawaySequence {
+                track = tracks.track(forPart: part, sequence: sequence)
+            }
+            
+            if let validTrack = track {
+                let chapterTitle = item.title ?? "Untitled"
+                let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0, tracks: tracks))
                 toc.append(chapter)
             }
         }
+
         prependForwardChapterIfNeeded()
     }
 
     private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
         links.contentLinks?.forEach { item in
-            if let track = tracks.track(forHref: item.href ?? "") {
+            if let track = tracks.track(forHref: item.href) {
                 let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
                 toc.append(chapter)
             }

@@ -29,7 +29,7 @@ public class Track {
 }
 
 extension Track: Equatable {
-   public static func == (lhs: Track, rhs: Track) -> Bool {
+    public static func == (lhs: Track, rhs: Track) -> Bool {
         let typeMatches: Bool = {
             switch (lhs.type, rhs.type) {
             case (.href(let lhsHref), .href(let rhsHref)):

@@ -152,6 +152,7 @@ public struct Manifest: Codable {
         let title: String?
         let duration: Int?
         let properties: Properties?
+        let physicalFileLengthInBytes: Int?
     }
     
     struct LinksDictionary: Codable {
