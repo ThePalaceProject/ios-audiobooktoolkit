@@ -1,4 +1,4 @@
-final class OpenAccessAudiobook: Audiobook {
+final class Original_OpenAccessAudiobook: Original_Audiobook {
     let player: Player
     var spine: [SpineElement]
     let uniqueIdentifier: String

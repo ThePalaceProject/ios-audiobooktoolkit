@@ -58,7 +58,7 @@ private var waitingForPlayer: Bool = false
 
     var networkService: AudiobookNetworkService { get }
     var metadata: AudiobookMetadata { get }
-    var audiobook: Audiobook { get }
+    var audiobook: Original_Audiobook { get }
 
     var tableOfContents: AudiobookTableOfContents { get }
     var sleepTimer: SleepTimer { get }
@@ -105,7 +105,7 @@ enum BookmarkError: Error {
 
     public private(set) var networkService: AudiobookNetworkService
     public let metadata: AudiobookMetadata
-    public let audiobook: Audiobook
+    public let audiobook: Original_Audiobook
 
     public static let skipTimeInterval: TimeInterval = 30
     
@@ -127,7 +127,7 @@ enum BookmarkError: Error {
 
     private(set) public var timer: Timer?
     private let mediaControlHandler: MediaControlHandler
-    public init (metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
+    public init (metadata: AudiobookMetadata, audiobook: Original_Audiobook, networkService: AudiobookNetworkService, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
         self.metadata = metadata
         self.audiobook = audiobook
         self.networkService = networkService
@@ -188,7 +188,7 @@ enum BookmarkError: Error {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
     }
 
-    public convenience init(metadata: AudiobookMetadata, audiobook: Audiobook, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
+    public convenience init(metadata: AudiobookMetadata, audiobook: Original_Audiobook, playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil) {
         self.init(
             metadata: metadata,
             audiobook: audiobook,

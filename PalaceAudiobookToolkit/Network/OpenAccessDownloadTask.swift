@@ -43,7 +43,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         self.feedbooksProfile = spineElement.feedbooksProfile
         self.token = spineElement.token
     }
-
+    
     /// If the asset is already downloaded and verified, return immediately and
     /// update state to the delegates. Otherwise, attempt to download the file
     /// referenced in the spine element.

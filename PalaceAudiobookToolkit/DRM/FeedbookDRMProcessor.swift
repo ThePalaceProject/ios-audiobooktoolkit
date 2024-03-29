@@ -148,7 +148,46 @@ class FeedbookDRMProcessor {
     // Performs asynchronous DRM checks that couldn't be performed statically
     // @param book the audiobook
     // @param drmData the book's DRM data dictionary holding relevant info
-    class func performAsyncDrm(book: OpenAccessAudiobook, drmData: [String: Any]) {
+    class func performAsyncDrm(book: Audiobook, drmData: [String: Any]) {
+        if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
+            weak var weakBook = book
+            URLSession.shared.dataTask(with: licenseCheckUrl) { (data, response, error) in
+                // Errors automatically mean success
+                // In practice, network errors should not prevent us from playing a book,
+                // especially since the point is to be able to listen offline
+                if error != nil {
+                    weakBook?.drmStatus = .succeeded
+                    ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck skip due to error: \(error!)")
+                    return
+                }
+                
+                // Explicitly check status value
+                if let licenseData = data,
+                   let jsonObj = try? JSONSerialization.jsonObject(with: licenseData, options: JSONSerialization.ReadingOptions()) as? [String: Any],
+                   let statusString = jsonObj?["status"] as? String {
+                    
+                    if statusString != "ready" && statusString != "active" {
+                        ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck failed: \((try? JSONUtils.canonicalize(jsonObj: jsonObj) as String) ?? "")")
+                        weakBook?.drmStatus = .failed
+                        return
+                    }
+                }
+                
+                // Fallthrough on all other cases
+                weakBook?.drmStatus = .succeeded
+                ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck fallthrough")
+            }
+        } else {
+            book.drmStatus = .succeeded
+            ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck not needed")
+        }
+    }
+    
+    // TODO: Deprecated - should be removed
+    // Performs asynchronous DRM checks that couldn't be performed statically
+    // @param book the audiobook
+    // @param drmData the book's DRM data dictionary holding relevant info
+    class func performAsyncDrm(book: Original_OpenAccessAudiobook, drmData: [String: Any]) {
         if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
             weak var weakBook = book
             URLSession.shared.dataTask(with: licenseCheckUrl) { (data, response, error) in

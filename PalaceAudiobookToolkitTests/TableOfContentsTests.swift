@@ -26,7 +26,7 @@ class TableOfContentsTests: XCTestCase {
             }
         }
     }
-    
+
     func testChapterCounts() {
         for manifestJSON in ManifestJSON.allCases {
             do {
@@ -47,8 +47,9 @@ class TableOfContentsTests: XCTestCase {
             .alice: "Opening Credits",
             .anathem: "Epigraph",
             .bigFail: "Chapter 1",
+            .bocas: "Chapter: 1",
             .christmasCarol: "Opening Credits",
-            .flatland: "Part 1 - This World",
+            .flatland: "Forward",
             .martian: "Opening Credits",
             .bestNewHorror: "Chapter 1",
             .quickSilver: "Invocation",
