@@ -1,6 +1,6 @@
 import AVFoundation
 
-class OverdrivePlayer: OpenAccessPlayer {
+class OverdrivePlayer: OriginalOpenAccessPlayer {
     override var errorDomain: String {
         return OverdrivePlayerErrorDomain
     }

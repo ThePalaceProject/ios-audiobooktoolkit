@@ -67,7 +67,7 @@ final class Original_OpenAccessAudiobook: Original_Audiobook {
             ATLog(.error, "Cursor could not be cast to Cursor<OpenAccessSpineElement>")
             return nil
         }
-        self.player = OpenAccessPlayer(cursor: cursor, audiobookID: uniqueIdentifier, drmOk: (drmData["status"] as? DrmStatus) == DrmStatus.succeeded)
+        self.player = OriginalOpenAccessPlayer(cursor: cursor, audiobookID: uniqueIdentifier, drmOk: (drmData["status"] as? DrmStatus) == DrmStatus.succeeded)
     }
 
     public func deleteLocalContent() {

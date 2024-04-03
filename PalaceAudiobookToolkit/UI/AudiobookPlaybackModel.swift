@@ -30,7 +30,7 @@ class AudiobookPlaybackModel: ObservableObject, Original_PlayerDelegate, Audiobo
     
     private func checkForEndOfChapter() {
         if currentLocation?.timeRemaining ?? 0 <= 0 {
-            (audiobookManager.audiobook.player as? OpenAccessPlayer)?.advanceToNextPlayerItem()
+            (audiobookManager.audiobook.player as? OriginalOpenAccessPlayer)?.advanceToNextPlayerItem()
         }
     }
     
