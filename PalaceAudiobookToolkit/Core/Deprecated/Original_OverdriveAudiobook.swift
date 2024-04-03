@@ -7,7 +7,7 @@ import Foundation
 
     public var spine: [SpineElement]
     
-    public let player: Player
+    public let player: OriginalPlayer
     
     public var drmStatus: DrmStatus {
         get {

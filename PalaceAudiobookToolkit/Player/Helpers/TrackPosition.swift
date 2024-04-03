@@ -8,14 +8,14 @@
 
 import Foundation
 
-enum TrackPositionError: Error, Equatable {
+public enum TrackPositionError: Error, Equatable {
     case outOfBounds
     case tracksOutOfOrder
     case differentTracks
     case calculationError(String)
 }
 
-struct TrackPosition: Equatable, Comparable {
+public struct TrackPosition: Equatable, Comparable {
     var track: Track
     var timestamp: Int
     var tracks: Tracks
@@ -72,14 +72,14 @@ struct TrackPosition: Equatable, Comparable {
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
 
-    static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
+    public static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
         if lhs.track == rhs.track {
             return lhs.timestamp < rhs.timestamp
         }
         return lhs.track < rhs.track
     }
 
-    static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
+    public static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
         lhs.track == rhs.track && lhs.timestamp == rhs.timestamp
     }
 }

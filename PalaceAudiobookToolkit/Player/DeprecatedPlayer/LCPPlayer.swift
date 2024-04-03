@@ -8,7 +8,7 @@
 
 import AVFoundation
 
-class LCPPlayer: OpenAccessPlayer {
+class LCPPlayer: OriginalOpenAccessPlayer {
 
     /// DRMDecryptor passed from SimplyE to process encrypted audio files.
     var decryptionDelegate: DRMDecryptor?

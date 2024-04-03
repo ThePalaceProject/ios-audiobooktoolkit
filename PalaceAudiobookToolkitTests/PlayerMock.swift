@@ -9,7 +9,7 @@
 import UIKit
 import PalaceAudiobookToolkit
 
-class PlayerMock: Player {
+class PlayerMock: OriginalPlayer {
     var queuesEvents: Bool = false
     
     var isDrmOk: Bool = true
@@ -20,7 +20,7 @@ class PlayerMock: Player {
     
     func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?) { }
 
-    var playbackRate: PlaybackRate = .normalTime
+    var playbackRate: Original_PlaybackRate = .normalTime
     
     var currentChapterLocation: ChapterLocation? {
         return self.currentChapter
@@ -38,9 +38,9 @@ class PlayerMock: Player {
 
     func unload() { }
     
-    func registerDelegate(_ delegate: PlayerDelegate) { }
+    func registerDelegate(_ delegate: Original_PlayerDelegate) { }
     
-    func removeDelegate(_ delegate: PlayerDelegate) { }
+    func removeDelegate(_ delegate: Original_PlayerDelegate) { }
 
     convenience init (currentChapter: ChapterLocation?) {
         self.init()

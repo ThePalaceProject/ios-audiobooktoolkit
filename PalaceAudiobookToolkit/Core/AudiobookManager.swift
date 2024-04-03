@@ -156,7 +156,7 @@ enum BookmarkError: Error {
                 return .commandFailed
             }
             let intValue = Int(mpRateCommand.playbackRate * 100)
-            guard let playbackRate = PlaybackRate(rawValue: intValue) else {
+            guard let playbackRate = Original_PlaybackRate(rawValue: intValue) else {
                 if (intValue < 100) && (intValue >= 50) {
                     audiobook.player.playbackRate = .threeQuartersTime
                     return .success
@@ -209,7 +209,7 @@ enum BookmarkError: Error {
             info[MPMediaItemPropertyAlbumTitle] = self.metadata.authors?.joined(separator: ", ")
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = chapter.playheadOffset
             info[MPMediaItemPropertyPlaybackDuration] = chapter.duration
-            var rate = NSNumber(value: PlaybackRate.convert(rate: self.audiobook.player.playbackRate))
+            var rate = NSNumber(value: Original_PlaybackRate.convert(rate: self.audiobook.player.playbackRate))
             if self.audiobook.player.playbackRate == .threeQuartersTime {
                 // Map to visible rates on Apple Watch interface [0.5, 1.0, 1.5, 2.0]
                 rate = NSNumber(value: 0.5)
@@ -282,20 +282,20 @@ enum BookmarkError: Error {
     }
 }
 
-extension DefaultAudiobookManager: PlayerDelegate {
-    public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+extension DefaultAudiobookManager: Original_PlayerDelegate {
+    public func player(_ player: OriginalPlayer, didBeginPlaybackOf chapter: ChapterLocation) {
         waitingForPlayer = false
         self.mediaControlHandler.enableMediaControlCommands()
         playbackTrackerDelegate?.playbackStarted()
     }
-    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
+    public func player(_ player: OriginalPlayer, didStopPlaybackOf chapter: ChapterLocation) {
         waitingForPlayer = false
         playbackTrackerDelegate?.playbackStopped()
     }
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
+    public func player(_ player: OriginalPlayer, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
         playbackTrackerDelegate?.playbackStopped()
     }
-    public func player(_ player: Player, didComplete chapter: ChapterLocation) {
+    public func player(_ player: OriginalPlayer, didComplete chapter: ChapterLocation) {
         waitingForPlayer = false
         playbackTrackerDelegate?.playbackStopped()
 
@@ -312,7 +312,7 @@ extension DefaultAudiobookManager: PlayerDelegate {
             }
         }
     }
-    public func playerDidUnload(_ player: Player) {
+    public func playerDidUnload(_ player: OriginalPlayer) {
         self.mediaControlHandler.teardown()
         self.timer?.invalidate()
         playbackTrackerDelegate?.playbackStopped()
@@ -336,8 +336,8 @@ private class MediaControlHandler {
             self.commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: DefaultAudiobookManager.skipTimeInterval)]
 
             var rates = [NSNumber]()
-            for playbackRate in PlaybackRate.allCases {
-                let floatRate = PlaybackRate.convert(rate: playbackRate)
+            for playbackRate in Original_PlaybackRate.allCases {
+                let floatRate = Original_PlaybackRate.convert(rate: playbackRate)
                 rates.append(NSNumber(value: floatRate))
             }
 

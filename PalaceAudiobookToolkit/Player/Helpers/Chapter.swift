@@ -8,7 +8,7 @@
 
 import Foundation
 
-struct Chapter {
+public struct Chapter {
     var title: String
     var position: TrackPosition
     var duration: Int?

@@ -12,7 +12,7 @@ open class Audiobook: NSObject, AudiobookProtocol {
     public var uniqueId: String
     public var annotationsId: String { uniqueId }
     public var tableOfContents: TableOfContents
-    public var player: Player? = nil
+    public var player: OriginalPlayer? = nil
     public var drmStatus: DRMStatus {
         get {
             return DRMStatus.succeeded

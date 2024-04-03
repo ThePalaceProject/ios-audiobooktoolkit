@@ -40,7 +40,7 @@ private enum TimerState {
 /// All methods should block until they can safely access their
 /// properties.
 @objc public final class SleepTimer: NSObject {
-    private let player: Player
+    private let player: OriginalPlayer
     private let queue = DispatchQueue(label: "com.palaceaudiobooktoolkit.SleepTimer")
     
     /// Flag to find out if the timer is currently scheduled.
@@ -168,7 +168,7 @@ private enum TimerState {
         }
     }
 
-    init(player: Player) {
+    init(player: OriginalPlayer) {
         self.player = player
         super.init()
         self.player.registerDelegate(self)
@@ -179,8 +179,8 @@ private enum TimerState {
     }
 }
 
-extension SleepTimer: PlayerDelegate {
-    public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+extension SleepTimer: Original_PlayerDelegate {
+    public func player(_ player: OriginalPlayer, didBeginPlaybackOf chapter: ChapterLocation) {
         self.queue.sync {
             switch self.timerState {
             case .inactive,
@@ -194,7 +194,7 @@ extension SleepTimer: PlayerDelegate {
         }
     }
 
-    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
+    public func player(_ player: OriginalPlayer, didStopPlaybackOf chapter: ChapterLocation) {
         self.queue.sync {
             switch self.timerState {
             case .inactive,
@@ -208,7 +208,7 @@ extension SleepTimer: PlayerDelegate {
         }
     }
 
-    public func player(_ player: Player, didComplete chapter: ChapterLocation) {
+    public func player(_ player: OriginalPlayer, didComplete chapter: ChapterLocation) {
         self.queue.sync {
             switch self.timerState {
             case .inactive,
@@ -227,8 +227,8 @@ extension SleepTimer: PlayerDelegate {
         }
     }
 
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
-    public func playerDidUnload(_ player: Player) { }
+    public func player(_ player: OriginalPlayer, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
+    public func playerDidUnload(_ player: OriginalPlayer) { }
 }
 
 

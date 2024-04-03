@@ -18,7 +18,7 @@ import Foundation
     
     public var spine: [SpineElement]
     
-    public var player: Player
+    public var player: OriginalPlayer
 
     private static let offsetKey = "#t="
 

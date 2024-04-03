@@ -407,7 +407,7 @@ struct AudiobookPlayerView: View {
     
     private var playbackRateButtons: [ActionSheet.Button] {
         var buttons = [ActionSheet.Button]()
-        for playbackRate in PlaybackRate.allCases {
+        for playbackRate in Original_PlaybackRate.allCases {
             buttons.append(
                 .default(Text(HumanReadablePlaybackRate(rate: playbackRate).value), action: { playbackModel.setPlaybackRate(playbackRate)
                 })

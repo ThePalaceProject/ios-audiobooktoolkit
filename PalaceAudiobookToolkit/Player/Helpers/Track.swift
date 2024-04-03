@@ -9,15 +9,26 @@
 import Foundation
 
 public class Track {
+
     enum TrackType {
         case href(String)
         case findaway(part: Int, sequence: Int)
+        
+        var href: String? {
+            switch self {
+            case .href(let url):
+                return url
+            default:
+                return nil
+            }
+        }
     }
-    
+
     let type: TrackType
     let title: String?
     let duration: Int
     let index: Int
+    var href: String? { type.href }
     var downloadTask: DownloadTask?
     
     init(type: TrackType, title: String?, duration: Int, index: Int) {

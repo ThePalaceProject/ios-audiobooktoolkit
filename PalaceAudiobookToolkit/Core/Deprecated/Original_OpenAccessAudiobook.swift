@@ -1,5 +1,5 @@
 final class Original_OpenAccessAudiobook: Original_Audiobook {
-    let player: Player
+    let player: OriginalPlayer
     var spine: [SpineElement]
     let uniqueIdentifier: String
     var token: String? = nil

@@ -35,8 +35,8 @@ public final class AudiobookTableOfContents: NSObject {
 
     weak var delegate: AudiobookTableOfContentsDelegate?
     private let networkService: AudiobookNetworkService
-    private let player: Player
-    internal init(networkService: AudiobookNetworkService, player: Player) {
+    private let player: OriginalPlayer
+    internal init(networkService: AudiobookNetworkService, player: OriginalPlayer) {
         self.networkService = networkService
         self.player = player
         super.init()
@@ -62,20 +62,20 @@ public final class AudiobookTableOfContents: NSObject {
     }
 }
 
-extension AudiobookTableOfContents: PlayerDelegate {
-    public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+extension AudiobookTableOfContents: Original_PlayerDelegate {
+    public func player(_ player: OriginalPlayer, didBeginPlaybackOf chapter: ChapterLocation) {
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: false)
         self.delegate?.audiobookTableOfContentsDidRequestReload(self)
     }
     
-    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
+    public func player(_ player: OriginalPlayer, didStopPlaybackOf chapter: ChapterLocation) {
         self.delegate?.audiobookTableOfContentsPendingStatusDidUpdate(inProgress: false)
         self.delegate?.audiobookTableOfContentsDidRequestReload(self)
     }
 
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
-    public func player(_ player: Player, didComplete chapter: ChapterLocation) { }
-    public func playerDidUnload(_ player: Player) { }
+    public func player(_ player: OriginalPlayer, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
+    public func player(_ player: OriginalPlayer, didComplete chapter: ChapterLocation) { }
+    public func playerDidUnload(_ player: OriginalPlayer) { }
 }
 
 extension AudiobookTableOfContents: AudiobookNetworkServiceDelegate {

@@ -31,7 +31,7 @@ public protocol AudiobookProtocol {
     var uniqueId: String { get }
     var annotationsId: String { get }
     var tableOfContents: TableOfContents { get }
-    var player: Player? { get } //TODO: This should not be optional. temporary for buildout
+    var player: OriginalPlayer? { get } //TODO: This should not be optional. temporary for buildout
     var drmStatus: DRMStatus { get set }
     
     func checkDrmAsync()

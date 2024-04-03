@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import MediaPlayer
 
-class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
+class AudiobookPlaybackModel: ObservableObject, Original_PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
 
     @ObservedObject private var reachability = Reachability()
     private var progressUpdateSubject = PassthroughSubject<Void, Never>()
@@ -189,7 +189,7 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         }
     }
     
-    func setPlaybackRate(_ playbackRate: PlaybackRate) {
+    func setPlaybackRate(_ playbackRate: Original_PlaybackRate) {
         audiobookManager.audiobook.player.playbackRate = playbackRate
     }
     
@@ -209,25 +209,25 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
     
     // MARK: - PlayerDelegate
     
-    func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+    func player(_ player: OriginalPlayer, didBeginPlaybackOf chapter: ChapterLocation) {
         currentLocation = chapter
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
+    func player(_ player: OriginalPlayer, didStopPlaybackOf chapter: ChapterLocation) {
         currentLocation = audiobookManager.audiobook.player.currentChapterLocation
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didComplete chapter: ChapterLocation) {
+    func player(_ player: OriginalPlayer, didComplete chapter: ChapterLocation) {
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
+    func player(_ player: OriginalPlayer, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
         isWaitingForPlayer = false
     }
     
-    func playerDidUnload(_ player: Player) {
+    func playerDidUnload(_ player: OriginalPlayer) {
         isWaitingForPlayer = false
     }
     

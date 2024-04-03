@@ -36,7 +36,7 @@ import UIKit
     var uniqueIdentifier: String { get }
     var annotationsId: String { get }
     var spine: [SpineElement] { get }
-    var player: Player { get }
+    var player: OriginalPlayer { get }
     var drmStatus: DrmStatus { get set }
     func checkDrmAsync()
     func deleteLocalContent()
