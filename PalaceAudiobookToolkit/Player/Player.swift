@@ -36,13 +36,13 @@ public protocol Player {
     var isPlaying: Bool { get }
     var queuesEvents: Bool { get }
     var isDrmOk: Bool { get set }
-    var tableOfContents: TableOfContents { get }
+    var tableOfContents: AudiobookTableOfContents { get }
     var currentTrackPosition: TrackPosition? { get }
     var playbackRate: PlaybackRate { get set }
     var isLoaded: Bool { get }
     var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
 
-    init(tableOfContents: TableOfContents)
+    init(tableOfContents: AudiobookTableOfContents)
     func play()
     func pause()
     func unload()

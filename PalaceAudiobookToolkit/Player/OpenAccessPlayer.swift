@@ -16,7 +16,7 @@ let AudioRouteChangeNotification =  AVAudioSession.routeChangeNotification
 class OpenAccessPlayer: Player {
     let avQueuePlayer: AVQueuePlayer = AVQueuePlayer()
     var playbackStatePublisher = PassthroughSubject<PlaybackState, Never>()
-    var tableOfContents: TableOfContents
+    var tableOfContents: AudiobookTableOfContents
     
     var isPlaying: Bool {
         avQueuePlayer.rate != .zero
@@ -67,7 +67,7 @@ class OpenAccessPlayer: Player {
         return OpenAccessPlayerErrorDomain
     }
     
-    required init(tableOfContents: TableOfContents) {
+    required init(tableOfContents: AudiobookTableOfContents) {
         self.tableOfContents = tableOfContents
         configurePlayer()
         addPlayerObservers()
@@ -213,7 +213,7 @@ class OpenAccessPlayer: Player {
             return
         }
         
-        let newTimestamp = currentTrackPosition.timestamp + Int(timeInterval * 1000)
+        let newTimestamp = currentTrackPosition.timestamp + (timeInterval * 1000)
         let totalDuration = currentTrackPosition.track.duration
         
         if newTimestamp >= 0 && newTimestamp <= totalDuration {
@@ -222,7 +222,7 @@ class OpenAccessPlayer: Player {
             handleBeyondCurrentTrackSkip(newTimestamp: newTimestamp, completion: completion)
         }
         
-        func handleBeyondCurrentTrackSkip(newTimestamp: Int, completion: ((TrackPosition?) -> Void)?) {
+        func handleBeyondCurrentTrackSkip(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
             if newTimestamp > currentTrackPosition.track.duration {
                 // Example of moving to the next track
                 if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrackPosition.track) {

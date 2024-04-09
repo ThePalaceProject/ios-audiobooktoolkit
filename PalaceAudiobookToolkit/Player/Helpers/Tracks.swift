@@ -8,10 +8,10 @@
 
 import Foundation
 
-class Tracks {
+public class Tracks {
     var manifest: Manifest
     var tracks: [Track] = []
-    var totalDuration: Int = 0
+    var totalDuration: Double = 0
     
     init(manifest: Manifest) {
         self.manifest = manifest
@@ -47,7 +47,7 @@ class Tracks {
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> Track? {
         let title = item.title ?? "Untitled"
-        let duration = Int(item.duration * 1000)
+        let duration = item.duration * 1000
         
         if let part = item.findawayPart, let sequence = item.findawaySequence {
             return Track(type: .findaway(part: part, sequence: sequence), title: title, duration: duration, index: index)
@@ -61,13 +61,13 @@ class Tracks {
     private func createTrack(from link: Manifest.Link, index: Int) -> Track? {
         let title = link.title ?? "Untitled"
         let bitrate = 64 * 1024
-        var duration: Int
+        var duration: Double
         
         if let explicitDuration = link.duration {
-            duration = explicitDuration
+            duration = Double(explicitDuration)
         } else if let fileSizeInBytes = link.physicalFileLengthInBytes {
             let fileSizeInBits = fileSizeInBytes * 8
-            duration = (fileSizeInBits / bitrate) * 1000
+            duration = Double((fileSizeInBits / bitrate) * 1000)
         } else {
             duration = 0
         }

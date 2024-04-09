@@ -28,12 +28,12 @@ struct AudiobookNavigationView: View {
     }
 
     @Environment(\.presentationMode) var presentationMode
-    @Binding var selectedLocation: ChapterLocation
+    @Binding var selectedLocation: TrackPosition?
     @State private var selectedSection: NavigationSection = .toc
-    @State private var bookmarks: [ChapterLocation] = []
+    @State private var bookmarks: [TrackPosition] = []
     
     @ObservedObject private var playback: AudiobookPlaybackModel
-    init(model: AudiobookPlaybackModel, selectedLocation: Binding<ChapterLocation>) {
+    init(model: AudiobookPlaybackModel, selectedLocation: Binding<TrackPosition?>) {
         self.playback = model
         self._selectedLocation = selectedLocation
     }
@@ -80,14 +80,18 @@ struct AudiobookNavigationView: View {
     @ViewBuilder
     private var chaptersList: some View {
         List {
-            ForEach(playback.spine, id: \.key) { spineElement in
-                chapterCell(for: spineElement)
+            ForEach(playback.tracks, id: \.id) { track in
+                ChapterCell(track: track)
                     .onTapGesture {
-                        if playback.spineErrors[spineElement.key] != nil {
-                            spineElement.downloadTask.fetch()
+                        if playback.trackErrors[track.id] != nil {
+                            track.downloadTask?.fetch()
                         } else {
-                            selectedLocation = .emptyLocation
-                            selectedLocation = spineElement.chapter
+                            guard let tracks = playback.currentLocation?.tracks else {
+                                NSLog("Unable to set current track position")
+                                return
+                            }
+
+                            selectedLocation = TrackPosition(track: track, timestamp: 0, tracks: tracks)
                             presentationMode.wrappedValue.dismiss()
                         }
                     }
@@ -95,82 +99,59 @@ struct AudiobookNavigationView: View {
         }
         .listStyle(.plain)
     }
-    
-    @ViewBuilder
-    private func chapterCell(for element: SpineElement) -> some View {
-        let progress = element.downloadTask.downloadProgress
-        HStack {
-            Text(element.chapter.title ?? "")
-                .palaceFont(.body)
-            Spacer()
-            if playback.spineErrors[element.key] != nil {
-                Text("Download Error")
-                    .palaceFont(.body)
-            } else if progress > 0 && progress < 1 {
-                Text(
-                    String(format: Strings.Generic.downloadingFormatted, HumanReadablePercentage(percentage: progress).value)
-                )
-                .palaceFont(.body)
-            } else {
-                Text(HumanReadableTimestamp(timeInterval: element.chapter.duration).timecode)
-                    .accessibility(label: Text(HumanReadableTimestamp(timeInterval: element.chapter.duration).accessibleDescription))
-                    .palaceFont(.body)
-            }
-        }
-        .contentShape(Rectangle())
-        .opacity(progress < 1 ? 0.4 : 1)
-    }
+
     
     @ViewBuilder
     private var bookmarksList: some View {
-        Group {
-            if self.bookmarks.isEmpty {
-                ScrollView {
-                    VStack {
-                        Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
-                            .palaceFont(.body)
-                            .padding(.top, 200)
-                    }
-                }
-                .refreshable {
-                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                        self.bookmarks = bookmarks
-                    }
-                }
-            } else {
-                List {
-                    ForEach(self.bookmarks, id: \.annotationId) { bookmark in
-                        bookmarkCell(for: bookmark)
-                            .onTapGesture {
-                                selectedLocation = bookmark
-                                presentationMode.wrappedValue.dismiss()
-                            }
-                    }
-                    .onDelete { indexSet in
-                        for index in indexSet.reversed() {
-                            if let bookmark = playback.audiobookManager.audiobookBookmarks[safe: index] {
-                                playback.audiobookManager.deleteBookmark(at: bookmark) { _ in
-                                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                                        self.bookmarks = bookmarks
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .refreshable {
-                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                        self.bookmarks = bookmarks
-                    }
-                }
-            }
-        }
-        .onAppear {
-            playback.audiobookManager.fetchBookmarks { bookmarks in
-                self.bookmarks = bookmarks
-            }
-        }
+        Text("TO BE IMPLEMENTED")
+//        Group {
+//            if self.bookmarks.isEmpty {
+//                ScrollView {
+//                    VStack {
+//                        Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
+//                            .palaceFont(.body)
+//                            .padding(.top, 200)
+//                    }
+//                }
+//                .refreshable {
+//                    playback.audiobookManager.fetchBookmarks { bookmarks in
+//                        self.bookmarks = bookmarks
+//                    }
+//                }
+//            } else {
+//                List {
+//                    ForEach(self.bookmarks, id: \.annotationId) { bookmark in
+//                        bookmarkCell(for: bookmark)
+//                            .onTapGesture {
+//                                selectedLocation = bookmark
+//                                presentationMode.wrappedValue.dismiss()
+//                            }
+//                    }
+//                    .onDelete { indexSet in
+//                        for index in indexSet.reversed() {
+//                            if let bookmark = playback.audiobookManager.audiobookBookmarks[safe: index] {
+//                                playback.audiobookManager.deleteBookmark(at: bookmark) { _ in
+//                                    playback.audiobookManager.fetchBookmarks { bookmarks in
+//                                        self.bookmarks = bookmarks
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//                .listStyle(.plain)
+//                .refreshable {
+//                    playback.audiobookManager.fetchBookmarks { bookmarks in
+//                        self.bookmarks = bookmarks
+//                    }
+//                }
+//            }
+//        }
+//        .onAppear {
+//            playback.audiobookManager.fetchBookmarks { bookmarks in
+//                self.bookmarks = bookmarks
+//            }
+//        }
     }
     
     @ViewBuilder
@@ -204,20 +185,21 @@ extension AudiobookNavigationView {
     fileprivate init?() {
         guard let resource = Bundle.audiobookToolkit()?.url(forResource: "alice_manifest", withExtension: "json"),
               let audiobookData = try? Data(contentsOf: resource),
-              let audiobookJSON = try? JSONSerialization.jsonObject(with: audiobookData) as? [String: Any],
-              let audiobook = Original_OpenAccessAudiobook(JSON: audiobookJSON, token: nil) else
+              let manifest = try? JSONDecoder().decode(Manifest.self, from: audiobookData),
+              let audiobook = OpenAccessAudiobook(manifest: manifest) else
         {
             return nil
         }
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
-            audiobook: audiobook
+            audiobook: audiobook,
+            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.tracks.tracks)
         )
         self.playback = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         let bookmark = ChapterLocation(number: 0, part: 1, duration: 135, startOffset: nil, playheadOffset: 185, title: "Chapter One", audiobookID: "")
         bookmark.lastSavedTimeStamp = "2023-01-01T12:34:56Z"
-        audiobookManager.audiobookBookmarks.append(bookmark)
-        self._selectedLocation = .constant(.emptyLocation)
+//        audiobookManager.audiobookBookmarks.append(bookmark)
+        self._selectedLocation = .constant(nil)
     }
 }
 

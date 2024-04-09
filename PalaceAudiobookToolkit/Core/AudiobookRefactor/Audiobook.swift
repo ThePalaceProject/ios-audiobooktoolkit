@@ -11,23 +11,25 @@ import Foundation
 open class Audiobook: NSObject, AudiobookProtocol {
     public var uniqueId: String
     public var annotationsId: String { uniqueId }
-    public var tableOfContents: TableOfContents
-    public var player: OriginalPlayer? = nil
+    public var tableOfContents: AudiobookTableOfContents
+    public var player: Player
     public var drmStatus: DRMStatus {
         get {
             return DRMStatus.succeeded
         }
         set(newStatus) {
-            //            player.isDrmOk = newStatus == DRMStatus.succeeded
+            player.isDrmOk = newStatus == DRMStatus.succeeded
         }
     }
 
-    public required init?(manifest: Manifest, audiobookId: String) {
-        self.uniqueId = audiobookId
+    public required init?(manifest: Manifest) {
+        guard let id = manifest.id else { return nil }
+        
+        self.uniqueId = id
         
         let tracks = Tracks(manifest: manifest)
-        self.tableOfContents = TableOfContents(manifest: manifest, tracks: tracks)
-        
+        self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+        self.player = OpenAccessPlayer(tableOfContents: tableOfContents) //TODO: setup correct player based on manifest
         super.init()
     }
     
@@ -40,7 +42,7 @@ open class Audiobook: NSObject, AudiobookProtocol {
     
     open func update(manifest: Manifest) {
         let tracks = Tracks(manifest: manifest)
-        self.tableOfContents = TableOfContents(manifest: manifest, tracks: tracks)
+        self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
     }
 }
 

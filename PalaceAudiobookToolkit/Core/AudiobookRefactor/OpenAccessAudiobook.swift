@@ -21,8 +21,8 @@ class OpenAccessAudiobook: Audiobook {
     
     private var drmData: [String: Any] = [:]
     
-    public required init?(manifest: Manifest, audiobookId: String) {
-        super.init(manifest: manifest, audiobookId: audiobookId)
+    public required init?(manifest: Manifest) {
+        super.init(manifest: manifest)
 
         self.drmData["status"] = DRMStatus.succeeded
         

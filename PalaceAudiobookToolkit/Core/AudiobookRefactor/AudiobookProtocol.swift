@@ -30,11 +30,11 @@ public enum DRMStatus: Int {
 public protocol AudiobookProtocol {
     var uniqueId: String { get }
     var annotationsId: String { get }
-    var tableOfContents: TableOfContents { get }
-    var player: OriginalPlayer? { get } //TODO: This should not be optional. temporary for buildout
+    var tableOfContents: AudiobookTableOfContents { get }
+    var player: Player { get }
     var drmStatus: DRMStatus { get set }
     
     func checkDrmAsync()
     func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void)
-    init?(manifest: Manifest, audiobookId: String)
+    init?(manifest: Manifest)
 }

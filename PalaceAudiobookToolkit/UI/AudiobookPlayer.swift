@@ -14,8 +14,7 @@ public class AudiobookPlayer: UIViewController {
     public required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
     }
-    
-    @objc
+        
     public init(audiobookManager: AudiobookManager) {
         let model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         super.init(nibName: nil, bundle: nil)

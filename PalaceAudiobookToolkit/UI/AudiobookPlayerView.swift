@@ -18,7 +18,7 @@ struct AudiobookPlayerView: View {
     
     @State private var uiTabarController: UITabBarController?
     @ObservedObject var playbackModel: AudiobookPlaybackModel
-    @State private var selectedLocation: ChapterLocation = .emptyLocation
+    @State private var selectedLocation: TrackPosition?
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
     @State private var showPlaybackSpeed = false
@@ -105,11 +105,11 @@ struct AudiobookPlayerView: View {
         }
         .palaceFont(.body)
         .navigationViewStyle(.stack)
-        .onChange(of: selectedLocation) { newValue in
-            playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
-                // present error
-            }
-        }
+//        .onChange(of: selectedLocation) { newValue in
+//            playbackModel.audiobookManager.audiobook.player.play(at: newValue) { error in
+//                // present error
+//            }
+//        }
     }
     
     private func showToast(message: String) {
@@ -314,9 +314,9 @@ struct AudiobookPlayerView: View {
                     .overlay(
                         // Bookmarks
                         Button {
-                            playbackModel.addBookmark { error in
-                                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
-                            }
+//                            playbackModel.addBookmark { error in
+//                                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
+//                            }
                         } label: {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)
@@ -344,21 +344,7 @@ struct AudiobookPlayerView: View {
             return "--"
         }
         let defaultTitleFormat = DisplayStrings.trackAt
-        let indexString = oneBasedSpineIndex() ?? "--"
-        return currentLocation.title ?? String(format: defaultTitleFormat, indexString)
-    }
-    
-    private func oneBasedSpineIndex() -> String? {
-        guard let currentLocation = playbackModel.currentLocation else {
-            return nil
-        }
-        let spine = playbackModel.audiobookManager.audiobook.spine
-        for index in 0..<spine.count {
-            if currentLocation.inSameChapter(other: spine[index].chapter) {
-                return String(index + 1)
-            }
-        }
-        return nil
+        return currentLocation.track.title ?? String(format: defaultTitleFormat, currentLocation.track.index)
     }
     
     private var playbackRateText: String {
@@ -407,7 +393,7 @@ struct AudiobookPlayerView: View {
     
     private var playbackRateButtons: [ActionSheet.Button] {
         var buttons = [ActionSheet.Button]()
-        for playbackRate in Original_PlaybackRate.allCases {
+        for playbackRate in PlaybackRate.allCases {
             buttons.append(
                 .default(Text(HumanReadablePlaybackRate(rate: playbackRate).value), action: { playbackModel.setPlaybackRate(playbackRate)
                 })
@@ -449,14 +435,15 @@ extension AudiobookPlayerView {
     fileprivate init?() {
         guard let resource = Bundle.audiobookToolkit()?.url(forResource: "alice_manifest", withExtension: "json"),
               let audiobookData = try? Data(contentsOf: resource),
-              let audiobookJSON = try? JSONSerialization.jsonObject(with: audiobookData) as? [String: Any],
-              let audiobook = Original_OpenAccessAudiobook(JSON: audiobookJSON, token: nil) else
+              let manifest = try? JSONDecoder().decode(Manifest.self, from: audiobookData),
+              let audiobook = OpenAccessAudiobook(manifest: manifest) else
         {
             return nil
         }
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
-            audiobook: audiobook
+            audiobook: audiobook,
+            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.tracks.tracks)
         )
         self.playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
     }

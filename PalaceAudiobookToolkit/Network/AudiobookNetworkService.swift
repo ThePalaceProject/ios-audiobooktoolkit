@@ -7,13 +7,14 @@
 //
 
 import UIKit
+import Combine
 
-@objc public protocol AudiobookNetworkServiceDelegate: class {
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didCompleteDownloadFor spineElement: SpineElement)
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateProgressFor spineElement: SpineElement)
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateOverallDownloadProgress progress: Float)
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didDeleteFileFor spineElement: SpineElement)
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didReceive error: NSError?, for spineElement: SpineElement)
+public enum DownloadState {
+    case progress(track: Track, progress: Float)
+    case completed(track: Track)
+    case deleted(track: Track)
+    case error(track: Track, error: Error)
+    case overallProgress(progress: Float)
 }
 
 
@@ -24,10 +25,10 @@ import UIKit
 /// The purpose of an AudiobookNetworkService is to manage the download
 /// tasks and tie them back to their spine elements
 /// for delegates to consume.
-@objc public protocol AudiobookNetworkService: class {
-    var spine: [SpineElement] { get }
-    var downloadProgress: Float { get }
-    
+public protocol AudiobookNetworkService: AnyObject {
+    var tracks: [Track] { get }
+    var downloadStatePublisher: PassthroughSubject<DownloadState, Never> { get }
+
     /// Implementers of this should attempt to download all
     /// spine elements in a serial order. Once the
     /// implementer has begun requesting files, calling this
@@ -48,117 +49,51 @@ import UIKit
     /// Updates for the status of each download task will
     /// come through delegate methods.
     func deleteAll()
-    
-    func registerDelegate(_ delegate: AudiobookNetworkServiceDelegate)
-    func removeDelegate(_ delegate: AudiobookNetworkServiceDelegate)
 }
 
 public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
-    public var downloadProgress: Float {
-        guard !self.spine.isEmpty else { return 0 }
-        let taskCompletedPercentage = self.spine.reduce(0) { (memo: Float, element: SpineElement) -> Float in
-            return memo + element.downloadTask.downloadProgress
-        }
-        ATLog(.debug, "ANS: Overall Download Progress: \(taskCompletedPercentage / Float(self.spine.count))")
-        return taskCompletedPercentage / Float(self.spine.count)
-    }
+    public var downloadStatePublisher = PassthroughSubject<DownloadState, Never>()
     
-    private var cursor: Cursor<SpineElement>?
-    private var delegates: NSHashTable<AudiobookNetworkServiceDelegate> = NSHashTable(options: [NSPointerFunctions.Options.weakMemory])
+    public let tracks: [Track]
+    private var cancellables: Set<AnyCancellable> = []
     
-    public func registerDelegate(_ delegate: AudiobookNetworkServiceDelegate) {
-        self.delegates.add(delegate)
-    }
-    
-    public func removeDelegate(_ delegate: AudiobookNetworkServiceDelegate) {
-        self.delegates.remove(delegate)
-    }
-    
-    public func deleteAll() {
-        self.spine.forEach { (spineElement) in
-            spineElement.downloadTask.delete()
-        }
-    }
-    
-    public let spine: [SpineElement]
-    private var spineElementByKey: [String: SpineElement]
-    
-    public init(spine: [SpineElement]) {
-        self.spine = spine
-        self.spineElementByKey = [String: SpineElement]()
-        self.spine.forEach { (element) in
-            element.downloadTask.delegate = self
-            self.spineElementByKey[element.downloadTask.key] = element
-        }
+    public init(tracks: [Track]) {
+        self.tracks = tracks
+        setupDownloadTasks()
     }
     
     public func fetch() {
-        if self.cursor == nil {
-            self.cursor = Cursor(data: self.spine)
-        }
-        self.cursor?.currentElement.downloadTask.fetch()
-    }
-}
+        tracks.forEach {
+            $0.downloadTask?.fetch()
 
-extension DefaultAudiobookNetworkService: DownloadTaskDelegate {
-    public func downloadTaskReadyForPlayback(_ downloadTask: DownloadTask) {
-        self.cursor = self.cursor?.next()
-        self.cursor?.currentElement.downloadTask.fetch()
-        if let spineElement = self.spineElementByKey[downloadTask.key] {
-            DispatchQueue.main.async { [weak self] () -> Void in
-                self?.notifyDelegatesThatPlaybackIsReadyFor(spineElement)
-            }
         }
     }
 
-    public func downloadTaskDidDeleteAsset(_ downloadTask: DownloadTask) {
-        if let spineElement = self.spineElementByKey[downloadTask.key] {
-            DispatchQueue.main.async { [weak self] () -> Void in
-                self?.notifyDelegatesOfDeleteFor(spineElement)
-            }
-        }
-    }
-
-    public func downloadTaskDidUpdateDownloadPercentage(_ downloadTask: DownloadTask) {
-        if let spineElement = self.spineElementByKey[downloadTask.key] {
-            DispatchQueue.main.async { [weak self] () -> Void in
-                self?.notifyDelegatesOfDownloadPercentFor(spineElement)
-            }
-        }
-    }
-
-    public func downloadTaskFailed(_ downloadTask: DownloadTask, withError error: NSError?) {
-        self.cursor = nil
-        if let spineElement = self.spineElementByKey[downloadTask.key] {
-            DispatchQueue.main.async { [weak self] () -> Void in
-                self?.notifyDelegatesThatErrorWasReceivedFor(spineElement, error: error)
-            }
-        }
-    }
-
-    func notifyDelegatesThatPlaybackIsReadyFor(_ spineElement: SpineElement) {
-        self.delegates.allObjects.forEach { (delegate) in
-            delegate.audiobookNetworkService(self, didCompleteDownloadFor: spineElement)
-            delegate.audiobookNetworkService(self, didUpdateOverallDownloadProgress: self.downloadProgress)
-        }
-    }
-
-    func notifyDelegatesOfDownloadPercentFor(_ spineElement: SpineElement) {
-        self.delegates.allObjects.forEach { (delegate) in
-            delegate.audiobookNetworkService(self, didUpdateProgressFor: spineElement)
-            delegate.audiobookNetworkService(self, didUpdateOverallDownloadProgress: self.downloadProgress)
-        }
-    }
-
-    func notifyDelegatesThatErrorWasReceivedFor(_ spineElement: SpineElement, error: NSError?) {
-        self.delegates.allObjects.forEach { (delegate) in
-            delegate.audiobookNetworkService(self, didReceive: error, for: spineElement)
+    public func deleteAll() {
+        tracks.forEach { track in
+            track.downloadTask?.delete()
         }
     }
     
-    func notifyDelegatesOfDeleteFor(_ spineElement: SpineElement) {
-        self.delegates.allObjects.forEach { (delegate) in
-            delegate.audiobookNetworkService(self, didDeleteFileFor: spineElement)
+    private func setupDownloadTasks() {
+        tracks.forEach { track in
+            guard let downloadTask = track.downloadTask else { return }
+            
+            downloadTask.statePublisher
+                .sink { [weak self] state in
+                    switch state {
+                    case .progress(let progress):
+                        self?.downloadStatePublisher.send(.progress(track: track, progress: progress))
+                    case .completed:
+                        self?.downloadStatePublisher.send(.completed(track: track))
+                    case .error(let error):
+                        self?.downloadStatePublisher.send(.error(track: track, error: error))
+                    case .deleted:
+                        self?.downloadStatePublisher.send(.deleted(track: track))
+                        break
+                    }
+                }
+                .store(in: &cancellables)
         }
     }
 }

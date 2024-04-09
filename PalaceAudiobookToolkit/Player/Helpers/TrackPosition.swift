@@ -17,10 +17,10 @@ public enum TrackPositionError: Error, Equatable {
 
 public struct TrackPosition: Equatable, Comparable {
     var track: Track
-    var timestamp: Int
+    var timestamp: Double
     var tracks: Tracks
         
-    static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Int {
+    static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
         if lhs.track == rhs.track {
             return lhs.timestamp - rhs.timestamp
         }
@@ -43,7 +43,7 @@ public struct TrackPosition: Equatable, Comparable {
         return diff
     }
     
-    static func + (lhs: TrackPosition, other: Int) throws -> TrackPosition {
+    static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
         var currentTrack = lhs.track
         

@@ -7,14 +7,15 @@
 //
 
 import Foundation
+import Combine
 
-protocol TableOfContentsProtocol {
+protocol AudiobookTableOfContentsProtocol {
     var manifest: Manifest { get }
     var tracks: Tracks { get }
     var toc: [Chapter] { get }
 }
 
-public struct TableOfContents: TableOfContentsProtocol {
+public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     var manifest: Manifest
     var tracks: Tracks
     var toc: [Chapter]
@@ -92,7 +93,7 @@ public struct TableOfContents: TableOfContentsProtocol {
         let hrefWithoutFragment = components.first ?? ""
         
         let timestampString = components.last?.replacingOccurrences(of: "t=", with: "")
-        let offsetInSeconds = Int(timestampString ?? "") ?? 0
+        let offsetInSeconds = Double(timestampString ?? "") ?? 0
         
         let offsetInMilliseconds = offsetInSeconds * 1000
         
@@ -134,7 +135,7 @@ public struct TableOfContents: TableOfContentsProtocol {
         return toc[index - 1]
     }
     
-    func chapter(forPosition position: TrackPosition) throws -> Chapter {
+    public func chapter(forPosition position: TrackPosition) throws -> Chapter {
         for chapter in toc {
             if position.track == chapter.position.track && position.timestamp >= chapter.position.timestamp &&
                 position.timestamp < chapter.position.timestamp + (chapter.duration ?? 0) {

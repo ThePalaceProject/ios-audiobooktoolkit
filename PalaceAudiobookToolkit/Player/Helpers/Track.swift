@@ -26,12 +26,12 @@ public class Track {
 
     let type: TrackType
     let title: String?
-    let duration: Int
+    let duration: Double
     let index: Int
     var href: String? { type.href }
-    var downloadTask: DownloadTask?
+    var downloadTask: NewDownloadTask?
     
-    init(type: TrackType, title: String?, duration: Int, index: Int) {
+    init(type: TrackType, title: String?, duration: Double, index: Int) {
         self.type = type
         self.title = title
         self.duration = duration
@@ -73,4 +73,8 @@ extension Track: Comparable {
             return false
         }
     }
+}
+
+extension Track: Identifiable {
+    public var id: String { href ?? "" }
 }

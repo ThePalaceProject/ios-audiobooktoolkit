@@ -41,8 +41,8 @@ class HumanReadablePlaybackRate {
         }
         return output
     }()
-    let rate: Original_PlaybackRate
-    init(rate: Original_PlaybackRate) {
+    let rate: PlaybackRate
+    init(rate: PlaybackRate) {
         self.rate = rate
     }
 }

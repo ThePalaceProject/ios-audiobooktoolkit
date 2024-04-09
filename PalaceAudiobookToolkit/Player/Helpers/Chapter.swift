@@ -11,5 +11,6 @@ import Foundation
 public struct Chapter {
     var title: String
     var position: TrackPosition
-    var duration: Int?
+    var duration: Double?
+    var downloadProgress: Float = 0
 }
