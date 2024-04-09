@@ -75,6 +75,7 @@
 		E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */; };
 		E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */; };
 		E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */; };
+		E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */; };
 		E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56C00C52BC3912100A25A97 /* ChapterCell.swift */; };
 		E57498BC2BB1EE3800BCD49C /* LCPAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BB2BB1EE3800BCD49C /* LCPAudiobook.swift */; };
 		E57498BE2BB1EEB100BCD49C /* OverdriveAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BD2BB1EEB100BCD49C /* OverdriveAudiobook.swift */; };
@@ -96,7 +97,6 @@
 		E5CC0CFC2BA8ABD9001BF751 /* TrackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFB2BA8ABD9001BF751 /* TrackTests.swift */; };
 		E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */; };
 		E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC6E792BBB295F00C31ABD /* Player.swift */; };
-		E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* TableOfContents.swift */; };
 		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
 		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
 		E5DE01A82BA3E4580063E68E /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A72BA3E4580063E68E /* Track.swift */; };
@@ -229,7 +229,7 @@
 		E5CC0CFB2BA8ABD9001BF751 /* TrackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackTests.swift; sourceTree = "<group>"; };
 		E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPositionTests.swift; sourceTree = "<group>"; };
 		E5CC6E792BBB295F00C31ABD /* Player.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Player.swift; sourceTree = "<group>"; };
-		E5DE01A12BA3E4420063E68E /* TableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableOfContents.swift; sourceTree = "<group>"; };
+		E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTableOfContents.swift; sourceTree = "<group>"; };
 		E5DE01A32BA3E44A0063E68E /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		E5DE01A52BA3E4500063E68E /* TrackPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPosition.swift; sourceTree = "<group>"; };
 		E5DE01A72BA3E4580063E68E /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
@@ -524,7 +524,7 @@
 		E5DE01A02BA3E1830063E68E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
-				E5DE01A12BA3E4420063E68E /* TableOfContents.swift */,
+				E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */,
 				E5DE01A32BA3E44A0063E68E /* Chapter.swift */,
 				E5DE01A52BA3E4500063E68E /* TrackPosition.swift */,
 				E5DE01A72BA3E4580063E68E /* Track.swift */,
@@ -793,7 +793,6 @@
 				E57498BE2BB1EEB100BCD49C /* OverdriveAudiobook.swift in Sources */,
 				17576CAE248E8A0100E18B4C /* OverdriveSpineElement.swift in Sources */,
 				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
-				E5DE01A22BA3E4420063E68E /* TableOfContents.swift in Sources */,
 				E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */,
 				7B7B370B202274DA00030A1E /* OriginalPlayer.swift in Sources */,
 				21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */,
@@ -820,6 +819,7 @@
 				8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */,
 				E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */,
 				7BD759CA2017CEA3004CE65F /* DownloadTask.swift in Sources */,
+				E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */,
 				8CF57BDC2432788C0053C31E /* Data+BigEndian.swift in Sources */,
 				7BD8E4FA206EB49D008ED3F1 /* VoiceOverTimestamp.swift in Sources */,
 				E5DE01A82BA3E4580063E68E /* Track.swift in Sources */,

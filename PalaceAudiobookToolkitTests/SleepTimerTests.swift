@@ -10,16 +10,21 @@ import XCTest
 @testable import PalaceAudiobookToolkit
 
 class SleepTimerTests: XCTestCase {
-    
+
+    lazy var tableOfContents: AudiobookTableOfContents = {
+        let manifest = try! loadManifest(for: ManifestJSON.alice)
+        return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
+    }()
+
     func testIsScheduled() {
-        let sleepTimer = SleepTimer(player: PlayerMock(currentChapter: nil))
+        let sleepTimer = SleepTimer(player: PlayerMock(tableOfContents: tableOfContents))
         XCTAssertFalse(sleepTimer.isActive)
         sleepTimer.setTimerTo(trigger: .fifteenMinutes)
         XCTAssertTrue(sleepTimer.isActive)
     }
     
     func testCancelSchedule() {
-        let sleepTimer = SleepTimer(player: PlayerMock(currentChapter: nil))
+        let sleepTimer = SleepTimer(player: PlayerMock(tableOfContents: tableOfContents))
         sleepTimer.setTimerTo(trigger: .thirtyMinutes)
         XCTAssertTrue(sleepTimer.isActive)
         XCTAssertNotEqual(sleepTimer.timeRemaining, 0)
@@ -34,23 +39,26 @@ class SleepTimerTests: XCTestCase {
     /// current chapter has finished.
     func testTestEndOfChapter() {
         let duration = TimeInterval(60)
-        let chapter = ChapterLocation(
-            number: 1,
-            part: 0,
-            duration: duration,
-            startOffset: 0,
-            playheadOffset: 0,
-            title: "Sometime",
-            audiobookID: "someID"
+        let trackPosition = TrackPosition(
+            track: Track(type: .href(""),
+                         title: "Sometime",
+                         duration: duration, 
+                         index: 1),
+            timestamp: 0,
+            tracks: tableOfContents.tracks
         )
-        let sleepTimer = SleepTimer(player: PlayerMock(currentChapter: chapter))
+
+        let playerMock = PlayerMock(tableOfContents: tableOfContents)
+        playerMock.currentTrackPosition = trackPosition
+
+        let sleepTimer = SleepTimer(player: playerMock)
         sleepTimer.setTimerTo(trigger: .endOfChapter)
         XCTAssertTrue(sleepTimer.isActive)
     }
 
     func testTimeDecreases() {
         let expectTimeToDecrease = expectation(description: "time to decrease")
-        let player = PlayerMock(currentChapter: nil)
+        let player = PlayerMock(tableOfContents: tableOfContents)
         player.isPlaying = true
         let sleepTimer = SleepTimer(player: player)
         sleepTimer.setTimerTo(trigger: .fifteenMinutes)
@@ -65,7 +73,7 @@ class SleepTimerTests: XCTestCase {
 
     func testIsAbleToSetDifferentTimes() {
         let expectTimeToDecreaseFrom15Minutes = expectation(description: "time to decrease from 15 minutes")
-        let player = PlayerMock(currentChapter: nil)
+        let player = PlayerMock(tableOfContents: tableOfContents)
         player.isPlaying = true
         let sleepTimer = SleepTimer(player: player)
         sleepTimer.setTimerTo(trigger: .fifteenMinutes)
@@ -94,7 +102,7 @@ class SleepTimerTests: XCTestCase {
     }
     
     func testOnlyCountsDownWhilePlaying() {
-        let player = PlayerMock(currentChapter: nil)
+        let player = PlayerMock(tableOfContents: tableOfContents)
         player.isPlaying = false
         let sleepTimer = SleepTimer(player: player)
         sleepTimer.setTimerTo(trigger: .fifteenMinutes)
@@ -112,5 +120,9 @@ class SleepTimerTests: XCTestCase {
                 self?.asyncCheckFor(sleepTimer: sleepTimer, untilTime: time, theExpectation: theExpectation)
             }
         }
+    }
+
+    func loadManifest(for manifestJSON: ManifestJSON) throws -> Manifest {
+        return try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
     }
 }
