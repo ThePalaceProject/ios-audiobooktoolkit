@@ -17,8 +17,8 @@ protocol AudiobookTableOfContentsProtocol {
 
 public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     var manifest: Manifest
-    var tracks: Tracks
-    var toc: [Chapter]
+    public var tracks: Tracks
+    public var toc: [Chapter]
     
     var count: Int {
         toc.count

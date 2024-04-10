@@ -10,8 +10,8 @@ import Foundation
 
 public class Tracks {
     var manifest: Manifest
-    var tracks: [Track] = []
-    var totalDuration: Double = 0
+    public var tracks: [Track] = []
+    public var totalDuration: Double = 0
     
     init(manifest: Manifest) {
         self.manifest = manifest
