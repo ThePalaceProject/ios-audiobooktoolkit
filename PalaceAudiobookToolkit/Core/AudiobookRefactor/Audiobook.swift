@@ -22,10 +22,8 @@ open class Audiobook: NSObject, AudiobookProtocol {
         }
     }
 
-    public required init?(manifest: Manifest) {
-        guard let id = manifest.id else { return nil }
-        
-        self.uniqueId = id
+    public required init?(manifest: Manifest, bookIdentifier: String) {
+        self.uniqueId = bookIdentifier
         
         let tracks = Tracks(manifest: manifest)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)

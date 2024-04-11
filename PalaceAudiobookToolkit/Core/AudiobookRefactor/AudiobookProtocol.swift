@@ -36,5 +36,5 @@ public protocol AudiobookProtocol {
     
     func checkDrmAsync()
     func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void)
-    init?(manifest: Manifest)
+    init?(manifest: Manifest, bookIdentifier: String)
 }

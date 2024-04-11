@@ -13,7 +13,7 @@ import Combine
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 let AudioRouteChangeNotification =  AVAudioSession.routeChangeNotification
 
-class OpenAccessPlayer: Player {
+class OpenAccessPlayer: NSObject, Player {
     let avQueuePlayer: AVQueuePlayer = AVQueuePlayer()
     var playbackStatePublisher = PassthroughSubject<PlaybackState, Never>()
     var tableOfContents: AudiobookTableOfContents
@@ -69,6 +69,7 @@ class OpenAccessPlayer: Player {
     
     required init(tableOfContents: AudiobookTableOfContents) {
         self.tableOfContents = tableOfContents
+        super.init()
         configurePlayer()
         addPlayerObservers()
     }
@@ -79,10 +80,13 @@ class OpenAccessPlayer: Player {
     }
     
     func play() {
-        guard isLoaded, let trackPosition = currentTrackPosition else {
+        guard isLoaded,
+              let firstTrack = tableOfContents.tracks.tracks.first else {
             playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil)))
             return
         }
+        
+        let trackPosition = currentTrackPosition ?? TrackPosition(track: firstTrack, timestamp: 0, tracks: tableOfContents.tracks)
         
         guard isDrmOk else {
             playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil)))
@@ -127,7 +131,15 @@ class OpenAccessPlayer: Player {
             completion?(nil)
         }
     }
-    
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        try? AVAudioSession.sharedInstance().setActive(false, options: [])
+        removePlayerObservers()
+    }
+}
+
+extension OpenAccessPlayer {
     private func playbackBegan(trackPosition: TrackPosition) {
         playbackStatePublisher.send(.began(trackPosition))
     }
@@ -145,7 +157,36 @@ class OpenAccessPlayer: Player {
     }
     
     private func addPlayerObservers() {
-        // Implement observing AVPlayerItem's status, AVQueuePlayer's rate, and other relevant properties to trigger state changes.
+        NotificationCenter.default.addObserver(self, selector: #selector(playerItemDidReachEnd(_:)), name: .AVPlayerItemDidPlayToEndTime, object: nil)
+        
+        avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
+        avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+    }
+    
+    @objc func playerItemDidReachEnd(_ notification: Notification) {
+        // Advance to the next item or stop if at the end.
+        // Notify delegates or publish a state change accordingly.
+    }
+    
+    func removePlayerObservers() {
+        NotificationCenter.default.removeObserver(self)
+        avQueuePlayer.removeObserver(self, forKeyPath: "status")
+        avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+    }
+    
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if keyPath == "status", let player = object as? AVQueuePlayer {
+            switch player.status {
+            case .readyToPlay:
+                playerIsReady = .readyToPlay
+            case .failed:
+                playerIsReady = .failed
+            default:
+                break
+            }
+        } else if keyPath == "rate", let player = object as? AVQueuePlayer {
+            // Handle rate change, can be used to determine if playback started or stopped.
+        }
     }
     
     @objc private func handleAudioSessionInterruption(_ notification: Notification) {
@@ -200,11 +241,6 @@ class OpenAccessPlayer: Player {
             }
         default: ()
         }
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-        try? AVAudioSession.sharedInstance().setActive(false, options: [])
     }
     
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {

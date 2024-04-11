@@ -436,7 +436,7 @@ extension AudiobookPlayerView {
         guard let resource = Bundle.audiobookToolkit()?.url(forResource: "alice_manifest", withExtension: "json"),
               let audiobookData = try? Data(contentsOf: resource),
               let manifest = try? JSONDecoder().decode(Manifest.self, from: audiobookData),
-              let audiobook = OpenAccessAudiobook(manifest: manifest) else
+              let audiobook = OpenAccessAudiobook(manifest: manifest, bookIdentifier: "test_book_id") else
         {
             return nil
         }

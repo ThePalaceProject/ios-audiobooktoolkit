@@ -91,7 +91,7 @@ public struct Manifest: Codable {
         }
     }
     
-    static func customDecoder() -> JSONDecoder {
+    public static func customDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in

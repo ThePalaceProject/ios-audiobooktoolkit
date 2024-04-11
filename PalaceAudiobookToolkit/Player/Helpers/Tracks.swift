@@ -47,7 +47,7 @@ public class Tracks {
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> Track? {
         let title = item.title ?? "Untitled"
-        let duration = item.duration * 1000
+        let duration = item.duration
         
         if let part = item.findawayPart, let sequence = item.findawaySequence {
             return Track(type: .findaway(part: part, sequence: sequence), title: title, duration: duration, index: index)
@@ -67,7 +67,7 @@ public class Tracks {
             duration = Double(explicitDuration)
         } else if let fileSizeInBytes = link.physicalFileLengthInBytes {
             let fileSizeInBits = fileSizeInBytes * 8
-            duration = Double((fileSizeInBits / bitrate) * 1000)
+            duration = Double(fileSizeInBits / bitrate)
         } else {
             duration = 0
         }

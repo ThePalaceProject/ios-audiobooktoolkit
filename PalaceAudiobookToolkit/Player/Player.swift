@@ -30,7 +30,7 @@ public enum PlaybackState {
     case unloaded
 }
 
-public protocol Player {
+public protocol Player: NSObject {
     typealias Completion = (Error?) -> Void
 
     var isPlaying: Bool { get }

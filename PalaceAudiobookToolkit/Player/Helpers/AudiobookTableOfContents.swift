@@ -23,7 +23,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     var count: Int {
         toc.count
     }
-    
+
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
         self.tracks = tracks
@@ -94,11 +94,9 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         
         let timestampString = components.last?.replacingOccurrences(of: "t=", with: "")
         let offsetInSeconds = Double(timestampString ?? "") ?? 0
-        
-        let offsetInMilliseconds = offsetInSeconds * 1000
-        
+                
         if let track = tracks.track(forHref: hrefWithoutFragment) {
-            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offsetInMilliseconds, tracks: tracks))
+            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offsetInSeconds, tracks: tracks))
             chapters.append(chapter)
         }
         
