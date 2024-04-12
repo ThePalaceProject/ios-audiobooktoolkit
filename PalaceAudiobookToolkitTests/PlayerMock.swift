@@ -10,19 +10,15 @@ import UIKit
 import PalaceAudiobookToolkit
 import Combine
 
-class PlayerMock: Player {
+class PlayerMock: NSObject, Player {
     var isPlaying: Bool = false
     var queuesEvents: Bool = false
     var isDrmOk: Bool = true
     var isLoaded: Bool = false
-
     var tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents
-    
     var currentTrackPosition: PalaceAudiobookToolkit.TrackPosition?
-    
     var playbackRate: PalaceAudiobookToolkit.PlaybackRate = .normalTime
-    
-    var playbackStatePublisher: PassthroughSubject<PalaceAudiobookToolkit.PlaybackState, Never>
+    var playbackStatePublisher: PassthroughSubject<PalaceAudiobookToolkit.PlaybackState, Never> = PassthroughSubject()
     
     required init(tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents) {
         self.tableOfContents = tableOfContents

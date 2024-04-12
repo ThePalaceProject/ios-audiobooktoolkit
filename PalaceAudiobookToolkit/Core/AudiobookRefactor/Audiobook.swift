@@ -25,7 +25,7 @@ open class Audiobook: NSObject, AudiobookProtocol {
     public required init?(manifest: Manifest, bookIdentifier: String) {
         self.uniqueId = bookIdentifier
         
-        let tracks = Tracks(manifest: manifest)
+        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
         self.player = OpenAccessPlayer(tableOfContents: tableOfContents) //TODO: setup correct player based on manifest
         super.init()
@@ -38,8 +38,8 @@ open class Audiobook: NSObject, AudiobookProtocol {
         completion(true, nil)
     }
     
-    open func update(manifest: Manifest) {
-        let tracks = Tracks(manifest: manifest)
+    open func update(manifest: Manifest, bookIdentifier: String) {
+        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
     }
 }

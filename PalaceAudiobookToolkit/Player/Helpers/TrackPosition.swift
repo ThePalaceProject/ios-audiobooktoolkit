@@ -16,18 +16,18 @@ public enum TrackPositionError: Error, Equatable {
 }
 
 public struct TrackPosition: Equatable, Comparable {
-    var track: Track
+    var track: any Track
     var timestamp: Double
     var tracks: Tracks
         
     static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
-        if lhs.track == rhs.track {
+        if lhs.track.id == rhs.track.id {
             return lhs.timestamp - rhs.timestamp
         }
         
         var diff = lhs.timestamp
-        guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == lhs.track }),
-              let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0 == rhs.track }) else {
+        guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == lhs.track.id }),
+              let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == rhs.track.id }) else {
             throw TrackPositionError.differentTracks
         }
         
@@ -73,13 +73,13 @@ public struct TrackPosition: Equatable, Comparable {
     }
 
     public static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        if lhs.track == rhs.track {
+        if lhs.track.id == rhs.track.id {
             return lhs.timestamp < rhs.timestamp
         }
-        return lhs.track < rhs.track
+        return lhs.track.index < rhs.track.index
     }
 
     public static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        lhs.track == rhs.track && lhs.timestamp == rhs.timestamp
+        lhs.track.id == rhs.track.id && lhs.timestamp == rhs.timestamp
     }
 }

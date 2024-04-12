@@ -2,65 +2,21 @@
 //  DownloadTask.swift
 //  NYPLAudiobookToolkit
 //
-//  Created by Dean Silfen on 1/23/18.
+//  Created by Maurice Carrier 4/11/2024
 //  Copyright © 2018 Dean Silfen. All rights reserved.
 //
 
 import Foundation
 import Combine
 
-//TODO: Deprecate
-
-/// Notifications about the status of the download.
-@objc public protocol DownloadTaskDelegate: class {
-    func downloadTaskReadyForPlayback(_ downloadTask: DownloadTask)
-    func downloadTaskDidDeleteAsset(_ downloadTask: DownloadTask)
-    func downloadTaskDidUpdateDownloadPercentage(_ downloadTask: DownloadTask)
-    func downloadTaskFailed(_ downloadTask: DownloadTask, withError error: NSError?)
-}
-
-/// Protocol to handle hitting the network to download an audiobook.
-/// Implementers of this protocol should handle the download with one source.
-/// There should be multiple objects that implement DownloadTask, each working
-/// with a different Network API.
-/// For example, one for AudioEngine networking, one for URLSession, etc.
-///
-/// If a DownloadTask is attempting to download a file that is already available
-/// locally, it should notify it's delegates as if it were a successful download.
-@objc public protocol DownloadTask: class {
-    
-    /// Ask the task to fetch the file and notify it's delegate
-    /// when playback is ready. If this file is stored locally
-    /// already, it should simply call the delegate immediately.
-    ///
-    /// Implementations of `fetch` should be idempotent, if a
-    /// task is already requesting data it should not fire
-    /// a subsequent request.
-    func fetch()
-    
-    /// Request the file that was fetched be deleted. Once the file
-    /// has been deleted, it should notify the delegate.
-    ///
-    /// Implementations of `delete` should be idempotent, if a
-    /// task is in the process of deleting the file, it should
-    /// not raise an error.
-    func delete()
-    
-    var downloadProgress: Float { get }
-    var key: String { get }
-    weak var delegate: DownloadTaskDelegate? { get set }
-}
-
-
-
 public enum DownloadTaskState {
     case progress(Float)
     case completed
-    case error(Error)
+    case error(Error?)
     case deleted
 }
 
-public protocol NewDownloadTask: AnyObject {
+public protocol DownloadTask: AnyObject {
     
     func fetch()
     func delete()
@@ -70,7 +26,7 @@ public protocol NewDownloadTask: AnyObject {
     var key: String { get }
 }
 
-public class URLDownloadTask: NSObject, NewDownloadTask, URLSessionDownloadDelegate {
+public class URLDownloadTask: NSObject, DownloadTask, URLSessionDownloadDelegate {
     public var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     public var key: String
     
@@ -109,18 +65,56 @@ public class URLDownloadTask: NSObject, NewDownloadTask, URLSessionDownloadDeleg
     }
     
     public func delete() {
+        downloadTask?.cancel()
         statePublisher.send(.deleted)
     }
 }
 
 extension URLDownloadTask {
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        statePublisher.send(.completed)
+        if verifyDownload(location: location) {
+            statePublisher.send(.completed)
+        } else {
+            statePublisher.send(.error(NSError(domain: "Download Verification Failed", code: -1, userInfo: nil)))
+        }
     }
     
-    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
             statePublisher.send(.error(error))
         }
+    }
+    
+    func urlSession(_ session: URLSession,
+                    downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64,
+                    totalBytesExpectedToWrite: Int64) {
+        let progress = Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)
+        statePublisher.send(.progress(progress))
+    }
+}
+
+extension URLDownloadTask {
+    private func verifyDownload(location: URL) -> Bool {
+        guard let fileAttributes = try? FileManager.default.attributesOfItem(atPath: location.path),
+              let fileSize = fileAttributes[.size] as? UInt64, fileSize > 0 else {
+            ATLog(.error, "Downloaded file does not exist or is empty.")
+            return false
+        }
+        
+        if !isCorrectFileType(at: location) {
+            ATLog(.error, "Downloaded file type does not match expected.")
+            return false
+        }
+        
+        return true
+    }
+    
+    private func isCorrectFileType(at url: URL) -> Bool {
+        let expectedFileTypes = ["mp3", "mp4"]
+        let fileExtension = url.pathExtension.lowercased()
+        
+        return expectedFileTypes.contains(fileExtension)
     }
 }

@@ -59,7 +59,7 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.audiobook.player.isPlaying
     }
     
-    var tracks: [Track] {
+    var tracks: [any Track] {
         audiobookManager.networkService.tracks
     }
 
@@ -168,7 +168,7 @@ class AudiobookPlaybackModel: ObservableObject {
     
     // MARK: - PlayerDelegate
     
-    func player(_ player: Player, didBeginPlaybackOf track: Track) {
+    func player(_ player: Player, didBeginPlaybackOf track: any Track) {
         currentLocation = TrackPosition(track: track, timestamp: 0, tracks: audiobookManager.audiobook.player.tableOfContents.tracks)
         isWaitingForPlayer = false
     }
@@ -178,11 +178,11 @@ class AudiobookPlaybackModel: ObservableObject {
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didComplete track: Track) {
+    func player(_ player: Player, didComplete track: any Track) {
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didFailPlaybackOf track: Track, withError error: NSError?) {
+    func player(_ player: Player, didFailPlaybackOf track: any Track, withError error: NSError?) {
         isWaitingForPlayer = false
     }
     
@@ -199,16 +199,16 @@ class AudiobookPlaybackModel: ObservableObject {
                     self?.isDownloading = progress < 1
                     break
                 case .completed(track: let track):
-                    self?.trackErrors.removeValue(forKey: track.href ?? "")
+                    self?.trackErrors.removeValue(forKey: track.id)
                     break
                 case .error(track: let track, error: let error):
-                    self?.trackErrors[track.href ?? ""] = error
+                    self?.trackErrors[track.id] = error
                     self?.isDownloading = false
                 case .overallProgress(progress: let progress):
                     self?.overallDownloadProgress = progress
                     self?.isDownloading = progress < 1.0
                 case .deleted(track: let track):
-                    self?.trackErrors.removeValue(forKey: track.href ?? "")
+                    self?.trackErrors.removeValue(forKey: track.id)
                 }
             }
             .store(in: &subscriptions)

@@ -158,7 +158,7 @@ public struct Manifest: Codable {
     struct LinksDictionary: Codable {
         var contentLinks: [Link]?
         var selfLink: Link?
-        
+    
         enum CodingKeys: String, CodingKey {
             case contentLinks = "contentlinks"
             case selfLink = "self"

@@ -7,11 +7,14 @@
 //
 
 import UIKit
+import Combine
 import PalaceAudiobookToolkit
 
 typealias TaskCallback = (_ task: DownloadTask) -> Void
 
 class DownloadTaskMock: DownloadTask {
+    var statePublisher: PassthroughSubject<PalaceAudiobookToolkit.DownloadTaskState, Never> = PassthroughSubject()
+    
     func fetch() {
         guard let fetchClosure = self.fetchClosure else { return }
         // Call the closure async to prevent temporal dependencies.
@@ -28,7 +31,6 @@ class DownloadTaskMock: DownloadTask {
     
     let key: String
     
-    weak var delegate: DownloadTaskDelegate?
     var fetchClosure: TaskCallback?
     public init(progress: Float, key: String, fetchClosure: TaskCallback?) {
         self.downloadProgress = progress

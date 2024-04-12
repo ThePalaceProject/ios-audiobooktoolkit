@@ -10,10 +10,10 @@ import UIKit
 import Combine
 
 public enum DownloadState {
-    case progress(track: Track, progress: Float)
-    case completed(track: Track)
-    case deleted(track: Track)
-    case error(track: Track, error: Error)
+    case progress(track: any Track, progress: Float)
+    case completed(track: any Track)
+    case deleted(track: any Track)
+    case error(track: any Track, error: Error?)
     case overallProgress(progress: Float)
 }
 
@@ -26,7 +26,7 @@ public enum DownloadState {
 /// tasks and tie them back to their spine elements
 /// for delegates to consume.
 public protocol AudiobookNetworkService: AnyObject {
-    var tracks: [Track] { get }
+    var tracks: [any Track] { get }
     var downloadStatePublisher: PassthroughSubject<DownloadState, Never> { get }
 
     /// Implementers of this should attempt to download all
@@ -54,10 +54,10 @@ public protocol AudiobookNetworkService: AnyObject {
 public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public var downloadStatePublisher = PassthroughSubject<DownloadState, Never>()
     
-    public let tracks: [Track]
+    public let tracks: [any Track]
     private var cancellables: Set<AnyCancellable> = []
     
-    public init(tracks: [Track]) {
+    public init(tracks: [any Track]) {
         self.tracks = tracks
         setupDownloadTasks()
     }
@@ -65,7 +65,6 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public func fetch() {
         tracks.forEach {
             $0.downloadTask?.fetch()
-
         }
     }
 

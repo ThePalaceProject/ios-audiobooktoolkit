@@ -10,11 +10,13 @@ import Foundation
 
 public class Tracks {
     var manifest: Manifest
-    public var tracks: [Track] = []
+    private var audiobookID: String
+    public var tracks: [any Track] = []
     public var totalDuration: Double = 0
     
-    init(manifest: Manifest) {
+    init(manifest: Manifest, audiobookID: String) {
         self.manifest = manifest
+        self.audiobookID = audiobookID
         self.initializeTracks()
         self.calculateTotalDuration()
     }
@@ -45,20 +47,21 @@ public class Tracks {
         }
     }
     
-    private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> Track? {
+    private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
         let title = item.title ?? "Untitled"
         let duration = item.duration
         
         if let part = item.findawayPart, let sequence = item.findawaySequence {
-            return Track(type: .findaway(part: part, sequence: sequence), title: title, duration: duration, index: index)
+            //TODO: Create Findaway track
+            return nil
         } else if let href = item.href {
-            return Track(type: .href(href), title: title, duration: duration, index: index)
+            return  try? OpenAccessTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
         }
-        
+
         return nil
     }
 
-    private func createTrack(from link: Manifest.Link, index: Int) -> Track? {
+    private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
         let title = link.title ?? "Untitled"
         let bitrate = 64 * 1024
         var duration: Double
@@ -72,44 +75,49 @@ public class Tracks {
             duration = 0
         }
 
-        return Track(type: .href(link.href), title: title, duration: duration, index: index)
+        return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
     }
 
 
-    func track(forHref href: String) -> Track? {
+    func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
-            if case let .href(trackHref) = track.type, trackHref == href {
+            if (track as? OpenAccessTrack)?.urlString == href {
                 return true
             }
             return false
         })
     }
     
-    func track(forPart part: Int, sequence: Int) -> Track? {
-        return tracks.first(where: { track in
-            if case let .findaway(trackPart, trackSequence) = track.type,
-               trackPart == part && trackSequence == sequence {
-                return true
-            }
-            return false
-        })
+    func track(forPart part: Int, sequence: Int) -> (any Track)? {
+        //TODO: Implement for Findaway
+//        return tracks.first(where: { track in
+//            if let track as? FindawayTrack,
+//               trackPart == part && trackSequence == sequence {
+//                return true
+//            }
+//            
+//            return false
+//        })
+        return nil
     }
     
-    func previousTrack(_ track: Track) -> Track? {
-        guard let currentIndex = tracks.firstIndex(of: track), currentIndex > 0 else {
+    func previousTrack(_ track: any Track) -> (any Track)? {
+        guard let currentIndex = tracks.first(where: { $0.id == track.id
+        })?.index, currentIndex > 0 else {
             return nil
         }
         return tracks[currentIndex - 1]
     }
     
-    func nextTrack(_ track: Track) -> Track? {
-        guard let currentIndex = tracks.firstIndex(of: track), currentIndex < tracks.count - 1 else {
+    func nextTrack(_ track: any Track) -> (any Track)? {
+        guard let currentIndex = tracks.first(where: { $0.id == track.id
+        })?.index, currentIndex < tracks.count - 1 else {
             return nil
         }
         return tracks[currentIndex + 1]
     }
     
-    subscript(index: Int) -> Track {
+    subscript(index: Int) -> any Track {
         return tracks[index]
     }
     

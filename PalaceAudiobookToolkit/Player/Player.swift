@@ -23,7 +23,7 @@ public enum PlaybackRate: Int, CaseIterable {
 }
 
 public enum PlaybackState {
-    case began(TrackPosition)
+    case started(TrackPosition)
     case stopped(TrackPosition)
     case failed(TrackPosition?, Error)
     case completed(Chapter)

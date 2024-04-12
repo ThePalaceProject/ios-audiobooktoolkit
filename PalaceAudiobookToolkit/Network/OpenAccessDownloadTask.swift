@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 
 let OpenAccessTaskCompleteNotification = NSNotification.Name(rawValue: "OpenAccessDownloadTaskCompleteNotification")
 
@@ -11,39 +12,37 @@ enum AssetResult {
     case unknown
 }
 
-final class OpenAccessDownloadTask: DownloadTask {
 
-    private static let DownloadTaskTimeoutValue = 60.0
+final class OpenAccessDownloadTask: NSObject, DownloadTask {
+    private static let DownloadTaskTimeoutValue: TimeInterval = 60
+    var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+    var key: String
+    private var downloadURL: URL
+    private var urlString: String
+    private var session: URLSession?
+    private var downloadTask: URLSessionDownloadTask?
+    let urlMediaType: OpenAccessTrackMediaType
+    let alternateLinks: [(OpenAccessTrackMediaType, URL)]?
+    let feedbooksProfile: String?
+    let token: String?
     
-    private var urlSession: URLSession?
-
-    weak var delegate: DownloadTaskDelegate?
-
     /// Progress should be set to 1 if the file already exists.
     var downloadProgress: Float = 0 {
         didSet {
-            self.delegate?.downloadTaskDidUpdateDownloadPercentage(self)
+            self.statePublisher.send(.progress(downloadProgress))
         }
     }
 
-    let key: String
-    let url: URL
-    let urlString: String // Retain original URI for DRM purposes
-    let urlMediaType: OpenAccessSpineElementMediaType
-    let alternateLinks: [(OpenAccessSpineElementMediaType, URL)]?
-    let feedbooksProfile: String?
-    let token: String?
-
-    init(spineElement: OpenAccessSpineElement) {
-        self.key = spineElement.key
-        self.url = spineElement.url
-        self.urlString = spineElement.urlString
-        self.urlMediaType = spineElement.mediaType
-        self.alternateLinks = spineElement.alternateUrls
-        self.feedbooksProfile = spineElement.feedbooksProfile
-        self.token = spineElement.token
+    init?(track: OpenAccessTrack) {
+        self.key = track.key
+        self.downloadURL = track.url
+        self.urlString = track.urlString
+        self.urlMediaType = track.mediaType
+        self.alternateLinks = track.alternateUrls
+        self.feedbooksProfile = track.feedbooksProfile
+        self.token = track.token
     }
-    
+
     /// If the asset is already downloaded and verified, return immediately and
     /// update state to the delegates. Otherwise, attempt to download the file
     /// referenced in the spine element.
@@ -51,7 +50,7 @@ final class OpenAccessDownloadTask: DownloadTask {
         switch self.assetFileStatus() {
         case .saved(_):
             downloadProgress = 1.0
-            self.delegate?.downloadTaskReadyForPlayback(self)
+            self.statePublisher.send(.completed)
         case .missing(let missingAssetURLs):
             switch urlMediaType {
             case .rbDigital:
@@ -62,11 +61,11 @@ final class OpenAccessDownloadTask: DownloadTask {
                 fallthrough
             case .audioMP4:
                 missingAssetURLs.forEach {
-                    self.downloadAsset(fromRemoteURL: self.url, toLocalDirectory:  $0)
+                    self.downloadAsset(fromRemoteURL: self.downloadURL, toLocalDirectory:  $0)
                 }
             }
         case .unknown:
-            self.delegate?.downloadTaskFailed(self, withError: nil)
+            self.statePublisher.send(.error(nil))
         }
     }
 
@@ -76,7 +75,7 @@ final class OpenAccessDownloadTask: DownloadTask {
             do {
                try urls.forEach {
                     try FileManager.default.removeItem(at: $0)
-                    self.delegate?.downloadTaskDidDeleteAsset(self)
+                    self.statePublisher.send(.deleted)
                 }
             } catch {
                 ATLog(.error, "FileManager removeItem error:\n\(error)")
@@ -118,7 +117,7 @@ final class OpenAccessDownloadTask: DownloadTask {
     /// to the url of the actual asset to download.
     private func downloadAssetForRBDigital(toLocalDirectory localURL: URL) {
 
-        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+        let task = URLSession.shared.dataTask(with: self.downloadURL) { (data, response, error) in
 
             guard let data = data,
                 let response = response,
@@ -131,7 +130,7 @@ final class OpenAccessDownloadTask: DownloadTask {
                 do {
                     if let responseBody = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any],
                         let typeString = responseBody["type"] as? String,
-                        let mediaType = OpenAccessSpineElementMediaType(rawValue: typeString),
+                        let mediaType = OpenAccessTrackMediaType(rawValue: typeString),
                         let urlString = responseBody["url"] as? String,
                         let assetUrl = URL(string: urlString) {
 
@@ -161,9 +160,9 @@ final class OpenAccessDownloadTask: DownloadTask {
         let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
         let delegate = OpenAccessDownloadTaskURLSessionDelegate(downloadTask: self,
-                                                                delegate: self.delegate,
+                                                                statePublisher: self.statePublisher,
                                                                 finalDirectory: finalURL)
-        urlSession = URLSession(configuration: config,
+        session = URLSession(configuration: config,
                                 delegate: delegate,
                                 delegateQueue: nil)
         var request = URLRequest(url: remoteURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue)
@@ -177,11 +176,11 @@ final class OpenAccessDownloadTask: DownloadTask {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        guard let urlSession = urlSession else {
+        guard let session else {
             return
         }
         
-        let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
+        let task = session.downloadTask(with: request.applyCustomUserAgent())
         task.resume()
     }
 
@@ -196,7 +195,7 @@ final class OpenAccessDownloadTask: DownloadTask {
 final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
 
     private let downloadTask: OpenAccessDownloadTask
-    private let delegate: DownloadTaskDelegate?
+    private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     private let finalURL: URL
 
     /// Each Spine Element's Download Task has a URLSession delegate.
@@ -209,18 +208,17 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
     ///   - delegate: The DownloadTaskDelegate, to forward download progress
     ///   - finalDirectory: Final directory to move the asset to
     required init(downloadTask: OpenAccessDownloadTask,
-                  delegate: DownloadTaskDelegate?,
+                  statePublisher: PassthroughSubject<DownloadTaskState, Never>,
                   finalDirectory: URL) {
         self.downloadTask = downloadTask
-        self.delegate = delegate
+        self.statePublisher = statePublisher
         self.finalURL = finalDirectory
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)
-    {
-        guard let httpResponse = downloadTask.response as? HTTPURLResponse else {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+       guard let httpResponse = downloadTask.response as? HTTPURLResponse else {
             ATLog(.error, "Response could not be cast to HTTPURLResponse: \(self.downloadTask.key)")
-            self.delegate?.downloadTaskFailed(self.downloadTask, withError: nil)
+            self.statePublisher.send(.error(nil))
             return
         }
 
@@ -236,17 +234,17 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
                         }
                     }
                     self.downloadTask.downloadProgress = 1.0
-                    self.delegate?.downloadTaskReadyForPlayback(self.downloadTask)
+                    self.statePublisher.send(.completed)
                     NotificationCenter.default.post(name: OpenAccessTaskCompleteNotification, object: self.downloadTask)
                 } else {
                     self.downloadTask.downloadProgress = 0.0
-                    self.delegate?.downloadTaskFailed(self.downloadTask, withError: nil)
+                    self.statePublisher.send(.error(nil))
                 }
             }
         } else {
             ATLog(.error, "Download Task failed with server response: \n\(httpResponse.description)")
             self.downloadTask.downloadProgress = 0.0
-            self.delegate?.downloadTaskFailed(self.downloadTask, withError: nil)
+            self.statePublisher.send(.error(nil))
         }
     }
 
@@ -266,14 +264,14 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
                  NSURLErrorTimedOut,
                  NSURLErrorNetworkConnectionLost:
                 let networkLossError = NSError(domain: OpenAccessPlayerErrorDomain, code: OpenAccessPlayerError.connectionLost.rawValue, userInfo: nil)
-                self.delegate?.downloadTaskFailed(self.downloadTask, withError: networkLossError)
+                self.statePublisher.send(.error(networkLossError))
                 return
             default:
                 break
             }
         }
-
-        self.delegate?.downloadTaskFailed(self.downloadTask, withError: error as NSError?)
+    
+        self.statePublisher.send(.error(error))
     }
 
     func urlSession(_ session: URLSession,

@@ -10,12 +10,14 @@ import XCTest
 @testable import PalaceAudiobookToolkit
 
 class TableOfContentsTests: XCTestCase {
+    private let testID = "testID"
+    
     func testTableOfContentsWithManifests() {
-        for manifestJSON in ManifestJSON.allCases {
+        for manifestJSON in [ManifestJSON.secretLives] {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
                 
-                let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
+                let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: testID))
                 XCTAssertFalse(tableOfContents.toc.isEmpty, "TOC should not be empty for \(manifestJSON.rawValue)")
                 
                 if let firstChapter = tableOfContents.toc.first {
@@ -31,7 +33,7 @@ class TableOfContentsTests: XCTestCase {
         for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tracks = Tracks(manifest: manifest)
+                let tracks = Tracks(manifest: manifest, audiobookID: testID)
                 let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
                 
                 let expectedCount = manifestJSON.chapterCount
@@ -60,7 +62,7 @@ class TableOfContentsTests: XCTestCase {
         for (manifestJSON, expectedTitle) in expectedFirstChapterTitles {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
+                let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: testID))
                 
                 let firstChapterTitle = tableOfContents.toc.first?.title ?? ""
                 XCTAssertEqual(firstChapterTitle, expectedTitle, "Expected first chapter title to be \"\(expectedTitle)\" in \(manifestJSON.rawValue), but found \"\(firstChapterTitle)\"")

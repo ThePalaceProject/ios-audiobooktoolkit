@@ -22,7 +22,7 @@ public enum AudiobookManagerState {
     case playbackFailed(TrackPosition?)
     case playbackCompleted(TrackPosition)
     case playbackUnloaded
-    case error(Track?, Error?)
+    case error((any Track)?, Error?)
 }
 
 public enum AudiobookManagerAction {
@@ -89,11 +89,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public var playbackCompletionHandler: (() -> ())?
     public static let skipTimeInterval: TimeInterval = 30
     
-    public var tableOfContents: DeprecatedAudiobookTableOfContents {
-        return DeprecatedAudiobookTableOfContents(
-            networkService: self.networkService,
-            player: self.audiobook.player
-        )
+    public var tableOfContents: AudiobookTableOfContents {
+        audiobook.tableOfContents
     }
 
     /// The SleepTimer may be used to schedule playback to stop at a specific
@@ -173,7 +170,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
     
-    public func updateAudiobook(with tracks: [Track]) {
+    public func updateAudiobook(with tracks: [any Track]) {
         self.networkService = DefaultAudiobookNetworkService(tracks: tracks)
     }
 
@@ -251,7 +248,7 @@ extension DefaultAudiobookManager {
                 guard let self else { return }
 
                 switch playbackState {
-                case .began(let trackPosition):
+                case .started(let trackPosition):
                     self.handlePlaybackBegan(trackPosition)
                     
                 case .stopped(let trackPosition):

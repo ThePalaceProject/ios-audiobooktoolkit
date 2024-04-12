@@ -30,7 +30,7 @@ struct ChapterCell: View {
         }
     }
     
-    init(track: Track) {
+    init(track: any Track) {
         self.viewModel = TrackDownloadViewModel(track: track)
     }
 }
@@ -40,9 +40,9 @@ class TrackDownloadViewModel: ObservableObject {
     @Published var downloadError: Error? = nil
     private var cancellables: Set<AnyCancellable> = []
     
-    let track: Track
+    let track: any Track
     
-    init(track: Track) {
+    init(track: any Track) {
         self.track = track
         track.downloadTask?.statePublisher
             .receive(on: RunLoop.main)

@@ -49,7 +49,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     
     private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
         readingOrder.forEach { item in
-            var track: Track? = nil
+            var track: (any Track)? = nil
             
             if let href = item.href {
                 track = tracks.track(forHref: href)
@@ -135,7 +135,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     
     public func chapter(forPosition position: TrackPosition) throws -> Chapter {
         for chapter in toc {
-            if position.track == chapter.position.track && position.timestamp >= chapter.position.timestamp &&
+            if areTracksEqual(position.track, chapter.position.track) && position.timestamp >= chapter.position.timestamp &&
                 position.timestamp < chapter.position.timestamp + (chapter.duration ?? 0) {
                 return chapter
             }
@@ -143,6 +143,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         throw ChapterError.noChapterFoundForPosition
     }
 
+    func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
+        return lhs.key == rhs.key && lhs.index == rhs.index
+    }
+    
     func index(of chapter: Chapter) -> Int? {
         return toc.firstIndex(where: { $0.title == chapter.title })
     }

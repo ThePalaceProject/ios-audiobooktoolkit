@@ -190,7 +190,7 @@ extension SleepTimer {
     private func handlePlaybackState(_ playbackState: PlaybackState) {
         self.queue.sync {
             switch playbackState {
-            case .began(let trackPosition):
+            case .started(let trackPosition):
                 switch self.timerState {
                 case .inactive, .playing:
                     break
@@ -212,8 +212,8 @@ extension SleepTimer {
         }
     }
 
-    public func player(_ player: OriginalPlayer, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
-    public func playerDidUnload(_ player: OriginalPlayer) { }
+    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
+    public func playerDidUnload(_ player: Player) { }
 }
 
 

@@ -13,7 +13,7 @@ class SleepTimerTests: XCTestCase {
 
     lazy var tableOfContents: AudiobookTableOfContents = {
         let manifest = try! loadManifest(for: ManifestJSON.alice)
-        return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest))
+        return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: "TEST_ID"))
     }()
 
     func testIsScheduled() {
@@ -40,10 +40,14 @@ class SleepTimerTests: XCTestCase {
     func testTestEndOfChapter() {
         let duration = TimeInterval(60)
         let trackPosition = TrackPosition(
-            track: Track(type: .href(""),
-                         title: "Sometime",
-                         duration: duration, 
-                         index: 1),
+            track: try! OpenAccessTrack(
+                manifest: try! Manifest.from(jsonFileName: ManifestJSON.alice.rawValue, bundle: Bundle(for: type(of: self))),
+                urlString: "",
+                audiobookID: "TEST_ID",
+                title: "TEST_TITLE",
+                duration: duration,
+                index: 1
+            ),
             timestamp: 0,
             tracks: tableOfContents.tracks
         )
