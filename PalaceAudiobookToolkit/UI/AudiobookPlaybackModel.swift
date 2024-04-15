@@ -11,23 +11,20 @@ import Combine
 import MediaPlayer
 
 class AudiobookPlaybackModel: ObservableObject {
-
     @ObservedObject private var reachability = Reachability()
-    private var progressUpdateSubject = PassthroughSubject<Void, Never>()
-    private var progressUpdateSubscription: AnyCancellable?
-
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
-    var currentLocation: TrackPosition? {
-        didSet {
-            debounceProgressUpdate()
-        }
-    }
-    
-    private func updateProgress() {
-        playbackProgress = offset / duration
-    }
-    
+    @Published var isDownloading = false
+    @Published var overallDownloadProgress: Float = 0
+    @Published var trackErrors: [String: Error] = [:]
+    @Published var coverImage: UIImage?
+
+    private var progressUpdateSubscription: AnyCancellable?
+    private var subscriptions: Set<AnyCancellable> = []
+    private(set) var audiobookManager: AudiobookManager
+
+    var currentLocation: TrackPosition?
+
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
@@ -40,21 +37,15 @@ class AudiobookPlaybackModel: ObservableObject {
     var timeLeft: TimeInterval {
         max(duration - offset, 0)
     }
+
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
             return 0
         }
-        
+
         return Double(currentLocation.tracks.totalDuration - currentLocation.timestamp)
     }
-    
-    @Published var isDownloading = false
-    @Published var overallDownloadProgress: Float = 0
-    @Published var trackErrors: [String: Error] = [:]
-    @Published var coverImage: UIImage?
-    
-    private var subscriptions: Set<AnyCancellable> = []
-    
+
     var isPlaying: Bool {
         audiobookManager.audiobook.player.isPlaying
     }
@@ -62,16 +53,56 @@ class AudiobookPlaybackModel: ObservableObject {
     var tracks: [any Track] {
         audiobookManager.networkService.tracks
     }
-
-    private(set) var audiobookManager: AudiobookManager
         
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.tracks.tracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
-        
+
         self.audiobookManager.networkService.fetch()
+        setupBindings()
+        subscribeToPublisher()
+    }
+    
+    private func subscribeToPublisher() {
+        audiobookManager.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                switch state {
+                case .positionUpdated(let position):
+                    self?.currentLocation = position
+                    self?.updateProgress()
+                    
+                case .playbackBegan(let position),
+                        .playbackCompleted(let position):
+                    self?.currentLocation = position
+                    self?.isWaitingForPlayer = false
+                    self?.updateProgress()
+
+                case .playbackUnloaded:
+                    self?.stop()
+                case .playbackFailed(let position):
+                    self?.isWaitingForPlayer = false
+                    if let position = position {
+                        ATLog(.debug, "Playback error at position: \(position.timestamp)")
+                    }
+                    
+                case .refreshRequested, .locationPosted(_), .bookmarkSaved(_, _),
+                        .bookmarksFetched(_), .bookmarkDeleted(_),
+                        .error(_, _):
+                    return
+                default:
+                    break
+                }
+            }
+            .store(in: &subscriptions)
+        //        self.audiobookManager.fetchBookmarks { _ in }
+        //        self.audiobookManager.timerDelegate = self
+        
+    }
+
+    private func setupBindings() {
         self.reachability.startMonitoring()
         self.reachability.$isConnected
             .receive(on: RunLoop.current)
@@ -81,40 +112,29 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        progressUpdateSubscription = progressUpdateSubject
-            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { [weak self] in
-                self?.updateProgress()
-//                self?.checkForEndOfChapter()
-            }
-    
-//        self.audiobookManager.fetchBookmarks { _ in }
-//        self.audiobookManager.timerDelegate = self
+        
     }
-    
-    private func debounceProgressUpdate() {
-        progressUpdateSubject.send()
+
+    private func updateProgress() {
+        if let currentLocation = currentLocation {
+            playbackProgress = currentLocation.timestamp / Double(currentLocation.track.duration)
+        }
     }
-    
+
     deinit {
         self.reachability.stopMonitoring()
-//        self.audiobookManager.timerDelegate = nil
         self.audiobookManager.audiobook.player.unload()
     }
     
     func playPause() {
         isWaitingForPlayer = true
-        if isPlaying {
-            audiobookManager.audiobook.player.pause()
-        } else {
-            audiobookManager.audiobook.player.play()
-        }
+        isPlaying ? audiobookManager.pause() : audiobookManager.play()
         audiobookManager.saveLocation()
     }
     
     func stop() {
         audiobookManager.saveLocation()
-        audiobookManager.audiobook.player.unload()
+        audiobookManager.unload()
     }
     
     func skipBack() {

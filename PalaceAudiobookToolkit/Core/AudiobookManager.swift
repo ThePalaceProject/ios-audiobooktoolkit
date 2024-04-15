@@ -11,7 +11,7 @@ import AVFoundation
 import MediaPlayer
 
 public enum AudiobookManagerState {
-    case timerUpdated(AudiobookManager, Timer?)
+    case positionUpdated(TrackPosition?)
     case refreshRequested
     case locationPosted(String?)
     case bookmarkSaved(TrackPosition?, Error?)
@@ -48,9 +48,13 @@ public protocol AudiobookManager {
 
     static func setLogHandler(_ handler: @escaping LogHandler)
     
-    func saveLocation() -> Result<Void, Error>?
-    func saveBookmark(location: TrackPosition) -> Result<TrackPosition?, Error>
-    func deleteBookmark(at location: TrackPosition) -> Bool
+    func play()
+    func pause()
+    func unload()
+
+    @discardableResult func saveLocation() -> Result<Void, Error>?
+    @discardableResult func saveBookmark(location: TrackPosition) -> Result<TrackPosition?, Error>
+    @discardableResult func deleteBookmark(at location: TrackPosition) -> Bool
     
     var statePublisher: PassthroughSubject<AudiobookManagerState, Never> { get }
     var actionPublisher: PassthroughSubject<AudiobookManagerAction, Never> { get }
@@ -135,25 +139,23 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     private func setupNowPlayingInfoTimer() {
-        DispatchQueue.main.async {
-            self.timer = Timer.scheduledTimer(
-                timeInterval: 1,
-                target: self,
-                selector: #selector(self.timerDidTick1Second(_:)),
-                userInfo: nil,
-                repeats: true
-            )
-        }
+        let timerPublisher = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+        timerPublisher
+            .map { [weak self] _ -> TrackPosition? in
+                self?.audiobook.player.currentTrackPosition
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] position in
+                self?.statePublisher.send(.positionUpdated(position))
+                self?.updateNowPlayingInfo()
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
     }
 
-    @objc func timerDidTick1Second(_ timer: Timer) {
-        updateNowPlayingInfo()
-    }
-    
     private func updateNowPlayingInfo() {
         guard let currentTrackPosition = audiobook.player.currentTrackPosition else { return }
         
@@ -172,6 +174,18 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     public func updateAudiobook(with tracks: [any Track]) {
         self.networkService = DefaultAudiobookNetworkService(tracks: tracks)
+    }
+    
+    public func play() {
+        audiobook.player.play()
+    }
+    
+    public func pause() {
+        audiobook.player.pause()
+    }
+
+    public func unload() {
+        audiobook.player.unload()
     }
 
     public func saveLocation() -> Result<Void, any Error>? {

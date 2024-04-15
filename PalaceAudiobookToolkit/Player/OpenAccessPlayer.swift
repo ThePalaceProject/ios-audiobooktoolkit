@@ -28,7 +28,6 @@ class OpenAccessPlayer: NSObject, Player {
     
     var queuesEvents: Bool = false
     var taskCompletion: Completion? = nil
-    var currentTrackPosition: TrackPosition?
     var isLoaded: Bool = true
     var queuedTrackPosition: TrackPosition?
     
@@ -36,7 +35,14 @@ class OpenAccessPlayer: NSObject, Player {
         didSet {
             if !isDrmOk {
                 pause()
-                playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil)))
+                playbackStatePublisher.send(
+                    .failed(
+                        currentTrackPosition,
+                        NSError(domain: errorDomain,
+                                code: OpenAccessPlayerError.drmExpired.rawValue,
+                                userInfo: nil)
+                    )
+                )
                 unload()
             }
         }
@@ -53,7 +59,13 @@ class OpenAccessPlayer: NSObject, Player {
             fetchPlaybackRate() ?? .normalTime
         }
     }
-    
+
+    var currentTrackPosition: TrackPosition? {
+        let currentTime = avQueuePlayer.currentTime().seconds
+        let currentTrack = findCurrentTrackForTime(currentTime)
+        return TrackPosition(track: currentTrack, timestamp: currentTime, tracks: tableOfContents.tracks)
+    }
+
     private var playerIsReady: AVPlayerItem.Status = .unknown {
         didSet {
             switch playerIsReady {
@@ -86,14 +98,32 @@ class OpenAccessPlayer: NSObject, Player {
     func play() {
         guard isLoaded,
               let firstTrack = tableOfContents.tracks.tracks.first else {
-            playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil)))
+            playbackStatePublisher.send(
+                .failed(
+                    currentTrackPosition,
+                    NSError(
+                        domain: errorDomain,
+                        code: OpenAccessPlayerError.drmExpired.rawValue,
+                        userInfo: nil
+                    )
+                )
+            )
             return
         }
         
         let trackPosition = currentTrackPosition ?? TrackPosition(track: firstTrack, timestamp: 0, tracks: tableOfContents.tracks)
         
         guard isDrmOk else {
-            playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.drmExpired.rawValue, userInfo: nil)))
+            playbackStatePublisher.send(
+                .failed(
+                    currentTrackPosition,
+                    NSError(
+                        domain: errorDomain,
+                        code: OpenAccessPlayerError.drmExpired.rawValue,
+                        userInfo: nil
+                    )
+                )
+            )
             return
         }
         
@@ -109,11 +139,29 @@ class OpenAccessPlayer: NSObject, Player {
             playbackStatePublisher.send(.started(trackPosition))
             
         case .unknown:
-            playbackStatePublisher.send(.failed(trackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)))
+            playbackStatePublisher.send(
+                .failed(
+                    trackPosition,
+                    NSError(
+                        domain: errorDomain,
+                        code: OpenAccessPlayerError.unknown.rawValue,
+                        userInfo: nil
+                    )
+                )
+            )
             
             if self.avQueuePlayer.currentItem == nil {
                 guard let task = self.currentTrackPosition?.track.downloadTask else {
-                    playbackStatePublisher.send(.failed(trackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.unknown.rawValue, userInfo: nil)))
+                    playbackStatePublisher.send(
+                        .failed(
+                            trackPosition, 
+                            NSError(
+                                domain: errorDomain,
+                                code: OpenAccessPlayerError.unknown.rawValue,
+                                userInfo: nil
+                            )
+                        )
+                    )
                     return
                 }
     
@@ -134,7 +182,14 @@ class OpenAccessPlayer: NSObject, Player {
                 }
             }
         case .failed:
-            playbackStatePublisher.send(.failed(trackPosition, NSError(domain: errorDomain, code: OpenAccessPlayerError.playerNotReady.rawValue, userInfo: nil)))
+            playbackStatePublisher.send(
+                .failed(trackPosition,
+                        NSError(domain: errorDomain,
+                                code: OpenAccessPlayerError.playerNotReady.rawValue,
+                                userInfo: nil
+                               )
+                       )
+            )
         }
     }
     
@@ -158,6 +213,17 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
+    private func findCurrentTrackForTime(_ time: Double) -> any Track {
+        var accumulatedDuration: Double = 0
+        for track in tableOfContents.tracks.tracks {
+            if accumulatedDuration + track.duration > time {
+                return track
+            }
+            accumulatedDuration += track.duration
+        }
+        return tableOfContents.tracks.tracks.last!
+    }
+    
     func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
         guard let task = task as? OpenAccessDownloadTask else {
             return nil
@@ -175,15 +241,32 @@ class OpenAccessPlayer: NSObject, Player {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
         
         let composition = AVMutableComposition()
-        let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        let compositionAudioTrack = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        )
         
         do {
             for (index, file) in files.enumerated() {
                 let asset = AVAsset(url: file)
                 if index == files.count - 1 {
-                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                    try compositionAudioTrack?.insertTimeRange(
+                        CMTimeRangeMake(
+                            start: .zero,
+                            duration: asset.duration
+                        ),
+                        of: asset.tracks(withMediaType: .audio)[0],
+                        at: compositionAudioTrack?.asset?.duration ?? .zero
+                    )
                 } else {
-                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                    try compositionAudioTrack?.insertTimeRange(
+                        CMTimeRangeMake(
+                            start: .zero,
+                            duration: asset.duration
+                        ),
+                        of: asset.tracks(withMediaType: .audio)[0],
+                        at: compositionAudioTrack?.asset?.duration ?? .zero
+                    )
                 }
             }
         } catch {
@@ -237,15 +320,27 @@ extension OpenAccessPlayer {
     }
     
     private func setupAudioSession() {
-        NotificationCenter.default.addObserver(self, selector: #selector(handleAudioSessionInterruption(_:)), name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance())
-        NotificationCenter.default.addObserver(self, selector: #selector(handleAudioSessionRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance())
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
+        )
         
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
     
     private func addPlayerObservers() {
-        NotificationCenter.default.addObserver(self, selector: #selector(playerItemDidReachEnd(_:)), name: .AVPlayerItemDidPlayToEndTime, object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(playerItemDidReachEnd(_:)),
+            name: .AVPlayerItemDidPlayToEndTime, object: nil
+        )
         
         avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
         avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
@@ -262,7 +357,12 @@ extension OpenAccessPlayer {
         avQueuePlayer.removeObserver(self, forKeyPath: "rate")
     }
     
-    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+    override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
         if keyPath == "status", let player = object as? AVQueuePlayer {
             switch player.status {
             case .readyToPlay:
@@ -340,24 +440,35 @@ extension OpenAccessPlayer {
         let totalDuration = currentTrackPosition.track.duration
         
         if newTimestamp >= 0 && newTimestamp <= totalDuration {
-            seekTo(position: TrackPosition(track: currentTrackPosition.track, timestamp: newTimestamp, tracks: currentTrackPosition.tracks), completion: completion)
+            seekTo(position: TrackPosition(
+                track: currentTrackPosition.track,
+                timestamp: newTimestamp,
+                tracks: currentTrackPosition.tracks
+            ), completion: completion)
         } else {
             handleBeyondCurrentTrackSkip(newTimestamp: newTimestamp, completion: completion)
         }
         
         func handleBeyondCurrentTrackSkip(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
             if newTimestamp > currentTrackPosition.track.duration {
-                // Example of moving to the next track
                 if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrackPosition.track) {
                     let overflowTime = newTimestamp - currentTrackPosition.track.duration
-                    let newPosition = TrackPosition(track: nextTrack, timestamp: overflowTime, tracks: currentTrackPosition.tracks)
+                    let newPosition = TrackPosition(
+                        track: nextTrack,
+                        timestamp: overflowTime,
+                        tracks: currentTrackPosition.tracks
+                    )
                     play(at: newPosition) { error in
                         completion?(newPosition)
                     }
                 }
             } else if newTimestamp < 0 {
                 if let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrackPosition.track) {
-                    let newPosition = TrackPosition(track: previousTrack, timestamp: previousTrack.duration + newTimestamp, tracks: currentTrackPosition.tracks)
+                    let newPosition = TrackPosition(
+                        track: previousTrack,
+                        timestamp: previousTrack.duration + newTimestamp,
+                        tracks: currentTrackPosition.tracks
+                    )
                     play(at: newPosition) { error in
                         completion?(newPosition)
                     }
@@ -385,7 +496,6 @@ extension OpenAccessPlayer {
     func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let cmTime = CMTime(seconds: Double(position.timestamp) / 1000.0, preferredTimescale: CMTimeScale(1000))
         avQueuePlayer.seek(to: cmTime) { _ in
-            self.currentTrackPosition = position
             completion?(position)
         }
     }
