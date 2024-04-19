@@ -79,14 +79,20 @@ public class Tracks {
         } else {
             duration = 0
         }
-
-        return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+        
+        switch manifest.audiobookType {
+        case .lcp:
+            return try? LCPTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+        default:
+            return  try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+        }
+//        return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
     }
 
 
     func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
-            if (track as? OpenAccessTrack)?.urlString == href {
+            if (track.urls?.first?.absoluteString ?? "") == href {
                 return true
             }
             return false

@@ -190,8 +190,7 @@ class OpenAccessPlayer: NSObject, Player {
                             self.avQueuePlayer.insert(item, after: nil)
                         }
                     case .missing(_):
-                        break
-//                        self.rebuildOnFinishedDownload(task: self.currentTrackPosition.tr.downloadTask)
+                        buildPlayerQueue()
                     default:
                         break
                     }
@@ -240,7 +239,7 @@ class OpenAccessPlayer: NSObject, Player {
         return tableOfContents.tracks.tracks.last
     }
     
-    func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
+    func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
         guard let task = task as? OpenAccessDownloadTask else {
             return nil
         }
@@ -253,7 +252,7 @@ class OpenAccessPlayer: NSObject, Player {
         unload()
         removePlayerObservers()
     }
-    
+
     private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
         
@@ -448,9 +447,11 @@ extension OpenAccessPlayer {
     }
     
     func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition = currentTrackPosition else { return }
+        guard let currentTrackPosition = currentTrackPosition,
+              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
+        else { return }
     
-        let newTimestamp = value * currentTrackPosition.track.duration
+        let newTimestamp = value * (currentChapter.duration ?? 0.0)
         seekTo(position: TrackPosition(
             track: currentTrackPosition.track,
             timestamp: newTimestamp,
@@ -624,10 +625,9 @@ extension OpenAccessPlayer {
         avQueuePlayer.removeAllItems()
         var lastItem: AVPlayerItem?
         for track in tableOfContents.tracks.tracks {
-//            guard let urls = track.urls, let playerItem = createPlayerItem(files: urls) else { continue }
-            guard let url = track.urls?.first else { continue }
-
-            let playerItem = AVPlayerItem(url: url)
+            guard let urls = track.urls, let playerItem = createPlayerItem(files: urls) else { continue }
+//            guard let url = track.urls?.first else { continue }
+//            let playerItem = AVPlayerItem(url: url)
             if let lastItem = lastItem {
                 avQueuePlayer.insert(playerItem, after: lastItem)
             } else {

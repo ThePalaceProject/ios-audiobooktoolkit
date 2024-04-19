@@ -28,7 +28,11 @@ class AudiobookPlaybackModel: ObservableObject {
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
-        self.currentLocation?.timestamp ?? 0
+        guard let currentLocation else {
+            return 0.0
+        }
+
+        return (try? audiobookManager.audiobook.tableOfContents.chapterOffset(for: currentLocation)) ?? 0.0
     }
 
     var duration: TimeInterval {
@@ -100,8 +104,7 @@ class AudiobookPlaybackModel: ObservableObject {
                     self.updateProgress()
                     
                 case .playbackUnloaded:
-                    self.stop()
-                    
+                    break
                 case .playbackFailed(let position):
                     self.isWaitingForPlayer = false
                     if let position = position {
@@ -131,9 +134,7 @@ class AudiobookPlaybackModel: ObservableObject {
     }
 
     private func updateProgress() {
-        if let currentLocation = currentLocation {
-            playbackProgress = currentLocation.timestamp / Double(currentLocation.track.duration)
-        }
+        playbackProgress = offset/duration
     }
 
     deinit {

@@ -19,12 +19,13 @@ class PlayerMock: NSObject, Player {
     var currentTrackPosition: PalaceAudiobookToolkit.TrackPosition?
     var playbackRate: PalaceAudiobookToolkit.PlaybackRate = .normalTime
     var playbackStatePublisher: PassthroughSubject<PalaceAudiobookToolkit.PlaybackState, Never> = PassthroughSubject()
+    var currentChapter: PalaceAudiobookToolkit.Chapter?
     
     required init(tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents) {
         self.tableOfContents = tableOfContents
         self.playbackStatePublisher = PassthroughSubject()
     }
-
+    
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {
         completion?(currentTrackPosition)
     }
@@ -32,7 +33,7 @@ class PlayerMock: NSObject, Player {
     func play(at position: PalaceAudiobookToolkit.TrackPosition, completion: (((any Error)?) -> Void)?) {
         completion?(nil)
     }
-
+    
     func play() {
         isPlaying = true
     }
@@ -44,8 +45,9 @@ class PlayerMock: NSObject, Player {
     func unload() {
         isPlaying = false
     }
-
+    
     func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) { }
     
     func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?) { }
+    func move(to value: Double, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {}
 }

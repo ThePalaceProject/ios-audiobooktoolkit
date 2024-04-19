@@ -21,7 +21,7 @@ class LCPPlayer: OpenAccessPlayer {
     /// Audio file status. LCP audiobooks contain all encrypted audio files inside, this method returns status of decrypted versions of these files.
     /// - Parameter task: `LCPDownloadTask` containing internal url (e.g., `media/sound.mp3`) for decryption.
     /// - Returns: Status of the file, .unknown in case of an error, .missing if the file needs decryption, .saved when accessing an already decrypted file.
-    override func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
+    override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
         if let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls {
             var savedUrls = [URL]()
             var missingUrls = [URL]()

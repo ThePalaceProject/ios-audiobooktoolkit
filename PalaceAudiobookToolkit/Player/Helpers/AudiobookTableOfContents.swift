@@ -115,7 +115,13 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
                 timestamp: tracks[tracks.tracks.count - 1].duration,
                 tracks: tracks
             )
-            toc[idx].duration = try? nextTocPosition - toc[idx].position
+            do {
+                let duration = try nextTocPosition - toc[idx].position
+                toc[idx].duration = duration
+            } catch {
+                print("Error calculating duration: \(error)")
+                toc[idx].duration = nil
+            }
         }
     }
     
@@ -141,6 +147,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             }
         }
         throw ChapterError.noChapterFoundForPosition
+    }
+        
+    public func chapterOffset(for position: TrackPosition) throws -> Double {
+        let chapter = try self.chapter(forPosition: position)
+        let chapterStartTimestamp = chapter.position.timestamp
+        let chapterOffset = position.timestamp - chapterStartTimestamp
+        
+        return max(0, chapterOffset)
     }
 
     func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
