@@ -58,7 +58,7 @@ public struct Manifest: Codable {
         case context = "@context"
         case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -122,17 +122,18 @@ public struct Manifest: Codable {
         return decoder
     }
 
-    struct ReadingOrderItem: Codable {
+    public struct ReadingOrderItem: Codable {
         let title: String?
         let type: String
         let duration: Double
         let href: String?
+        let properties: Properties?
         
         let findawayPart: Int?
         let findawaySequence: Int?
         
         enum CodingKeys: String, CodingKey {
-            case title, type, duration, href
+            case title, type, duration, href, properties
             case findawayPart = "findaway:part"
             case findawaySequence = "findaway:sequence"
         }
@@ -205,17 +206,15 @@ extension Manifest {
     }
     
     var audiobookType: AudiobookType {
-        if let scheme = metadata?.drmInformation?.scheme {
-            if scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
-                return .findaway
-            }
+        if let scheme = metadata?.drmInformation?.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
+            return .findaway
         }
         
         if formatType?.contains("overdrive") == true {
             return .overdrive
         }
         
-        if !context.isEmpty && context.contains(where: { $0.matchesLCPContext }) {
+        if ((readingOrder?.contains(where: { $0.properties?.encrypted?.scheme == "http://readium.org/2014/01/lcp" })) != nil) {
             return .lcp
         }
         
@@ -227,15 +226,6 @@ extension Manifest {
     }
 }
 
-private extension ManifestContext {
-    var matchesLCPContext: Bool {
-        switch self {
-        case .uri(let url):
-            return url.absoluteString.contains("readium.org/lcp")
-        case .object(let dict):
-            return dict.values.contains(where: { $0.contains("readium.org/lcp") })
-        case .other(let string):
-            return string.contains("readium.org/lcp")
-        }
-    }
+extension Manifest.ReadingOrderItem {
+    
 }

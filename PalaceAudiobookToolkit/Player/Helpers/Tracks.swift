@@ -55,7 +55,12 @@ public class Tracks {
             //TODO: Create Findaway track
             return nil
         } else if let href = item.href {
-            return  try? OpenAccessTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+            switch manifest.audiobookType {
+            case .lcp:
+                return try? LCPTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+            default:
+                return  try? OpenAccessTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+            }
         }
 
         return nil

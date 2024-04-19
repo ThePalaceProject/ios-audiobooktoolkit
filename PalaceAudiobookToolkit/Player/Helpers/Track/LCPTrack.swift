@@ -2,7 +2,7 @@
 //  LCPTrack.swift
 //  PalaceAudiobookToolkit
 //
-//  Created by Maurice Work on 4/11/24.
+//  Created by Maurice Carrier on 4/11/24.
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
@@ -20,23 +20,26 @@ class LCPTrack: Track {
     var title: String?
     var index: Int
     var duration: TimeInterval
-    let urls: [URL]
+    var urls: [URL]?
     let mediaType: LCPTrackMediaType
     
     init(manifest: Manifest, urlString: String, audiobookID: String, title: String?, duration: Double, index: Int, token: String? = nil) throws {
         self.key = "\(audiobookID)-\(index)"
         self.urls = [URL(string: urlString)].compactMap { $0 }
-        guard !self.urls.isEmpty else {
+        guard !(self.urls?.isEmpty ?? true) else {
             throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
         }
+
         self.title = title ?? "Track \(index + 1)"
         self.duration = duration
         self.index = index
-        if let mediaTypeString = manifest.formatType,
+        if let mediaTypeString = manifest.readingOrder?.first?.type,
            let mediaType = LCPTrackMediaType(rawValue: mediaTypeString) {
             self.mediaType = mediaType
         } else {
-            throw NSError(domain: "Unsupported media type", code: 0, userInfo: nil)
+            self.mediaType = .audioMP3
         }
+        
+        self.downloadTask = LCPDownloadTask(track: self)
     }
 }

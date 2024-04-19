@@ -14,6 +14,7 @@ public protocol Track: class, Identifiable {
     var title: String? { get }
     var index: Int { get }
     var duration: TimeInterval { get }
+    var urls: [URL]? { get }
 }
 
 extension Track {

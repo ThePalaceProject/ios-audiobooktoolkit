@@ -22,12 +22,21 @@ open class Audiobook: NSObject, AudiobookProtocol {
         }
     }
 
-    public required init?(manifest: Manifest, bookIdentifier: String) {
+    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?) {
         self.uniqueId = bookIdentifier
         
         let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-        self.player = OpenAccessPlayer(tableOfContents: tableOfContents) //TODO: setup correct player based on manifest
+        
+        switch manifest.audiobookType {
+        case .lcp:
+            self.player = LCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
+        case .findaway:
+            self.player = OpenAccessPlayer(tableOfContents: tableOfContents)
+        default:
+            self.player = OpenAccessPlayer(tableOfContents: tableOfContents)
+        }
+
         super.init()
     }
     

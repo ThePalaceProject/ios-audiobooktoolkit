@@ -28,22 +28,41 @@ class AudiobookPlaybackModel: ObservableObject {
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
-        Double(self.currentLocation?.timestamp ?? 0)
+        self.currentLocation?.timestamp ?? 0
     }
 
     var duration: TimeInterval {
-        Double(self.currentLocation?.track.duration ?? 0)
+        audiobookManager.audiobook.player.currentChapter?.duration ??
+        currentLocation?.track.duration ??
+        0.0
     }
+
     var timeLeft: TimeInterval {
-        max(duration - offset, 0)
+        max(duration - offset, 0.0)
     }
 
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
-            return 0
+            return 0.0
+        }
+        
+        guard currentLocation.timestamp.isFinite else {
+            return currentLocation.tracks.totalDuration
         }
 
-        return Double(currentLocation.tracks.totalDuration - currentLocation.timestamp)
+        return currentLocation.tracks.totalDuration - currentLocation.timestamp
+    }
+    
+    var currentChapterTitle: String {
+        guard let currentChapter = audiobookManager.audiobook.player.currentChapter else {
+            if let index = currentLocation?.track.index {
+                return String(format: "Track %d", index)
+            } else {
+                return "--"
+            }
+        }
+        
+        return currentChapter.title
     }
 
     var isPlaying: Bool {
@@ -57,41 +76,38 @@ class AudiobookPlaybackModel: ObservableObject {
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.tracks.tracks.first {
-            self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
+            self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
 
-        self.audiobookManager.networkService.fetch()
         setupBindings()
         subscribeToPublisher()
+        self.audiobookManager.networkService.fetch()
     }
     
     private func subscribeToPublisher() {
         audiobookManager.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
+                guard let self = self else { return }
                 switch state {
                 case .positionUpdated(let position):
-                    self?.currentLocation = position
-                    self?.updateProgress()
+                    self.currentLocation = position
+                    self.updateProgress()
                     
-                case .playbackBegan(let position),
-                        .playbackCompleted(let position):
-                    self?.currentLocation = position
-                    self?.isWaitingForPlayer = false
-                    self?.updateProgress()
-
+                case .playbackBegan(let position), .playbackCompleted(let position):
+                    self.currentLocation = position
+                    self.isWaitingForPlayer = false
+                    self.updateProgress()
+                    
                 case .playbackUnloaded:
-                    self?.stop()
+                    self.stop()
+                    
                 case .playbackFailed(let position):
-                    self?.isWaitingForPlayer = false
+                    self.isWaitingForPlayer = false
                     if let position = position {
                         ATLog(.debug, "Playback error at position: \(position.timestamp)")
                     }
                     
-                case .refreshRequested, .locationPosted(_), .bookmarkSaved(_, _),
-                        .bookmarksFetched(_), .bookmarkDeleted(_),
-                        .error(_, _):
-                    return
                 default:
                     break
                 }
@@ -99,7 +115,6 @@ class AudiobookPlaybackModel: ObservableObject {
             .store(in: &subscriptions)
         //        self.audiobookManager.fetchBookmarks { _ in }
         //        self.audiobookManager.timerDelegate = self
-        
     }
 
     private func setupBindings() {
@@ -127,44 +142,53 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     func playPause() {
-        isWaitingForPlayer = true
         isPlaying ? audiobookManager.pause() : audiobookManager.play()
-        audiobookManager.saveLocation()
+        saveLocation()
     }
     
     func stop() {
-        audiobookManager.saveLocation()
+        saveLocation()
         audiobookManager.unload()
     }
-    
+
+    private func saveLocation() {
+        if let currentLocation {
+            audiobookManager.saveLocation(currentLocation)
+        }
+    }
+
     func skipBack() {
-        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
+        guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
             return
         }
 
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.audiobookManager.saveLocation()
-            self.isWaitingForPlayer = false
+        audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
     
     func skipForward() {
-        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else { return }
+        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
+            return
+        }
+        
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.audiobookManager.saveLocation()
-            self.isWaitingForPlayer = false
+        audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
 
+
     func move(to value: Double) {
-        self.audiobookManager.audiobook.player.skipPlayhead(value) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.isWaitingForPlayer = false
-            self.audiobookManager.saveLocation()
+        self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
     
@@ -215,8 +239,6 @@ class AudiobookPlaybackModel: ObservableObject {
             .sink { [weak self] downloadState in
                 switch downloadState {
                 case .progress(track: let track, progress: let progress):
-                    self?.overallDownloadProgress = progress
-                    self?.isDownloading = progress < 1
                     break
                 case .completed(track: let track):
                     self?.trackErrors.removeValue(forKey: track.id)

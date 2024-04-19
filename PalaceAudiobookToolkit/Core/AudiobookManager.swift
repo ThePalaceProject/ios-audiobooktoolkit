@@ -52,8 +52,8 @@ public protocol AudiobookManager {
     func pause()
     func unload()
 
-    @discardableResult func saveLocation() -> Result<Void, Error>?
-    @discardableResult func saveBookmark(location: TrackPosition) -> Result<TrackPosition?, Error>
+    @discardableResult func saveLocation(_ location: TrackPosition) -> Result<Void, Error>?
+    @discardableResult func saveBookmark(_ location: TrackPosition) -> Result<TrackPosition?, Error>
     @discardableResult func deleteBookmark(at location: TrackPosition) -> Bool
     
     var statePublisher: PassthroughSubject<AudiobookManagerState, Never> { get }
@@ -147,24 +147,25 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] position in
                 self?.statePublisher.send(.positionUpdated(position))
-                self?.updateNowPlayingInfo()
+                self?.updateNowPlayingInfo(position)
             }
             .store(in: &cancellables)
     }
 
     deinit {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
+        cancellables.removeAll()
     }
 
-    private func updateNowPlayingInfo() {
-        guard let currentTrackPosition = audiobook.player.currentTrackPosition else { return }
+    private func updateNowPlayingInfo(_ position: TrackPosition?) {
+        guard let currentTrackPosition = position else { return }
         
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = currentTrackPosition.track.title
         nowPlayingInfo[MPMediaItemPropertyArtist] = self.metadata.title
         nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = self.metadata.authors?.joined(separator: ", ")
-        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(currentTrackPosition.timestamp) / 1000
-        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = Double(currentTrackPosition.track.duration) / 1000
+        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTrackPosition.timestamp
+        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = currentTrackPosition.track.duration
         let playbackRate = PlaybackRate.convert(rate: self.audiobook.player.playbackRate)
         nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = self.audiobook.player.isPlaying ? playbackRate : 0
@@ -188,12 +189,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         audiobook.player.unload()
     }
 
-    public func saveLocation() -> Result<Void, any Error>? {
-        guard let location = audiobook.player.currentTrackPosition else {
-            return nil
-        }
-        
-
+    public func saveLocation(_ location: TrackPosition) -> Result<Void, any Error>? {
         print("Save Location here: \(location)")
         return nil
 //        bookmarkDelegate?.saveListeningPosition(at: location) {
@@ -214,7 +210,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 //        })
     }
 
-    public func saveBookmark(location: TrackPosition) -> Result<TrackPosition?, any Error> {
+    public func saveBookmark(_ location: TrackPosition) -> Result<TrackPosition?, any Error> {
         print("Save bookmark here")
         return .success(nil)
 //        guard audiobookBookmarks.first(where: { $0.isSimilar(to: audiobook.player.currentChapterLocation) }) == nil else {

@@ -39,7 +39,8 @@ public class OpenAccessTrack: Track {
     public var title: String?
     public var index: Int
     public var duration: Double
-    public let url: URL
+    public var url: URL?
+    public var urls: [URL]?
     let mediaType: OpenAccessTrackMediaType
     let urlString: String // Retain original URI for DRM purposes
     let alternateUrls: [(OpenAccessTrackMediaType, URL)]?
@@ -47,7 +48,15 @@ public class OpenAccessTrack: Track {
     let feedbooksProfile: String?
     let token: String?
 
-    init(manifest: Manifest, urlString: String, audiobookID: String, title: String?, duration: Double, index: Int, token: String? = nil) throws {
+    init(
+        manifest: Manifest,
+        urlString: String,
+        audiobookID: String,
+        title: String?,
+        duration: Double,
+        index: Int,
+        token: String? = nil
+    ) throws {
         guard let url = URL(string: urlString)
         else {
             throw OpenAccessTrackError.unsupportedMediaType
@@ -55,16 +64,18 @@ public class OpenAccessTrack: Track {
 
         self.audiobookID = audiobookID
         self.url = url
+        self.urls = [url]
         self.urlString = urlString
         self.mediaType = OpenAccessTrackMediaType(rawValue: manifest.formatType ?? "") ?? .audioMP4
         self.key = "\(audiobookID)-\(index)"
         self.title = title ?? "Track \(index + 1)"
         self.index = index
         self.duration = duration
-        self.downloadTask = URLDownloadTask(url: url, key: self.key)
         self.alternateUrls = []
         self.feedbooksProfile = nil
         self.token = token
+        self.downloadTask = OpenAccessDownloadTask(track: self)
+
         //TODO: REturn to for feedbooks
 //        // Feedbooks DRM or other configurations can be handled similarly
 //        if let feedbooksProfile = manifest.properties?.encrypted.profile as? String,

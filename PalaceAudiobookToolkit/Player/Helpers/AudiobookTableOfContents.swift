@@ -60,7 +60,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             
             if let validTrack = track {
                 let chapterTitle = item.title ?? "Untitled"
-                let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0, tracks: tracks))
+                let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0.0, tracks: tracks))
                 toc.append(chapter)
             }
         }
@@ -71,7 +71,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
-                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0, tracks: tracks))
+                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
                 toc.append(chapter)
             }
         }
@@ -80,7 +80,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     private mutating func prependForwardChapterIfNeeded() {
         if let firstEntry = toc.first,
            firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
-            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0, tracks: tracks)
+            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0.0, tracks: tracks)
             toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
         }
     }

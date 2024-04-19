@@ -60,7 +60,7 @@ public struct TrackPosition: Equatable, Comparable {
         while newTimestamp >= currentTrack.duration {
             newTimestamp -= currentTrack.duration
             guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
-                if newTimestamp == 0 {
+                if newTimestamp == 0.0 {
                     // If exactly at the end of the last track, return this position
                     return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
                 }

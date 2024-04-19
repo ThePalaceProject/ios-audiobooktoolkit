@@ -340,13 +340,9 @@ struct AudiobookPlayerView: View {
     typealias DisplayStrings = Strings.AudiobookPlayerViewController
     
     private var chapterTitle: String {
-        guard let currentLocation = playbackModel.currentLocation else {
-            return "--"
-        }
-        let defaultTitleFormat = DisplayStrings.trackAt
-        return currentLocation.track.title ?? String(format: defaultTitleFormat, currentLocation.track.index)
+        playbackModel.currentChapterTitle
     }
-    
+
     private var playbackRateText: String {
         if playbackModel.audiobookManager.audiobook.player.playbackRate == .normalTime {
             return NSLocalizedString("1.0×",

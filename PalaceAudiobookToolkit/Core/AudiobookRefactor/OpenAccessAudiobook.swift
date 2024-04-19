@@ -15,14 +15,14 @@ class OpenAccessAudiobook: Audiobook {
         }
         set {
             drmData["status"] = newValue
-//            player.isDrmOk = (DRMStatus.succeeded == newValue)
+            player.isDrmOk = (DRMStatus.succeeded == newValue)
         }
     }
     
     private var drmData: [String: Any] = [:]
     
-    public required init?(manifest: Manifest, bookIdentifier: String) {
-        super.init(manifest: manifest, bookIdentifier: bookIdentifier)
+    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil) {
+        super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor)
 
         self.drmData["status"] = DRMStatus.succeeded
         

@@ -12,7 +12,6 @@ enum AssetResult {
     case unknown
 }
 
-
 final class OpenAccessDownloadTask: NSObject, DownloadTask {
     private static let DownloadTaskTimeoutValue: TimeInterval = 60
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
@@ -34,8 +33,12 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
     }
 
     init?(track: OpenAccessTrack) {
+        guard let url = track.url else {
+            return nil
+        }
+
         self.key = track.key
-        self.downloadURL = track.url
+        self.downloadURL = url
         self.urlString = track.urlString
         self.urlMediaType = track.mediaType
         self.alternateLinks = track.alternateUrls

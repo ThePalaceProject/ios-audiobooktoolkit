@@ -38,6 +38,7 @@ public protocol Player: NSObject {
     var isDrmOk: Bool { get set }
     var tableOfContents: AudiobookTableOfContents { get }
     var currentTrackPosition: TrackPosition? { get }
+    var currentChapter: Chapter? { get }
     var playbackRate: PlaybackRate { get set }
     var isLoaded: Bool { get }
     var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
@@ -48,7 +49,7 @@ public protocol Player: NSObject {
     func unload()
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?)
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?)
-//    func move(to position: TrackPosition, completion: ((Error?) -> Void)?)
+    func move(to value: Double, completion: ((TrackPosition?) -> Void)?)
 }
 
 

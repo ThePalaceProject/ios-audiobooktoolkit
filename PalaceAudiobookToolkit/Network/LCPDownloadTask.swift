@@ -28,7 +28,7 @@ final class LCPDownloadTask: DownloadTask {
     
     init(track: LCPTrack) {
         self.key = track.key
-        self.urls = track.urls
+        self.urls = track.urls ?? []
         self.urlMediaType = track.mediaType
         self.decryptedUrls = self.urls.compactMap { decryptedFileURL(for:$0) }
         self.statePublisher.send(.completed)
