@@ -8,6 +8,17 @@
 
 import Foundation
 
+public struct AudiobookFactory {
+    public static func audiobook(for manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?, token: String?) -> Audiobook? {
+        switch manifest.audiobookType {
+        case .openAccess:
+            return OpenAccessAudiobook(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: token)
+        default:
+            return Audiobook(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor)
+        }
+    }
+}
+
 open class Audiobook: NSObject, AudiobookProtocol {
     public var uniqueId: String
     public var annotationsId: String { uniqueId }

@@ -35,7 +35,7 @@
 //        // We don't check DRM status here;
 //        // LCP library checks it accessing files
 //    }
-//    
+//
 //    public func deleteLocalContent() {
 //        for spineElement in spine {
 //            spineElement.downloadTask.delete()

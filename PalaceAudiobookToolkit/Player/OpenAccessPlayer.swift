@@ -17,7 +17,8 @@ class OpenAccessPlayer: NSObject, Player {
     let avQueuePlayer: AVQueuePlayer
     var playbackStatePublisher = PassthroughSubject<PlaybackState, Never>()
     var tableOfContents: AudiobookTableOfContents
-    
+    private var cancellables = Set<AnyCancellable>()
+
     var isPlaying: Bool {
         avQueuePlayer.rate != .zero
     }
@@ -190,7 +191,31 @@ class OpenAccessPlayer: NSObject, Player {
                             self.avQueuePlayer.insert(item, after: nil)
                         }
                     case .missing(_):
-                        buildPlayerQueue()
+                        self.currentTrackPosition?.track.downloadTask?.statePublisher
+                            .receive(on: DispatchQueue.main)
+                            .sink(
+                                receiveCompletion: { [weak self] completion in
+                                    guard let self = self else { return }
+                                    switch completion {
+                                    case .finished:
+                                        print("Download monitoring completed.")
+                                    case .failure(let error):
+                                        // Handle error scenario
+                                        self.playbackStatePublisher.send(
+                                            .failed(trackPosition,
+                                                    NSError(domain: self.errorDomain,
+                                                            code: OpenAccessPlayerError.downloadNotFinished.rawValue,
+                                                            userInfo: ["message": "Download failed: \(error.localizedDescription)"])
+                                                   )
+                                        )
+                                    }
+                                },
+                                receiveValue: { [weak self] downloadState in
+                                    guard let self = self else { return }
+                                    self.handleDownloadState(downloadState, trackPosition: trackPosition)
+                                }
+                            )
+                            .store(in: &cancellables)
                     default:
                         break
                     }
@@ -205,6 +230,29 @@ class OpenAccessPlayer: NSObject, Player {
                                )
                        )
             )
+        }
+    }
+    
+    private func handleDownloadState(_ downloadState: DownloadTaskState, trackPosition: TrackPosition) {
+        switch downloadState {
+        case .completed:
+            // Rebuild queue now that download is complete
+            self.buildPlayerQueue()
+            DispatchQueue.main.async {
+                self.avQueuePlayer.play()
+            }
+            playbackStatePublisher.send(.started(trackPosition))
+        case .error(let error):
+            // Notify that the playback failed due to download error
+            playbackStatePublisher.send(
+                .failed(trackPosition,
+                        NSError(domain: errorDomain,
+                                code: OpenAccessPlayerError.downloadNotFinished.rawValue,
+                                userInfo: ["message": "Download failed: \(error?.localizedDescription)"])
+                       )
+            )
+        default:
+            print("Download state updated to \(downloadState)")
         }
     }
     
@@ -620,25 +668,96 @@ extension OpenAccessPlayer {
             }
         }
     }
-    
+
     private func buildPlayerQueue() {
+        for item in avQueuePlayer.items() {
+            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: item)
+        }
         avQueuePlayer.removeAllItems()
-        var lastItem: AVPlayerItem?
-        for track in tableOfContents.tracks.tracks {
-            guard let urls = track.urls, let playerItem = createPlayerItem(files: urls) else { continue }
-//            guard let url = track.urls?.first else { continue }
-//            let playerItem = AVPlayerItem(url: url)
-            if let lastItem = lastItem {
-                avQueuePlayer.insert(playerItem, after: lastItem)
-            } else {
-                avQueuePlayer.insert(playerItem, after: nil)
-            }
-            lastItem = playerItem
+        
+        // Create and queue player items
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
+        if playerItems.isEmpty {
+            isLoaded = false
+            print("DEBUGGING: No items were queued. Loading failed.")
+            return
         }
         
-        print("DEBUGGING: newly build player avQueuePlayer: \(avQueuePlayer.items().count)")
+        for item in playerItems {
+            if avQueuePlayer.canInsert(item, after: nil) {
+                NotificationCenter.default.addObserver(self,
+                                                       selector: #selector(advanceToNextPlayerItem),
+                                                       name: .AVPlayerItemDidPlayToEndTime,
+                                                       object: item)
+                avQueuePlayer.insert(item, after: nil)
+            } else {
+                print("DEBUGGING: Cannot insert item \(item). Only partially complete queue.")
+                isLoaded = avQueuePlayer.items().count > 0
+                return
+            }
+        }
+        
         isLoaded = true
+        print("DEBUGGING: newly built player avQueuePlayer: \(avQueuePlayer.items().count)")
     }
+    
+    /// Helper function to create player items from track URLs
+    private func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+        var items = [AVPlayerItem]()
+        for track in tracks {
+            guard let fileStatus = assetFileStatus(track.downloadTask), 
+                    let urls = track.urls,
+                  let playerItem = createPlayerItem(files: urls)
+            else { continue }
+            
+            switch fileStatus {
+            case .saved(let urls):
+                let playerItem = createPlayerItem(files: urls) ?? AVPlayerItem(url: urls[0])
+                playerItem.audioTimePitchAlgorithm = .timeDomain
+                items.append(playerItem)
+            case .missing(_):
+                fallthrough
+            case .unknown:
+                continue
+            }
+        
+        }
+        return items
+    }
+    
+//    /// Function to create a single player item from multiple file URLs
+//    private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
+//        guard let primaryFile = files.first else { return nil }
+//        let playerItem = AVPlayerItem(url: primaryFile)
+//        // Additional configuration if needed
+//        return playerItem
+//    }
+//    
+    @objc private func advanceToNextPlayerItem() {
+        // Advance to the next item logic
+        // This might include checking if the current item was the last one and handling the end of the queue
+        if avQueuePlayer.items().isEmpty {
+            print("Queue has finished playing all items.")
+        }
+    }
+//    private func buildPlayerQueue() {
+//        avQueuePlayer.removeAllItems()
+//        var lastItem: AVPlayerItem?
+//        for track in tableOfContents.tracks.tracks {
+//            guard track.downloadTask  let urls = track.urls, let playerItem = createPlayerItem(files: urls) else { continue }
+////            guard let url = track.urls?.first else { continue }
+////            let playerItem = AVPlayerItem(url: url)
+//            if let lastItem = lastItem {
+//                avQueuePlayer.insert(playerItem, after: lastItem)
+//            } else {
+//                avQueuePlayer.insert(playerItem, after: nil)
+//            }
+//            lastItem = playerItem
+//        }
+//        
+//        print("DEBUGGING: newly built player avQueuePlayer: \(avQueuePlayer.items().count)")
+//        isLoaded = true
+//    }
     
 //    private func buildPlayerQueue() {
 //        avQueuePlayer.removeAllItems()

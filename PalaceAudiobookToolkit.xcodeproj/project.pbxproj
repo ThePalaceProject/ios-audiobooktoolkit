@@ -74,8 +74,6 @@
 		E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */; };
 		E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */; };
 		E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56C00C52BC3912100A25A97 /* ChapterCell.swift */; };
-		E57498BC2BB1EE3800BCD49C /* LCPAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BB2BB1EE3800BCD49C /* LCPAudiobook.swift */; };
-		E57498BE2BB1EEB100BCD49C /* OverdriveAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BD2BB1EEB100BCD49C /* OverdriveAudiobook.swift */; };
 		E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */; };
 		E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498C52BB31C9F00BCD49C /* Metadata.swift */; };
 		E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5797E9B2BAA35F40017AB03 /* Audiobook.swift */; };
@@ -210,8 +208,6 @@
 		E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessPlayer.swift; sourceTree = "<group>"; };
 		E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
 		E56C00C52BC3912100A25A97 /* ChapterCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterCell.swift; sourceTree = "<group>"; };
-		E57498BB2BB1EE3800BCD49C /* LCPAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPAudiobook.swift; sourceTree = "<group>"; };
-		E57498BD2BB1EEB100BCD49C /* OverdriveAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverdriveAudiobook.swift; sourceTree = "<group>"; };
 		E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		E57498C52BB31C9F00BCD49C /* Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metadata.swift; sourceTree = "<group>"; };
 		E5797E9B2BAA35F40017AB03 /* Audiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audiobook.swift; sourceTree = "<group>"; };
@@ -507,8 +503,6 @@
 				E5A5FB042BAA1BA0006A78FE /* AudiobookProtocol.swift */,
 				E5797E9B2BAA35F40017AB03 /* Audiobook.swift */,
 				E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */,
-				E57498BB2BB1EE3800BCD49C /* LCPAudiobook.swift */,
-				E57498BD2BB1EEB100BCD49C /* OverdriveAudiobook.swift */,
 			);
 			path = AudiobookRefactor;
 			sourceTree = "<group>";
@@ -776,7 +770,6 @@
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,
 				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
 				E5A5FB052BAA1BA0006A78FE /* AudiobookProtocol.swift in Sources */,
-				E57498BC2BB1EE3800BCD49C /* LCPAudiobook.swift in Sources */,
 				7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */,
 				E71168BA2AB4A63000629DC7 /* ChapterLocation+emptyLocation.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
@@ -800,7 +793,6 @@
 				E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */,
 				E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */,
 				7B5441E1200EA82C0047B6C6 /* AudiobookMetadata.swift in Sources */,
-				E57498BE2BB1EEB100BCD49C /* OverdriveAudiobook.swift in Sources */,
 				17576CAE248E8A0100E18B4C /* OverdriveSpineElement.swift in Sources */,
 				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
 				E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */,

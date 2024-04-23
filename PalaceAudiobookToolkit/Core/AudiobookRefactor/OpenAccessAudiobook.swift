@@ -8,8 +8,10 @@
 
 import Foundation
 
-class OpenAccessAudiobook: Audiobook {
-    override var drmStatus: DRMStatus {
+public class OpenAccessAudiobook: Audiobook {
+    public var token: String?
+
+    public override var drmStatus: DRMStatus {
         get {
             return (drmData["status"] as? DRMStatus) ?? DRMStatus.succeeded
         }
@@ -21,10 +23,15 @@ class OpenAccessAudiobook: Audiobook {
     
     private var drmData: [String: Any] = [:]
     
-    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil) {
+    public required convenience init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil) {
+        self.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: nil)
+    }
+
+    public init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String?) {
         super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor)
 
         self.drmData["status"] = DRMStatus.succeeded
+        self.token = token
         
         if let JSON = manifest.toJSONDictionary(), !FeedbookDRMProcessor.processManifest(JSON, drmData: &drmData) {
             ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON)")
@@ -32,7 +39,7 @@ class OpenAccessAudiobook: Audiobook {
         }
     }
     
-    override func checkDrmAsync() {
+    public override func checkDrmAsync() {
         FeedbookDRMProcessor.performAsyncDrm(book: self, drmData: drmData)
     }
 }
