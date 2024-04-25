@@ -28,17 +28,11 @@ class AudiobookPlaybackModel: ObservableObject {
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
-        guard let currentLocation else {
-            return 0.0
-        }
-
-        return (try? audiobookManager.audiobook.tableOfContents.chapterOffset(for: currentLocation)) ?? 0.0
+        audiobookManager.currentOffset
     }
 
     var duration: TimeInterval {
-        audiobookManager.audiobook.player.currentChapter?.duration ??
-        currentLocation?.track.duration ??
-        0.0
+        audiobookManager.currentDuration
     }
 
     var timeLeft: TimeInterval {
@@ -58,7 +52,7 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     var currentChapterTitle: String {
-        guard let currentChapter = audiobookManager.audiobook.player.currentChapter else {
+        guard let currentChapter = audiobookManager.currentChapter else {
             if let index = currentLocation?.track.index {
                 return String(format: "Track %d", index)
             } else {

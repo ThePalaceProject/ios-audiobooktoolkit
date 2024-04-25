@@ -51,15 +51,30 @@ public class Tracks {
         let title = item.title ?? "Untitled"
         let duration = item.duration
         
-        if let part = item.findawayPart, let sequence = item.findawaySequence {
+        if let part = item.findawayPart,
+           let sequence = item.findawaySequence {
             //TODO: Create Findaway track
             return nil
         } else if let href = item.href {
             switch manifest.audiobookType {
             case .lcp:
-                return try? LCPTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+                return try? LCPTrack(
+                    manifest: manifest,
+                    urlString: href,
+                    audiobookID: audiobookID,
+                    title: title,
+                    duration: duration,
+                    index: index
+                )
             default:
-                return  try? OpenAccessTrack(manifest: manifest, urlString: href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+                return  try? OpenAccessTrack(
+                    manifest: manifest,
+                    urlString: href,
+                    audiobookID: audiobookID,
+                    title: title,
+                    duration: duration,
+                    index: index
+                )
             }
         }
 
@@ -93,6 +108,15 @@ public class Tracks {
     func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
             if (track.urls?.first?.absoluteString ?? "") == href {
+                return true
+            }
+            return false
+        })
+    }
+    
+    func track(forKey key: String) -> (any Track)? {
+        return tracks.first(where: { track in
+            if track.key == key {
                 return true
             }
             return false

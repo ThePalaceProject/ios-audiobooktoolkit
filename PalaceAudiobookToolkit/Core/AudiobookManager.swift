@@ -45,6 +45,10 @@ public protocol AudiobookManager {
     
     var sleepTimer: SleepTimer { get }
     var audiobookBookmarksPublisher: CurrentValueSubject<[TrackPosition], Never> { get }
+    
+    var currentOffset: Double { get }
+    var currentDuration: Double { get }
+    var currentChapter: Chapter? { get }
 
     static func setLogHandler(_ handler: @escaping LogHandler)
     
@@ -95,6 +99,25 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     public var tableOfContents: AudiobookTableOfContents {
         audiobook.tableOfContents
+    }
+    
+    public var currentOffset: Double {
+        guard let currentTrackPosition = audiobook.player.currentTrackPosition else {
+            return 0.0
+        }
+
+        print("Debugger CurrentChapterOffset: \((try? audiobook.tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition.timestamp)")
+        return (try? audiobook.tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition.timestamp
+    }
+    
+    public var currentDuration: Double {
+        print("Debugger CurrentDuration: \(currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0)")
+        return currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
+    }
+    
+    public var currentChapter: Chapter? {
+        print("Debugger CurrentChapter: \(audiobook.player.currentChapter)")
+        return audiobook.player.currentChapter
     }
 
     /// The SleepTimer may be used to schedule playback to stop at a specific

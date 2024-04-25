@@ -41,6 +41,19 @@ enum ManifestJSON: String, CaseIterable {
         case .theSystemOfTheWorld: return 47
         }
     }
+    
+    var chapterDurations: [Double] {
+        switch self {
+        case .bigFail:
+            return [
+                15.0, 7.0, 586.0, 3061.0, 2740.0, 2177.0, 2395.0, 2230.0, 4218.0,
+                1991.0, 2830.0, 1533.0, 2811.0, 1752.0, 2367.0, 2863.0, 3025.0,
+                2596.0, 2296.0, 3019.0, 2006.0, 36.0
+            ]
+        default:
+            return []
+        }
+    }
 }
 
 final class ManifestDecodingTests: XCTestCase {

@@ -23,7 +23,15 @@ class LCPTrack: Track {
     var urls: [URL]?
     let mediaType: LCPTrackMediaType
     
-    init(manifest: Manifest, urlString: String, audiobookID: String, title: String?, duration: Double, index: Int, token: String? = nil) throws {
+    init(
+        manifest: Manifest,
+        urlString: String,
+        audiobookID: String,
+        title: String?,
+        duration: Double,
+        index: Int,
+        token: String? = nil
+    ) throws {
         self.key = "\(audiobookID)-\(index)"
         self.urls = [URL(string: urlString)].compactMap { $0 }
         guard !(self.urls?.isEmpty ?? true) else {

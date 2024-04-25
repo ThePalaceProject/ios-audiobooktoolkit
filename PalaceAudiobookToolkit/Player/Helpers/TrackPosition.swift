@@ -83,3 +83,10 @@ public struct TrackPosition: Equatable, Comparable {
         lhs.track.id == rhs.track.id && lhs.timestamp == rhs.timestamp
     }
 }
+
+extension TrackPosition: CustomStringConvertible {
+    public var description: String {
+        let trackDesc = track.description
+        return "Track: \(trackDesc) (Timestamp: \(timestamp)"
+    }
+}

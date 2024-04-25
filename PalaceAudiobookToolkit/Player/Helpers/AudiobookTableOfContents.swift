@@ -13,6 +13,7 @@ protocol AudiobookTableOfContentsProtocol {
     var manifest: Manifest { get }
     var tracks: Tracks { get }
     var toc: [Chapter] { get }
+    func track(forKey key: String) -> (any Track)?
 }
 
 public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
@@ -40,6 +41,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         self.calculateDurations()
     }
     
+    func track(forKey key: String) -> (any Track)? {
+        tracks.track(forKey: key)
+    }
+
     private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
         tocItems.forEach { tocItem in
             toc.append(contentsOf: flattenChapters(entry: tocItem, tracks: tracks))
@@ -106,21 +111,27 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         
         return chapters
     }
-    
+
     mutating func calculateDurations() {
         for idx in toc.indices {
-            let nextTocPosition = idx + 1 < toc.count ? toc[idx + 1].position :
-            TrackPosition(
-                track: tracks[tracks.tracks.count - 1],
-                timestamp: tracks[tracks.tracks.count - 1].duration,
-                tracks: tracks
-            )
-            do {
-                let duration = try nextTocPosition - toc[idx].position
-                toc[idx].duration = duration
-            } catch {
-                print("Error calculating duration: \(error)")
-                toc[idx].duration = nil
+            if idx + 1 < toc.count {
+                let currentTrack = toc[idx].position.track
+                let nextChapter = toc[idx + 1]
+                let nextTrack = nextChapter.position.track
+                
+                if areTracksEqual(currentTrack, nextTrack) {
+                    toc[idx].duration = nextChapter.position.timestamp - toc[idx].position.timestamp
+                } else {
+                    toc[idx].duration = currentTrack.duration - toc[idx].position.timestamp
+                    
+                    if toc[idx].position.timestamp + toc[idx].duration! < currentTrack.duration {
+                        let leftoverDuration = currentTrack.duration - (toc[idx].position.timestamp + toc[idx].duration!)
+                        toc[idx + 1].position.timestamp += leftoverDuration
+                    }
+                }
+            } else {
+                let lastTrack = toc[idx].position.track
+                toc[idx].duration = lastTrack.duration - toc[idx].position.timestamp
             }
         }
     }

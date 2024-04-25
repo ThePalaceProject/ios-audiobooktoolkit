@@ -19,4 +19,16 @@ public protocol Track: class, Identifiable {
 
 extension Track {
     public var id: String { key }
+    
+    public var description: String {
+        let titleDesc = title ?? "Unknown Title"
+        let urlsDesc = urls?.map { $0.absoluteString }.joined(separator: ", ") ?? "No URLs"
+        return """
+        Track Key: \(key)
+        Title: \(titleDesc)
+        Index: \(index)
+        Duration: \(duration) seconds
+        URLs: \(urlsDesc)
+        """
+    }
 }
