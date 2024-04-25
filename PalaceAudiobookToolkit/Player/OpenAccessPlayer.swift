@@ -354,11 +354,7 @@ extension OpenAccessPlayer {
             playbackStatePublisher.send(.completed(currentChapter))
         }
         
-        print("Before advancing to next track: \(currentTrack.description)")
-        print("Current item: \(avQueuePlayer.currentItem?.description ?? "None")")
-        print("Items in queue: \(avQueuePlayer.items().map { $0.description })")
         avQueuePlayer.advanceToNextItem()
-        print("After advancing to next track: \(currentTrack.description)")
     }
     
     func removePlayerObservers() {
@@ -408,7 +404,7 @@ extension OpenAccessPlayer {
         default: ()
         }
     }
-    
+
     @objc private func handleAudioSessionRouteChange(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -496,11 +492,13 @@ extension OpenAccessPlayer {
 
         func moveToNextTrackOrEnd(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
             var currentTrack = currentTrackPosition.track
-            var overflowTime = newTimestamp - currentTrack.duration
+            let overflowTime = newTimestamp - currentTrack.duration
             
             if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrack) {
                 currentTrack = nextTrack
                 avQueuePlayer.advanceToNextItem()
+                let newPosiiton = TrackPosition(track: nextTrack, timestamp: overflowTime, tracks: currentTrackPosition.tracks)
+                seekTo(position: newPosiiton, completion: completion)
                 print("DEBUGGING: advance to next item avQueuePlayer: \(avQueuePlayer.items().count)")
             } else {
                 let endPosition = TrackPosition(
@@ -519,27 +517,36 @@ extension OpenAccessPlayer {
             }
         }
         
-        //TODO: Consider tracks smaller than step back, update avqueplayer by reinserting skipped tracks
         func moveToPreviousTrackOrStart(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
-            if let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrackPosition.track) {
-                let newPosition = TrackPosition(
-                    track: previousTrack,
-                    timestamp: previousTrack.duration + newTimestamp,
-                    tracks: currentTrackPosition.tracks
-                )
-                play(at: newPosition) { error in
-                    completion?(newPosition)
+            var adjustedTimestamp = newTimestamp
+            var currentTrack = currentTrackPosition.track
+            
+            while adjustedTimestamp < 0 {
+                guard let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrack) else {
+                    let newPosition = TrackPosition(
+                        track: currentTrack,
+                        timestamp: 0,
+                        tracks: currentTrackPosition.tracks
+                    )
+                    self.play(at: newPosition) { error in
+                        completion?(newPosition)
+                    }
+                    return
                 }
-            } else {
-                // Before the start of the available tracks, set to the start of the current track.
-                let newPosition = TrackPosition(
-                    track: currentTrackPosition.tracks.tracks.first ?? currentTrackPosition.track,
-                    timestamp: 0,
-                    tracks: currentTrackPosition.tracks
-                )
-                play(at: newPosition) { error in
-                    completion?(newPosition)
-                }
+                currentTrack = previousTrack
+                adjustedTimestamp += currentTrack.duration
+            }
+            
+            adjustedTimestamp = min(adjustedTimestamp, currentTrack.duration)
+            
+            let newPosition = TrackPosition(
+                track: currentTrack,
+                timestamp: adjustedTimestamp,
+                tracks: currentTrackPosition.tracks
+            )
+
+            rebuildPlayerQueueAndNavigate(to: newPosition) { _ in
+                completion?(newPosition)
             }
         }
 
@@ -557,17 +564,6 @@ extension OpenAccessPlayer {
         }
     }
     
-//    func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-//        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(1000))
-//        avQueuePlayer.seek(to: cmTime) { success in
-//            if success {
-//                completion?(position)
-//            } else {
-//                // Handle error, e.g., log or update state
-//                completion?(nil)
-//            }
-//        }
-//    }
     func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let trackDuration = position.track.duration
                 
@@ -583,7 +579,7 @@ extension OpenAccessPlayer {
             return
         }
         
-        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(1000))
+        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         print("DEBUGGING: seeking avQueuePlayer: \(avQueuePlayer.items().count)")
 
         avQueuePlayer.seek(to: cmTime) { success in
@@ -603,7 +599,6 @@ extension OpenAccessPlayer {
         }
         avQueuePlayer.removeAllItems()
         
-        // Create and queue player items
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
         if playerItems.isEmpty {
             isLoaded = false
@@ -613,10 +608,6 @@ extension OpenAccessPlayer {
         
         for item in playerItems {
             if avQueuePlayer.canInsert(item, after: nil) {
-                NotificationCenter.default.addObserver(self,
-                                                       selector: #selector(advanceToNextPlayerItem),
-                                                       name: .AVPlayerItemDidPlayToEndTime,
-                                                       object: item)
                 avQueuePlayer.insert(item, after: nil)
             } else {
                 print("DEBUGGING: Cannot insert item \(item). Only partially complete queue.")
@@ -630,12 +621,51 @@ extension OpenAccessPlayer {
         print("DEBUGGING: newly built player avQueuePlayer: \(avQueuePlayer.items().count)")
     }
     
-    @objc private func advanceToNextPlayerItem() {
-        if avQueuePlayer.items().isEmpty {
-            print("Queue has finished playing all items.")
+    private func rebuildPlayerQueueAndNavigate(to trackPosition: TrackPosition?, completion: @escaping (Bool) -> Void) {
+        avQueuePlayer.removeAllItems()
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
+        
+        var desiredIndex: Int? = nil
+        for (index, item) in playerItems.enumerated() {
+            avQueuePlayer.insert(item, after: nil)
+            if let trackPos = trackPosition, tableOfContents.tracks.tracks[index].id == trackPos.track.id {
+                desiredIndex = index
+            }
         }
+        
+        guard let index = desiredIndex, index < playerItems.count else {
+            completion(false)
+            return
+        }
+        
+        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
     }
     
+    private func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: @escaping (Bool) -> Void) {
+        avQueuePlayer.pause()
+        
+        for _ in 0..<index {
+            avQueuePlayer.advanceToNextItem()
+        }
+        
+        guard let currentItem = avQueuePlayer.currentItem else {
+            completion(false)
+            return
+        }
+        
+        let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        currentItem.seek(to: seekTime) { success in
+            if success {
+                self.avQueuePlayer.play()
+                print("Navigated to \(index) and seeking to \(timestamp)")
+                completion(true)
+            } else {
+                print("Failed to seek to \(timestamp) on item at \(index)")
+                completion(false)
+            }
+        }
+    }
+
     private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
         
