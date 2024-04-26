@@ -51,6 +51,7 @@ class OpenAccessPlayer: NSObject, Player {
         set {
             if isPlaying {
                 self.avQueuePlayer.rate = PlaybackRate.convert(rate: newValue)
+                savePlaybackRate(rate: newValue)
             }
         }
         
