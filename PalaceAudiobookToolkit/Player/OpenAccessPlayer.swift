@@ -59,6 +59,14 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
+    var currentChapter: Chapter? {
+        guard let currentTrackPosition else {
+            return nil
+        }
+        
+        return try? tableOfContents.chapter(forPosition: currentTrackPosition)
+    }
+    
     var currentTrackPosition: TrackPosition? {
         guard let currentItem = avQueuePlayer.currentItem,
               let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "") else {
@@ -74,7 +82,11 @@ class OpenAccessPlayer: NSObject, Player {
         
         print("TimeTracking: AVQueuePlayer.currentTime: \(currentTime)")
 
-        let position = TrackPosition(track: currentTrack, timestamp: currentTime, tracks: tableOfContents.tracks)
+        let position = TrackPosition(
+            track: currentTrack,
+            timestamp: currentTime,
+            tracks: tableOfContents.tracks
+        )
         lastKnownPosition = position
         print("TimeTracking: Current position: \(position.description)")
         return position
@@ -82,14 +94,6 @@ class OpenAccessPlayer: NSObject, Player {
     
     private var cancellables = Set<AnyCancellable>()
     private var lastKnownPosition: TrackPosition?
-
-    var currentChapter: Chapter? {
-        guard let currentTrackPosition else {
-            return nil
-        }
-
-        return try? tableOfContents.chapter(forPosition: currentTrackPosition)
-    }
 
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
         didSet {
@@ -123,126 +127,35 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     func play() {
-        clearPositionCache()
-
-        guard isLoaded,
-              let firstTrack = tableOfContents.tracks.tracks.first else {
-            playbackStatePublisher.send(
-                .failed(
-                    currentTrackPosition,
-                    NSError(
-                        domain: errorDomain,
-                        code: OpenAccessPlayerError.drmExpired.rawValue,
-                        userInfo: nil
-                    )
-                )
-            )
+        guard isLoaded, let firstTrack = tableOfContents.tracks.tracks.first else {
+            handlePlaybackError(.drmExpired)
+            return
+        }
+        
+        if !isDrmOk {
+            handlePlaybackError(.drmExpired)
             return
         }
         
         let trackPosition = currentTrackPosition ?? TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-        
-        guard isDrmOk else {
-            playbackStatePublisher.send(
-                .failed(
-                    currentTrackPosition,
-                    NSError(
-                        domain: errorDomain,
-                        code: OpenAccessPlayerError.drmExpired.rawValue,
-                        userInfo: nil
-                    )
-                )
-            )
-            return
-        }
-        
-        switch playerIsReady {
-        case .readyToPlay:
-
-            avQueuePlayer.play()
-            let rate = PlaybackRate.convert(rate: playbackRate)
-            if avQueuePlayer.rate != rate {
-                avQueuePlayer.rate = rate
-            }
-            playbackStatePublisher.send(.started(trackPosition))
-            
-        case .unknown:
-            playbackStatePublisher.send(
-                .failed(
-                    trackPosition,
-                    NSError(
-                        domain: errorDomain,
-                        code: OpenAccessPlayerError.unknown.rawValue,
-                        userInfo: nil
-                    )
-                )
-            )
-
-            if self.avQueuePlayer.currentItem == nil {
-                guard let task = self.currentTrackPosition?.track.downloadTask else {
-                    playbackStatePublisher.send(
-                        .failed(
-                            trackPosition, 
-                            NSError(
-                                domain: errorDomain,
-                                code: OpenAccessPlayerError.unknown.rawValue,
-                                userInfo: nil
-                            )
-                        )
-                    )
-                    return
-                }
-    
-                if let fileStatus = assetFileStatus(task) {
-                    switch fileStatus {
-                    case .saved(let savedURLs):
-                        let item = createPlayerItem(files: savedURLs) ?? AVPlayerItem(url: savedURLs[0])
-                        
-                        if self.avQueuePlayer.canInsert(item, after: nil) {
-                            self.avQueuePlayer.insert(item, after: nil)
-                        }
-                    case .missing(_):
-                        self.currentTrackPosition?.track.downloadTask?.statePublisher
-                            .receive(on: DispatchQueue.main)
-                            .sink(
-                                receiveCompletion: { [weak self] completion in
-                                    guard let self = self else { return }
-                                    switch completion {
-                                    case .finished:
-                                        self.buildPlayerQueue()
-                                    case .failure(let error):
-                                        self.playbackStatePublisher.send(
-                                            .failed(trackPosition,
-                                                    NSError(domain: self.errorDomain,
-                                                            code: OpenAccessPlayerError.downloadNotFinished.rawValue,
-                                                            userInfo: ["message": "Download failed: \(error.localizedDescription)"])
-                                                   )
-                                        )
-                                    }
-                                },
-                                receiveValue: { [weak self] downloadState in
-                                    guard let self = self else { return }
-                                    self.handleDownloadState(downloadState, trackPosition: trackPosition)
-                                }
-                            )
-                            .store(in: &cancellables)
-                    default:
-                        break
-                    }
-                }
-            }
-        case .failed:
-            playbackStatePublisher.send(
-                .failed(trackPosition,
-                        NSError(domain: errorDomain,
-                                code: OpenAccessPlayerError.playerNotReady.rawValue,
-                                userInfo: nil
-                               )
-                       )
-            )
-        }
+        attemptToPlay(trackPosition)
     }
     
+    private func handlePlaybackError(_ error: OpenAccessPlayerError) {
+        playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: error.rawValue)))
+        unload()
+    }
+    
+    private func attemptToPlay(_ trackPosition: TrackPosition) {
+        switch playerIsReady {
+        case .readyToPlay:
+            avQueuePlayer.play()
+            playbackStatePublisher.send(.started(trackPosition))
+        default:
+            handlePlaybackError(.playerNotReady)
+        }
+    }
+
     private func handleDownloadState(_ downloadState: DownloadTaskState, trackPosition: TrackPosition) {
         switch downloadState {
         case .completed:
@@ -258,7 +171,7 @@ class OpenAccessPlayer: NSObject, Player {
                 .failed(trackPosition,
                         NSError(domain: errorDomain,
                                 code: OpenAccessPlayerError.downloadNotFinished.rawValue,
-                                userInfo: ["message": "Download failed: \(error?.localizedDescription)"])
+                                userInfo: ["message": "Download failed: \(String(describing: error?.localizedDescription))"])
                        )
             )
         default:
@@ -477,7 +390,7 @@ extension OpenAccessPlayer {
             else if newTimestamp < 0 {
                 moveToPreviousTrackOrStart(newTimestamp: newTimestamp, completion: completion)
             }
-            // Remain within `the current track, resetting to start if negative.
+            // Remain within the current track, resetting to start if negative.
             else {
                 let newPosition = TrackPosition(
                     track: currentTrackPosition.track,
@@ -497,9 +410,12 @@ extension OpenAccessPlayer {
             if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrack) {
                 currentTrack = nextTrack
                 avQueuePlayer.advanceToNextItem()
-                let newPosiiton = TrackPosition(track: nextTrack, timestamp: overflowTime, tracks: currentTrackPosition.tracks)
+                let newPosiiton = TrackPosition(
+                    track: nextTrack,
+                    timestamp: overflowTime,
+                    tracks: currentTrackPosition.tracks
+                )
                 seekTo(position: newPosiiton, completion: completion)
-                print("DEBUGGING: advance to next item avQueuePlayer: \(avQueuePlayer.items().count)")
             } else {
                 let endPosition = TrackPosition(
                     track: currentTrack,
