@@ -42,7 +42,7 @@ class LCPPlayer: OpenAccessPlayer {
                     DispatchQueue.main.async {
                         // taskCompleteNotification notifies the player to call `play` function again.
                         NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
-                        
+                        task.statePublisher.send(.completed)
                     }
                 }
                 

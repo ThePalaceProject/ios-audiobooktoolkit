@@ -91,18 +91,109 @@ class OpenAccessPlayer: NSObject, Player {
     private var cancellables = Set<AnyCancellable>()
     private var lastKnownPosition: TrackPosition?
 
+//    private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
+//        didSet {
+//            switch playerIsReady {
+//            case .readyToPlay:
+//                guard !isPlaying else { return }
+//                self.play()
+//            case .unknown:
+//                if self.avQueuePlayer.currentItem == nil {
+//                    if let fileStatus = assetFileStatus(self.currentTrackPosition?.track.downloadTask) {
+//                        switch fileStatus {
+//                        case .saved(let savedURLs):
+//                            let item = createPlayerItem(files: savedURLs) ?? AVPlayerItem(url: savedURLs[0])
+//
+//                            if self.avQueuePlayer.canInsert(item, after: nil) {
+//                                self.avQueuePlayer.insert(item, after: nil)
+//                            }
+//                        case .missing(_):
+//                            self.currentTrackPosition?.track.downloadTask?.statePublisher
+//                                .receive(on: DispatchQueue.main) // Ensure updates are received on the main thread
+//                                .sink(receiveCompletion: { completion in
+//                                    switch completion {
+//                                    case .finished:
+//                                        // Perform any cleanup if needed
+//                                        break
+//                                    case .failure(let error):
+//                                        print("Download failed with error: \(error)")
+//                                    }
+//                                }, receiveValue: { [weak self] state in
+//                                    if case .completed = state {
+//                                        self?.rebuildPlayerQueueAndNavigate(to: nil)
+//                                    }
+//                                })
+//                                .store(in: &self.cancellables)
+//                        default:
+//                            break
+//                        }
+//                    }
+//                }
+//            case .failed:
+//                break
+//            }
+//        }
+//    }
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
         didSet {
-            switch playerIsReady {
-            case .readyToPlay:
-                guard !isPlaying else { return }
-                self.play()
-            case .failed:
-                fallthrough
-            case .unknown:
+            handlePlayerStatusChange()
+        }
+    }
+    
+    private func handlePlayerStatusChange() {
+        switch playerIsReady {
+        case .readyToPlay:
+            guard !isPlaying else { return }
+//            self.play()
+            
+        case .unknown:
+            handleUnknownPlayerStatus()
+            
+        case .failed:
+            ATLog(.error, "Player failed to load the media")
+
+        default:
+            break
+        }
+    }
+    
+    private func handleUnknownPlayerStatus() {
+        guard self.avQueuePlayer.currentItem == nil else { return }
+        
+        if let fileStatus = assetFileStatus(self.currentTrackPosition?.track.downloadTask) {
+            switch fileStatus {
+            case .saved(let savedURLs):
+                guard let item = createPlayerItem(files: savedURLs) else { return }
+    
+                if self.avQueuePlayer.canInsert(item, after: nil) {
+                    self.avQueuePlayer.insert(item, after: nil)
+                }
+                
+            case .missing:
+                listenForDownloadCompletion()
+                
+            default:
                 break
             }
         }
+    }
+    
+    private func listenForDownloadCompletion(task: DownloadTask? = nil) {
+        (task ?? self.currentTrackPosition?.track.downloadTask)?.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { completion in
+                switch completion {
+                case .finished:
+                    break
+                case .failure(let error):
+                    ATLog(.error, "Download failed with error: \(error)")
+                }
+            }, receiveValue: { [weak self] state in
+                if case .completed = state {
+                    self?.rebuildPlayerQueueAndNavigate(to: nil)
+                }
+            })
+            .store(in: &self.cancellables)
     }
     
     private var errorDomain: String {
@@ -514,13 +605,7 @@ extension OpenAccessPlayer {
     }
 
     private func buildPlayerQueue() {
-        for item in avQueuePlayer.items() {
-            NotificationCenter.default.removeObserver(
-                self, name: .AVPlayerItemDidPlayToEndTime,
-                object: item
-            )
-        }
-        avQueuePlayer.removeAllItems()
+        resetPlayerQueue()
         
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
         if playerItems.isEmpty {
@@ -541,9 +626,19 @@ extension OpenAccessPlayer {
         isLoaded = true
     }
     
+    private func resetPlayerQueue() {
+        for item in avQueuePlayer.items() {
+            NotificationCenter.default.removeObserver(
+                self, name: .AVPlayerItemDidPlayToEndTime,
+                object: item
+            )
+        }
+        avQueuePlayer.removeAllItems()
+    }
+    
     private func rebuildPlayerQueueAndNavigate(
         to trackPosition: TrackPosition?,
-        completion: @escaping (Bool) -> Void
+        completion: ((Bool) -> Void)? = nil
     ) {
         avQueuePlayer.removeAllItems()
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
@@ -557,14 +652,14 @@ extension OpenAccessPlayer {
         }
         
         guard let index = desiredIndex, index < playerItems.count else {
-            completion(false)
+            completion?(false)
             return
         }
         
         navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
     }
     
-    private func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: @escaping (Bool) -> Void) {
+    private func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
         avQueuePlayer.pause()
         
         for _ in 0..<index {
@@ -572,7 +667,7 @@ extension OpenAccessPlayer {
         }
         
         guard let currentItem = avQueuePlayer.currentItem else {
-            completion(false)
+            completion?(false)
             return
         }
         
@@ -580,9 +675,9 @@ extension OpenAccessPlayer {
         currentItem.seek(to: seekTime) { success in
             if success {
                 self.avQueuePlayer.play()
-                completion(true)
+                completion?(true)
             } else {
-                completion(false)
+                completion?(false)
             }
         }
     }
@@ -636,7 +731,11 @@ extension OpenAccessPlayer {
                     playerItem.trackIdentifier = track.key
                     items.append(playerItem)
                 }
-            case .missing(_), .unknown:
+            case .missing:
+                //TODO: Handle missing track issue, check the token.
+                listenForDownloadCompletion(task: track.downloadTask)
+                continue
+            case .unknown:
                 continue
             }
         }

@@ -27,7 +27,8 @@ public struct AudiobookFactory {
             return Audiobook(
                 manifest: manifest,
                 bookIdentifier: bookIdentifier,
-                decryptor: decryptor
+                decryptor: decryptor,
+                token: token
             )
         }
     }
@@ -47,10 +48,10 @@ open class Audiobook: NSObject, AudiobookProtocol {
         }
     }
 
-    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?) {
+    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?, token: String?) {
         self.uniqueId = bookIdentifier
         
-        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier)
+        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
         
         switch manifest.audiobookType {
@@ -72,8 +73,8 @@ open class Audiobook: NSObject, AudiobookProtocol {
         completion(true, nil)
     }
     
-    open func update(manifest: Manifest, bookIdentifier: String) {
-        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier)
+    open func update(manifest: Manifest, bookIdentifier: String, token: String?) {
+        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
     }
 }

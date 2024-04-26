@@ -101,7 +101,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         let offsetInSeconds = Double(timestampString ?? "") ?? 0
                 
         if let track = tracks.track(forHref: hrefWithoutFragment) {
-            let chapter = Chapter(title: entry.title ?? "", position: TrackPosition(track: track, timestamp: offsetInSeconds, tracks: tracks))
+            let chapter = Chapter(
+                title: entry.title ?? "",
+                position: TrackPosition(
+                    track: track,
+                    timestamp: offsetInSeconds,
+                    tracks: tracks
+                )
+            )
             chapters.append(chapter)
         }
         

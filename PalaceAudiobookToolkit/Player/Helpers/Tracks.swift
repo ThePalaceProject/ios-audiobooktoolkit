@@ -13,10 +13,12 @@ public class Tracks {
     private var audiobookID: String
     public var tracks: [any Track] = []
     public var totalDuration: Double = 0
+    private var token: String?
     
-    init(manifest: Manifest, audiobookID: String) {
+    init(manifest: Manifest, audiobookID: String, token: String?) {
         self.manifest = manifest
         self.audiobookID = audiobookID
+        self.token = token
         self.initializeTracks()
         self.calculateTotalDuration()
     }
@@ -73,7 +75,8 @@ public class Tracks {
                     audiobookID: audiobookID,
                     title: title,
                     duration: duration,
-                    index: index
+                    index: index,
+                    token: token
                 )
             }
         }

@@ -2,7 +2,7 @@
 //  OpenAccessAudiobook.swift
 //  PalaceAudiobookToolkit
 //
-//  Created by Maurice Work on 3/25/24.
+//  Created by Maurice Carrier on 3/25/24.
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
@@ -22,13 +22,9 @@ public class OpenAccessAudiobook: Audiobook {
     }
     
     private var drmData: [String: Any] = [:]
-    
-    public required convenience init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil) {
-        self.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: nil)
-    }
 
-    public init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String?) {
-        super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor)
+    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String?) {
+        super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: token)
 
         self.drmData["status"] = DRMStatus.succeeded
         self.token = token

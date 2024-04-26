@@ -198,15 +198,15 @@ extension Manifest {
 
 extension Manifest {
     enum AudiobookType {
-        case overdrive
-        case findaway
-        case lcp
-        case openAccess
-        case unknown
+        case findaway, overdrive, lcp, openAccess, unknown
     }
     
     var audiobookType: AudiobookType {
-        if let scheme = metadata?.drmInformation?.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
+        guard let drmInformation = metadata?.drmInformation else {
+            return .openAccess
+        }
+        
+        if let scheme = drmInformation.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
             return .findaway
         }
         
@@ -214,12 +214,8 @@ extension Manifest {
             return .overdrive
         }
         
-        if ((readingOrder?.contains(where: { $0.properties?.encrypted?.scheme == "http://readium.org/2014/01/lcp" })) != nil) {
+        if readingOrder?.contains(where: { $0.properties?.encrypted?.scheme == "http://readium.org/2014/01/lcp" }) == true {
             return .lcp
-        }
-        
-        if metadata?.drmInformation == nil {
-            return .openAccess
         }
         
         return .unknown
