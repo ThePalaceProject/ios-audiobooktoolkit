@@ -8,6 +8,14 @@
 
 import Foundation
 
+enum TrackMediaType: String {
+    case audioMPEG = "audio/mpeg"
+    case audioMP4 = "audio/mp4"
+    case rbDigital = "vnd.librarysimplified/rbdigital-access-document+json"
+    case audioMP3 = "audio/mp3"
+    case audioAAC = "audio/aac"
+}
+
 public protocol Track: class, Identifiable {
     var key: String { get }
     var downloadTask: DownloadTask? { get }

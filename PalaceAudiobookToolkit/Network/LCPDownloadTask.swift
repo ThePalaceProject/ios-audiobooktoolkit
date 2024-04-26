@@ -18,18 +18,18 @@ let LCPDownloadTaskCompleteNotification = NSNotification.Name(rawValue: "LCPDown
 final class LCPDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     /// All encrypted files are included in the audiobook, download progress is 1.0
-    let downloadProgress: Float = 1.0
+    var downloadProgress: Float = 1.0
     let key: String
     /// URL of a file inside the audiobook archive (e.g., `media/sound.mp3`)
     let urls: [URL]
     /// URL for decrypted audio file
     var decryptedUrls: [URL]? = []
-    let urlMediaType: LCPTrackMediaType
+    let urlMediaType: TrackMediaType
     
-    init(track: LCPTrack) {
-        self.key = track.key
-        self.urls = track.urls ?? []
-        self.urlMediaType = track.mediaType
+    init(key: String, urls: [URL]?, mediaType: TrackMediaType) {
+        self.key = key
+        self.urls = urls ?? []
+        self.urlMediaType = mediaType
         self.decryptedUrls = self.urls.compactMap { decryptedFileURL(for:$0) }
         self.statePublisher.send(.completed)
     }

@@ -12,18 +12,20 @@ enum AssetResult {
     case unknown
 }
 
-final class OpenAccessDownloadTask: NSObject, DownloadTask {
-    private static let DownloadTaskTimeoutValue: TimeInterval = 60
+final class OpenAccessDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     var key: String
+
+    let urlMediaType: TrackMediaType
+    let alternateLinks: [(TrackMediaType, URL)]?
+    let feedbooksProfile: String?
+    let token: String?
+
+    private static let DownloadTaskTimeoutValue: TimeInterval = 60
     private var downloadURL: URL
     private var urlString: String
     private var session: URLSession?
     private var downloadTask: URLSessionDownloadTask?
-    let urlMediaType: OpenAccessTrackMediaType
-    let alternateLinks: [(OpenAccessTrackMediaType, URL)]?
-    let feedbooksProfile: String?
-    let token: String?
     
     /// Progress should be set to 1 if the file already exists.
     var downloadProgress: Float = 0 {
@@ -32,18 +34,23 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
         }
     }
 
-    init?(track: OpenAccessTrack) {
-        guard let url = track.url else {
-            return nil
-        }
-
-        self.key = track.key
-        self.downloadURL = url
-        self.urlString = track.urlString
-        self.urlMediaType = track.mediaType
-        self.alternateLinks = track.alternateUrls
-        self.feedbooksProfile = track.feedbooksProfile
-        self.token = track.token
+   
+    init(
+        key: String,
+        downloadURL: URL,
+        urlString: String,
+        urlMediaType: TrackMediaType,
+        alternateLinks: [(TrackMediaType, URL)]?,
+        feedbooksProfile: String?,
+        token: String?
+    ) {
+        self.key = key
+        self.downloadURL = downloadURL
+        self.urlString = urlString
+        self.urlMediaType = urlMediaType
+        self.alternateLinks = alternateLinks
+        self.feedbooksProfile = feedbooksProfile
+        self.token = token
     }
 
     /// If the asset is already downloaded and verified, return immediately and
@@ -60,9 +67,7 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
                 missingAssetURLs.forEach {
                     self.downloadAssetForRBDigital(toLocalDirectory: $0)
                 }
-            case .audioMPEG:
-                fallthrough
-            case .audioMP4:
+            default:
                 missingAssetURLs.forEach {
                     self.downloadAsset(fromRemoteURL: self.downloadURL, toLocalDirectory:  $0)
                 }
@@ -133,7 +138,7 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
                 do {
                     if let responseBody = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any],
                         let typeString = responseBody["type"] as? String,
-                        let mediaType = OpenAccessTrackMediaType(rawValue: typeString),
+                        let mediaType = TrackMediaType(rawValue: typeString),
                         let urlString = responseBody["url"] as? String,
                         let assetUrl = URL(string: urlString) {
 
@@ -142,7 +147,7 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
                             fallthrough
                         case .audioMP4:
                             self.downloadAsset(fromRemoteURL: assetUrl, toLocalDirectory: localURL)
-                        case .rbDigital:
+                        default:
                             ATLog(.error, "Wrong media type for download task.")
                         }
                     } else {
@@ -162,7 +167,7 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
     {
         let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
-        let delegate = OpenAccessDownloadTaskURLSessionDelegate(downloadTask: self,
+        let delegate = DownloadTaskURLSessionDelegate(downloadTask: self,
                                                                 statePublisher: self.statePublisher,
                                                                 finalDirectory: finalURL)
         session = URLSession(configuration: config,
@@ -195,9 +200,9 @@ final class OpenAccessDownloadTask: NSObject, DownloadTask {
     }
 }
 
-final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
+final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
 
-    private let downloadTask: OpenAccessDownloadTask
+    private let downloadTask: DownloadTask
     private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     private let finalURL: URL
 
@@ -210,7 +215,7 @@ final class OpenAccessDownloadTaskURLSessionDelegate: NSObject, URLSessionDelega
     ///   - downloadTask: The corresponding download task for the URLSession.
     ///   - delegate: The DownloadTaskDelegate, to forward download progress
     ///   - finalDirectory: Final directory to move the asset to
-    required init(downloadTask: OpenAccessDownloadTask,
+    required init(downloadTask: DownloadTask,
                   statePublisher: PassthroughSubject<DownloadTaskState, Never>,
                   finalDirectory: URL) {
         self.downloadTask = downloadTask

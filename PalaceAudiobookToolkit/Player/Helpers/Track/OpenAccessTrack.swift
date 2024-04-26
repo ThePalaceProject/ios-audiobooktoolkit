@@ -9,12 +9,6 @@
 import Darwin
 import Foundation
 
-enum OpenAccessTrackMediaType: String {
-    case audioMPEG = "audio/mpeg"
-    case audioMP4 = "audio/mp4"
-    case rbDigital = "vnd.librarysimplified/rbdigital-access-document+json"
-}
-
 enum OpenAccessTrackError: Error {
     case invalidJSON
     case missingURL
@@ -41,9 +35,9 @@ public class OpenAccessTrack: Track {
     public var duration: Double
     public var url: URL?
     public var urls: [URL]?
-    let mediaType: OpenAccessTrackMediaType
-    let urlString: String // Retain original URI for DRM purposes
-    let alternateUrls: [(OpenAccessTrackMediaType, URL)]?
+    let mediaType: TrackMediaType
+    let urlString: String
+    let alternateUrls: [(TrackMediaType, URL)]?
     let audiobookID: String
     let feedbooksProfile: String?
     let token: String?
@@ -66,7 +60,7 @@ public class OpenAccessTrack: Track {
         self.url = url
         self.urls = [url]
         self.urlString = urlString
-        self.mediaType = OpenAccessTrackMediaType(rawValue: manifest.formatType ?? "") ?? .audioMP4
+        self.mediaType = TrackMediaType(rawValue: manifest.formatType ?? "") ?? .audioMP4
         self.key = "\(audiobookID)-\(index)"
         self.title = title ?? "Track \(index + 1)"
         self.index = index
@@ -74,7 +68,15 @@ public class OpenAccessTrack: Track {
         self.alternateUrls = []
         self.feedbooksProfile = nil
         self.token = token
-        self.downloadTask = OpenAccessDownloadTask(track: self)
+        self.downloadTask = OpenAccessDownloadTask(
+            key: key,
+            downloadURL: url,
+            urlString: urlString,
+            urlMediaType: mediaType,
+            alternateLinks: alternateUrls,
+            feedbooksProfile: feedbooksProfile,
+            token: token
+        )
 
         //TODO: REturn to for feedbooks
 //        // Feedbooks DRM or other configurations can be handled similarly

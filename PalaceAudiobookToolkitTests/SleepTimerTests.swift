@@ -13,7 +13,7 @@ class SleepTimerTests: XCTestCase {
 
     lazy var tableOfContents: AudiobookTableOfContents = {
         let manifest = try! loadManifest(for: ManifestJSON.alice)
-        return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: "TEST_ID"))
+        return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: "TEST_ID", token: nil))
     }()
 
     func testIsScheduled() {

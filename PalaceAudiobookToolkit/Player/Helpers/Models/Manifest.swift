@@ -202,11 +202,7 @@ extension Manifest {
     }
     
     var audiobookType: AudiobookType {
-        guard let drmInformation = metadata?.drmInformation else {
-            return .openAccess
-        }
-        
-        if let scheme = drmInformation.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
+        if let scheme = metadata?.drmInformation?.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
             return .findaway
         }
         
@@ -218,10 +214,16 @@ extension Manifest {
             return .lcp
         }
         
-        return .unknown
+        return .openAccess
+    }
+    
+    var trackMediaType: TrackMediaType {
+        readingOrder?.first?.trackMediaType ?? .audioMP3
     }
 }
 
 extension Manifest.ReadingOrderItem {
-    
+    var trackMediaType: TrackMediaType? {
+        TrackMediaType(rawValue: self.type)
+    }
 }

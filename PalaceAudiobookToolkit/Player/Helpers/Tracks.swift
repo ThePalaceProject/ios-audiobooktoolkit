@@ -86,7 +86,7 @@ public class Tracks {
 
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
         let title = link.title ?? "Untitled"
-        let bitrate = 64 * 1024
+        let bitrate = link.bitrate ?? 64 * 1024
         var duration: Double
         
         if let explicitDuration = link.duration {
@@ -97,7 +97,7 @@ public class Tracks {
         } else {
             duration = 0
         }
-        
+    
         switch manifest.audiobookType {
         case .lcp:
             return try? LCPTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
