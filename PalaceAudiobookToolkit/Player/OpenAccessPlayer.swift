@@ -372,113 +372,93 @@ extension OpenAccessPlayer {
         let totalDuration = currentTrackPosition.track.duration
         
         if newTimestamp >= 0 && newTimestamp <= totalDuration {
-            seekTo(position: TrackPosition(
+            let newPosition = TrackPosition(
                 track: currentTrackPosition.track,
                 timestamp: newTimestamp,
                 tracks: currentTrackPosition.tracks
-            ), completion: completion)
+            )
+            seekTo(position: newPosition, completion: completion)
         } else {
-            handleBeyondCurrentTrackSkip(newTimestamp: newTimestamp, completion: completion)
+            handleBeyondCurrentTrackSkip(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
         }
+    }
     
-        func handleBeyondCurrentTrackSkip(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
-            // Adjust to the next track if the timestamp exceeds the current track's duration.
-            if newTimestamp > currentTrackPosition.track.duration {
-                moveToNextTrackOrEnd(newTimestamp: newTimestamp, completion: completion)
-            }
-            // Adjust to the previous track if the timestamp is negative.
-            else if newTimestamp < 0 {
-                moveToPreviousTrackOrStart(newTimestamp: newTimestamp, completion: completion)
-            }
-            // Remain within the current track, resetting to start if negative.
-            else {
-                let newPosition = TrackPosition(
-                    track: currentTrackPosition.track,
-                    timestamp: max(0, newTimestamp),
-                    tracks: currentTrackPosition.tracks
-                )
-                play(at: newPosition) { error in
-                    completion?(newPosition)
-                }
-            }
-        }
-
-        func moveToNextTrackOrEnd(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
-            var currentTrack = currentTrackPosition.track
-            let overflowTime = newTimestamp - currentTrack.duration
-            
-            if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrack) {
-                currentTrack = nextTrack
-                avQueuePlayer.advanceToNextItem()
-                let newPosiiton = TrackPosition(
-                    track: nextTrack,
-                    timestamp: overflowTime,
-                    tracks: currentTrackPosition.tracks
-                )
-                seekTo(position: newPosiiton, completion: completion)
-            } else {
-                let endPosition = TrackPosition(
-                    track: currentTrack,
-                    timestamp: currentTrack.duration,
-                    tracks: currentTrackPosition.tracks
-                )
-                
-                if let completedTrack = try? tableOfContents.chapter(forPosition: endPosition) {
-                    playbackStatePublisher.send(.completed(completedTrack))
-                }
-                
-                self.pause()
-                ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
-                completion?(endPosition)
-            }
-        }
-        
-        func moveToPreviousTrackOrStart(newTimestamp: Double, completion: ((TrackPosition?) -> Void)?) {
-            var adjustedTimestamp = newTimestamp
-            var currentTrack = currentTrackPosition.track
-            
-            while adjustedTimestamp < 0 {
-                guard let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrack) else {
-                    let newPosition = TrackPosition(
-                        track: currentTrack,
-                        timestamp: 0,
-                        tracks: currentTrackPosition.tracks
-                    )
-                    self.play(at: newPosition) { error in
-                        completion?(newPosition)
-                    }
-                    return
-                }
-                currentTrack = previousTrack
-                adjustedTimestamp += currentTrack.duration
-            }
-            
-            adjustedTimestamp = min(adjustedTimestamp, currentTrack.duration)
-            
+    func handleBeyondCurrentTrackSkip(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        if newTimestamp > currentTrackPosition.track.duration {
+            moveToNextTrackOrEnd(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
+        } else if newTimestamp < 0 {
+            moveToPreviousTrackOrStart(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
+        } else {
             let newPosition = TrackPosition(
-                track: currentTrack,
-                timestamp: adjustedTimestamp,
+                track: currentTrackPosition.track,
+                timestamp: max(0, newTimestamp),
                 tracks: currentTrackPosition.tracks
             )
-
-            rebuildPlayerQueueAndNavigate(to: newPosition) { _ in
+            play(at: newPosition) { error in
                 completion?(newPosition)
             }
         }
-
-        func move(to position: TrackPosition, completion: ((Error?) -> Void)?) {
-            // Check if the move is within the current track or requires changing tracks
-            if position.track.id == currentTrackPosition.track.id {
-                seekTo(position: position, completion: { newTrackPosition in
-                    completion?(nil)
-                })
-            } else {
-                play(at: position) { error in
-                    completion?(error)
-                }
-            }
+    }
+    
+    func moveToNextTrackOrEnd(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        var currentTrack = currentTrackPosition.track
+        let overflowTime = newTimestamp - currentTrack.duration
+        
+        if let nextTrack = currentTrackPosition.tracks.nextTrack(currentTrack) {
+            currentTrack = nextTrack
+            avQueuePlayer.advanceToNextItem()
+            let newPosition = TrackPosition(
+                track: nextTrack,
+                timestamp: overflowTime,
+                tracks: currentTrackPosition.tracks
+            )
+            seekTo(position: newPosition, completion: completion)
+        } else {
+            handlePlaybackEnd(currentTrack: currentTrack, completion: completion)
         }
     }
+    
+    func moveToPreviousTrackOrStart(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        var adjustedTimestamp = newTimestamp
+        var currentTrack = currentTrackPosition.track
+        
+        while adjustedTimestamp < 0, let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrack) {
+            currentTrack = previousTrack
+            adjustedTimestamp += currentTrack.duration
+        }
+        
+        adjustedTimestamp = max(0, min(adjustedTimestamp, currentTrack.duration))
+        let newPosition = TrackPosition(
+            track: currentTrack,
+            timestamp: adjustedTimestamp,
+            tracks: currentTrackPosition.tracks
+        )
+        rebuildPlayerQueueAndNavigate(to: newPosition) { _ in
+            completion?(newPosition)
+        }
+    }
+    
+    func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        guard let currentTrackPosition else {
+            completion?(nil)
+            return
+        }
+
+        let endPosition = TrackPosition(
+            track: currentTrack,
+            timestamp: currentTrack.duration,
+            tracks: currentTrackPosition.tracks
+        )
+        
+        if let completedTrack = try? tableOfContents.chapter(forPosition: endPosition) {
+            playbackStatePublisher.send(.completed(completedTrack))
+        }
+        
+        self.pause()
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        completion?(endPosition)
+    }
+
     
     func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let trackDuration = position.track.duration
