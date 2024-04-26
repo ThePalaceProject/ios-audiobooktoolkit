@@ -66,29 +66,24 @@ class OpenAccessPlayer: NSObject, Player {
         
         return try? tableOfContents.chapter(forPosition: currentTrackPosition)
     }
-    
+
     var currentTrackPosition: TrackPosition? {
         guard let currentItem = avQueuePlayer.currentItem,
               let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "") else {
-            print("DEBUGGING: Current item not found in the queue")
             return nil
         }
                 
         let currentTime = currentItem.currentTime().seconds
         guard currentTime.isFinite else {
-            print("DEBUGGING: Current time is infinite, likely due to transition or load issues")
             return lastKnownPosition
         }
         
-        print("TimeTracking: AVQueuePlayer.currentTime: \(currentTime)")
-
         let position = TrackPosition(
             track: currentTrack,
             timestamp: currentTime,
             tracks: tableOfContents.tracks
         )
         lastKnownPosition = position
-        print("TimeTracking: Current position: \(position.description)")
         return position
     }
     
@@ -175,7 +170,7 @@ class OpenAccessPlayer: NSObject, Player {
                        )
             )
         default:
-            print("Download state updated to \(downloadState)")
+            return
         }
     }
 
@@ -379,15 +374,31 @@ extension OpenAccessPlayer {
             )
             seekTo(position: newPosition, completion: completion)
         } else {
-            handleBeyondCurrentTrackSkip(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
+            handleBeyondCurrentTrackSkip(
+                newTimestamp: newTimestamp,
+                currentTrackPosition: currentTrackPosition,
+                completion: completion
+            )
         }
     }
     
-    func handleBeyondCurrentTrackSkip(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    func handleBeyondCurrentTrackSkip(
+        newTimestamp: Double,
+        currentTrackPosition: TrackPosition,
+        completion: ((TrackPosition?) -> Void)?
+    ) {
         if newTimestamp > currentTrackPosition.track.duration {
-            moveToNextTrackOrEnd(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
+            moveToNextTrackOrEnd(
+                newTimestamp: newTimestamp,
+                currentTrackPosition: currentTrackPosition,
+                completion: completion
+            )
         } else if newTimestamp < 0 {
-            moveToPreviousTrackOrStart(newTimestamp: newTimestamp, currentTrackPosition: currentTrackPosition, completion: completion)
+            moveToPreviousTrackOrStart(
+                newTimestamp: newTimestamp,
+                currentTrackPosition: currentTrackPosition,
+                completion: completion
+            )
         } else {
             let newPosition = TrackPosition(
                 track: currentTrackPosition.track,
@@ -400,7 +411,11 @@ extension OpenAccessPlayer {
         }
     }
     
-    func moveToNextTrackOrEnd(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    func moveToNextTrackOrEnd(
+        newTimestamp: Double,
+        currentTrackPosition: TrackPosition,
+        completion: ((TrackPosition?) -> Void)?
+    ) {
         var currentTrack = currentTrackPosition.track
         let overflowTime = newTimestamp - currentTrack.duration
         
@@ -418,11 +433,17 @@ extension OpenAccessPlayer {
         }
     }
     
-    func moveToPreviousTrackOrStart(newTimestamp: Double, currentTrackPosition: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    func moveToPreviousTrackOrStart(
+        newTimestamp: Double,
+        currentTrackPosition: TrackPosition, 
+        completion: ((TrackPosition?) -> Void)?
+    ) {
         var adjustedTimestamp = newTimestamp
         var currentTrack = currentTrackPosition.track
         
-        while adjustedTimestamp < 0, let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrack) {
+        while adjustedTimestamp < 0, 
+                let previousTrack = currentTrackPosition.tracks.previousTrack(currentTrack)
+        {
             currentTrack = previousTrack
             adjustedTimestamp += currentTrack.duration
         }
@@ -475,8 +496,10 @@ extension OpenAccessPlayer {
             return
         }
         
-        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        print("DEBUGGING: seeking avQueuePlayer: \(avQueuePlayer.items().count)")
+        let cmTime = CMTime(
+            seconds: position.timestamp,
+            preferredTimescale: CMTimeScale(NSEC_PER_SEC)
+        )
 
         avQueuePlayer.seek(to: cmTime) { success in
             if success {
@@ -491,14 +514,16 @@ extension OpenAccessPlayer {
 
     private func buildPlayerQueue() {
         for item in avQueuePlayer.items() {
-            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: item)
+            NotificationCenter.default.removeObserver(
+                self, name: .AVPlayerItemDidPlayToEndTime,
+                object: item
+            )
         }
         avQueuePlayer.removeAllItems()
         
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
         if playerItems.isEmpty {
             isLoaded = false
-            print("DEBUGGING: No items were queued. Loading failed.")
             return
         }
         
@@ -506,7 +531,6 @@ extension OpenAccessPlayer {
             if avQueuePlayer.canInsert(item, after: nil) {
                 avQueuePlayer.insert(item, after: nil)
             } else {
-                print("DEBUGGING: Cannot insert item \(item). Only partially complete queue.")
                 isLoaded = avQueuePlayer.items().count > 0
                 return
             }
@@ -514,10 +538,12 @@ extension OpenAccessPlayer {
         
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
         isLoaded = true
-        print("DEBUGGING: newly built player avQueuePlayer: \(avQueuePlayer.items().count)")
     }
     
-    private func rebuildPlayerQueueAndNavigate(to trackPosition: TrackPosition?, completion: @escaping (Bool) -> Void) {
+    private func rebuildPlayerQueueAndNavigate(
+        to trackPosition: TrackPosition?,
+        completion: @escaping (Bool) -> Void
+    ) {
         avQueuePlayer.removeAllItems()
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
         
@@ -553,10 +579,8 @@ extension OpenAccessPlayer {
         currentItem.seek(to: seekTime) { success in
             if success {
                 self.avQueuePlayer.play()
-                print("Navigated to \(index) and seeking to \(timestamp)")
                 completion(true)
             } else {
-                print("Failed to seek to \(timestamp) on item at \(index)")
                 completion(false)
             }
         }
@@ -566,15 +590,26 @@ extension OpenAccessPlayer {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
         
         let composition = AVMutableComposition()
-        let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        let compositionAudioTrack = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        )
         
         do {
             for (index, file) in files.enumerated() {
                 let asset = AVAsset(url: file)
                 if index == files.count - 1 {
-                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                    try compositionAudioTrack?.insertTimeRange(
+                        CMTimeRangeMake(start: .zero,duration: asset.duration),
+                        of: asset.tracks(withMediaType: .audio)[0],
+                        at: compositionAudioTrack?.asset?.duration ?? .zero
+                    )
                 } else {
-                    try compositionAudioTrack?.insertTimeRange(CMTimeRangeMake(start: .zero, duration: asset.duration), of: asset.tracks(withMediaType: .audio)[0], at: compositionAudioTrack?.asset?.duration ?? .zero)
+                    try compositionAudioTrack?.insertTimeRange(
+                        CMTimeRangeMake(start: .zero, duration: asset.duration),
+                        of: asset.tracks(withMediaType: .audio)[0],
+                        at: compositionAudioTrack?.asset?.duration ?? .zero
+                    )
                 }
             }
         } catch {
@@ -589,7 +624,6 @@ extension OpenAccessPlayer {
         var items = [AVPlayerItem]()
         for track in tracks {
             guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                print("DEBUGGING: No file status available, skipping track.")
                 continue
             }
             
@@ -600,10 +634,8 @@ extension OpenAccessPlayer {
                     playerItem.audioTimePitchAlgorithm = .timeDomain
                     playerItem.trackIdentifier = track.key
                     items.append(playerItem)
-                    print("DEBUGGING: Added track from URL: \(url)")
                 }
             case .missing(_), .unknown:
-                print("DEBUGGING: Track missing or status unknown, skipping.")
                 continue
             }
         }
