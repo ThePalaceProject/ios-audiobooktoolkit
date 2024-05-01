@@ -10,7 +10,7 @@ import Foundation
 
 public class Tracks {
     var manifest: Manifest
-    private var audiobookID: String
+    var audiobookID: String
     public var tracks: [any Track] = []
     public var totalDuration: Double = 0
     private var token: String?
@@ -101,10 +101,11 @@ public class Tracks {
         switch manifest.audiobookType {
         case .lcp:
             return try? LCPTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+        case .findaway:
+            return try? FindawayTrack(manifest: manifest, audiobookID: audiobookID, title: title, duration: duration, index: index)
         default:
-            return  try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
+            return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
         }
-//        return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
     }
 
 

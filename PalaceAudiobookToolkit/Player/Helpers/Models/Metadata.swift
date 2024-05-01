@@ -81,6 +81,20 @@ extension Manifest {
             }
         }
         
+        var sessionKey: String? {
+            switch self {
+            case .findaway(let info):
+                return info.sessionKey
+            }
+        }
+        
+        var licenseID: String? {
+            switch self {
+            case .findaway(let info):
+                return info.licenseId
+            }
+        }
+
         var scheme: String? {
             switch self {
             case .findaway(let information):

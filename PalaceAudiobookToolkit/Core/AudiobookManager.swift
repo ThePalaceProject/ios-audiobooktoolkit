@@ -310,7 +310,7 @@ extension DefaultAudiobookManager {
         statePublisher.send(.playbacStopped(trackPosition))
     }
     
-    private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error: Error) {
+    private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error: Error?) {
         statePublisher.send(.playbackFailed(trackPosition))
     }
     

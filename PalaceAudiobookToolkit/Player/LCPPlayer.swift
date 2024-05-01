@@ -13,10 +13,10 @@ class LCPPlayer: OpenAccessPlayer {
     // DRMDecryptor passed from SimplyE to process encrypted audio files.
     var decryptionDelegate: DRMDecryptor?
     
-//    /// Task completion notification to notify about the end of decryption process.
-//    override var taskCompleteNotification: Notification.Name {
-//        LCPDownloadTaskCompleteNotification
-//    }
+    /// Task completion notification to notify about the end of decryption process.
+    override var taskCompleteNotification: Notification.Name {
+        LCPDownloadTaskCompleteNotification
+    }
     
     /// Audio file status. LCP audiobooks contain all encrypted audio files inside, this method returns status of decrypted versions of these files.
     /// - Parameter task: `LCPDownloadTask` containing internal url (e.g., `media/sound.mp3`) for decryption.
@@ -40,7 +40,6 @@ class LCPPlayer: OpenAccessPlayer {
                         return
                     }
                     DispatchQueue.main.async {
-                        // taskCompleteNotification notifies the player to call `play` function again.
                         NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
                         task.statePublisher.send(.completed)
                     }

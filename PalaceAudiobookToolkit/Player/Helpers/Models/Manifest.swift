@@ -49,7 +49,7 @@ public struct Manifest: Codable {
     public let metadata: Metadata?
     let  links: [Link]?
     var linksDictionary: LinksDictionary?
-    let readingOrder: [ReadingOrderItem]?
+    public let readingOrder: [ReadingOrderItem]?
     let resources: [Link]?
     let toc: [TOCItem]?
     public let formatType: String?
@@ -129,8 +129,8 @@ public struct Manifest: Codable {
         let href: String?
         let properties: Properties?
         
-        let findawayPart: Int?
-        let findawaySequence: Int?
+        public let findawayPart: Int?
+        public let findawaySequence: Int?
         
         enum CodingKeys: String, CodingKey {
             case title, type, duration, href, properties
@@ -196,7 +196,7 @@ extension Manifest {
     }
 }
 
-extension Manifest {
+public extension Manifest {
     enum AudiobookType {
         case findaway, overdrive, lcp, openAccess, unknown
     }

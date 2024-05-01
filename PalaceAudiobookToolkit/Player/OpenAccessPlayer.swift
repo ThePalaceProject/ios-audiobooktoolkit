@@ -563,8 +563,8 @@ extension OpenAccessPlayer {
             tracks: currentTrackPosition.tracks
         )
         
-        if let completedTrack = try? tableOfContents.chapter(forPosition: endPosition) {
-            playbackStatePublisher.send(.completed(completedTrack))
+        if let completedChapter = try? tableOfContents.chapter(forPosition: endPosition) {
+            playbackStatePublisher.send(.completed(completedChapter))
         }
         
         self.pause()

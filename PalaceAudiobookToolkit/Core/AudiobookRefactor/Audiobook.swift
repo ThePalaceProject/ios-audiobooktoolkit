@@ -16,6 +16,12 @@ public struct AudiobookFactory {
         token: String?
     ) -> Audiobook? {
         switch manifest.audiobookType {
+        case .findaway:
+            return FindawayAudiobook(
+                manifest: manifest,
+                bookIdentifier: bookIdentifier,
+                token: token
+            )
         case .openAccess:
             return OpenAccessAudiobook(
                 manifest: manifest,

@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum TrackMediaType: String {
+public enum TrackMediaType: String {
     case audioMPEG = "audio/mpeg"
     case audioMP4 = "audio/mp4"
     case rbDigital = "vnd.librarysimplified/rbdigital-access-document+json"

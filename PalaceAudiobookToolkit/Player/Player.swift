@@ -25,7 +25,7 @@ public enum PlaybackRate: Int, CaseIterable {
 public enum PlaybackState {
     case started(TrackPosition)
     case stopped(TrackPosition)
-    case failed(TrackPosition?, Error)
+    case failed(TrackPosition?, Error?)
     case completed(Chapter)
     case unloaded
 }
@@ -43,7 +43,6 @@ public protocol Player: NSObject {
     var isLoaded: Bool { get }
     var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
 
-    init(tableOfContents: AudiobookTableOfContents)
     func play()
     func pause()
     func unload()
