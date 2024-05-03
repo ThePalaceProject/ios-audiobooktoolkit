@@ -85,13 +85,7 @@
 		E58496952BAB6FF1003C83E6 /* secret_lives_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */; };
 		E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
 		E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53452B7550B000D861EE /* anathem_manifest.json */; };
-		E58FCC5C2BE094DA00943CEB /* FindawayTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC5B2BE094DA00943CEB /* FindawayTrack.swift */; };
-		E58FCC622BE09AB000943CEB /* FindawayDownloadTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC612BE09AB000943CEB /* FindawayDownloadTask.swift */; };
 		E58FCC642BE09ED200943CEB /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
-		E58FCC682BE0A29B00943CEB /* FindawayPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC672BE0A29B00943CEB /* FindawayPlayer.swift */; };
-		E58FCC6B2BE0A48900943CEB /* FindawayPlaybackNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC692BE0A48800943CEB /* FindawayPlaybackNotificationHandler.swift */; };
-		E58FCC6C2BE0A48900943CEB /* FindawayDownloadNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC6A2BE0A48900943CEB /* FindawayDownloadNotificationHandler.swift */; };
-		E58FCC6E2BE0A4B000943CEB /* FindawayDatabaseVerification.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC6D2BE0A4B000943CEB /* FindawayDatabaseVerification.swift */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
@@ -206,6 +200,10 @@
 		E5041F772BBF36B600AE363E /* MediaControlPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaControlPublisher.swift; sourceTree = "<group>"; };
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
 		E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Extensions.swift"; sourceTree = "<group>"; };
+		E52261AF2BE489840082214F /* FindawayPlaybackNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlaybackNotificationHandler.swift; sourceTree = "<group>"; };
+		E52261B02BE489840082214F /* FindawayAudiobookLifecycleListener.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobookLifecycleListener.swift; sourceTree = "<group>"; };
+		E52261B12BE489840082214F /* FindawayDownloadNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = FindawayDownloadNotificationHandler.swift; path = "../../../../ios-drm-audioengine/NYPLAEToolkit/FindawayDownloadNotificationHandler.swift"; sourceTree = "<group>"; };
+		E52261B72BE48A540082214F /* FindawayDatabaseVerification.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDatabaseVerification.swift; sourceTree = "<group>"; };
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
 		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
@@ -231,9 +229,6 @@
 		E58FCC612BE09AB000943CEB /* FindawayDownloadTask.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadTask.swift; sourceTree = "<group>"; };
 		E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobook.swift; sourceTree = "<group>"; };
 		E58FCC672BE0A29B00943CEB /* FindawayPlayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlayer.swift; sourceTree = "<group>"; };
-		E58FCC692BE0A48800943CEB /* FindawayPlaybackNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlaybackNotificationHandler.swift; sourceTree = "<group>"; };
-		E58FCC6A2BE0A48900943CEB /* FindawayDownloadNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadNotificationHandler.swift; sourceTree = "<group>"; };
-		E58FCC6D2BE0A4B000943CEB /* FindawayDatabaseVerification.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDatabaseVerification.swift; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
@@ -416,10 +411,7 @@
 				7B7B370720211CE100030A1E /* OpenAccessDownloadTask.swift */,
 				17576CAB248E89DE00E18B4C /* OverdriveDownloadTask.swift */,
 				21B26CCF257FBA9F00A60238 /* LCPDownloadTask.swift */,
-				E58FCC612BE09AB000943CEB /* FindawayDownloadTask.swift */,
-				E58FCC6D2BE0A4B000943CEB /* FindawayDatabaseVerification.swift */,
-				E58FCC6A2BE0A48900943CEB /* FindawayDownloadNotificationHandler.swift */,
-				E58FCC692BE0A48800943CEB /* FindawayPlaybackNotificationHandler.swift */,
+				E56091202BE34286007F5F03 /* Findaway */,
 				7B6C1BCF203F1CDA00EB791E /* AudiobookNetworkService.swift */,
 				E71168B72AB453A800629DC7 /* Reachability.swift */,
 			);
@@ -494,6 +486,18 @@
 				E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */,
 			);
 			path = TestResources;
+			sourceTree = "<group>";
+		};
+		E56091202BE34286007F5F03 /* Findaway */ = {
+			isa = PBXGroup;
+			children = (
+				E58FCC612BE09AB000943CEB /* FindawayDownloadTask.swift */,
+				E52261B72BE48A540082214F /* FindawayDatabaseVerification.swift */,
+				E52261B12BE489840082214F /* FindawayDownloadNotificationHandler.swift */,
+				E52261AF2BE489840082214F /* FindawayPlaybackNotificationHandler.swift */,
+				E52261B02BE489840082214F /* FindawayAudiobookLifecycleListener.swift */,
+			);
+			path = Findaway;
 			sourceTree = "<group>";
 		};
 		E5797E9D2BAA36BE0017AB03 /* Deprecated */ = {
@@ -784,7 +788,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */,
-				E58FCC622BE09AB000943CEB /* FindawayDownloadTask.swift in Sources */,
 				E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */,
 				7BD8E4FC20753BC6008ED3F1 /* Bundle.swift in Sources */,
 				A97CE12F21ED0BF700B64305 /* OpenAccessSpineElement.swift in Sources */,
@@ -798,7 +801,6 @@
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,
 				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
 				E5A5FB052BAA1BA0006A78FE /* AudiobookProtocol.swift in Sources */,
-				E58FCC682BE0A29B00943CEB /* FindawayPlayer.swift in Sources */,
 				7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */,
 				E71168BA2AB4A63000629DC7 /* ChapterLocation+emptyLocation.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
@@ -827,7 +829,6 @@
 				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
 				E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */,
 				7B7B370B202274DA00030A1E /* OriginalPlayer.swift in Sources */,
-				E58FCC5C2BE094DA00943CEB /* FindawayTrack.swift in Sources */,
 				21B26CD1257FBB2900A60238 /* LCPSpineElement.swift in Sources */,
 				E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */,
 				17576CAC248E89DE00E18B4C /* OverdriveDownloadTask.swift in Sources */,
@@ -838,7 +839,6 @@
 				E7D1DCDA2ABE273500ADED8D /* AudiobookPlaybackModel.swift in Sources */,
 				E57FCA282BC8E768008D8907 /* LCPTrack.swift in Sources */,
 				A97CE13121ED388D00B64305 /* Original_OpenAccessAudiobook.swift in Sources */,
-				E58FCC6E2BE0A4B000943CEB /* FindawayDatabaseVerification.swift in Sources */,
 				E57FCA222BC8D0ED008D8907 /* DownloadTask.swift in Sources */,
 				E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */,
 				E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */,
@@ -853,8 +853,6 @@
 				E55DE9802BDC0B6300ECB153 /* OverdriveTrack.swift in Sources */,
 				E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */,
 				7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */,
-				E58FCC6B2BE0A48900943CEB /* FindawayPlaybackNotificationHandler.swift in Sources */,
-				E58FCC6C2BE0A48900943CEB /* FindawayDownloadNotificationHandler.swift in Sources */,
 				8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */,
 				E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */,
 				E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */,

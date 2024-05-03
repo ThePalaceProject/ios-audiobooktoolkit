@@ -8,11 +8,78 @@
 
 import Foundation
 
+public protocol TrackFactoryProtocol {
+    static func createTrack(
+        from manifest: Manifest,
+        title: String?,
+        urlString: String?,
+        audiobookID: String,
+        index: Int,
+        duration: Double,
+        token: String?
+    ) -> (any Track)?
+}
+
+class TrackFactory: TrackFactoryProtocol {
+    static func createTrack(
+        from manifest: Manifest,
+        title: String? = "Untitled",
+        urlString: String? = nil,
+        audiobookID: String,
+        index: Int,
+        duration: Double,
+        token: String?
+    ) -> (any Track)? {
+        switch manifest.audiobookType {
+        case .lcp:
+            return try? LCPTrack(
+                manifest: manifest,
+                urlString: urlString,
+                audiobookID: audiobookID,
+                title: title,
+                duration: duration,
+                index: index,
+                token: token
+
+            )
+        case .findaway:
+            let factoryClassName = "NYPLAEToolkit.FindawayTrackFactory"
+            guard let factoryClass = NSClassFromString(factoryClassName) as? TrackFactoryProtocol.Type else {
+                print("Failed to find track factory class.")
+                return nil
+            }
+            
+            return factoryClass.createTrack(
+                from: manifest,
+                title: title,
+                urlString: urlString,
+                audiobookID: audiobookID,
+                index: index,
+                duration: duration,
+                token: nil
+            )
+        default:
+            return try? OpenAccessTrack(
+                manifest: manifest,
+                urlString: urlString ?? "",
+                audiobookID: audiobookID,
+                title: title,
+                duration: duration,
+                index: index,
+                token: token
+            )
+        }
+    }
+}
+
+
+
 public class Tracks {
     var manifest: Manifest
-    var audiobookID: String
+    public var audiobookID: String
     public var tracks: [any Track] = []
     public var totalDuration: Double = 0
+    
     private var token: String?
     
     init(manifest: Manifest, audiobookID: String, token: String?) {
@@ -21,6 +88,21 @@ public class Tracks {
         self.token = token
         self.initializeTracks()
         self.calculateTotalDuration()
+    }
+    
+    public subscript(index: Int) -> (any Track)? {
+        guard index >= 0 && index < tracks.count else {
+            return nil
+        }
+        return tracks[index]   
+    }
+    
+    public var count: Int {
+        tracks.count
+    }
+    
+    public var first: (any Track)? {
+        tracks.first
     }
 
     private func initializeTracks() {
@@ -49,39 +131,9 @@ public class Tracks {
         }
     }
     
+    
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        let title = item.title ?? "Untitled"
-        let duration = item.duration
-        
-        if let part = item.findawayPart,
-           let sequence = item.findawaySequence {
-            //TODO: Create Findaway track
-            return nil
-        } else if let href = item.href {
-            switch manifest.audiobookType {
-            case .lcp:
-                return try? LCPTrack(
-                    manifest: manifest,
-                    urlString: href,
-                    audiobookID: audiobookID,
-                    title: title,
-                    duration: duration,
-                    index: index
-                )
-            default:
-                return  try? OpenAccessTrack(
-                    manifest: manifest,
-                    urlString: href,
-                    audiobookID: audiobookID,
-                    title: title,
-                    duration: duration,
-                    index: index,
-                    token: token
-                )
-            }
-        }
-
-        return nil
+        TrackFactory.createTrack(from: manifest, title: item.title, audiobookID: self.audiobookID, index: index, duration: item.duration, token: token)
     }
 
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
@@ -97,19 +149,20 @@ public class Tracks {
         } else {
             duration = 0
         }
-    
-        switch manifest.audiobookType {
-        case .lcp:
-            return try? LCPTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
-        case .findaway:
-            return try? FindawayTrack(manifest: manifest, audiobookID: audiobookID, title: title, duration: duration, index: index)
-        default:
-            return try? OpenAccessTrack(manifest: manifest, urlString: link.href, audiobookID: audiobookID, title: title, duration: duration, index: index)
-        }
+        
+        return TrackFactory.createTrack(
+            from: manifest,
+            title: title,
+            urlString: link.href,
+            audiobookID: self.audiobookID,
+            index: index,
+            duration: duration,
+            token: token
+        )
     }
 
 
-    func track(forHref href: String) -> (any Track)? {
+    public func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
             if (track.urls?.first?.absoluteString ?? "") == href {
                 return true
@@ -118,7 +171,7 @@ public class Tracks {
         })
     }
     
-    func track(forKey key: String) -> (any Track)? {
+    public func track(forKey key: String) -> (any Track)? {
         return tracks.first(where: { track in
             if track.key == key {
                 return true
@@ -126,21 +179,14 @@ public class Tracks {
             return false
         })
     }
-    
-    func track(forPart part: Int, sequence: Int) -> (any Track)? {
-        //TODO: Implement for Findaway
-//        return tracks.first(where: { track in
-//            if let track as? FindawayTrack,
-//               trackPart == part && trackSequence == sequence {
-//                return true
-//            }
-//            
-//            return false
-//        })
-        return nil
+
+    public func track(forPart part: Int, sequence: Int) -> (any Track)? {
+        return tracks.first(where: { track in
+            return track.partNumber == part && track.chapterNumber == sequence
+        })
     }
-    
-    func previousTrack(_ track: any Track) -> (any Track)? {
+
+    public func previousTrack(_ track: any Track) -> (any Track)? {
         guard let currentIndex = tracks.first(where: { $0.id == track.id
         })?.index, currentIndex > 0 else {
             return nil
@@ -148,7 +194,7 @@ public class Tracks {
         return tracks[currentIndex - 1]
     }
     
-    func nextTrack(_ track: any Track) -> (any Track)? {
+    public func nextTrack(_ track: any Track) -> (any Track)? {
         guard let currentIndex = tracks.first(where: { $0.id == track.id
         })?.index, currentIndex < tracks.count - 1 else {
             return nil
@@ -156,11 +202,11 @@ public class Tracks {
         return tracks[currentIndex + 1]
     }
     
-    subscript(index: Int) -> any Track {
+    public subscript(index: Int) -> any Track {
         return tracks[index]
     }
     
-    func deleteTracks() {
+    public func deleteTracks() {
         tracks.forEach { track in
             track.downloadTask?.delete()
         }

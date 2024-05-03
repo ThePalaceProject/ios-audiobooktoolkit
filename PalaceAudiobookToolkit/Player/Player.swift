@@ -43,6 +43,7 @@ public protocol Player: NSObject {
     var isLoaded: Bool { get }
     var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
 
+    init?(tableOfContents: AudiobookTableOfContents)
     func play()
     func pause()
     func unload()

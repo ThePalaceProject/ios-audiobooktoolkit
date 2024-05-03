@@ -193,7 +193,7 @@ extension AudiobookNavigationView {
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
             audiobook: audiobook,
-            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.tracks.tracks)
+            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
         )
         self.playback = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         let bookmark = ChapterLocation(number: 0, part: 1, duration: 135, startOffset: nil, playheadOffset: 185, title: "Chapter One", audiobookID: "")

@@ -9,6 +9,7 @@
 import Foundation
 
 class OverdriveTrack: Track {
+
     var key: String = ""
     var downloadTask: (any DownloadTask)?
     var title: String?
@@ -18,17 +19,17 @@ class OverdriveTrack: Track {
     var urls: [URL]? { [url] }
     let mediaType: TrackMediaType
     
-    init?(
+    required init(
         manifest: Manifest,
-        urlString: String,
+        urlString: String?,
         audiobookID: String,
         title: String?,
         duration: Double,
         index: Int,
         token: String? = nil
     ) throws {
-        guard let url = URL(string: urlString) else {
-            return nil
+        guard let urlString, let url = URL(string: urlString) else {
+            throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
         }
 
         self.key = "\(audiobookID)-\(index)"

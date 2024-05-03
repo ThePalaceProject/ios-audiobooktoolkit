@@ -22,12 +22,26 @@ public protocol Track: class, Identifiable {
     var title: String? { get }
     var index: Int { get }
     var duration: TimeInterval { get }
+    var partNumber: Int? { get }
+    var chapterNumber: Int? { get }
     var urls: [URL]? { get }
+
+    init(
+        manifest: Manifest,
+        urlString: String?,
+        audiobookID: String,
+        title: String?,
+        duration: Double,
+        index: Int,
+        token: String?
+    ) throws
 }
 
 extension Track {
     public var id: String { key }
-    
+    public var partNumber: Int? { nil }
+    public var chapterNumber: Int? { nil }
+
     public var description: String {
         let titleDesc = title ?? "Unknown Title"
         let urlsDesc = urls?.map { $0.absoluteString }.joined(separator: ", ") ?? "No URLs"

@@ -9,8 +9,8 @@
 import Foundation
 
 public struct Chapter {
-    var title: String
-    var position: TrackPosition
-    var duration: Double?
-    var downloadProgress: Float = 0
+    public var title: String
+    public var position: TrackPosition
+    public var duration: Double?
+    public  var downloadProgress: Float = 0
 }

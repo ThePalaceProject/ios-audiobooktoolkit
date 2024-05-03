@@ -17,15 +17,19 @@ class LCPTrack: Track {
     var urls: [URL]?
     let mediaType: TrackMediaType
     
-    init(
+    required init(
         manifest: Manifest,
-        urlString: String,
+        urlString: String?,
         audiobookID: String,
         title: String?,
         duration: Double,
         index: Int,
         token: String? = nil
     ) throws {
+        guard let urlString else {
+            throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
+        }
+
         self.key = "\(audiobookID)-\(index)"
         self.urls = [URL(string: urlString)].compactMap { $0 }
         guard !(self.urls?.isEmpty ?? true) else {

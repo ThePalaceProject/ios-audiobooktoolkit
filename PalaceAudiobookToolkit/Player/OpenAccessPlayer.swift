@@ -214,7 +214,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     func play() {
-        guard isLoaded, let firstTrack = tableOfContents.tracks.tracks.first else {
+        guard isLoaded, let firstTrack = tableOfContents.allTracks.first else {
             handlePlaybackError(.drmExpired)
             return
         }
@@ -607,7 +607,7 @@ extension OpenAccessPlayer {
     private func buildPlayerQueue() {
         resetPlayerQueue()
         
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
         if playerItems.isEmpty {
             isLoaded = false
             return
@@ -641,12 +641,12 @@ extension OpenAccessPlayer {
         completion: ((Bool) -> Void)? = nil
     ) {
         avQueuePlayer.removeAllItems()
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.tracks.tracks)
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
         
         var desiredIndex: Int? = nil
         for (index, item) in playerItems.enumerated() {
             avQueuePlayer.insert(item, after: nil)
-            if let trackPos = trackPosition, tableOfContents.tracks.tracks[index].id == trackPos.track.id {
+            if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
                 desiredIndex = index
             }
         }

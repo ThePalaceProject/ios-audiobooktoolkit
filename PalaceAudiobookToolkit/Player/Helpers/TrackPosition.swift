@@ -16,11 +16,17 @@ public enum TrackPositionError: Error, Equatable {
 }
 
 public struct TrackPosition: Equatable, Comparable {
-    var track: any Track
-    var timestamp: Double
-    var tracks: Tracks
+    public var track: any Track
+    public var timestamp: Double
+    public var tracks: Tracks
+    
+    public init(track: any Track, timestamp: Double, tracks: Tracks) {
+        self.track = track
+        self.timestamp = timestamp
+        self.tracks = tracks
+    }
         
-    static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
+    public static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
         if lhs.track.id == rhs.track.id {
             return lhs.timestamp - rhs.timestamp
         }
@@ -36,14 +42,14 @@ public struct TrackPosition: Equatable, Comparable {
         }
         
         for index in (rhsTrackIndex + 1)...lhsTrackIndex {
-            diff += lhs.tracks.tracks[index].duration
+            diff += lhs.tracks[index].duration
         }
         
-        diff += (lhs.tracks.tracks[rhsTrackIndex].duration - rhs.timestamp)
+        diff += (lhs.tracks[rhsTrackIndex].duration - rhs.timestamp)
         return diff
     }
     
-    static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
+    public static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
         var currentTrack = lhs.track
         

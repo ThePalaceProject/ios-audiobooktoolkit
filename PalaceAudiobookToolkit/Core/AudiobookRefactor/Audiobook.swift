@@ -8,6 +8,7 @@
 
 import Foundation
 
+
 public struct AudiobookFactory {
     public static func audiobook(
         for manifest: Manifest,
@@ -22,15 +23,8 @@ public struct AudiobookFactory {
                 bookIdentifier: bookIdentifier,
                 token: token
             )
-        case .openAccess:
-            return OpenAccessAudiobook(
-                manifest: manifest,
-                bookIdentifier: bookIdentifier,
-                decryptor: decryptor,
-                token: token
-            )
         default:
-            return Audiobook(
+            return OpenAccessAudiobook(
                 manifest: manifest,
                 bookIdentifier: bookIdentifier,
                 decryptor: decryptor,
@@ -59,15 +53,13 @@ open class Audiobook: NSObject, AudiobookProtocol {
         
         let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-        
-        switch manifest.audiobookType {
-        case .lcp:
-            self.player = LCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
-        case .findaway:
-            self.player = OpenAccessPlayer(tableOfContents: tableOfContents)
-        default:
-            self.player = OpenAccessPlayer(tableOfContents: tableOfContents)
-        }
+     
+        let playerFactory = DynamicPlayerFactory()
+        self.player = playerFactory.createPlayer(
+            forType: manifest.audiobookType,
+            withTableOfContents: tableOfContents,
+            decryptor: decryptor
+        )
 
         super.init()
     }
@@ -85,3 +77,26 @@ open class Audiobook: NSObject, AudiobookProtocol {
     }
 }
 
+
+protocol PlayerFactoryProtocol {
+    func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player
+}
+
+class DynamicPlayerFactory: PlayerFactoryProtocol {
+    func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
+        switch type {
+        case .lcp:
+            return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
+        case .findaway:
+
+            guard let playerClass = NSClassFromString("NYPLAEToolkit.FindawayPlayer") as? Player.Type,
+                  let player = playerClass.init(tableOfContents: toc) else {
+             fallthrough
+            }
+
+            return player
+        default:
+            return OpenAccessPlayer(tableOfContents: toc)
+        }
+    }
+}

@@ -17,7 +17,7 @@ public final class FindawayAudiobook: Audiobook {
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String? = nil) {
         super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: token)
         
-        guard let findawayInfo = manifest.metadata?.drmInformation else {
+        guard let _ = manifest.metadata?.drmInformation else {
             return nil
         }
     }

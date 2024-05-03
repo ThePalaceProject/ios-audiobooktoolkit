@@ -42,16 +42,16 @@ public class OpenAccessTrack: Track {
     let feedbooksProfile: String?
     let token: String?
 
-    init(
+    required public init(
         manifest: Manifest,
-        urlString: String,
+        urlString: String?,
         audiobookID: String,
         title: String?,
         duration: Double,
         index: Int,
         token: String? = nil
     ) throws {
-        guard let url = URL(string: urlString)
+        guard let urlString, let url = URL(string: urlString)
         else {
             throw OpenAccessTrackError.unsupportedMediaType
         }

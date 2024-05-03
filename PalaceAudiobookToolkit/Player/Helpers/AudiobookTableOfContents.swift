@@ -176,15 +176,15 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
 
     func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
-        return lhs.key == rhs.key && lhs.index == rhs.index
+        lhs.key == rhs.key && lhs.index == rhs.index
     }
     
     func index(of chapter: Chapter) -> Int? {
-        return toc.firstIndex(where: { $0.title == chapter.title })
+        toc.firstIndex(where: { $0.title == chapter.title })
     }
 
     subscript(index: Int) -> Chapter {
-        return toc[index]
+        toc[index]
     }
 }
 
@@ -192,3 +192,8 @@ enum ChapterError: Error {
     case noChapterFoundForPosition
 }
 
+public extension AudiobookTableOfContents {
+    var allTracks: [any Track] {
+        tracks.tracks
+    }
+}

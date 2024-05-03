@@ -73,7 +73,7 @@ class AudiobookPlaybackModel: ObservableObject {
         
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
-        if let firstTrack = audiobookManager.audiobook.tableOfContents.tracks.tracks.first {
+        if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
 

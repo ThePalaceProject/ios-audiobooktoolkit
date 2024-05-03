@@ -81,21 +81,21 @@ extension Manifest {
             }
         }
         
-        var sessionKey: String? {
+        public var sessionKey: String? {
             switch self {
             case .findaway(let info):
                 return info.sessionKey
             }
         }
         
-        var licenseID: String? {
+        public var licenseID: String? {
             switch self {
             case .findaway(let info):
                 return info.licenseId
             }
         }
 
-        var scheme: String? {
+        public var scheme: String? {
             switch self {
             case .findaway(let information):
                 return information.scheme

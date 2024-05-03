@@ -15,7 +15,7 @@ class TrackPositionTests: XCTestCase {
         for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
-                let tracks = Tracks(manifest: manifest, audiobookID: testID)
+                let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
                 
                 try testAdditionAndSubtractionForAllTracks(tracks)
             } catch {
@@ -36,7 +36,7 @@ class TrackPositionTests: XCTestCase {
             try testTimeAdditionWithinTrack(middlePosition)
             try testTimeSubtractionWithinTrack(middlePosition)
             
-            if index < tracks.tracks.count - 1 {
+            if index < tracks.count - 1 {
                 try testMovingToNextTrack(from: startPosition, in: tracks)
             }
             if index > 0 {
