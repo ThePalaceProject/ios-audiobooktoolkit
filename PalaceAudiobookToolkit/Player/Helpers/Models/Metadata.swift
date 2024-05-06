@@ -101,6 +101,13 @@ extension Manifest {
                 return information.scheme
             }
         }
+        
+        public var fulfillmentId: String? {
+            switch self {
+            case .findaway(let info):
+                return info.fulfillmentId
+            }
+        }
     }
     
     public struct FindawayDRMInformation: Codable {

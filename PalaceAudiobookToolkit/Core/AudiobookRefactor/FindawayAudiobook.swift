@@ -15,11 +15,12 @@ private func findawayKey(_ key: String) -> String {
 
 public final class FindawayAudiobook: Audiobook {
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String? = nil) {
-        super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: token)
-        
-        guard let _ = manifest.metadata?.drmInformation else {
+        guard let fulfillmentId = manifest.metadata?.drmInformation?.fulfillmentId else {
             return nil
         }
+        
+        super.init(manifest: manifest, bookIdentifier: fulfillmentId, decryptor: decryptor, token: token)
+        self.uniqueId = fulfillmentId
     }
     
     public override func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void) {

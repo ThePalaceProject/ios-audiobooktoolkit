@@ -225,10 +225,8 @@
 		E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = secret_lives_manifest.json; sourceTree = "<group>"; };
 		E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = the_system_of_the_world_manifest.json; sourceTree = "<group>"; };
 		E58C53452B7550B000D861EE /* anathem_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = anathem_manifest.json; sourceTree = "<group>"; };
-		E58FCC5B2BE094DA00943CEB /* FindawayTrack.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayTrack.swift; sourceTree = "<group>"; };
 		E58FCC612BE09AB000943CEB /* FindawayDownloadTask.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadTask.swift; sourceTree = "<group>"; };
 		E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobook.swift; sourceTree = "<group>"; };
-		E58FCC672BE0A29B00943CEB /* FindawayPlayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlayer.swift; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
@@ -373,7 +371,6 @@
 				E5CC6E792BBB295F00C31ABD /* Player.swift */,
 				E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */,
 				E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */,
-				E58FCC672BE0A29B00943CEB /* FindawayPlayer.swift */,
 				E5CC6E7B2BBB2CD900C31ABD /* DeprecatedPlayer */,
 				7BBF4DFB20506FF600700731 /* SleepTimer.swift */,
 				E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */,
@@ -519,7 +516,6 @@
 			children = (
 				E5DE01A72BA3E4580063E68E /* Track.swift */,
 				E57FCA272BC8E768008D8907 /* LCPTrack.swift */,
-				E58FCC5B2BE094DA00943CEB /* FindawayTrack.swift */,
 				E57FCA242BC8D3D2008D8907 /* OpenAccessTrack.swift */,
 				E55DE97F2BDC0B6300ECB153 /* OverdriveTrack.swift */,
 			);
