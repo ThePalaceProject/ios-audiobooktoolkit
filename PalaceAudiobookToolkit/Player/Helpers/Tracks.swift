@@ -133,7 +133,15 @@ public class Tracks {
     
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        TrackFactory.createTrack(from: manifest, title: item.title, audiobookID: self.audiobookID, index: index, duration: item.duration, token: token)
+        TrackFactory.createTrack(
+            from: manifest,
+            title: item.title,
+            urlString: item.href, 
+            audiobookID: self.audiobookID,
+            index: index,
+            duration: item.duration,
+            token: token
+        )
     }
 
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {

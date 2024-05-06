@@ -79,8 +79,8 @@ public class OpenAccessTrack: Track {
         )
 
         //TODO: REturn to for feedbooks
-//        // Feedbooks DRM or other configurations can be handled similarly
-//        if let feedbooksProfile = manifest.properties?.encrypted.profile as? String,
+        // Feedbooks DRM or other configurations can be handled similarly
+//        if let feedbooksProfile = manifest.encrypted,
 //           feedbooksProfile.contains("feedbooks")
 //        if let feedbooksProfile = payload["properties"]?["encrypted"]?["profile"] as? String,
 //           feedbooksProfile.contains("feedbooks") {
