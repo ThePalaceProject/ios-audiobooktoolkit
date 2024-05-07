@@ -8,7 +8,6 @@
 
 import Foundation
 
-
 public struct AudiobookFactory {
     public static func audiobook(
         for manifest: Manifest,

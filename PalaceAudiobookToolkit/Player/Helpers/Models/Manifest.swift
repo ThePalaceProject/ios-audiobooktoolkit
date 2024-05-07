@@ -53,10 +53,11 @@ public struct Manifest: Codable {
     let resources: [Link]?
     let toc: [TOCItem]?
     public let formatType: String?
-    
+    let spine: [SpineItem]?
+
     enum CodingKeys: String, CodingKey {
         case context = "@context"
-        case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType
+        case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType, spine
     }
 
     public init(from decoder: Decoder) throws {
@@ -78,7 +79,8 @@ public struct Manifest: Codable {
         resources = try container.decodeIfPresent([Link].self, forKey: .resources)
         toc = try container.decodeIfPresent([TOCItem].self, forKey: .toc)
         formatType = try container.decodeIfPresent(String.self, forKey: .formatType)
-        
+        spine = try container.decodeIfPresent([SpineItem].self, forKey: .spine)
+
         if let linksArray = try? container.decode([Link].self, forKey: .links) {
             links = linksArray
             linksDictionary = nil
@@ -164,6 +166,13 @@ public struct Manifest: Codable {
             case contentLinks = "contentlinks"
             case selfLink = "self"
         }
+    }
+
+    public struct SpineItem: Codable {
+        let title: String
+        let href: String
+        let type: String
+        let duration: Int
     }
 
     public struct Properties: Codable {

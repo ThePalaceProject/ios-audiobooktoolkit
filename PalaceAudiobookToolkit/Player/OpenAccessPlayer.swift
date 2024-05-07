@@ -91,49 +91,6 @@ class OpenAccessPlayer: NSObject, Player {
     private var cancellables = Set<AnyCancellable>()
     private var lastKnownPosition: TrackPosition?
 
-//    private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
-//        didSet {
-//            switch playerIsReady {
-//            case .readyToPlay:
-//                guard !isPlaying else { return }
-//                self.play()
-//            case .unknown:
-//                if self.avQueuePlayer.currentItem == nil {
-//                    if let fileStatus = assetFileStatus(self.currentTrackPosition?.track.downloadTask) {
-//                        switch fileStatus {
-//                        case .saved(let savedURLs):
-//                            let item = createPlayerItem(files: savedURLs) ?? AVPlayerItem(url: savedURLs[0])
-//
-//                            if self.avQueuePlayer.canInsert(item, after: nil) {
-//                                self.avQueuePlayer.insert(item, after: nil)
-//                            }
-//                        case .missing(_):
-//                            self.currentTrackPosition?.track.downloadTask?.statePublisher
-//                                .receive(on: DispatchQueue.main) // Ensure updates are received on the main thread
-//                                .sink(receiveCompletion: { completion in
-//                                    switch completion {
-//                                    case .finished:
-//                                        // Perform any cleanup if needed
-//                                        break
-//                                    case .failure(let error):
-//                                        print("Download failed with error: \(error)")
-//                                    }
-//                                }, receiveValue: { [weak self] state in
-//                                    if case .completed = state {
-//                                        self?.rebuildPlayerQueueAndNavigate(to: nil)
-//                                    }
-//                                })
-//                                .store(in: &self.cancellables)
-//                        default:
-//                            break
-//                        }
-//                    }
-//                }
-//            case .failed:
-//                break
-//            }
-//        }
-//    }
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
         didSet {
             handlePlayerStatusChange()

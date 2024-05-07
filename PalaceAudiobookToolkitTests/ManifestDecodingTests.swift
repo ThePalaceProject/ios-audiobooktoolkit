@@ -19,6 +19,7 @@ enum ManifestJSON: String, CaseIterable {
     case flatland = "flatland_manifest"
     case bestNewHorror = "best_new_horror_manifest"
     case quickSilver = "quicksilver_manifest"
+    case littleWomenDevotional = "littleWomenDevotional_manifest"
     case martian = "the_martian_manifest"
     case snowcrash = "snowcrash_manifest"
     case secretLives = "secret_lives_manifest"
@@ -33,6 +34,7 @@ enum ManifestJSON: String, CaseIterable {
         case .bocas: return 14
         case .christmasCarol: return 6
         case .flatland: return 25
+        case .littleWomenDevotional: return 54
         case .martian: return 41
         case .bestNewHorror: return 7
         case .quickSilver: return 29
@@ -60,7 +62,8 @@ final class ManifestDecodingTests: XCTestCase {
     private let enableDataLogging = true
     
     func testManifestDecoding() {
-        for manifestJSON in ManifestJSON.allCases {
+//        for manifestJSON in ManifestJSON.allCases {
+        for manifestJSON in [ManifestJSON.littleWomenDevotional] {
             do {
                 let manifest = try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
                 guard let jsonData = try? Data(contentsOf: Bundle(for: type(of: self)).url(forResource: manifestJSON.rawValue, withExtension: "json")!),

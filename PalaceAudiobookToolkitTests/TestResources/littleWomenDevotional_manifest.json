@@ -1,0 +1,348 @@
+{
+    "spine": [
+        {
+            "title": "Opening Credits",
+            "href": "https://app.unlimitedlistens.com/api/track/44783651-7693-45ca-a079-f2e85a7100b0",
+            "type": "audio/mpeg",
+            "duration": 20
+        },
+        {
+            "title": "Dedication",
+            "href": "https://app.unlimitedlistens.com/api/track/314b91b5-d95f-4c59-b2df-8af7aa5410f8",
+            "type": "audio/mpeg",
+            "duration": 17
+        },
+        {
+            "title": "A Little Women Welcome",
+            "href": "https://app.unlimitedlistens.com/api/track/77e9a092-2b79-46c9-8f00-74a72aa68b8a",
+            "type": "audio/mpeg",
+            "duration": 269
+        },
+        {
+            "title": "Day1",
+            "href": "https://app.unlimitedlistens.com/api/track/93950ecd-773a-4c6d-a17f-0b3210b75b06",
+            "type": "audio/mpeg",
+            "duration": 290
+        },
+        {
+            "title": "Day2",
+            "href": "https://app.unlimitedlistens.com/api/track/0c6dac44-6bf3-46aa-bdb6-19e05180010e",
+            "type": "audio/mpeg",
+            "duration": 284
+        },
+        {
+            "title": "Day3",
+            "href": "https://app.unlimitedlistens.com/api/track/dd22285f-8908-4bbf-b860-9fbfd1ca5331",
+            "type": "audio/mpeg",
+            "duration": 291
+        },
+        {
+            "title": "Day4",
+            "href": "https://app.unlimitedlistens.com/api/track/1b33c9a1-e4da-48a6-8d90-a59596e01fb2",
+            "type": "audio/mpeg",
+            "duration": 281
+        },
+        {
+            "title": "Day5",
+            "href": "https://app.unlimitedlistens.com/api/track/1f67a303-0f1f-45ac-91e1-21a41fbf7c6c",
+            "type": "audio/mpeg",
+            "duration": 270
+        },
+        {
+            "title": "Day6",
+            "href": "https://app.unlimitedlistens.com/api/track/46eed119-0ad8-4517-9133-02783aaf1063",
+            "type": "audio/mpeg",
+            "duration": 283
+        },
+        {
+            "title": "Day7",
+            "href": "https://app.unlimitedlistens.com/api/track/6e700df0-e870-4f68-bee5-950c898ef48b",
+            "type": "audio/mpeg",
+            "duration": 283
+        },
+        {
+            "title": "Day8",
+            "href": "https://app.unlimitedlistens.com/api/track/ff898ca0-44cb-40df-90ee-cae3379d4a07",
+            "type": "audio/mpeg",
+            "duration": 351
+        },
+        {
+            "title": "Day9",
+            "href": "https://app.unlimitedlistens.com/api/track/2fbd0bee-5f61-42b9-8ccc-5f4bea1e3046",
+            "type": "audio/mpeg",
+            "duration": 292
+        },
+        {
+            "title": "Day10",
+            "href": "https://app.unlimitedlistens.com/api/track/4afbfe67-becd-46a7-ba84-e1bb08665f08",
+            "type": "audio/mpeg",
+            "duration": 287
+        },
+        {
+            "title": "Day11",
+            "href": "https://app.unlimitedlistens.com/api/track/f519c4c2-7ac1-49c6-8c14-837c97fb2173",
+            "type": "audio/mpeg",
+            "duration": 277
+        },
+        {
+            "title": "Day12",
+            "href": "https://app.unlimitedlistens.com/api/track/0923ad0e-3770-452f-bfaf-f3f54312d3d1",
+            "type": "audio/mpeg",
+            "duration": 318
+        },
+        {
+            "title": "Day13",
+            "href": "https://app.unlimitedlistens.com/api/track/52ac4e56-a6b3-4643-ad17-60b709511032",
+            "type": "audio/mpeg",
+            "duration": 292
+        },
+        {
+            "title": "Day14",
+            "href": "https://app.unlimitedlistens.com/api/track/49f639e9-d87c-4e1e-8116-7d348594d337",
+            "type": "audio/mpeg",
+            "duration": 280
+        },
+        {
+            "title": "Day15",
+            "href": "https://app.unlimitedlistens.com/api/track/292e4ded-fb22-417a-9f9e-73aef5c8d521",
+            "type": "audio/mpeg",
+            "duration": 320
+        },
+        {
+            "title": "Day16",
+            "href": "https://app.unlimitedlistens.com/api/track/53b9c323-0a41-4dfe-8102-dbb5ec98670f",
+            "type": "audio/mpeg",
+            "duration": 303
+        },
+        {
+            "title": "Day17",
+            "href": "https://app.unlimitedlistens.com/api/track/4de21d0e-d7e6-4d76-b536-b9d5996c04b0",
+            "type": "audio/mpeg",
+            "duration": 304
+        },
+        {
+            "title": "Day18",
+            "href": "https://app.unlimitedlistens.com/api/track/f6a1979a-ecb5-4292-917f-e608c96b24f1",
+            "type": "audio/mpeg",
+            "duration": 303
+        },
+        {
+            "title": "Day19",
+            "href": "https://app.unlimitedlistens.com/api/track/f2d4b3da-9771-45cb-b315-ebb11b0c44e3",
+            "type": "audio/mpeg",
+            "duration": 293
+        },
+        {
+            "title": "Day20",
+            "href": "https://app.unlimitedlistens.com/api/track/48bfc089-243b-4c91-95b8-d5b19f5b2a87",
+            "type": "audio/mpeg",
+            "duration": 290
+        },
+        {
+            "title": "Day21",
+            "href": "https://app.unlimitedlistens.com/api/track/7d1dbac5-d438-4c3a-b59a-6168cf7c668b",
+            "type": "audio/mpeg",
+            "duration": 308
+        },
+        {
+            "title": "Day22",
+            "href": "https://app.unlimitedlistens.com/api/track/b5348de8-7e8c-4741-a03a-1308933df5b7",
+            "type": "audio/mpeg",
+            "duration": 296
+        },
+        {
+            "title": "Day23",
+            "href": "https://app.unlimitedlistens.com/api/track/6af4387c-ed0f-446d-b452-8572c119964d",
+            "type": "audio/mpeg",
+            "duration": 308
+        },
+        {
+            "title": "Day24",
+            "href": "https://app.unlimitedlistens.com/api/track/ffea6cc2-32f7-41f7-8c3e-a30d9d8d7fc8",
+            "type": "audio/mpeg",
+            "duration": 310
+        },
+        {
+            "title": "Day25",
+            "href": "https://app.unlimitedlistens.com/api/track/92cd6e90-6826-48da-a5e5-874e8092ed72",
+            "type": "audio/mpeg",
+            "duration": 319
+        },
+        {
+            "title": "Day26",
+            "href": "https://app.unlimitedlistens.com/api/track/75f57098-1f75-4452-ae9d-3a86e6e498c9",
+            "type": "audio/mpeg",
+            "duration": 317
+        },
+        {
+            "title": "Day27",
+            "href": "https://app.unlimitedlistens.com/api/track/3e2bf241-9269-49af-8cd6-2f012858934a",
+            "type": "audio/mpeg",
+            "duration": 292
+        },
+        {
+            "title": "Day28",
+            "href": "https://app.unlimitedlistens.com/api/track/c1ba15b1-4420-43a6-ba16-f072a1e99635",
+            "type": "audio/mpeg",
+            "duration": 300
+        },
+        {
+            "title": "Day29",
+            "href": "https://app.unlimitedlistens.com/api/track/42c059cc-b71e-4edd-86f9-d15280ae6696",
+            "type": "audio/mpeg",
+            "duration": 291
+        },
+        {
+            "title": "Day30",
+            "href": "https://app.unlimitedlistens.com/api/track/7fa16355-2c13-439e-ae1f-deef38ecff86",
+            "type": "audio/mpeg",
+            "duration": 301
+        },
+        {
+            "title": "Day31",
+            "href": "https://app.unlimitedlistens.com/api/track/bb4fadb0-0ab1-4a0e-8898-20fb1a15cab0",
+            "type": "audio/mpeg",
+            "duration": 281
+        },
+        {
+            "title": "Day32",
+            "href": "https://app.unlimitedlistens.com/api/track/42fe6f5b-b4c1-48cd-8477-953ad8b20d1c",
+            "type": "audio/mpeg",
+            "duration": 275
+        },
+        {
+            "title": "Day33",
+            "href": "https://app.unlimitedlistens.com/api/track/be63abd3-b6fe-4e31-94df-dba60e10950c",
+            "type": "audio/mpeg",
+            "duration": 282
+        },
+        {
+            "title": "Day34",
+            "href": "https://app.unlimitedlistens.com/api/track/7ad59049-20d7-44e1-8568-a96475429d1f",
+            "type": "audio/mpeg",
+            "duration": 291
+        },
+        {
+            "title": "Day35",
+            "href": "https://app.unlimitedlistens.com/api/track/772b2df1-11d1-4056-87ad-84c255cd82ca",
+            "type": "audio/mpeg",
+            "duration": 295
+        },
+        {
+            "title": "Day36",
+            "href": "https://app.unlimitedlistens.com/api/track/765b5612-8d36-439f-9b18-d0b9377e06eb",
+            "type": "audio/mpeg",
+            "duration": 284
+        },
+        {
+            "title": "Day37",
+            "href": "https://app.unlimitedlistens.com/api/track/20cfc394-d6b8-4480-bc71-0d0cf2b9dc57",
+            "type": "audio/mpeg",
+            "duration": 292
+        },
+        {
+            "title": "Day38",
+            "href": "https://app.unlimitedlistens.com/api/track/667d4e18-5ffd-468d-9cc8-e105830f4c31",
+            "type": "audio/mpeg",
+            "duration": 281
+        },
+        {
+            "title": "Day39",
+            "href": "https://app.unlimitedlistens.com/api/track/08350423-721a-41c1-a05b-57f3843c42be",
+            "type": "audio/mpeg",
+            "duration": 295
+        },
+        {
+            "title": "Day40",
+            "href": "https://app.unlimitedlistens.com/api/track/c5f96357-cb25-41b3-8411-017234064962",
+            "type": "audio/mpeg",
+            "duration": 323
+        },
+        {
+            "title": "Day41",
+            "href": "https://app.unlimitedlistens.com/api/track/ecd51d75-5f28-40cf-9a79-2ad2e5efc4e9",
+            "type": "audio/mpeg",
+            "duration": 297
+        },
+        {
+            "title": "Day42",
+            "href": "https://app.unlimitedlistens.com/api/track/8b4b7775-e2c4-4996-8530-b0a3e3427b81",
+            "type": "audio/mpeg",
+            "duration": 313
+        },
+        {
+            "title": "Day43",
+            "href": "https://app.unlimitedlistens.com/api/track/81946839-2ed7-4722-a99a-536873487ce4",
+            "type": "audio/mpeg",
+            "duration": 291
+        },
+        {
+            "title": "Day44",
+            "href": "https://app.unlimitedlistens.com/api/track/13fa68a6-4ff8-47d9-9e94-99cef589713d",
+            "type": "audio/mpeg",
+            "duration": 284
+        },
+        {
+            "title": "Day45",
+            "href": "https://app.unlimitedlistens.com/api/track/07ae4a36-6c35-45b8-93ca-43bad152a676",
+            "type": "audio/mpeg",
+            "duration": 294
+        },
+        {
+            "title": "Day46",
+            "href": "https://app.unlimitedlistens.com/api/track/4a418298-5cdb-4efc-be7e-e6639aeff934",
+            "type": "audio/mpeg",
+            "duration": 276
+        },
+        {
+            "title": "Day47",
+            "href": "https://app.unlimitedlistens.com/api/track/f60d48d7-fecf-4690-8d96-fc2172bedf96",
+            "type": "audio/mpeg",
+            "duration": 313
+        },
+        {
+            "title": "Fathers Letter",
+            "href": "https://app.unlimitedlistens.com/api/track/c18e86d4-8d35-46df-8e77-727a2f96200a",
+            "type": "audio/mpeg",
+            "duration": 287
+        },
+        {
+            "title": "An Invitation",
+            "href": "https://app.unlimitedlistens.com/api/track/3408cca1-2b62-4ab0-bb2e-3527d6d4d937",
+            "type": "audio/mpeg",
+            "duration": 136
+        },
+        {
+            "title": "Authors Note",
+            "href": "https://app.unlimitedlistens.com/api/track/7fcf12a4-9868-4055-b36c-3bf89e4e3bd3",
+            "type": "audio/mpeg",
+            "duration": 97
+        },
+        {
+            "title": "Closing Credits",
+            "href": "https://app.unlimitedlistens.com/api/track/305ab88a-efa2-4b46-9cb5-a3de23f96dfb",
+            "type": "audio/mpeg",
+            "duration": 32
+        }
+    ],
+    "links": [
+        {
+            "type": "application/audiobook+json",
+            "href": "https://app.unlimitedlistens.com/api/book/f8ee17c7-4e1c-4085-9824-bdf5bda57716",
+            "rel": "self"
+        },
+        {
+            "type": "image/jpeg",
+            "href": "https://imagedelivery.net/MoyOSb5DbIV0Ggq39kOkWQ/cover/images/9781646894802.jpg/public"
+        }
+    ],
+    "metadata": {
+        "language": "eng",
+        "author": "Rachel Dodge",
+        "title": "The Little Women Devotional",
+        "identifier": "urn:uuid:f8ee17c7-4e1c-4085-9824-bdf5bda57716",
+        "@type": "http://schema.org/audiobook",
+        "modified": "2024-04-20T02:01:07Z"
+    },
+    "@context": "http://readium.org/webpub/default.jsonld"
+}
