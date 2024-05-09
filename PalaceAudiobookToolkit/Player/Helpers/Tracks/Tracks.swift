@@ -147,8 +147,8 @@ public class Tracks {
     }
 
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
-        let title = link.title ?? "Untitled"
-        let bitrate = link.bitrate ?? 64 * 1024
+        let title = link.title?.localizedTitle() ?? "Untitled"
+        let bitrate = (link.bitrate ?? 64) * 1024
         var duration: Double
         
         if let explicitDuration = link.duration {

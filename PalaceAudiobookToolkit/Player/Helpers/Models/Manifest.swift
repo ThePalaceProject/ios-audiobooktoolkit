@@ -152,10 +152,20 @@ public struct Manifest: Codable {
         let height: Int?
         let width: Int?
         let bitrate: Int?
-        let title: String?
+        let title: LocalizedString?
         let duration: Int?
         let properties: Properties?
         let physicalFileLengthInBytes: Int?
+        
+        struct LocalizedString: Codable {
+            let values: [String: String]
+            
+            func localizedTitle() -> String {
+                let currentLocale = Locale.autoupdatingCurrent
+                let languageCode = currentLocale.languageCode ?? "en"
+                return values[languageCode] ?? values["en"] ?? "Untitled"
+            }
+        }
     }
     
     struct LinksDictionary: Codable {

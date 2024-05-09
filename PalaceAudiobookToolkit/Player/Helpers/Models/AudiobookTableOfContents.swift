@@ -78,14 +78,17 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
-                let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
+                let chapter = Chapter(
+                    title: item.title?.localizedTitle() ?? "Untitled",
+                    position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks)
+                )
                 toc.append(chapter)
             }
         }
     }
     
     private mutating func loadTocFromSpine(_ spine: [Manifest.SpineItem]) {
-        for (index, item) in spine.enumerated() {
+        spine.forEach { item in
             if let track = tracks.track(forHref: item.href) {
                 let chapterTitle = item.title
                 let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
