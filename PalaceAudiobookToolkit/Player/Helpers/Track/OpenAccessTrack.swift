@@ -66,7 +66,7 @@ public class OpenAccessTrack: Track {
         self.index = index
         self.duration = duration
         self.alternateUrls = []
-        self.feedbooksProfile = nil
+        self.feedbooksProfile = manifest.profile(for: .findaway)
         self.token = token
         self.downloadTask = OpenAccessDownloadTask(
             key: key,
@@ -77,14 +77,5 @@ public class OpenAccessTrack: Track {
             feedbooksProfile: feedbooksProfile,
             token: token
         )
-
-        //TODO: REturn to for feedbooks
-        // Feedbooks DRM or other configurations can be handled similarly
-//        if let feedbooksProfile = manifest.encrypted,
-//           feedbooksProfile.contains("feedbooks")
-//        if let feedbooksProfile = payload["properties"]?["encrypted"]?["profile"] as? String,
-//           feedbooksProfile.contains("feedbooks") {
-//            // Handle DRM configuration if necessary
-//        }
     }
 }

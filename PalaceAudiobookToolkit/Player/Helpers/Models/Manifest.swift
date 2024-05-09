@@ -229,6 +229,15 @@ public extension Manifest {
     var trackMediaType: TrackMediaType {
         readingOrder?.first?.trackMediaType ?? spine?.first?.trackMediaType ?? .audioMP3
     }
+    
+    func profile(for type: AudiobookType) -> String? {
+        switch audiobookType {
+        case .findaway:
+            return readingOrder?.first?.properties?.encrypted?.profile
+        default:
+            return nil
+        }
+    }
 }
 
 extension Manifest.ReadingOrderItem {

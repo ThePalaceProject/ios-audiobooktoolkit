@@ -37,9 +37,11 @@ class OpenAccessPlayer: NSObject, Player {
                 playbackStatePublisher.send(
                     .failed(
                         currentTrackPosition,
-                        NSError(domain: errorDomain,
-                                code: OpenAccessPlayerError.drmExpired.rawValue,
-                                userInfo: nil)
+                        NSError(
+                            domain: errorDomain,
+                            code: OpenAccessPlayerError.drmExpired.rawValue,
+                            userInfo: nil
+                        )
                     )
                 )
                 unload()
@@ -104,8 +106,8 @@ class OpenAccessPlayer: NSObject, Player {
         switch playerIsReady {
         case .readyToPlay:
             guard !isPlaying else { return }
-//            self.play()
-            
+            play()
+
         case .unknown:
             handleUnknownPlayerStatus()
             
@@ -144,16 +146,35 @@ class OpenAccessPlayer: NSObject, Player {
             .sink(receiveCompletion: { completion in
                 switch completion {
                 case .finished:
-                    break
+                    self.updatePlayerQueueIfNeeded()
                 case .failure(let error):
                     ATLog(.error, "Download failed with error: \(error)")
                 }
             }, receiveValue: { [weak self] state in
                 if case .completed = state {
-                    self?.rebuildPlayerQueueAndNavigate(to: nil)
+                    self?.updatePlayerQueueIfNeeded()
                 }
             })
             .store(in: &self.cancellables)
+    }
+    
+    private func updatePlayerQueueIfNeeded() {
+        let trackToCheck = currentTrackPosition?.track ?? tableOfContents.allTracks.first
+        
+        guard let track = trackToCheck,
+              let fileStatus = assetFileStatus(track.downloadTask),
+              case .saved(let urls) = fileStatus,
+              !isPlaying else {
+            return
+        }
+        
+        if let currentAssetURL = (avQueuePlayer.currentItem?.asset as? AVURLAsset)?.url,
+           urls.contains(currentAssetURL) {
+            rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
+        } else if currentTrackPosition == nil && tableOfContents.allTracks.first?.id == track.id {
+            buildPlayerQueue()
+            print("Debugger: Building player queue for the first track.")
+        }
     }
     
     private var errorDomain: String {
@@ -200,29 +221,6 @@ class OpenAccessPlayer: NSObject, Player {
             playbackStatePublisher.send(.started(trackPosition))
         default:
             handlePlaybackError(.playerNotReady)
-        }
-    }
-
-    private func handleDownloadState(_ downloadState: DownloadTaskState, trackPosition: TrackPosition) {
-        switch downloadState {
-        case .completed:
-            // Rebuild queue now that download is complete
-            self.buildPlayerQueue()
-            DispatchQueue.main.async {
-                self.avQueuePlayer.play()
-            }
-            playbackStatePublisher.send(.started(trackPosition))
-        case .error(let error):
-            // Notify that the playback failed due to download error
-            playbackStatePublisher.send(
-                .failed(trackPosition,
-                        NSError(domain: errorDomain,
-                                code: OpenAccessPlayerError.downloadNotFinished.rawValue,
-                                userInfo: ["message": "Download failed: \(String(describing: error?.localizedDescription))"])
-                       )
-            )
-        default:
-            return
         }
     }
 
