@@ -9,10 +9,6 @@
 import UIKit
 import AudioEngine
 
-private func findawayKey(_ key: String) -> String {
-    return "findaway:\(key)"
-}
-
 public final class FindawayAudiobook: Audiobook {
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String? = nil) {
         guard let fulfillmentId = manifest.metadata?.drmInformation?.fulfillmentId else {

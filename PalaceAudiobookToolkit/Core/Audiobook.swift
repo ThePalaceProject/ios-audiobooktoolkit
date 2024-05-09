@@ -8,6 +8,25 @@
 
 import Foundation
 
+public enum DRMStatus: Int {
+    public typealias RawValue = Int
+    case failed
+    case processing
+    case succeeded
+    case unknown
+}
+
+/// DRM Decryptor protocol - decrypts protected files
+@objc public protocol DRMDecryptor {
+    
+    /// Decrypt protected file
+    /// - Parameters:
+    ///   - url: encrypted file URL.
+    ///   - resultUrl: URL to save decrypted file at.
+    ///   - completion: decryptor callback with optional `Error`.
+    func decrypt(url: URL, to resultUrl: URL, completion: @escaping (_ error: Error?) -> Void)
+}
+
 public struct AudiobookFactory {
     public static func audiobook(
         for manifest: Manifest,
@@ -33,7 +52,7 @@ public struct AudiobookFactory {
     }
 }
 
-open class Audiobook: NSObject, AudiobookProtocol {
+open class Audiobook: NSObject {
     public var uniqueId: String
     public var annotationsId: String { uniqueId }
     public var tableOfContents: AudiobookTableOfContents
