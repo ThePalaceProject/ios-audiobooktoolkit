@@ -8,7 +8,7 @@ final class OverdriveDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
 
     private static let DownloadTaskTimeoutValue = 60.0
-
+    
     private var urlSession: URLSession?
         
     /// Progress should be set to 1 if the file already exists.
