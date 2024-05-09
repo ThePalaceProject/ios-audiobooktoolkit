@@ -167,13 +167,21 @@ final class OpenAccessDownloadTask: DownloadTask {
     {
         let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
-        let delegate = DownloadTaskURLSessionDelegate(downloadTask: self,
-                                                                statePublisher: self.statePublisher,
-                                                                finalDirectory: finalURL)
+        let delegate = DownloadTaskURLSessionDelegate(
+            downloadTask: self,
+            statePublisher: self.statePublisher,
+            finalDirectory: finalURL
+        )
+        
         session = URLSession(configuration: config,
                                 delegate: delegate,
-                                delegateQueue: nil)
-        var request = URLRequest(url: remoteURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue)
+                                delegateQueue: nil
+        )
+        var request = URLRequest(
+            url: remoteURL,
+            cachePolicy: .useProtocolCachePolicy,
+            timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue
+        )
         
         // Feedbooks DRM
         // CantookAudio does not support Authorization fields causing downloads to fail, this fix may need to be less exclusive

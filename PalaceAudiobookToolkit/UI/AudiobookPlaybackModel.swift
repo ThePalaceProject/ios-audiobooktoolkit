@@ -19,7 +19,6 @@ class AudiobookPlaybackModel: ObservableObject {
     @Published var trackErrors: [String: Error] = [:]
     @Published var coverImage: UIImage?
 
-    private var progressUpdateSubscription: AnyCancellable?
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
 
@@ -88,6 +87,11 @@ class AudiobookPlaybackModel: ObservableObject {
             .sink { [weak self] state in
                 guard let self = self else { return }
                 switch state {
+                case .overallDownloadProgress(let overallProgress):
+                    isDownloading = overallProgress < 1
+                    isWaitingForPlayer = isDownloading
+
+                    overallDownloadProgress = overallProgress
                 case .positionUpdated(let position):
                     self.currentLocation = position
                     self.updateProgress()
@@ -134,6 +138,7 @@ class AudiobookPlaybackModel: ObservableObject {
     deinit {
         self.reachability.stopMonitoring()
         self.audiobookManager.audiobook.player.unload()
+        subscriptions.removeAll()
     }
     
     func playPause() {
@@ -144,6 +149,7 @@ class AudiobookPlaybackModel: ObservableObject {
     func stop() {
         saveLocation()
         audiobookManager.unload()
+        subscriptions.removeAll()
     }
 
     private func saveLocation() {
@@ -227,28 +233,6 @@ class AudiobookPlaybackModel: ObservableObject {
     
     func playerDidUnload(_ player: Player) {
         isWaitingForPlayer = false
-    }
-    
-    private func setupNetworkServiceSubscription() {
-        audiobookManager.networkService.downloadStatePublisher
-            .sink { [weak self] downloadState in
-                switch downloadState {
-                case .progress(track: let track, progress: let progress):
-                    break
-                case .completed(track: let track):
-                    self?.trackErrors.removeValue(forKey: track.id)
-                    break
-                case .error(track: let track, error: let error):
-                    self?.trackErrors[track.id] = error
-                    self?.isDownloading = false
-                case .overallProgress(progress: let progress):
-                    self?.overallDownloadProgress = progress
-                    self?.isDownloading = progress < 1.0
-                case .deleted(track: let track):
-                    self?.trackErrors.removeValue(forKey: track.id)
-                }
-            }
-            .store(in: &subscriptions)
     }
     
     // MARK: - Media Player

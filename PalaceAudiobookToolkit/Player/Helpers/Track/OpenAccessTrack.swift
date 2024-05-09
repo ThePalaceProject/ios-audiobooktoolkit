@@ -60,7 +60,7 @@ public class OpenAccessTrack: Track {
         self.url = url
         self.urls = [url]
         self.urlString = urlString
-        self.mediaType = TrackMediaType(rawValue: manifest.formatType ?? "") ?? .audioMP4
+        self.mediaType = manifest.trackMediaType
         self.key = "\(audiobookID)-\(index)"
         self.title = title ?? "Track \(index + 1)"
         self.index = index

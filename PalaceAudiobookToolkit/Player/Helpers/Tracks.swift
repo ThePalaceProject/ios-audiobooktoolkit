@@ -106,7 +106,9 @@ public class Tracks {
     }
 
     private func initializeTracks() {
-        if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
+        if let spine = manifest.spine, !spine.isEmpty {
+            addTracksFromSpine(spine)
+        } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
             addTracksFromReadingOrder(readingOrder)
         } else if let linksDict = manifest.linksDictionary, let contentLinks = linksDict.contentLinks, !contentLinks.isEmpty {
             addTracksFromLinks(contentLinks)
@@ -169,7 +171,6 @@ public class Tracks {
         )
     }
 
-
     public func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
             if (track.urls?.first?.absoluteString ?? "") == href {
@@ -186,6 +187,26 @@ public class Tracks {
             }
             return false
         })
+    }
+
+    private func addTracksFromSpine(_ spine: [Manifest.SpineItem]) {
+        for (index, item) in spine.enumerated() {
+            if let track = createTrack(from: item, index: index) {
+                tracks.append(track)
+            }
+        }
+    }
+    
+    private func createTrack(from item: Manifest.SpineItem, index: Int) -> (any Track)? {
+        return TrackFactory.createTrack(
+            from: manifest,
+            title: item.title,
+            urlString: item.href,
+            audiobookID: audiobookID,
+            index: index,
+            duration: Double(item.duration),
+            token: token
+        )
     }
 
     public func track(forPart part: Int, sequence: Int) -> (any Track)? {

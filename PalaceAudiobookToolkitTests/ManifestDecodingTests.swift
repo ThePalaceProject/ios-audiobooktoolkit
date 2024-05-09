@@ -8,6 +8,7 @@
 
 import XCTest
 @testable import PalaceAudiobookToolkit
+@testable import NYPLAEToolkit
 
 enum ManifestJSON: String, CaseIterable {
     case alice = "alice_manifest"

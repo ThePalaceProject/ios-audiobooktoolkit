@@ -30,7 +30,9 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         self.tracks = tracks
         self.toc = []
         
-        if let tocItems = manifest.toc, !tocItems.isEmpty {
+        if let spine = manifest.spine, !spine.isEmpty {
+            loadTocFromSpine(spine)
+        } else if let tocItems = manifest.toc, !tocItems.isEmpty {
             loadTocFromTocItems(tocItems)
         } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
             loadTocFromReadingOrder(readingOrder)
@@ -77,6 +79,16 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
                 let chapter = Chapter(title: item.title ?? "Untitled", position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
+                toc.append(chapter)
+            }
+        }
+    }
+    
+    private mutating func loadTocFromSpine(_ spine: [Manifest.SpineItem]) {
+        for (index, item) in spine.enumerated() {
+            if let track = tracks.track(forHref: item.href) {
+                let chapterTitle = item.title
+                let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
                 toc.append(chapter)
             }
         }

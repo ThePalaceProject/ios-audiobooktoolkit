@@ -22,6 +22,7 @@ public enum AudiobookManagerState {
     case playbackFailed(TrackPosition?)
     case playbackCompleted(TrackPosition)
     case playbackUnloaded
+    case overallDownloadProgress(Float)
     case error((any Track)?, Error?)
 }
 
@@ -142,6 +143,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         subscribeToPlayer()
         setupNowPlayingInfoTimer()
         subscribeToMediaControlCommands()
+        calculateOverallDownloadProgress()
     }
     
     static public func setLogHandler(_ handler: @escaping LogHandler) {
@@ -157,8 +159,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 default:
                     break
                 }
+    
+                self?.calculateOverallDownloadProgress()
             }
             .store(in: &cancellables)
+    }
+    
+    private func calculateOverallDownloadProgress() {
+        let tracks = audiobook.tableOfContents.allTracks
+        let totalProgress = tracks.reduce(0.0) { (result, track) in
+            result + (track.downloadTask?.downloadProgress ?? 0.0)
+        }
+        
+        let overallProgress = totalProgress / Float(tracks.count)
+        statePublisher.send(.overallDownloadProgress(overallProgress))
     }
     
     private func setupNowPlayingInfoTimer() {
@@ -210,6 +224,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     public func unload() {
         audiobook.player.unload()
+        cancellables.removeAll()
     }
 
     public func saveLocation(_ location: TrackPosition) -> Result<Void, any Error>? {

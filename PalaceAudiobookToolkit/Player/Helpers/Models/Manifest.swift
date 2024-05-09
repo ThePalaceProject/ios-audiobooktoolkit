@@ -227,11 +227,17 @@ public extension Manifest {
     }
     
     var trackMediaType: TrackMediaType {
-        readingOrder?.first?.trackMediaType ?? .audioMP3
+        readingOrder?.first?.trackMediaType ?? spine?.first?.trackMediaType ?? .audioMP3
     }
 }
 
 extension Manifest.ReadingOrderItem {
+    var trackMediaType: TrackMediaType? {
+        TrackMediaType(rawValue: self.type)
+    }
+}
+
+extension Manifest.SpineItem {
     var trackMediaType: TrackMediaType? {
         TrackMediaType(rawValue: self.type)
     }

@@ -75,6 +75,8 @@ class OpenAccessPlayer: NSObject, Player {
         }
                 
         let currentTime = currentItem.currentTime().seconds
+        print("Debugger: currentItem: \(currentItem)")
+
         guard currentTime.isFinite else {
             return lastKnownPosition
         }
@@ -90,6 +92,7 @@ class OpenAccessPlayer: NSObject, Player {
     
     private var cancellables = Set<AnyCancellable>()
     private var lastKnownPosition: TrackPosition?
+    private var isObservingPlayerStatus = false
 
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
         didSet {
@@ -242,6 +245,8 @@ class OpenAccessPlayer: NSObject, Player {
         avQueuePlayer.removeAllItems()
         isLoaded = false
         playbackStatePublisher.send(.unloaded)
+        removePlayerObservers()
+        cancellables.removeAll()
     }
 
     func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
@@ -298,6 +303,7 @@ extension OpenAccessPlayer {
         
         avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
         avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+        isObservingPlayerStatus = true
     }
 
     @objc func playerItemDidReachEnd(_ notification: Notification) {
@@ -315,9 +321,11 @@ extension OpenAccessPlayer {
     }
     
     func removePlayerObservers() {
+        guard isObservingPlayerStatus else { return }
         NotificationCenter.default.removeObserver(self)
         avQueuePlayer.removeObserver(self, forKeyPath: "status")
         avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+        isObservingPlayerStatus = false
     }
     
     override func observeValue(
@@ -689,7 +697,6 @@ extension OpenAccessPlayer {
                     items.append(playerItem)
                 }
             case .missing:
-                //TODO: Handle missing track issue, check the token.
                 listenForDownloadCompletion(task: track.downloadTask)
                 continue
             case .unknown:

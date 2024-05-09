@@ -426,7 +426,7 @@
 //        return self.cursor.currentElement.chapter
 //    }
 //
-//    /// The overall readiness of an AVPlayer and the currently queued AVPlayerItem's readiness values.
+//    /// The overallDownloadProgress readiness of an AVPlayer and the currently queued AVPlayerItem's readiness values.
 //    /// You cannot play audio without both being "ready."
 //    fileprivate func overallPlayerReadiness(player: AVPlayer.Status, item: AVPlayerItem.Status?) -> AVPlayerItem.Status
 //    {
