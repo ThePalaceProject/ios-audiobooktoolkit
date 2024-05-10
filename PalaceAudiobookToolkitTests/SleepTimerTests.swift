@@ -41,8 +41,8 @@ class SleepTimerTests: XCTestCase {
         let duration = TimeInterval(60)
         let trackPosition = TrackPosition(
             track: try! OpenAccessTrack(
-                manifest: try! Manifest.from(jsonFileName: ManifestJSON.alice.rawValue, bundle: Bundle(for: type(of: self))),
-                urlString: "",
+                manifest: try! Manifest.from(jsonFileName: ManifestJSON.bigFail.rawValue, bundle: Bundle(for: type(of: self))),
+                urlString: "www.google.com",
                 audiobookID: "TEST_ID",
                 title: "TEST_TITLE",
                 duration: duration,

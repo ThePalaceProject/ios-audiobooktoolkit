@@ -53,9 +53,9 @@ public protocol AudiobookNetworkService: AnyObject {
 
 public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public var downloadStatePublisher = PassthroughSubject<DownloadState, Never>()
-    
     public let tracks: [any Track]
     private var cancellables: Set<AnyCancellable> = []
+    private var progressDictionary: [String: Float] = [:]
     
     public init(tracks: [any Track]) {
         self.tracks = tracks
@@ -63,36 +63,40 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
     
     public func fetch() {
-        tracks.forEach {
-            $0.downloadTask?.fetch()
-        }
+        tracks.forEach { $0.downloadTask?.fetch() }
     }
-
+    
     public func deleteAll() {
-        tracks.forEach { track in
-            track.downloadTask?.delete()
-        }
+        tracks.forEach { $0.downloadTask?.delete() }
     }
     
     private func setupDownloadTasks() {
         tracks.forEach { track in
             guard let downloadTask = track.downloadTask else { return }
-            
             downloadTask.statePublisher
                 .sink { [weak self] state in
+                    guard let self = self else { return }
                     switch state {
                     case .progress(let progress):
-                        self?.downloadStatePublisher.send(.progress(track: track, progress: progress))
+                        self.progressDictionary[track.key] = progress
+                        self.updateOverallProgress()
+                        self.downloadStatePublisher.send(.progress(track: track, progress: progress))
                     case .completed:
-                        self?.downloadStatePublisher.send(.completed(track: track))
+                        self.downloadStatePublisher.send(.completed(track: track))
                     case .error(let error):
-                        self?.downloadStatePublisher.send(.error(track: track, error: error))
+                        self.downloadStatePublisher.send(.error(track: track, error: error))
                     case .deleted:
-                        self?.downloadStatePublisher.send(.deleted(track: track))
-                        break
+                        self.downloadStatePublisher.send(.deleted(track: track))
                     }
                 }
-                .store(in: &cancellables)
+                .store(in: &self.cancellables)
         }
     }
+
+    private func updateOverallProgress() {
+        let totalProgress = progressDictionary.values.reduce(0, +)
+        let overallProgress = totalProgress / Float(tracks.count)
+        downloadStatePublisher.send(.overallProgress(progress: overallProgress))
+    }
 }
+

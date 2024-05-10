@@ -173,9 +173,10 @@ final class OpenAccessDownloadTask: DownloadTask {
             finalDirectory: finalURL
         )
         
-        session = URLSession(configuration: config,
-                                delegate: delegate,
-                                delegateQueue: nil
+        session = URLSession(
+            configuration: config,
+            delegate: delegate,
+            delegateQueue: nil
         )
         var request = URLRequest(
             url: remoteURL,

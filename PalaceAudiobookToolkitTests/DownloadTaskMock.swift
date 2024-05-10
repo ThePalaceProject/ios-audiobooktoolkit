@@ -27,7 +27,7 @@ class DownloadTaskMock: DownloadTask {
     
     func delete() { }
     
-    let downloadProgress: Float
+    var downloadProgress: Float
     
     let key: String
     
