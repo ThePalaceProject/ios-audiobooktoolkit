@@ -106,13 +106,7 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         case .lcp:
             return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
-
-            guard let playerClass = NSClassFromString("NYPLAEToolkit.FindawayPlayer") as? Player.Type,
-                  let player = playerClass.init(tableOfContents: toc) else {
-             fallthrough
-            }
-
-            return player
+            return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
         default:
             return OpenAccessPlayer(tableOfContents: toc)
         }

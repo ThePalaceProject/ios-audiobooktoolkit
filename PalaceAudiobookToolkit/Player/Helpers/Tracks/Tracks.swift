@@ -43,20 +43,14 @@ class TrackFactory: TrackFactoryProtocol {
 
             )
         case .findaway:
-            let factoryClassName = "NYPLAEToolkit.FindawayTrackFactory"
-            guard let factoryClass = NSClassFromString(factoryClassName) as? TrackFactoryProtocol.Type else {
-                print("Failed to find track factory class.")
-                return nil
-            }
-            
-            return factoryClass.createTrack(
-                from: manifest,
-                title: title,
+            return try? FindawayTrack(
+                manifest: manifest,
                 urlString: urlString,
                 audiobookID: audiobookID,
-                index: index,
+                title: title,
                 duration: duration,
-                token: nil
+                index: index,
+                token: token
             )
         default:
             return try? OpenAccessTrack(

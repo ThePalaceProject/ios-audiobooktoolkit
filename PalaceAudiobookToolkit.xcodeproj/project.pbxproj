@@ -93,6 +93,15 @@
 		E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A92BA3E4610063E68E /* Tracks.swift */; };
 		E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01AB2BA3E47A0063E68E /* Manifest.swift */; };
 		E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */; };
+		E5ECFA7C2BED6C050008670F /* FindawayTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */; };
+		E5ECFA7E2BED6C150008670F /* FindawayPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA7D2BED6C140008670F /* FindawayPlayer.swift */; };
+		E5ECFA802BED6C1D0008670F /* FindawayDownloadTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA7F2BED6C1D0008670F /* FindawayDownloadTask.swift */; };
+		E5ECFA822BED6C270008670F /* FindawayAudiobookLifecycleListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA812BED6C270008670F /* FindawayAudiobookLifecycleListener.swift */; };
+		E5ECFA852BED6C430008670F /* FindawayDatabaseVerification.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */; };
+		E5ECFA872BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */; };
+		E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */; };
+		E5ECFA9C2BED70E80008670F /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; };
+		E5ECFA9D2BED70E80008670F /* AudioEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E5FC12AC2A24E9B6000BFED5 /* ChapterLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
 		E71168B82AB453A800629DC7 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B72AB453A800629DC7 /* Reachability.swift */; };
@@ -123,10 +132,23 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		E5ECFA9E2BED70E80008670F /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E5ECFA9D2BED70E80008670F /* AudioEngine.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		17576CAB248E89DE00E18B4C /* OverdriveDownloadTask.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OverdriveDownloadTask.swift; sourceTree = "<group>"; };
 		178707C724DA505700649567 /* RSAUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSAUtils.swift; sourceTree = "<group>"; };
-		219868BE267E0C770041369E /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = Carthage/Build/PureLayout.xcframework; sourceTree = "<group>"; };
 		21B26CCF257FBA9F00A60238 /* LCPDownloadTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPDownloadTask.swift; sourceTree = "<group>"; };
 		7B4F1B1F20361546003F047B /* Cursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cursor.swift; sourceTree = "<group>"; };
 		7B54418C200EA7C20047B6C6 /* PalaceAudiobookToolkit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PalaceAudiobookToolkit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -144,7 +166,6 @@
 		7B7B370720211CE100030A1E /* OpenAccessDownloadTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessDownloadTask.swift; sourceTree = "<group>"; };
 		7B8026A2206AB0AF00012808 /* HumanReadablePlaybackRate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanReadablePlaybackRate.swift; sourceTree = "<group>"; };
 		7B87DCC42087AE5D00256331 /* PlayerManipulationTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerManipulationTest.swift; sourceTree = "<group>"; };
-		7BA55A3220A3487700712CAC /* NYPLAEToolkit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = NYPLAEToolkit.framework; sourceTree = "<group>"; };
 		7BBF4DFB20506FF600700731 /* SleepTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimer.swift; sourceTree = "<group>"; };
 		7BBF4DFD2050850A00700731 /* SleepTimerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimerTests.swift; sourceTree = "<group>"; };
 		7BBF4DFF2050856400700731 /* PlayerMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMock.swift; sourceTree = "<group>"; };
@@ -216,6 +237,14 @@
 		E5DE01A92BA3E4610063E68E /* Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tracks.swift; sourceTree = "<group>"; };
 		E5DE01AB2BA3E47A0063E68E /* Manifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manifest.swift; sourceTree = "<group>"; };
 		E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestDecodingTests.swift; sourceTree = "<group>"; };
+		E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayTrack.swift; sourceTree = "<group>"; };
+		E5ECFA7D2BED6C140008670F /* FindawayPlayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlayer.swift; sourceTree = "<group>"; };
+		E5ECFA7F2BED6C1D0008670F /* FindawayDownloadTask.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadTask.swift; sourceTree = "<group>"; };
+		E5ECFA812BED6C270008670F /* FindawayAudiobookLifecycleListener.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobookLifecycleListener.swift; sourceTree = "<group>"; };
+		E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDatabaseVerification.swift; sourceTree = "<group>"; };
+		E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlaybackNotificationHandler.swift; sourceTree = "<group>"; };
+		E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadNotificationHandler.swift; sourceTree = "<group>"; };
+		E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = AudioEngine.xcframework; path = ../Carthage/Build/AudioEngine.xcframework; sourceTree = "<group>"; };
 		E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocation.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlaybackModel.swift; sourceTree = "<group>"; };
@@ -240,6 +269,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5ECFA9C2BED70E80008670F /* AudioEngine.xcframework in Frameworks */,
 				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
 				E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
@@ -326,10 +356,9 @@
 		7B5441E8200EA8740047B6C6 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */,
 				E7E96BBF2B0E82740036B23A /* PalaceUIKit.framework */,
 				E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */,
-				219868BE267E0C770041369E /* PureLayout.xcframework */,
-				7BA55A3220A3487700712CAC /* NYPLAEToolkit.framework */,
 				7BD759CB20191980004CE65F /* CoreData.framework */,
 				7BD759B720127E31004CE65F /* MediaPlayer.framework */,
 			);
@@ -341,6 +370,7 @@
 			children = (
 				E5CC6E792BBB295F00C31ABD /* Player.swift */,
 				E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */,
+				E5ECFA7D2BED6C140008670F /* FindawayPlayer.swift */,
 				E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */,
 				E5DE01A02BA3E1830063E68E /* Helpers */,
 			);
@@ -353,7 +383,6 @@
 				E5797E9B2BAA35F40017AB03 /* Audiobook.swift */,
 				E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */,
 				E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */,
-				7B5441DF200EA82C0047B6C6 /* AudiobookLifecycleManager.swift */,
 				7B5441E0200EA82C0047B6C6 /* AudiobookManager.swift */,
 				7B5441DA200EA82C0047B6C6 /* AudiobookMetadata.swift */,
 				7BD8E4FB20753BC6008ED3F1 /* Bundle.swift */,
@@ -377,6 +406,7 @@
 				E71168B72AB453A800629DC7 /* Reachability.swift */,
 				7BD759C92017CEA3004CE65F /* DownloadTask.swift */,
 				7B7B370720211CE100030A1E /* OpenAccessDownloadTask.swift */,
+				E5ECFA7F2BED6C1D0008670F /* FindawayDownloadTask.swift */,
 				17576CAB248E89DE00E18B4C /* OverdriveDownloadTask.swift */,
 				21B26CCF257FBA9F00A60238 /* LCPDownloadTask.swift */,
 			);
@@ -457,6 +487,7 @@
 		E57FCA232BC8D3C0008D8907 /* Tracks */ = {
 			isa = PBXGroup;
 			children = (
+				E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */,
 				E5DE01A92BA3E4610063E68E /* Tracks.swift */,
 				E5DE01A72BA3E4580063E68E /* Track.swift */,
 				E57FCA272BC8E768008D8907 /* LCPTrack.swift */,
@@ -476,6 +507,11 @@
 		E5DE01A02BA3E1830063E68E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */,
+				E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */,
+				7B5441DF200EA82C0047B6C6 /* AudiobookLifecycleManager.swift */,
+				E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */,
+				E5ECFA812BED6C270008670F /* FindawayAudiobookLifecycleListener.swift */,
 				7BBF4DFB20506FF600700731 /* SleepTimer.swift */,
 				E5FC12AB2A24E9B6000BFED5 /* ChapterLocation.swift */,
 				E5C3820B2BDACB7E00049CF1 /* AVPlayer+Extensions.swift */,
@@ -549,6 +585,7 @@
 				7B544189200EA7C20047B6C6 /* Headers */,
 				7B54418A200EA7C20047B6C6 /* Resources */,
 				E6EF9A1C218CE5D9000CE559 /* Copy Frameworks (Carthage) */,
+				E5ECFA9E2BED70E80008670F /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -719,6 +756,7 @@
 				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
 				7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */,
 				E71168BA2AB4A63000629DC7 /* ChapterLocation+emptyLocation.swift in Sources */,
+				E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
 				E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */,
 				7B8026A3206AB0AF00012808 /* HumanReadablePlaybackRate.swift in Sources */,
@@ -735,8 +773,10 @@
 				E7F127BA2A9921BE001ED616 /* AudiobookPlayerView.swift in Sources */,
 				7B5441E6200EA82C0047B6C6 /* AudiobookLifecycleManager.swift in Sources */,
 				7B5441E7200EA82C0047B6C6 /* AudiobookManager.swift in Sources */,
+				E5ECFA7E2BED6C150008670F /* FindawayPlayer.swift in Sources */,
 				7BDD33B320470A7100CC8807 /* HumanReadablePercentage.swift in Sources */,
 				E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */,
+				E5ECFA802BED6C1D0008670F /* FindawayDownloadTask.swift in Sources */,
 				E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */,
 				7B5441E1200EA82C0047B6C6 /* AudiobookMetadata.swift in Sources */,
 				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
@@ -752,13 +792,17 @@
 				E57FCA222BC8D0ED008D8907 /* DownloadTask.swift in Sources */,
 				E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */,
 				E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */,
+				E5ECFA872BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift in Sources */,
 				8CF57BDA243277180053C31E /* MediaProcessor.swift in Sources */,
 				E71168B82AB453A800629DC7 /* Reachability.swift in Sources */,
+				E5ECFA822BED6C270008670F /* FindawayAudiobookLifecycleListener.swift in Sources */,
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				E59FCEC929425F81004FD730 /* Strings.swift in Sources */,
+				E5ECFA852BED6C430008670F /* FindawayDatabaseVerification.swift in Sources */,
 				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
 				178707C824DA505700649567 /* RSAUtils.swift in Sources */,
+				E5ECFA7C2BED6C050008670F /* FindawayTrack.swift in Sources */,
 				E55DE9802BDC0B6300ECB153 /* OverdriveTrack.swift in Sources */,
 				E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */,
 				7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */,
@@ -942,6 +986,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Carthage/Build",
+					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = PalaceAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -978,6 +1023,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Carthage/Build",
+					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = PalaceAudiobookToolkit/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -1005,6 +1051,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Carthage/Build/**",
+					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = PalaceAudiobookToolkitTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1029,6 +1076,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Carthage/Build/**",
+					"$(PROJECT_DIR)",
 				);
 				INFOPLIST_FILE = PalaceAudiobookToolkitTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;

@@ -54,11 +54,8 @@ import AVFoundation
     private var listeners = [AudiobookLifecycleListener]()
     public override init() {
         super.init()
-        let FindawayListenerClass = NSClassFromString("NYPLAEToolkit.FindawayAudiobookLifecycleListener") as? AudiobookLifecycleListener.Type
-        let findawayListener = FindawayListenerClass?.init()
-        if let listener = findawayListener {
-            self.listeners.append(listener)
-        }
+        let findawayListener = FindawayAudiobookLifecycleListener()
+        self.listeners.append(findawayListener)
     }
 }
 
