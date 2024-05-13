@@ -102,7 +102,6 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
-    private func handlePlayerStatusChange() {
     private var errorDomain: String {
         return OpenAccessPlayerErrorDomain
     }
