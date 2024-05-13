@@ -265,7 +265,6 @@ class OpenAccessPlayer: NSObject, Player {
             print("Debugger: Building player queue for the first track.")
         }
     }
-    
 }
 
 extension OpenAccessPlayer {
@@ -463,7 +462,6 @@ extension OpenAccessPlayer {
         }
     }
     
-    // Rebuilding the player queue when necessary
     private func rebuildPlayerQueueAndNavigate(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         avQueuePlayer.removeAllItems()
         let playerItems = buildPlayerItems()
