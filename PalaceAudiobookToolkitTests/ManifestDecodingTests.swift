@@ -13,8 +13,7 @@ final class ManifestDecodingTests: XCTestCase {
     private let enableDataLogging = true
     
     func testManifestDecoding() {
-//        for manifestJSON in ManifestJSON.allCases {
-        for manifestJSON in [ManifestJSON.littleWomenDevotional] {
+        for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
                 guard let jsonData = try? Data(contentsOf: Bundle(for: type(of: self)).url(forResource: manifestJSON.rawValue, withExtension: "json")!),
@@ -78,6 +77,10 @@ final class ManifestDecodingTests: XCTestCase {
             case "resources":
                 if let jsonResources = value as? [[String: Any]] {
                     validateLinks(manifest.resources ?? [], against: jsonResources)
+                }
+            case "spine":
+                if let spineArray = value as? [[String: Any]] {
+                    validateSpineItems(manifest.spine ?? [], against: spineArray)
                 }
             default:
                 if let valueAsString = value as? String, let propertyValueAsString = manifestProperty.value as? String {
@@ -152,6 +155,24 @@ private func validateDictionaryContext(_ manifestContext: ManifestContext, conte
         XCTFail("Expected an object with key '\(key)' at index \(index)")
     }
 }
+
+private func validateSpineItems(_ spineItems: [Manifest.SpineItem], against jsonSpineItems: [[String: Any]]) {
+    XCTAssertEqual(spineItems.count, jsonSpineItems.count, "Spine count does not match")
+    
+    for (index, spineItem) in spineItems.enumerated() {
+        guard index < jsonSpineItems.count else {
+            XCTFail("Index out of bounds for JSON spine array")
+            break
+        }
+        
+        let jsonSpineItem = jsonSpineItems[index]
+        XCTAssertEqual(spineItem.title, jsonSpineItem["title"] as? String, "Title mismatch in spine at index \(index)")
+        XCTAssertEqual(spineItem.href, jsonSpineItem["href"] as? String, "Href mismatch in spine at index \(index)")
+        XCTAssertEqual(spineItem.type, jsonSpineItem["type"] as? String, "Type mismatch in spine at index \(index)")
+        XCTAssertEqual(spineItem.duration, jsonSpineItem["duration"] as? Int, "Duration mismatch in spine at index \(index)")
+    }
+}
+
 
 private func validateMetadata(_ manifestMetadata: Manifest.Metadata, against jsonMetadata: [String: Any]) {
     XCTAssertEqual(manifestMetadata.type, jsonMetadata["@type"] as? String)
