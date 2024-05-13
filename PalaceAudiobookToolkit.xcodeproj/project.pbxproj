@@ -56,7 +56,6 @@
 		E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
 		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */; };
-		E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
 		E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */; };
 		E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */; };
@@ -200,7 +199,6 @@
 		E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = littleWomenDevotional_manifest.json; sourceTree = "<group>"; };
 		E549653227FBEAC400913BD6 /* flatland_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = flatland_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = best_new_horror_manifest.json; sourceTree = "<group>"; };
-		E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTOCTests.swift; sourceTree = "<group>"; };
 		E55470132B7C1814003447B8 /* quicksilver_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = quicksilver_manifest.json; sourceTree = "<group>"; };
 		E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = christmas_carol_manifest.json; sourceTree = "<group>"; };
 		E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessPlayer.swift; sourceTree = "<group>"; };
@@ -336,7 +334,6 @@
 				8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */,
 				7BBF4DFF2050856400700731 /* PlayerMock.swift */,
 				7BBF4DFD2050850A00700731 /* SleepTimerTests.swift */,
-				E549653627FCC52E00913BD6 /* AudiobookTOCTests.swift */,
 				E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */,
 				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
 				E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */,
@@ -821,7 +818,6 @@
 				7BBF4DFE2050850A00700731 /* SleepTimerTests.swift in Sources */,
 				7B78545B204DEE8500F6589B /* AudiobookNetworkServiceTest.swift in Sources */,
 				7B78545D204DEE9900F6589B /* DownloadTaskMock.swift in Sources */,
-				E549653727FCC52E00913BD6 /* AudiobookTOCTests.swift in Sources */,
 				E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */,
 				8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */,
 				8CD8A20F243E7A0D009DA4CC /* Data+BigEndianTest.swift in Sources */,

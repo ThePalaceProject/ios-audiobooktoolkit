@@ -24,7 +24,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     var count: Int {
         toc.count
     }
-
+    
     init(manifest: Manifest, tracks: Tracks) {
         self.manifest = manifest
         self.tracks = tracks
@@ -48,11 +48,43 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
 
     private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
-        tocItems.forEach { tocItem in
-            toc.append(contentsOf: flattenChapters(entry: tocItem, tracks: tracks))
+        for tocItem in tocItems {
+            if let chapter = parseChapter(from: tocItem, tracks: tracks) {
+                toc.append(chapter)
+            }
+            // Recursively parse children if present
+            tocItem.children?.forEach { childItem in
+                if let subChapter = parseChapter(from: childItem, tracks: tracks) {
+                    toc.append(subChapter)
+                }
+            }
         }
         prependForwardChapterIfNeeded()
     }
+    
+    private func parseChapter(from tocItem: TOCItem, tracks: Tracks) -> Chapter? {
+        guard let fullHref = tocItem.href else {
+            return nil
+        }
+        
+        let components = fullHref.components(separatedBy: "#")
+        let trackHref = components.first
+        
+        var offsetInSeconds = 0.0
+        if components.count > 1, let timestampString = components.last?.replacingOccurrences(of: "t=", with: "") {
+            offsetInSeconds = Double(timestampString) ?? 0.0
+        }
+        
+        let track = tracks.track(forHref: trackHref ?? fullHref)
+        
+        guard let validTrack = track else {
+            return nil
+        }
+        
+        let startPosition = TrackPosition(track: validTrack, timestamp: offsetInSeconds, tracks: tracks)
+        return Chapter(title: tocItem.title ?? "Untitled", position: startPosition)
+    }
+
     
     private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
         readingOrder.forEach { item in
@@ -71,10 +103,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
                 toc.append(chapter)
             }
         }
-
+        
         prependForwardChapterIfNeeded()
     }
-
+    
     private mutating func loadTocFromLinks(_ links: Manifest.LinksDictionary) {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
@@ -105,59 +137,18 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         }
     }
 
-    private func flattenChapters(entry: TOCItem, tracks: Tracks) -> [Chapter] {
-        guard let fullHref = entry.href else { return [] }
-        var chapters: [Chapter] = []
-        
-        let components = fullHref.components(separatedBy: "#")
-        let hrefWithoutFragment = components.first ?? ""
-        
-        let timestampString = components.last?.replacingOccurrences(of: "t=", with: "")
-        let offsetInSeconds = Double(timestampString ?? "") ?? 0
-                
-        if let track = tracks.track(forHref: hrefWithoutFragment) {
-            let chapter = Chapter(
-                title: entry.title ?? "",
-                position: TrackPosition(
-                    track: track,
-                    timestamp: offsetInSeconds,
-                    tracks: tracks
-                )
-            )
-            chapters.append(chapter)
-        }
-        
-        entry.children?.forEach { childEntry in
-            chapters.append(contentsOf: flattenChapters(entry: childEntry, tracks: tracks))
-        }
-        
-        return chapters
-    }
-
-    mutating func calculateDurations() {
-        for idx in toc.indices {
-            if idx + 1 < toc.count {
-                let currentTrack = toc[idx].position.track
-                let nextChapter = toc[idx + 1]
-                let nextTrack = nextChapter.position.track
-                
-                if areTracksEqual(currentTrack, nextTrack) {
-                    toc[idx].duration = nextChapter.position.timestamp - toc[idx].position.timestamp
-                } else {
-                    toc[idx].duration = currentTrack.duration - toc[idx].position.timestamp
-                    
-                    if toc[idx].position.timestamp + toc[idx].duration! < currentTrack.duration {
-                        let leftoverDuration = currentTrack.duration - (toc[idx].position.timestamp + toc[idx].duration!)
-                        toc[idx + 1].position.timestamp += leftoverDuration
-                    }
-                }
+    private mutating func calculateDurations() {
+        for (index, chapter) in toc.enumerated() {
+            if index + 1 < toc.count {
+                let nextChapter = toc[index + 1]
+                toc[index].duration = try? nextChapter.position - chapter.position
             } else {
-                let lastTrack = toc[idx].position.track
-                toc[idx].duration = lastTrack.duration - toc[idx].position.timestamp
+                // Last chapter in the list
+                toc[index].duration = chapter.position.track.duration - chapter.position.timestamp
             }
         }
     }
-    
+
     func nextChapter(after chapter: Chapter) -> Chapter? {
         guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index + 1 < toc.count else {
             return nil
@@ -172,24 +163,34 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         return toc[index - 1]
     }
     
-    public func chapter(forPosition position: TrackPosition) throws -> Chapter {
+    func chapter(forPosition position: TrackPosition) throws -> Chapter {
         for chapter in toc {
-            if areTracksEqual(position.track, chapter.position.track) && position.timestamp >= chapter.position.timestamp &&
-                position.timestamp < chapter.position.timestamp + (chapter.duration ?? 0) {
+            let chapterDuration = chapter.duration ?? 0
+            let chapterEndPosition = try chapter.position + chapterDuration
+            
+            // Check if the position is within the chapter's range
+            if position >= chapter.position && position < chapterEndPosition {
                 return chapter
             }
         }
+        
         throw ChapterError.noChapterFoundForPosition
     }
-        
+    
     public func chapterOffset(for position: TrackPosition) throws -> Double {
         let chapter = try self.chapter(forPosition: position)
-        let chapterStartTimestamp = chapter.position.timestamp
-        let chapterOffset = position.timestamp - chapterStartTimestamp
+        let chapterStartPosition = TrackPosition(track: chapter.position.track, timestamp: chapter.position.timestamp, tracks: position.tracks)
         
-        return max(0, chapterOffset)
+        if position.track.id == chapter.position.track.id && position.timestamp >= chapter.position.timestamp {
+            // Both positions are in the same track and the position timestamp is after the chapter start
+            return position.timestamp - chapter.position.timestamp
+        } else {
+            // Handle transitions between tracks if needed
+            return (try position - chapterStartPosition)
+        }
     }
 
+    
     func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
         lhs.key == rhs.key && lhs.index == rhs.index
     }
@@ -197,7 +198,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     func index(of chapter: Chapter) -> Int? {
         toc.firstIndex(where: { $0.title == chapter.title })
     }
-
+    
     subscript(index: Int) -> Chapter {
         toc[index]
     }
@@ -205,6 +206,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
 enum ChapterError: Error {
     case noChapterFoundForPosition
+    case invalidChapterDuration
 }
 
 public extension AudiobookTableOfContents {

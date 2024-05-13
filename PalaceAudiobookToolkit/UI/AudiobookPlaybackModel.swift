@@ -186,6 +186,8 @@ class AudiobookPlaybackModel: ObservableObject {
 
 
     func move(to value: Double) {
+        isWaitingForPlayer = true
+
         self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
             self?.saveLocation()

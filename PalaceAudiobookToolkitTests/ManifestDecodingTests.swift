@@ -9,55 +9,6 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
-enum ManifestJSON: String, CaseIterable {
-    case alice = "alice_manifest"
-    case anathem = "anathem_manifest"
-    case animalFarm = "animalFarm_manifest"
-    case bigFail = "theBigFail_manifest"
-    case bocas = "bocas_manifest"
-    case christmasCarol = "christmas_carol_manifest"
-    case flatland = "flatland_manifest"
-    case bestNewHorror = "best_new_horror_manifest"
-    case quickSilver = "quicksilver_manifest"
-    case littleWomenDevotional = "littleWomenDevotional_manifest"
-    case martian = "the_martian_manifest"
-    case snowcrash = "snowcrash_manifest"
-    case secretLives = "secret_lives_manifest"
-    case theSystemOfTheWorld = "the_system_of_the_world_manifest"
-
-    var chapterCount: Int {
-        switch self {
-        case .alice: return 13
-        case .anathem: return 17
-        case .animalFarm: return 3
-        case .bigFail: return 22
-        case .bocas: return 14
-        case .christmasCarol: return 6
-        case .flatland: return 25
-        case .littleWomenDevotional: return 54
-        case .martian: return 41
-        case .bestNewHorror: return 7
-        case .quickSilver: return 29
-        case .snowcrash: return 72
-        case .secretLives: return 10
-        case .theSystemOfTheWorld: return 47
-        }
-    }
-    
-    var chapterDurations: [Double] {
-        switch self {
-        case .bigFail:
-            return [
-                15.0, 7.0, 586.0, 3061.0, 2740.0, 2177.0, 2395.0, 2230.0, 4218.0,
-                1991.0, 2830.0, 1533.0, 2811.0, 1752.0, 2367.0, 2863.0, 3025.0,
-                2596.0, 2296.0, 3019.0, 2006.0, 36.0
-            ]
-        default:
-            return []
-        }
-    }
-}
-
 final class ManifestDecodingTests: XCTestCase {
     private let enableDataLogging = true
     
@@ -331,3 +282,76 @@ extension Manifest {
     }
 }
 
+
+enum ManifestJSON: String, CaseIterable {
+    case alice = "alice_manifest"
+    case anathem = "anathem_manifest"
+    case animalFarm = "animalFarm_manifest"
+    case bigFail = "theBigFail_manifest"
+    case bocas = "bocas_manifest"
+    case christmasCarol = "christmas_carol_manifest"
+    case flatland = "flatland_manifest"
+    case bestNewHorror = "best_new_horror_manifest"
+    case quickSilver = "quicksilver_manifest"
+    case littleWomenDevotional = "littleWomenDevotional_manifest"
+    case martian = "the_martian_manifest"
+    case snowcrash = "snowcrash_manifest"
+    case secretLives = "secret_lives_manifest"
+    case theSystemOfTheWorld = "the_system_of_the_world_manifest"
+    
+    var chapterCount: Int {
+        switch self {
+        case .alice: return 13
+        case .anathem: return 17
+        case .animalFarm: return 3
+        case .bigFail: return 22
+        case .bocas: return 14
+        case .christmasCarol: return 6
+        case .flatland: return 25
+        case .littleWomenDevotional: return 54
+        case .martian: return 41
+        case .bestNewHorror: return 7
+        case .quickSilver: return 29
+        case .snowcrash: return 72
+        case .secretLives: return 10
+        case .theSystemOfTheWorld: return 47
+        }
+    }
+    
+    var chapterDurations: [Double] {
+        switch self {
+        case .bigFail:
+            return [
+                15.0, 7.0, 586.0, 3061.0, 2740.0, 2177.0, 2395.0, 2230.0, 4218.0,
+                1991.0, 2830.0, 1533.0, 2811.0, 1752.0, 2367.0, 2863.0, 3025.0,
+                2596.0, 2296.0, 3019.0, 2006.0, 36.0
+            ]
+        case .snowcrash:
+            return [
+                75.0, 1388.0, 955.0, 1834.0, 1161.0, 1154.0, 1278.0, 1196.0, 1128.0,
+                945.0, 961.0, 1130.0, 1621.0, 1188.0, 1411.0, 1089.0, 1256.0, 884.0,
+                591.0, 1173.0, 535.0, 1274.0, 806.0, 786.0, 1163.0, 837.0, 837.0, 1471.0,
+                799.0, 1046.0, 993.0, 988.0, 1199.0, 1096.0, 584.0, 1142.0, 1214.0, 470.0,
+                922.0, 1234.0, 1414.0, 808.0, 937.0, 1456.0, 691.0, 1169.0, 971.0, 996.0,
+                1320.0, 494.0, 994.0, 743.0, 632.0, 1.0
+            ]
+        default:
+            return []
+        }
+    }
+    
+    var chapterOffset: [Int] {
+        switch self {
+        case .snowcrash:
+            return [
+                0, 75, 1463, 2418, 626, 1787, 12, 1290, 2486, 326, 1271, 2232, 13, 1634, 13,
+                1424, 2513, 768, 1652, 2243, 939, 1474, 15, 821, 1607, 280, 1067, 1904, 686,
+                1485, 17, 1063, 18, 1006, 2205, 751, 1335, 19, 1233, 1703, 19, 687, 1921, 20,
+                828, 1765, 20, 370, 1061, 20, 1341, 1835, 21, 1039, 1782, 1850, 21, 1253, 1991,
+                21, 549, 1459, 2125, 2230, 398, 584, 1237, 1797, 22, 554, 1210, 1671
+            ]
+        default:
+            return []
+        }
+    }
+}

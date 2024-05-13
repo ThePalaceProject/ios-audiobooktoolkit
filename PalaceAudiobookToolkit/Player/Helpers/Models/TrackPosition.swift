@@ -25,29 +25,40 @@ public struct TrackPosition: Equatable, Comparable {
         self.timestamp = timestamp
         self.tracks = tracks
     }
-        
+    
     public static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
         if lhs.track.id == rhs.track.id {
+            // Direct subtraction if both positions are in the same track
             return lhs.timestamp - rhs.timestamp
         }
         
-        var diff = lhs.timestamp
         guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == lhs.track.id }),
               let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == rhs.track.id }) else {
             throw TrackPositionError.differentTracks
         }
         
-        if lhsTrackIndex <= rhsTrackIndex {
-            throw TrackPositionError.tracksOutOfOrder
+        // Handle both possible track orderings
+        var diff = 0.0
+        if lhsTrackIndex > rhsTrackIndex {
+            // Accumulate duration starting from rhs to lhs
+            diff += lhs.tracks[rhsTrackIndex].duration - rhs.timestamp // remaining time in rhs's track
+            for index in (rhsTrackIndex + 1)..<lhsTrackIndex {
+                diff += lhs.tracks[index].duration
+            }
+            diff += lhs.timestamp // time in lhs's track
+        } else {
+            // Accumulate duration starting from lhs to rhs (negative because lhs is before rhs)
+            diff -= rhs.timestamp - lhs.tracks[lhsTrackIndex].duration // remaining time in lhs's track
+            for index in (lhsTrackIndex + 1)..<rhsTrackIndex {
+                diff -= lhs.tracks[index].duration
+            }
+            diff -= rhs.timestamp // time in rhs's track
+            return -diff // return negative because lhs is before rhs
         }
         
-        for index in (rhsTrackIndex + 1)...lhsTrackIndex {
-            diff += lhs.tracks[index].duration
-        }
-        
-        diff += (lhs.tracks[rhsTrackIndex].duration - rhs.timestamp)
         return diff
     }
+
     
     public static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
