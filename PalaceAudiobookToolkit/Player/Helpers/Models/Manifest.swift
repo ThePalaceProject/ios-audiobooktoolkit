@@ -49,16 +49,17 @@ public struct Manifest: Codable {
     public let metadata: Metadata?
     let  links: [Link]?
     var linksDictionary: LinksDictionary?
-    let readingOrder: [ReadingOrderItem]?
+    public let readingOrder: [ReadingOrderItem]?
     let resources: [Link]?
     let toc: [TOCItem]?
     public let formatType: String?
-    
+    let spine: [SpineItem]?
+
     enum CodingKeys: String, CodingKey {
         case context = "@context"
-        case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType
+        case id, reserveId, crossRefId, metadata, links, readingOrder, resources, toc, formatType, spine
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -78,7 +79,8 @@ public struct Manifest: Codable {
         resources = try container.decodeIfPresent([Link].self, forKey: .resources)
         toc = try container.decodeIfPresent([TOCItem].self, forKey: .toc)
         formatType = try container.decodeIfPresent(String.self, forKey: .formatType)
-        
+        spine = try container.decodeIfPresent([SpineItem].self, forKey: .spine)
+
         if let linksArray = try? container.decode([Link].self, forKey: .links) {
             links = linksArray
             linksDictionary = nil
@@ -91,7 +93,7 @@ public struct Manifest: Codable {
         }
     }
     
-    static func customDecoder() -> JSONDecoder {
+    public static func customDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in
@@ -122,17 +124,18 @@ public struct Manifest: Codable {
         return decoder
     }
 
-    struct ReadingOrderItem: Codable {
+    public struct ReadingOrderItem: Codable {
         let title: String?
         let type: String
         let duration: Double
         let href: String?
+        let properties: Properties?
         
-        let findawayPart: Int?
-        let findawaySequence: Int?
+        public let findawayPart: Int?
+        public let findawaySequence: Int?
         
         enum CodingKeys: String, CodingKey {
-            case title, type, duration, href
+            case title, type, duration, href, properties
             case findawayPart = "findaway:part"
             case findawaySequence = "findaway:sequence"
         }
@@ -149,20 +152,37 @@ public struct Manifest: Codable {
         let height: Int?
         let width: Int?
         let bitrate: Int?
-        let title: String?
+        let title: LocalizedString?
         let duration: Int?
         let properties: Properties?
         let physicalFileLengthInBytes: Int?
+        
+        struct LocalizedString: Codable {
+            let values: [String: String]
+            
+            func localizedTitle() -> String {
+                let currentLocale = Locale.autoupdatingCurrent
+                let languageCode = currentLocale.languageCode ?? "en"
+                return values[languageCode] ?? values["en"] ?? "Untitled"
+            }
+        }
     }
     
     struct LinksDictionary: Codable {
         var contentLinks: [Link]?
         var selfLink: Link?
-        
+    
         enum CodingKeys: String, CodingKey {
             case contentLinks = "contentlinks"
             case selfLink = "self"
         }
+    }
+
+    public struct SpineItem: Codable {
+        let title: String
+        let href: String
+        let type: String
+        let duration: Int
     }
 
     public struct Properties: Codable {
@@ -195,47 +215,49 @@ extension Manifest {
     }
 }
 
-extension Manifest {
+public extension Manifest {
     enum AudiobookType {
-        case overdrive
-        case findaway
-        case lcp
-        case openAccess
-        case unknown
+        case findaway, overdrive, lcp, openAccess, unknown
     }
     
     var audiobookType: AudiobookType {
-        if let scheme = metadata?.drmInformation?.scheme {
-            if scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
-                return .findaway
-            }
+        if let scheme = metadata?.drmInformation?.scheme, scheme.contains("http://librarysimplified.org/terms/drm/scheme/FAE") {
+            return .findaway
         }
         
         if formatType?.contains("overdrive") == true {
             return .overdrive
         }
         
-        if !context.isEmpty && context.contains(where: { $0.matchesLCPContext }) {
+        if readingOrder?.contains(where: { $0.properties?.encrypted?.scheme == "http://readium.org/2014/01/lcp" }) == true {
             return .lcp
         }
         
-        if metadata?.drmInformation == nil {
-            return .openAccess
+        return .openAccess
+    }
+    
+    var trackMediaType: TrackMediaType {
+        readingOrder?.first?.trackMediaType ?? spine?.first?.trackMediaType ?? .audioMP3
+    }
+    
+    func profile(for type: AudiobookType) -> String? {
+        switch audiobookType {
+        case .findaway:
+            return readingOrder?.first?.properties?.encrypted?.profile
+        default:
+            return nil
         }
-        
-        return .unknown
     }
 }
 
-private extension ManifestContext {
-    var matchesLCPContext: Bool {
-        switch self {
-        case .uri(let url):
-            return url.absoluteString.contains("readium.org/lcp")
-        case .object(let dict):
-            return dict.values.contains(where: { $0.contains("readium.org/lcp") })
-        case .other(let string):
-            return string.contains("readium.org/lcp")
-        }
+extension Manifest.ReadingOrderItem {
+    var trackMediaType: TrackMediaType? {
+        TrackMediaType(rawValue: self.type)
+    }
+}
+
+extension Manifest.SpineItem {
+    var trackMediaType: TrackMediaType? {
+        TrackMediaType(rawValue: self.type)
     }
 }

@@ -51,7 +51,7 @@ class FeedbookDRMProcessor {
             if let licenseCheckUrl = URL(string: href) {
                 drmData["licenseCheckUrl"] = licenseCheckUrl
             }
-            drmData["status"] = DrmStatus.processing
+            drmData["status"] = DRMStatus.processing
         }
         
         // Perform Feedbooks signature verification
@@ -187,7 +187,7 @@ class FeedbookDRMProcessor {
     // Performs asynchronous DRM checks that couldn't be performed statically
     // @param book the audiobook
     // @param drmData the book's DRM data dictionary holding relevant info
-    class func performAsyncDrm(book: Original_OpenAccessAudiobook, drmData: [String: Any]) {
+    class func performAsyncDrm(book: OpenAccessAudiobook, drmData: [String: Any]) {
         if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
             weak var weakBook = book
             URLSession.shared.dataTask(with: licenseCheckUrl) { (data, response, error) in

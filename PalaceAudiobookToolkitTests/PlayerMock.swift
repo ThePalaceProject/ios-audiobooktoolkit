@@ -8,43 +8,46 @@
 
 import UIKit
 import PalaceAudiobookToolkit
+import Combine
 
-class PlayerMock: Player {
+class PlayerMock: NSObject, Player {
+    var isPlaying: Bool = false
     var queuesEvents: Bool = false
-    
     var isDrmOk: Bool = true
-
     var isLoaded: Bool = false
-
+    var tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents
+    var currentTrackPosition: PalaceAudiobookToolkit.TrackPosition?
+    var playbackRate: PalaceAudiobookToolkit.PlaybackRate = .normalTime
+    var playbackStatePublisher: PassthroughSubject<PalaceAudiobookToolkit.PlaybackState, Never> = PassthroughSubject()
+    var currentChapter: PalaceAudiobookToolkit.Chapter?
+    
+    required init(tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents) {
+        self.tableOfContents = tableOfContents
+        self.playbackStatePublisher = PassthroughSubject()
+    }
+    
+    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {
+        completion?(currentTrackPosition)
+    }
+    
+    func play(at position: PalaceAudiobookToolkit.TrackPosition, completion: (((any Error)?) -> Void)?) {
+        completion?(nil)
+    }
+    
+    func play() {
+        isPlaying = true
+    }
+    
+    func pause() {
+        isPlaying = false
+    }
+    
+    func unload() {
+        isPlaying = false
+    }
+    
     func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) { }
     
     func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?) { }
-
-    var playbackRate: PlaybackRate = .normalTime
-    
-    var currentChapterLocation: ChapterLocation? {
-        return self.currentChapter
-    }
-    
-    var isPlaying: Bool = false
-    
-    private var currentChapter: ChapterLocation?
-    
-    func play() { }
-    
-    func pause() { }
-
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((ChapterLocation?) -> ())?) { }
-
-    func unload() { }
-    
-    func registerDelegate(_ delegate: PlayerDelegate) { }
-    
-    func removeDelegate(_ delegate: PlayerDelegate) { }
-
-    convenience init (currentChapter: ChapterLocation?) {
-        self.init()
-        self.currentChapter = currentChapter
-        self.isLoaded = true
-    }
+    func move(to value: Double, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {}
 }

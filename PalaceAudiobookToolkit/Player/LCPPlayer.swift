@@ -1,16 +1,16 @@
 //
 //  LCPPlayer.swift
-//  NYPLAudiobookToolkit
+//  PalaceAudiobookToolkit
 //
-//  Created by Vladimir Fedorov on 19.11.2020.
-//  Copyright © 2020 NYPL Labs. All rights reserved.
+//  Created by Maurice Carrier on 4/16/24.
+//  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
 import AVFoundation
 
 class LCPPlayer: OpenAccessPlayer {
-
-    /// DRMDecryptor passed from SimplyE to process encrypted audio files.
+    
+    // DRMDecryptor passed from SimplyE to process encrypted audio files.
     var decryptionDelegate: DRMDecryptor?
     
     /// Task completion notification to notify about the end of decryption process.
@@ -21,11 +21,11 @@ class LCPPlayer: OpenAccessPlayer {
     /// Audio file status. LCP audiobooks contain all encrypted audio files inside, this method returns status of decrypted versions of these files.
     /// - Parameter task: `LCPDownloadTask` containing internal url (e.g., `media/sound.mp3`) for decryption.
     /// - Returns: Status of the file, .unknown in case of an error, .missing if the file needs decryption, .saved when accessing an already decrypted file.
-    override func assetFileStatus(_ task: DownloadTask) -> AssetResult? {
+    override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
         if let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls {
             var savedUrls = [URL]()
             var missingUrls = [URL]()
-
+            
             for (index, decryptedUrl) in decryptedUrls.enumerated() {
                 // Return file URL if it already decrypted
                 if FileManager.default.fileExists(atPath: decryptedUrl.path) {
@@ -40,38 +40,34 @@ class LCPPlayer: OpenAccessPlayer {
                         return
                     }
                     DispatchQueue.main.async {
-                        // taskCompleteNotification notifies the player to call `play` function again.
                         NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
-                        
+                        task.statePublisher.send(.completed)
                     }
                 }
-
+                
                 missingUrls.append(task.urls[index])
             }
             
             guard missingUrls.count == 0  else {
                 return .missing(missingUrls)
             }
-
+            
             return .saved(savedUrls)
         } else {
             return .unknown
         }
-            
-    }
-    
-    @available(*, deprecated, message: "Use init(cursor: Cursor<SpineElement>, audiobookID: String, decryptor: DRMDecryptor?) instead")
-    required convenience init(cursor: Cursor<SpineElement>, audiobookID: String, drmOk: Bool) {
-        self.init(cursor: cursor, audiobookID: audiobookID, decryptor: nil)
     }
     
     /// Audiobook player
     /// - Parameters:
-    ///   - cursor: Player cursor for the audiobook spine.
-    ///   - audiobookID: Audiobook identifier.
+    ///   - tableOfContents: Audiobook player's table of contents.
     ///   - decryptor: LCP DRM decryptor.
-    init(cursor: Cursor<SpineElement>, audiobookID: String, decryptor: DRMDecryptor?) {
+    init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
         self.decryptionDelegate = decryptor
-        super.init(cursor: cursor, audiobookID: audiobookID, drmOk: true)
+        super.init(tableOfContents: tableOfContents)
+    }
+    
+    required init(tableOfContents: AudiobookTableOfContents) {
+        super.init(tableOfContents: tableOfContents)
     }
 }

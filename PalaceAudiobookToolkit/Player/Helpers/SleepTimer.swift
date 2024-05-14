@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import Combine
 
 @objc public enum SleepTimerTriggerAt: Int, CaseIterable {
     case never
@@ -18,12 +19,12 @@ import UIKit
 
 private enum TimerStopPoint {
     case date(date: Date)
-    case endOfChapter(chapterLocation: ChapterLocation)
+    case endOfChapter(trackPosition: TrackPosition)
 }
 
 private enum TimerDurationLeft {
     case timeInterval(timeInterval: TimeInterval)
-    case restOfChapter(chapterLocation: ChapterLocation)
+    case restOfChapter(trackPosition: TrackPosition)
 }
 
 private enum TimerState {
@@ -41,6 +42,7 @@ private enum TimerState {
 /// properties.
 @objc public final class SleepTimer: NSObject {
     private let player: Player
+    private var cancellables = Set<AnyCancellable>()
     private let queue = DispatchQueue(label: "com.palaceaudiobooktoolkit.SleepTimer")
     
     /// Flag to find out if the timer is currently scheduled.
@@ -66,7 +68,7 @@ private enum TimerState {
                 return date.timeIntervalSinceNow
             case .playing(until: .endOfChapter),
                  .paused(with: .restOfChapter):
-                return self.player.currentChapterLocation?.timeRemaining ?? TimeInterval()
+                return Double(self.player.currentTrackPosition?.timestamp ?? 0)
             case .paused(with: .timeInterval(let timeInterval)):
                 return timeInterval
             }
@@ -158,11 +160,11 @@ private enum TimerState {
         case .oneHour:
             sleepIn(secondsFromNow: minutes(60))
         case .endOfChapter:
-            if let currentChapter = self.player.currentChapterLocation {
+            if let currentTrackPosition = self.player.currentTrackPosition {
                 if self.player.isPlaying {
-                    self.timerState = .playing(until: .endOfChapter(chapterLocation: currentChapter))
+                    self.timerState = .playing(until: .endOfChapter(trackPosition: currentTrackPosition))
                 } else {
-                    self.timerState = .paused(with: .restOfChapter(chapterLocation: currentChapter))
+                    self.timerState = .paused(with: .restOfChapter(trackPosition: currentTrackPosition))
                 }
             }
         }
@@ -171,64 +173,44 @@ private enum TimerState {
     init(player: Player) {
         self.player = player
         super.init()
-        self.player.registerDelegate(self)
+        subscribeToPlaybackChanges()
     }
     
-    deinit {
-        self.player.removeDelegate(self)
+    private func subscribeToPlaybackChanges() {
+        player.playbackStatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] playbackState in
+                self?.handlePlaybackState(playbackState)
+            }
+            .store(in: &cancellables)
     }
 }
 
-extension SleepTimer: PlayerDelegate {
-    public func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
+extension SleepTimer {
+    private func handlePlaybackState(_ playbackState: PlaybackState) {
         self.queue.sync {
-            switch self.timerState {
-            case .inactive,
-                 .playing:
-                break
-            case .paused(with: .timeInterval(let timeInterval)):
-                self.timerState = .playing(until: .date(date: Date(timeIntervalSinceNow: timeInterval)))
-            case .paused(with: .restOfChapter):
-                self.timerState = .playing(until: .endOfChapter(chapterLocation: chapter))
-            }
-        }
-    }
-
-    public func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
-        self.queue.sync {
-            switch self.timerState {
-            case .inactive,
-                 .paused:
-                break
-            case .playing(until: .date(let date)):
-                self.timerState = .paused(with: .timeInterval(timeInterval: date.timeIntervalSinceNow))
-            case .playing(until: .endOfChapter):
-                self.timerState = .paused(with: .restOfChapter(chapterLocation: chapter))
-            }
-        }
-    }
-
-    public func player(_ player: Player, didComplete chapter: ChapterLocation) {
-        self.queue.sync {
-            switch self.timerState {
-            case .inactive,
-                 .paused:
-                break
-            case  .playing(let until):
-                switch until {
-                case .date:
+            switch playbackState {
+            case .started(let trackPosition):
+                switch self.timerState {
+                case .inactive, .playing:
                     break
-                case .endOfChapter(let chapterToSleepAt):
-                    if chapterToSleepAt.inSameChapter(other: chapter) {
-                        self.goToSleep()
-                    }
+                case .paused(with: .timeInterval(let timeInterval)):
+                    self.timerState = .playing(until: .date(date: Date(timeIntervalSinceNow: timeInterval)))
+                case .paused(with: .restOfChapter):
+                    self.timerState = .playing(until: .endOfChapter(trackPosition: trackPosition))
+                }
+            case .stopped, .failed, .completed, .bookCompleted, .unloaded:
+                switch self.timerState {
+                case .inactive, .paused:
+                    break
+                case .playing(until: .date(let date)):
+                    self.timerState = .paused(with: .timeInterval(timeInterval: date.timeIntervalSinceNow))
+                case .playing(until: .endOfChapter(let chapterToSleepAt)):
+                    self.timerState = .paused(with: .restOfChapter(trackPosition: chapterToSleepAt))
                 }
             }
         }
     }
-
-    public func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) { }
-    public func playerDidUnload(_ player: Player) { }
 }
 
 

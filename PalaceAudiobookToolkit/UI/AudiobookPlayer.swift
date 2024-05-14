@@ -8,16 +8,18 @@
 
 import SwiftUI
 
+
 public class AudiobookPlayer: UIViewController {
+    
+    private var model: AudiobookPlaybackModel!
     
     @available(*, unavailable, message: "Use init?(audiobookManager:) instead")
     public required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
     }
-    
-    @objc
+        
     public init(audiobookManager: AudiobookManager) {
-        let model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
+        model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         super.init(nibName: nil, bundle: nil)
         let playerViewController =  UIHostingController(rootView: AudiobookPlayerView(model: model))
         addChild(playerViewController)

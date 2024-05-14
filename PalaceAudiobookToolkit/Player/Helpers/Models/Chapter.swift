@@ -8,8 +8,9 @@
 
 import Foundation
 
-struct Chapter {
-    var title: String
-    var position: TrackPosition
-    var duration: Int?
+public struct Chapter {
+    public var title: String
+    public var position: TrackPosition
+    public var duration: Double?
+    public var downloadProgress: Float = 0
 }

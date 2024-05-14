@@ -11,6 +11,10 @@ import UIKit
 /// Utility class to turn a time interval into a human readable string or timecode.
 class HumanReadableTimestamp {
     lazy var timecode: String = {
+        guard self.timeInterval.isFinite else {
+            return "--"
+        }
+        
         let interval = Int(self.timeInterval)
         let seconds = interval % 60
         let minutes = (interval / 60) % 60
@@ -25,6 +29,10 @@ class HumanReadableTimestamp {
     }()
 
     lazy var stringDescription: String = {
+        guard self.timeInterval.isFinite else {
+            return "--"
+        }
+        
         let interval = Int(self.timeInterval)
         let minutes = (interval / 60) % 60
         let hours = (interval / 3600)
@@ -38,6 +46,10 @@ class HumanReadableTimestamp {
     }()
 
     lazy var accessibleDescription: String = {
+        guard self.timeInterval.isFinite else {
+            return "--"
+        }
+        
         let interval = Int(self.timeInterval)
         let seconds = interval % 60
         let minutes = (interval / 60) % 60

@@ -10,86 +10,115 @@ import SwiftUI
 import Combine
 import MediaPlayer
 
-class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManagerTimerDelegate, AudiobookNetworkServiceDelegate {
-
+class AudiobookPlaybackModel: ObservableObject {
     @ObservedObject private var reachability = Reachability()
-    private var progressUpdateSubject = PassthroughSubject<Void, Never>()
-    private var progressUpdateSubscription: AnyCancellable?
-
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
-    var currentLocation: ChapterLocation? {
-        didSet {
-            debounceProgressUpdate()
-        }
-    }
-    
-    private func updateProgress() {
-        playbackProgress = offset / duration
-    }
-    
-    private func checkForEndOfChapter() {
-        if currentLocation?.timeRemaining ?? 0 <= 0 {
-            (audiobookManager.audiobook.player as? OpenAccessPlayer)?.advanceToNextPlayerItem()
-        }
-    }
-    
+    @Published var isDownloading = false
+    @Published var overallDownloadProgress: Float = 0
+    @Published var trackErrors: [String: Error] = [:]
+    @Published var coverImage: UIImage?
+
+    private var subscriptions: Set<AnyCancellable> = []
+    private(set) var audiobookManager: AudiobookManager
+
+    var currentLocation: TrackPosition?
+
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
-        self.currentLocation?.actualOffset ?? 0
+        audiobookManager.currentOffset
     }
+
     var duration: TimeInterval {
-        self.currentLocation?.duration ?? 0
+        audiobookManager.currentDuration
     }
+
     var timeLeft: TimeInterval {
-        max(duration - offset, 0)
+        max(duration - offset, 0.0)
     }
+
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
-            return 0
+            return 0.0
         }
-        let spine = self.audiobookManager.audiobook.spine
-        var addUpStuff = false
-        let timeLeftInChapter = currentLocation.timeRemaining
-        let timeLeftAfterChapter = spine.reduce(timeLeftInChapter, { (result, element) -> TimeInterval in
-            var newResult: TimeInterval = 0
-            if addUpStuff {
-                newResult = result + element.chapter.duration
-            }
+        
+        guard currentLocation.timestamp.isFinite else {
+            return currentLocation.tracks.totalDuration
+        }
 
-            if element.chapter.inSameChapter(other: currentLocation) {
-                newResult = timeLeftInChapter
-                addUpStuff = true
-            }
-            return newResult
-        })
-        return timeLeftAfterChapter
+        return currentLocation.tracks.totalDuration - currentLocation.timestamp
     }
     
-    @Published var isDownloading = false
-    @Published var overallDownloadProgress: Float = 0
-    @Published var spineErrors: [String: Error] = [:]
-    @Published var coverImage: UIImage?
-    
-    private var subscriptions: Set<AnyCancellable> = []
-    
+    var currentChapterTitle: String {
+        guard let currentChapter = audiobookManager.currentChapter else {
+            if let index = currentLocation?.track.index {
+                return String(format: "Track %d", index)
+            } else {
+                return "--"
+            }
+        }
+        
+        return currentChapter.title
+    }
+
     var isPlaying: Bool {
         audiobookManager.audiobook.player.isPlaying
     }
     
-    var spine: [SpineElement] {
-        audiobookManager.networkService.spine
+    var tracks: [any Track] {
+        audiobookManager.networkService.tracks
     }
-
-    private(set) var audiobookManager: AudiobookManager
         
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
-        self.currentLocation = audiobookManager.audiobook.spine.first?.chapter
-        self.audiobookManager.audiobook.player.registerDelegate(self)
-        self.audiobookManager.networkService.registerDelegate(self)
+        if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
+            self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
+        }
+
+        setupBindings()
+        subscribeToPublisher()
         self.audiobookManager.networkService.fetch()
+    }
+    
+    private func subscribeToPublisher() {
+        audiobookManager.statePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+                switch state {
+                case .overallDownloadProgress(let overallProgress):
+                    isDownloading = overallProgress < 1
+                    isWaitingForPlayer = isDownloading
+
+                    overallDownloadProgress = overallProgress
+                case .positionUpdated(let position):
+                    self.currentLocation = position
+                    self.updateProgress()
+                    
+                case .playbackBegan(let position), .playbackCompleted(let position):
+                    self.currentLocation = position
+                    self.isWaitingForPlayer = false
+                    self.updateProgress()
+                    
+                case .playbackUnloaded:
+                    break
+                case .playbackFailed(let position):
+                    self.isWaitingForPlayer = false
+                    if let position = position {
+                        ATLog(.debug, "Playback error at position: \(position.timestamp)")
+                    }
+                    
+                default:
+                    break
+                }
+            }
+            .store(in: &subscriptions)
+        //        self.audiobookManager.fetchBookmarks { _ in }
+        //        self.audiobookManager.timerDelegate = self
+    }
+
+    private func setupBindings() {
         self.reachability.startMonitoring()
         self.reachability.$isConnected
             .receive(on: RunLoop.current)
@@ -99,93 +128,70 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
                 }
             }
             .store(in: &subscriptions)
-        progressUpdateSubscription = progressUpdateSubject
-            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .sink { [weak self] in
-                self?.updateProgress()
-                self?.checkForEndOfChapter()
-            }
-        self.audiobookManager.fetchBookmarks { _ in }
-        self.audiobookManager.timerDelegate = self
+        
     }
-    
-    private func debounceProgressUpdate() {
-        progressUpdateSubject.send()
+
+    private func updateProgress() {
+        playbackProgress = offset/duration
     }
-    
+
     deinit {
         self.reachability.stopMonitoring()
-        self.audiobookManager.timerDelegate = nil
-        self.audiobookManager.audiobook.player.removeDelegate(self)
-        self.audiobookManager.networkService.removeDelegate(self)
         self.audiobookManager.audiobook.player.unload()
+        subscriptions.removeAll()
     }
     
     func playPause() {
-        isWaitingForPlayer = true
-        if isPlaying {
-            audiobookManager.audiobook.player.pause()
-        } else {
-            audiobookManager.audiobook.player.play()
-        }
-        audiobookManager.saveLocation()
+        isPlaying ? audiobookManager.pause() : audiobookManager.play()
+        saveLocation()
     }
     
     func stop() {
-        audiobookManager.saveLocation()
-        audiobookManager.audiobook.player.unload()
+        saveLocation()
+        audiobookManager.unload()
+        subscriptions.removeAll()
     }
-    
+
+    private func saveLocation() {
+        if let currentLocation {
+            audiobookManager.saveLocation(currentLocation)
+        }
+    }
+
     func skipBack() {
-        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
+        guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
             return
         }
 
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.audiobookManager.saveLocation()
-            self.isWaitingForPlayer = false
+        audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
     
     func skipForward() {
-        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else { return }
+        guard !isWaitingForPlayer || self.audiobookManager.audiobook.player.queuesEvents else {
+            return
+        }
+        
         isWaitingForPlayer = true
-        audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.audiobookManager.saveLocation()
-            self.isWaitingForPlayer = false
+        audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
 
+
     func move(to value: Double) {
-        guard let currentLocation = self.currentLocation else {
-            ATLog(.error, "Invalid move value or current location is nil.")
-            return
-        }
-        
-        let newOffset = currentLocation.duration * value
-        let adjustedOffset = (newOffset + (currentLocation.chapterOffset ?? 0.0))
-        
-        guard let requestedOffset = currentLocation.update(playheadOffset: adjustedOffset) else {
-            ATLog(.error, "Failed to update chapter location.")
-            return
-        }
-        
-        let offsetMovement = requestedOffset.playheadOffset - currentLocation.playheadOffset
-        
-        if offsetMovement + currentLocation.playheadOffset < currentLocation.chapterOffset ?? 0.0 || offsetMovement + currentLocation.playheadOffset > (currentLocation.chapterOffset ?? 0.0) + currentLocation.duration {
-            ATLog(.error, "Attempt to move beyond chapter bounds.")
-            return
-        }
-        
-        self.isWaitingForPlayer = true
-        
-        self.audiobookManager.audiobook.player.skipPlayhead(offsetMovement) { adjustedLocation in
-            self.currentLocation = adjustedLocation
-            self.isWaitingForPlayer = false
-            self.audiobookManager.saveLocation()
+        isWaitingForPlayer = true
+
+        self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
+            self?.currentLocation = adjustedLocation
+            self?.saveLocation()
+            self?.isWaitingForPlayer = false
         }
     }
     
@@ -197,62 +203,38 @@ class AudiobookPlaybackModel: ObservableObject, PlayerDelegate, AudiobookManager
         audiobookManager.sleepTimer.setTimerTo(trigger: trigger)
     }
     
-    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
-        audiobookManager.saveBookmark(completion: completion)
-    }
-    
+//    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
+//        await audiobookManager.saveBookmark(location: <#T##TrackPosition#>)
+//    }
+//    
     // MARK: - Player timer delegate
     
     func audiobookManager(_ audiobookManager: AudiobookManager, didUpdate timer: Timer?) {
-        currentLocation = audiobookManager.audiobook.player.currentChapterLocation
+        currentLocation = audiobookManager.audiobook.player.currentTrackPosition
     }
     
     // MARK: - PlayerDelegate
     
-    func player(_ player: Player, didBeginPlaybackOf chapter: ChapterLocation) {
-        currentLocation = chapter
+    func player(_ player: Player, didBeginPlaybackOf track: any Track) {
+        currentLocation = TrackPosition(track: track, timestamp: 0, tracks: audiobookManager.audiobook.player.tableOfContents.tracks)
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didStopPlaybackOf chapter: ChapterLocation) {
-        currentLocation = audiobookManager.audiobook.player.currentChapterLocation
+    func player(_ player: Player, didStopPlaybackOf trackPosition: TrackPosition) {
+        currentLocation = trackPosition
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didComplete chapter: ChapterLocation) {
+    func player(_ player: Player, didComplete track: any Track) {
         isWaitingForPlayer = false
     }
     
-    func player(_ player: Player, didFailPlaybackOf chapter: ChapterLocation, withError error: NSError?) {
+    func player(_ player: Player, didFailPlaybackOf track: any Track, withError error: NSError?) {
         isWaitingForPlayer = false
     }
     
     func playerDidUnload(_ player: Player) {
         isWaitingForPlayer = false
-    }
-    
-    // MARK: - AudiobookNetworkServiceDelegate
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateOverallDownloadProgress progress: Float) {
-        overallDownloadProgress = progress
-        isDownloading = progress < 1
-    }
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didReceive error: NSError?, for spineElement: SpineElement) {
-        spineErrors[spineElement.key] = error
-        isDownloading = false
-    }
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateProgressFor spineElement: SpineElement) {
-        spineErrors.removeValue(forKey: spineElement.key)
-    }
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didCompleteDownloadFor spineElement: SpineElement) {
-        spineErrors.removeValue(forKey: spineElement.key)
-    }
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didDeleteFileFor spineElement: SpineElement) {
-        spineErrors.removeValue(forKey: spineElement.key)
     }
     
     // MARK: - Media Player
