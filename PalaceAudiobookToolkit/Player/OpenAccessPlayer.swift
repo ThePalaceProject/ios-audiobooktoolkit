@@ -260,9 +260,10 @@ class OpenAccessPlayer: NSObject, Player {
         if let currentAssetURL = (avQueuePlayer.currentItem?.asset as? AVURLAsset)?.url,
            urls.contains(currentAssetURL) {
             rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
-        } else if currentTrackPosition == nil && tableOfContents.allTracks.first?.id == track.id {
+        } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id{
             buildPlayerQueue()
-            print("Debugger: Building player queue for the first track.")
+        } else {
+            rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
         }
     }
 }
