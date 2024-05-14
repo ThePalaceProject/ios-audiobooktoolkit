@@ -427,25 +427,23 @@ extension OpenAccessPlayer {
     }
     
     func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition else {
-            completion?(nil)
-            return
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+
+                avQueuePlayer.pause()
+                rebuildPlayerQueueAndNavigate(to: endPosition)
+                completion?(endPosition)
+            }
         }
 
-        let endPosition = TrackPosition(
-            track: currentTrack,
-            timestamp: currentTrack.duration,
-            tracks: currentTrackPosition.tracks
-        )
-        
-        if let completedChapter = try? tableOfContents.chapter(forPosition: endPosition) {
-            playbackStatePublisher.send(.completed(completedChapter))
-        }
-        
-        self.pause()
         ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
-        completion?(endPosition)
     }
     
     func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
@@ -578,6 +576,8 @@ extension OpenAccessPlayer {
     }
     
     private func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
+        let shouldPlay = avQueuePlayer.rate > 0
+    
         avQueuePlayer.pause()
         
         for _ in 0..<index {
@@ -592,7 +592,10 @@ extension OpenAccessPlayer {
         let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         currentItem.seek(to: seekTime) { success in
             if success {
-                self.avQueuePlayer.play()
+                if shouldPlay {
+                    self.avQueuePlayer.play()
+                }
+    
                 completion?(true)
             } else {
                 completion?(false)
