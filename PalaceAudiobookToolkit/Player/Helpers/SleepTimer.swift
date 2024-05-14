@@ -199,7 +199,7 @@ extension SleepTimer {
                 case .paused(with: .restOfChapter):
                     self.timerState = .playing(until: .endOfChapter(trackPosition: trackPosition))
                 }
-            case .stopped, .failed, .completed, .unloaded:
+            case .stopped, .failed, .completed, .bookCompleted, .unloaded:
                 switch self.timerState {
                 case .inactive, .paused:
                     break

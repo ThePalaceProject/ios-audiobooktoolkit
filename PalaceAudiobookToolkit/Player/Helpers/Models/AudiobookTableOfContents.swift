@@ -52,7 +52,6 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             if let chapter = parseChapter(from: tocItem, tracks: tracks) {
                 toc.append(chapter)
             }
-            // Recursively parse children if present
             tocItem.children?.forEach { childItem in
                 if let subChapter = parseChapter(from: childItem, tracks: tracks) {
                     toc.append(subChapter)
@@ -181,15 +180,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         let chapter = try self.chapter(forPosition: position)
         let chapterStartPosition = TrackPosition(track: chapter.position.track, timestamp: chapter.position.timestamp, tracks: position.tracks)
         
-        if position.track.id == chapter.position.track.id && position.timestamp >= chapter.position.timestamp {
-            // Both positions are in the same track and the position timestamp is after the chapter start
-            return position.timestamp - chapter.position.timestamp
-        } else {
-            // Handle transitions between tracks if needed
-            return (try position - chapterStartPosition)
-        }
+        return try position - chapterStartPosition
     }
-
     
     func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
         lhs.key == rhs.key && lhs.index == rhs.index

@@ -27,6 +27,7 @@ public enum PlaybackState {
     case stopped(TrackPosition)
     case failed(TrackPosition?, Error?)
     case completed(Chapter)
+    case bookCompleted
     case unloaded
 }
 

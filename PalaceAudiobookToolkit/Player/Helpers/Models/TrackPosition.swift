@@ -58,7 +58,6 @@ public struct TrackPosition: Equatable, Comparable {
         
         return diff
     }
-
     
     public static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
@@ -78,14 +77,13 @@ public struct TrackPosition: Equatable, Comparable {
             newTimestamp -= currentTrack.duration
             guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
                 if newTimestamp == 0.0 {
-                    // If exactly at the end of the last track, return this position
-                    return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
+                    return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
                 }
                 throw TrackPositionError.outOfBounds
             }
             currentTrack = nextTrack
         }
-        
+
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
 

@@ -305,9 +305,12 @@ extension OpenAccessPlayer {
     }
 
     @objc func playerItemDidReachEnd(_ notification: Notification) {
-        guard let currentTrack = currentTrackPosition?.track,
-            (tableOfContents.tracks.nextTrack(currentTrack) != nil)
-        else {
+        guard let currentTrack = currentTrackPosition?.track else {
+            return 
+        }
+        
+        guard (tableOfContents.tracks.nextTrack(currentTrack) != nil) else {
+            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
             return
         }
         
@@ -441,6 +444,7 @@ extension OpenAccessPlayer {
         
         self.pause()
         ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        playbackStatePublisher.send(.bookCompleted)
         completion?(endPosition)
     }
     

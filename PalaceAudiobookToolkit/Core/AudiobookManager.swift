@@ -310,6 +310,9 @@ extension DefaultAudiobookManager {
                     
                 case .unloaded:
                     self.handlePlayerUnloaded()
+                    
+                case .bookCompleted:
+                    playbackCompletionHandler?()
                 }
             }
             .store(in: &cancellables)
