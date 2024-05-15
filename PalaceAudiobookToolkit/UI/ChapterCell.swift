@@ -20,7 +20,7 @@ struct ChapterCell: View {
             if let _ = viewModel.downloadError {
                 Text("Download Error").palaceFont(.body)
             } else if viewModel.downloadProgress > 0 && viewModel.downloadProgress < 1 {
-                Text("Downloading... \((viewModel.downloadProgress * 100, specifier: "%.0f"))%").palaceFont(.body)
+                Text("Downloading... \(String(format: "%.0f", viewModel.downloadProgress * 100))%").palaceFont(.body)
             } else {
                 Text(HumanReadableTimestamp(timeInterval: viewModel.track.duration).timecode)
                     .accessibility(label: Text(HumanReadableTimestamp(timeInterval: viewModel.track.duration).accessibleDescription))
