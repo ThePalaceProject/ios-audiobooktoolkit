@@ -49,6 +49,7 @@ public protocol AudiobookManager {
     
     var currentOffset: Double { get }
     var currentDuration: Double { get }
+    var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
 
     static func setLogHandler(_ handler: @escaping LogHandler)
@@ -111,9 +112,13 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     public var currentDuration: Double {
-        return currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
+        currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
     }
     
+    public var totalDuration: Double {
+        audiobook.tableOfContents.tracks.totalDuration
+    }
+
     public var currentChapter: Chapter? {
         return audiobook.player.currentChapter
     }

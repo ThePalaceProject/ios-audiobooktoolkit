@@ -17,7 +17,6 @@ public enum DownloadState {
     case overallProgress(progress: Float)
 }
 
-
 /// The protocol for managing the download of chapters. Implementers of
 /// this protocol should not be concerned with the details of how
 /// the downloads happen or any caching.
@@ -28,7 +27,7 @@ public enum DownloadState {
 public protocol AudiobookNetworkService: AnyObject {
     var tracks: [any Track] { get }
     var downloadStatePublisher: PassthroughSubject<DownloadState, Never> { get }
-
+    
     /// Implementers of this should attempt to download all
     /// spine elements in a serial order. Once the
     /// implementer has begun requesting files, calling this
@@ -40,7 +39,6 @@ public protocol AudiobookNetworkService: AnyObject {
     /// Updates for the status of each download task will
     /// come through delegate methods.
     func fetch()
-    
     
     /// Implmenters of this should attempt to delete all
     /// spine elements.
@@ -56,8 +54,9 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public let tracks: [any Track]
     private var cancellables: Set<AnyCancellable> = []
     private var progressDictionary: [String: Float] = [:]
-    private let downloadQueue = DispatchQueue(label: "com.palace.audiobook.downloadQueue")
-
+    private let downloadQueue = DispatchQueue(label: "com.palace.audiobook.downloadQueue", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "com.yourapp.progressDictionaryQueue", attributes: .concurrent)
+    
     public init(tracks: [any Track]) {
         self.tracks = tracks
         setupDownloadTasks()
@@ -70,7 +69,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public func deleteAll() {
         tracks.forEach { $0.downloadTask?.delete() }
     }
-
+    
     private func setupDownloadTasks() {
         tracks.forEach { track in
             guard let downloadTask = track.downloadTask else { return }
@@ -98,7 +97,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
     
     private func updateProgress(_ progress: Float, for track: any Track) {
-        downloadQueue.async {
+        queue.async(flags: .barrier) {
             self.progressDictionary[track.key] = progress
             DispatchQueue.main.async {
                 self.updateOverallProgress()
@@ -106,15 +105,18 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
             }
         }
     }
-
+    
     private func updateOverallProgress() {
-        guard !progressDictionary.isEmpty else {
-            return
+        queue.sync {
+            guard !progressDictionary.isEmpty else {
+                return
+            }
+            
+            let totalProgress = progressDictionary.values.reduce(0, +)
+            let overallProgress = totalProgress / Float(tracks.count)
+            DispatchQueue.main.async {
+                self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
+            }
         }
-
-        let totalProgress = progressDictionary.values.reduce(0, +)
-        let overallProgress = totalProgress / Float(tracks.count)
-        downloadStatePublisher.send(.overallProgress(progress: overallProgress))
     }
 }
-

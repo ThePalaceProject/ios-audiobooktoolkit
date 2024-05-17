@@ -40,14 +40,14 @@ class AudiobookPlaybackModel: ObservableObject {
 
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
-            return 0.0
+            return audiobookManager.totalDuration
         }
         
         guard currentLocation.timestamp.isFinite else {
-            return currentLocation.tracks.totalDuration
+            return audiobookManager.totalDuration
         }
 
-        return currentLocation.tracks.totalDuration - currentLocation.timestamp
+        return audiobookManager.totalDuration - currentLocation.timestamp
     }
     
     var currentChapterTitle: String {
@@ -93,6 +93,7 @@ class AudiobookPlaybackModel: ObservableObject {
 
                     overallDownloadProgress = overallProgress
                 case .positionUpdated(let position):
+                    guard let position else { return }
                     self.currentLocation = position
                     self.updateProgress()
                     
