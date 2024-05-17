@@ -14,7 +14,10 @@ final class OverdriveDownloadTask: DownloadTask {
     /// Progress should be set to 1 if the file already exists.
     var downloadProgress: Float = 0 {
         didSet {
-            self.statePublisher.send(.progress(downloadProgress))
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.statePublisher.send(.progress(self.downloadProgress))
+            }
         }
     }
     

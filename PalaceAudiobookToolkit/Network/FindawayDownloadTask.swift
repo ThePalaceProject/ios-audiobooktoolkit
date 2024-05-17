@@ -20,8 +20,11 @@ final class FindawayDownloadTask: DownloadTask {
 
     var downloadProgress: Float = 0 {
         didSet {
-            self.statePublisher.send(.progress(self.downloadProgress))
-            self.notifiedDownloadProgress = self.downloadProgress
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.statePublisher.send(.progress(self.downloadProgress))
+                self.notifiedDownloadProgress = self.downloadProgress
+            }
         }
     }
 
