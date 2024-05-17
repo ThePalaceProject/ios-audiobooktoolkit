@@ -77,7 +77,6 @@ class OpenAccessPlayer: NSObject, Player {
         }
                 
         let currentTime = currentItem.currentTime().seconds
-        print("Debugger: currentItem: \(currentItem)")
 
         guard currentTime.isFinite else {
             return lastKnownPosition

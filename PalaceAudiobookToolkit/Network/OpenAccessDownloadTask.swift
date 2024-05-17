@@ -300,17 +300,18 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
                     totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64)
     {
-        if (totalBytesExpectedToWrite == NSURLSessionTransferSizeUnknown) ||
-            totalBytesExpectedToWrite == 0 {
-            self.downloadTask.downloadProgress = 0.0
-        }
-
-        if totalBytesWritten >= totalBytesExpectedToWrite {
-            self.downloadTask.downloadProgress = 1.0
-        } else if totalBytesWritten <= 0 {
-            self.downloadTask.downloadProgress = 0.0
-        } else {
-            self.downloadTask.downloadProgress = Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if totalBytesExpectedToWrite == NSURLSessionTransferSizeUnknown || totalBytesExpectedToWrite == 0 {
+                self.downloadTask.downloadProgress = 0.0
+            } else if totalBytesWritten >= totalBytesExpectedToWrite {
+                self.downloadTask.downloadProgress = 1.0
+            } else if totalBytesWritten <= 0 {
+                self.downloadTask.downloadProgress = 0.0
+            } else {
+                self.downloadTask.downloadProgress = Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)
+            }
         }
     }
     

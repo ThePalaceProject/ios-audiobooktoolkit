@@ -169,7 +169,6 @@ class MediaProcessor {
             do {
                 size = try UInt64(data.bigEndianUInt32At(offset: Int(localOffset)))
             } catch {
-                print("Could not read atom size")
                 atoms = []
                 break
             }
@@ -181,7 +180,6 @@ class MediaProcessor {
                     // Extended size is 8 bytes after atom start
                     size = try data.bigEndianUInt64At(offset: Int(localOffset+8))
                 } catch {
-                    print("Could not read atom ext size")
                     atoms = []
                     break
                 }

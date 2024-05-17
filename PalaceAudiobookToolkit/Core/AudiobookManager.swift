@@ -107,17 +107,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             return 0.0
         }
 
-        print("Debugger CurrentChapterOffset: \((try? audiobook.tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition.timestamp)")
         return (try? audiobook.tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition.timestamp
     }
     
     public var currentDuration: Double {
-        print("Debugger CurrentDuration: \(currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0)")
         return currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
     }
     
     public var currentChapter: Chapter? {
-        print("Debugger CurrentChapter: \(audiobook.player.currentChapter)")
         return audiobook.player.currentChapter
     }
 
@@ -228,7 +225,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
 
     public func saveLocation(_ location: TrackPosition) -> Result<Void, any Error>? {
-        print("Save Location here: \(location)")
         return nil
 //        bookmarkDelegate?.saveListeningPosition(at: location) {
 //            guard let _ = $0 else {
@@ -239,7 +235,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
 
     public func deleteBookmark(at location: TrackPosition) -> Bool {
-        print("Delete Location here: \(location)")
         return true
 
 //        bookmarkDelegate?.deleteBookmark(at: location, completion: { [weak self] success in
@@ -249,7 +244,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
 
     public func saveBookmark(_ location: TrackPosition) -> Result<TrackPosition?, any Error> {
-        print("Save bookmark here")
         return .success(nil)
 //        guard audiobookBookmarks.first(where: { $0.isSimilar(to: audiobook.player.currentChapterLocation) }) == nil else {
 //            completion(BookmarkError.bookmarkAlreadyExists)

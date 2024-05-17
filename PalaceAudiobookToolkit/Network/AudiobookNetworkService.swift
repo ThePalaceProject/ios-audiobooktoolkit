@@ -108,6 +108,10 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
 
     private func updateOverallProgress() {
+        guard !progressDictionary.isEmpty else {
+            return
+        }
+
         let totalProgress = progressDictionary.values.reduce(0, +)
         let overallProgress = totalProgress / Float(tracks.count)
         downloadStatePublisher.send(.overallProgress(progress: overallProgress))

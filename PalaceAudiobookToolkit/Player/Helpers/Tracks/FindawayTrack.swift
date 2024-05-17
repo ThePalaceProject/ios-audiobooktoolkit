@@ -27,7 +27,6 @@ public class FindawayTrackFactory: NSObject, TrackFactoryProtocol {
                 index: index
             )
         } catch {
-            print("Failed to create FindawayTrack: \(error)")
             return nil
         }
     }

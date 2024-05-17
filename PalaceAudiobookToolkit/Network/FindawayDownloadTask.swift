@@ -28,7 +28,7 @@ final class FindawayDownloadTask: DownloadTask {
         }
     }
 
-    private let pollRate: TimeInterval = 0.5
+    private let pollRate: TimeInterval = 1.0
     private var pollAgainForPercentageAt: Date?
     private var retryAfterVerification = false
     private var readyToDownload: Bool {
@@ -169,18 +169,20 @@ final class FindawayDownloadTask: DownloadTask {
     }
     
     private func updateDownloadProgress() {
-        guard self.readyToDownload else {
-            downloadProgress = 0
-            return
-        }
-        
-        downloadProgress = findawayProgressToNYPLToolkit(
-            FAEAudioEngine.shared()?.downloadEngine?.percentage(
-                forAudiobookID: self.downloadRequest.audiobookID,
-                partNumber: self.downloadRequest.partNumber,
-                chapterNumber: self.downloadRequest.chapterNumber
+        DispatchQueue.main.async { [weak self] in
+            guard let self, readyToDownload else {
+                self?.downloadProgress = 0
+                return
+            }
+
+            self.downloadProgress = findawayProgressToNYPLToolkit(
+                FAEAudioEngine.shared()?.downloadEngine?.percentage(
+                    forAudiobookID: self.downloadRequest.audiobookID,
+                    partNumber: self.downloadRequest.partNumber,
+                    chapterNumber: self.downloadRequest.chapterNumber
+                )
             )
-        )
+        }
     }
 
     /// If we try to download the book again before the deletion has
