@@ -115,8 +115,8 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        //        self.audiobookManager.fetchBookmarks { _ in }
-        //        self.audiobookManager.timerDelegate = self
+            
+        self.audiobookManager.fetchBookmarks { _ in }
     }
 
     private func setupBindings() {
@@ -204,10 +204,22 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.sleepTimer.setTimerTo(trigger: trigger)
     }
     
-//    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
-//        await audiobookManager.saveBookmark(location: <#T##TrackPosition#>)
-//    }
-//    
+    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
+        guard let currentLocation else {
+            completion(BookmarkError.bookmarkFailedToSave)
+            return
+        }
+        
+        audiobookManager.saveBookmark(at: currentLocation) { result in
+            switch result {
+            case .success:
+                completion(nil)
+            case .failure(let error):
+                completion(error)
+            }
+        }
+    }
+    
     // MARK: - Player timer delegate
     
     func audiobookManager(_ audiobookManager: AudiobookManager, didUpdate timer: Timer?) {

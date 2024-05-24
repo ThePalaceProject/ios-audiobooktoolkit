@@ -54,3 +54,27 @@ extension Track {
         """
     }
 }
+
+class EmptyTrack: Track {
+    var key: String = ""
+    var downloadTask: (any DownloadTask)? = nil
+    var title: String? = ""
+    var index: Int = 0
+    var duration: TimeInterval = 0.0
+    var urls: [URL]? = nil
+    required init(
+        manifest: Manifest,
+        urlString: String?,
+        audiobookID: String,
+        title: String?,
+        duration: Double,
+        index: Int,
+        token: String?
+    ) throws {
+        self.title = title
+        self.duration = duration
+        self.index = index
+    }
+    
+    init() {}
+}
