@@ -18,15 +18,6 @@ struct AudiobookPlayerView: View {
     
     @State private var uiTabarController: UITabBarController?
     @ObservedObject var playbackModel: AudiobookPlaybackModel
-    @State private var selectedLocation: TrackPosition? { 
-        didSet {
-            if let selectedLocation {
-                playbackModel.audiobookManager.audiobook.player.play(at: selectedLocation) { error in
-                    // Present error
-                }
-            }
-        }
-    }
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
     @State private var showPlaybackSpeed = false
@@ -127,7 +118,7 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var tocButton: some View {
         NavigationLink {
-            AudiobookNavigationView(model: playbackModel, selectedLocation: $selectedLocation)
+            AudiobookNavigationView(model: playbackModel)
         } label: {
             ToolkitImage(name: "table_of_contents", renderingMode: .template)
                 .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))

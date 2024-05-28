@@ -28,14 +28,12 @@ struct AudiobookNavigationView: View {
     }
 
     @Environment(\.presentationMode) var presentationMode
-    @Binding var selectedLocation: TrackPosition?
     @State private var selectedSection: NavigationSection = .toc
     @State private var bookmarks: [TrackPosition] = []
     
     @ObservedObject private var playback: AudiobookPlaybackModel
-    init(model: AudiobookPlaybackModel, selectedLocation: Binding<TrackPosition?>) {
+    init(model: AudiobookPlaybackModel) {
         self.playback = model
-        self._selectedLocation = selectedLocation
     }
     
     var body: some View {
@@ -86,12 +84,12 @@ struct AudiobookNavigationView: View {
                         if playback.trackErrors[track.id] != nil {
                             track.downloadTask?.fetch()
                         } else {
-                            guard let tracks = playback.currentLocation?.tracks else {
+                            guard let tracks = playback.selectedLocation?.tracks else {
                                 NSLog("Unable to set current track position")
                                 return
                             }
 
-                            selectedLocation = TrackPosition(track: track, timestamp: 0, tracks: tracks)
+                            playback.selectedLocation = TrackPosition(track: track, timestamp: 0, tracks: tracks)
                             presentationMode.wrappedValue.dismiss()
                         }
                     }
@@ -122,7 +120,7 @@ struct AudiobookNavigationView: View {
                     ForEach(self.bookmarks, id: \.annotationId) { bookmark in
                         bookmarkCell(for: bookmark)
                             .onTapGesture {
-                                selectedLocation = bookmark
+                                playback.selectedLocation = bookmark
                                 presentationMode.wrappedValue.dismiss()
                             }
                     }
@@ -198,7 +196,7 @@ extension AudiobookNavigationView {
         var bookmark = TrackPosition(track: audiobook.player.tableOfContents.tracks.first!, timestamp: 0.0, tracks: audiobook.player.tableOfContents.tracks)
         bookmark.lastSavedTimeStamp = "2023-01-01T12:34:56Z"
         audiobookManager.bookmarks.append(bookmark)
-        self._selectedLocation = .constant(bookmark)
+        playback.selectedLocation = bookmark
     }
 }
 

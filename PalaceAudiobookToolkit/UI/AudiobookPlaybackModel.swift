@@ -22,7 +22,14 @@ class AudiobookPlaybackModel: ObservableObject {
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
 
-    var currentLocation: TrackPosition?
+    @Published var currentLocation: TrackPosition?
+    var selectedLocation: TrackPosition? {
+        didSet {
+            if let selectedLocation {
+                audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
+            }
+        }
+    }
 
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
@@ -37,6 +44,7 @@ class AudiobookPlaybackModel: ObservableObject {
     var timeLeft: TimeInterval {
         max(duration - offset, 0.0)
     }
+
 
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
