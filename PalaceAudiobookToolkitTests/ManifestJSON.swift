@@ -2,12 +2,11 @@
 //  ManifestJSON.swift
 //  PalaceAudiobookToolkitTests
 //
-//  Created by Maurice Work on 5/23/24.
+//  Created by Maurice Carrier on 5/23/24.
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
 import Foundation
-import PalaceAudiobookToolkit
 
 extension Manifest {
     static func from(jsonFileName: String, bundle: Bundle = .main) throws -> Manifest {
