@@ -22,7 +22,14 @@ class AudiobookPlaybackModel: ObservableObject {
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
 
-    var currentLocation: TrackPosition?
+    @Published var currentLocation: TrackPosition?
+    var selectedLocation: TrackPosition? {
+        didSet {
+            if let selectedLocation {
+                audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
+            }
+        }
+    }
 
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
@@ -37,6 +44,7 @@ class AudiobookPlaybackModel: ObservableObject {
     var timeLeft: TimeInterval {
         max(duration - offset, 0.0)
     }
+
 
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
@@ -115,8 +123,8 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        //        self.audiobookManager.fetchBookmarks { _ in }
-        //        self.audiobookManager.timerDelegate = self
+            
+        self.audiobookManager.fetchBookmarks { _ in }
     }
 
     private func setupBindings() {
@@ -204,10 +212,22 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.sleepTimer.setTimerTo(trigger: trigger)
     }
     
-//    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
-//        await audiobookManager.saveBookmark(location: <#T##TrackPosition#>)
-//    }
-//    
+    func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
+        guard let currentLocation else {
+            completion(BookmarkError.bookmarkFailedToSave)
+            return
+        }
+        
+        audiobookManager.saveBookmark(at: currentLocation) { result in
+            switch result {
+            case .success:
+                completion(nil)
+            case .failure(let error):
+                completion(error)
+            }
+        }
+    }
+    
     // MARK: - Player timer delegate
     
     func audiobookManager(_ audiobookManager: AudiobookManager, didUpdate timer: Timer?) {

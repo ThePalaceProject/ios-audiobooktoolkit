@@ -18,7 +18,6 @@ struct AudiobookPlayerView: View {
     
     @State private var uiTabarController: UITabBarController?
     @ObservedObject var playbackModel: AudiobookPlaybackModel
-    @State private var selectedLocation: TrackPosition?
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
     @State private var showPlaybackSpeed = false
@@ -105,11 +104,6 @@ struct AudiobookPlayerView: View {
         }
         .palaceFont(.body)
         .navigationViewStyle(.stack)
-//        .onChange(of: selectedLocation) { newValue in
-//            playbackModel.audiobookManager.audiobook.player.play(at: newValue) { error in
-//                // present error
-//            }
-//        }
     }
     
     private func showToast(message: String) {
@@ -124,7 +118,7 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var tocButton: some View {
         NavigationLink {
-            AudiobookNavigationView(model: playbackModel, selectedLocation: $selectedLocation)
+            AudiobookNavigationView(model: playbackModel)
         } label: {
             ToolkitImage(name: "table_of_contents", renderingMode: .template)
                 .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
@@ -314,9 +308,9 @@ struct AudiobookPlayerView: View {
                     .overlay(
                         // Bookmarks
                         Button {
-//                            playbackModel.addBookmark { error in
-//                                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
-//                            }
+                            playbackModel.addBookmark { error in
+                                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
+                            }
                         } label: {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)

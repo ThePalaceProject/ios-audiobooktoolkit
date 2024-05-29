@@ -19,7 +19,9 @@ public struct TrackPosition: Equatable, Comparable {
     public var track: any Track
     public var timestamp: Double
     public var tracks: Tracks
-    
+    public var lastSavedTimeStamp: String = ""
+    public var annotationId: String = ""
+
     public init(track: any Track, timestamp: Double, tracks: Tracks) {
         self.track = track
         self.timestamp = timestamp

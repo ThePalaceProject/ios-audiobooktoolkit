@@ -173,7 +173,7 @@ public class Tracks {
             return false
         })
     }
-    
+
     public func track(forKey key: String) -> (any Track)? {
         return tracks.first(where: { track in
             if track.key == key {
