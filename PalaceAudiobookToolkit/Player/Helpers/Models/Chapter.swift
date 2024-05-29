@@ -8,7 +8,9 @@
 
 import Foundation
 
-public struct Chapter {
+public struct Chapter: Identifiable {
+    public var id: String { title }
+    
     public var title: String
     public var position: TrackPosition
     public var duration: Double?

@@ -10,52 +10,16 @@ import SwiftUI
 import Combine
 
 struct ChapterCell: View {
-    @ObservedObject var viewModel: TrackDownloadViewModel
+    var chapter: Chapter
     
     var body: some View {
         HStack {
-            Text(viewModel.track.title ?? "Unknown Title")
+            Text(chapter.title)
                 .palaceFont(.body)
             Spacer()
-            if let _ = viewModel.downloadError {
-                Text("Download Error").palaceFont(.body)
-            } else if viewModel.downloadProgress > 0 && viewModel.downloadProgress < 1 {
-                Text("Downloading... \(String(format: "%.0f", viewModel.downloadProgress * 100))%").palaceFont(.body)
-            } else {
-                Text(HumanReadableTimestamp(timeInterval: viewModel.track.duration).timecode)
-                    .accessibility(label: Text(HumanReadableTimestamp(timeInterval: viewModel.track.duration).accessibleDescription))
-                    .palaceFont(.body)
-
-            }
+            Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).timecode)
+                .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
+                .palaceFont(.body)
         }
-    }
-    
-    init(track: any Track) {
-        self.viewModel = TrackDownloadViewModel(track: track)
-    }
-}
-
-class TrackDownloadViewModel: ObservableObject {
-    @Published var downloadProgress: Float = 0
-    @Published var downloadError: Error? = nil
-    private var cancellables: Set<AnyCancellable> = []
-    
-    let track: any Track
-    
-    init(track: any Track) {
-        self.track = track
-        track.downloadTask?.statePublisher
-            .receive(on: RunLoop.main)
-            .sink(receiveValue: { [weak self] state in
-                switch state {
-                case .progress(let progress):
-                    self?.downloadProgress = progress
-                case .error(let error):
-                    self?.downloadError = error
-                default:
-                    break
-                }
-            })
-            .store(in: &cancellables)
     }
 }

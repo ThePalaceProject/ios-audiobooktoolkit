@@ -78,20 +78,11 @@ struct AudiobookNavigationView: View {
     @ViewBuilder
     private var chaptersList: some View {
         List {
-            ForEach(playback.tracks, id: \.id) { track in
-                ChapterCell(track: track)
+            ForEach(playback.audiobookManager.audiobook.tableOfContents.toc) { chapter in
+                ChapterCell(chapter: chapter)
                     .onTapGesture {
-                        if playback.trackErrors[track.id] != nil {
-                            track.downloadTask?.fetch()
-                        } else {
-                            guard let tracks = playback.selectedLocation?.tracks else {
-                                NSLog("Unable to set current track position")
-                                return
-                            }
-
-                            playback.selectedLocation = TrackPosition(track: track, timestamp: 0, tracks: tracks)
+                        playback.selectedLocation = chapter.position
                             presentationMode.wrappedValue.dismiss()
-                        }
                     }
             }
         }
