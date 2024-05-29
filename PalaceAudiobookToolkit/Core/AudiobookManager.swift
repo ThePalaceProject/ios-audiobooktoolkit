@@ -73,9 +73,9 @@ public enum BookmarkError: Error {
     var localizedDescription: String {
         switch self {
         case .bookmarkAlreadyExists:
-            return "Bookmark already exists."
+            return Strings.Error.bookmarkAlreadyExistsError
         case .bookmarkFailedToSave:
-            return "Failed to save bookmark."
+            return Strings.Error.failedToSaveBookmarkError
         }
     }
 }
