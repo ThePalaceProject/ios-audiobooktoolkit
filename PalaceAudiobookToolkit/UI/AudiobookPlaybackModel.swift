@@ -45,7 +45,6 @@ class AudiobookPlaybackModel: ObservableObject {
         max(duration - offset, 0.0)
     }
 
-
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
             return audiobookManager.totalDuration

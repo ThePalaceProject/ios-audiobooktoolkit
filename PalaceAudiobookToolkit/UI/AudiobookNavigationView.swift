@@ -79,11 +79,11 @@ struct AudiobookNavigationView: View {
     private var chaptersList: some View {
         List {
             ForEach(playback.audiobookManager.audiobook.tableOfContents.toc) { chapter in
-                ChapterCell(chapter: chapter)
-                    .onTapGesture {
-                        playback.selectedLocation = chapter.position
-                            presentationMode.wrappedValue.dismiss()
-                    }
+                ChapterCell(chapter: chapter) {
+                    playback.selectedLocation = chapter.position
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .frame(height: 40)
             }
         }
         .listStyle(.plain)
@@ -109,8 +109,7 @@ struct AudiobookNavigationView: View {
             } else {
                 List {
                     ForEach(self.bookmarks, id: \.annotationId) { bookmark in
-                        bookmarkCell(for: bookmark)
-                            .onTapGesture {
+                        bookmarkCell(for: bookmark) {
                                 playback.selectedLocation = bookmark
                                 presentationMode.wrappedValue.dismiss()
                             }
@@ -143,25 +142,29 @@ struct AudiobookNavigationView: View {
     }
     
     @ViewBuilder
-    private func bookmarkCell(for position: TrackPosition) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading) {
-                Text(position.track.title ?? "")
-                    .lineLimit(1)
-                    .palaceFont(.body)
-                Text(DateFormatter.convertISO8601String(position.lastSavedTimeStamp ?? "") ?? "")
-                    .lineLimit(1)
-                    .palaceFont(.subheadline, weight: .regular)
-                    .foregroundColor(.secondary)
+    private func bookmarkCell(for position: TrackPosition, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+        } label: {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading) {
+                    Text(position.track.title ?? "")
+                        .lineLimit(1)
+                        .palaceFont(.body)
+                    Text(DateFormatter.convertISO8601String(position.lastSavedTimeStamp) ?? "")
+                        .lineLimit(1)
+                        .palaceFont(.subheadline, weight: .regular)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text(
+                    DateFormatter.bookmarkTimeFormatter.string(from: Date(timeIntervalSinceReferenceDate: position.timestamp))
+                )
+                .palaceFont(.body)
+                .foregroundColor(.secondary)
             }
-            Spacer()
-            Text(
-                DateFormatter.bookmarkTimeFormatter.string(from: Date(timeIntervalSinceReferenceDate: position.timestamp))
-            )
-            .palaceFont(.body)
-            .foregroundColor(.secondary)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
     }
 }
 

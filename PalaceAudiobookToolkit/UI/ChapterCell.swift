@@ -11,15 +11,20 @@ import Combine
 
 struct ChapterCell: View {
     var chapter: Chapter
+    var action: () -> Void
     
     var body: some View {
-        HStack {
-            Text(chapter.title)
-                .palaceFont(.body)
-            Spacer()
-            Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).timecode)
-                .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
-                .palaceFont(.body)
+        Button {
+            action()
+        } label: {
+            HStack {
+                Text(chapter.title)
+                    .palaceFont(.body)
+                Spacer()
+                Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).timecode)
+                    .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
+                    .palaceFont(.body)
+            }
         }
     }
 }

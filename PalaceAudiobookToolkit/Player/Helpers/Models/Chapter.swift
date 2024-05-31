@@ -8,8 +8,8 @@
 
 import Foundation
 
-public struct Chapter: Identifiable {
-    public var id: String { title }
+public struct Chapter: Identifiable, Equatable {
+    public var id: String = UUID().uuidString
     
     public var title: String
     public var position: TrackPosition
