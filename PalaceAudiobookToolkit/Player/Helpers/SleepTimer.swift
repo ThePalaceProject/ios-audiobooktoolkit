@@ -143,7 +143,7 @@ private enum TimerState {
         case .never:
             self.timerState = .inactive
         case .fifteenMinutes:
-            sleepIn(secondsFromNow: 15)
+            sleepIn(secondsFromNow: minutes(15))
         case .thirtyMinutes:
             sleepIn(secondsFromNow: minutes(30))
         case .oneHour:
