@@ -24,13 +24,14 @@ class LCPTrack: Track {
         title: String?,
         duration: Double,
         index: Int,
-        token: String? = nil
+        token: String? = nil,
+        key: String? = nil
     ) throws {
         guard let urlString else {
             throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
         }
 
-        self.key = "\(audiobookID)-\(index)"
+        self.key = key ?? "\(audiobookID)-\(index)"
         self.urls = [URL(string: urlString)].compactMap { $0 }
         guard !(self.urls?.isEmpty ?? true) else {
             throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
@@ -40,6 +41,6 @@ class LCPTrack: Track {
         self.duration = duration
         self.index = index
         self.mediaType = manifest.trackMediaType
-        self.downloadTask = LCPDownloadTask(key: key, urls: urls, mediaType: mediaType)
+        self.downloadTask = LCPDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
     }
 }

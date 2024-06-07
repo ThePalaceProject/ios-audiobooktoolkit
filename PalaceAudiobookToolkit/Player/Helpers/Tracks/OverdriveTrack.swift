@@ -26,18 +26,19 @@ class OverdriveTrack: Track {
         title: String?,
         duration: Double,
         index: Int,
-        token: String? = nil
+        token: String? = nil,
+        key: String?
     ) throws {
         guard let urlString, let url = URL(string: urlString) else {
             throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
         }
 
-        self.key = "\(audiobookID)-\(index)"
+        self.key = "urn:org.thepalaceproject:readingOrder:\(String(describing: index)))"
         self.url = url
         self.title = title
         self.index = index
         self.duration = duration
         self.mediaType = manifest.trackMediaType
-        self.downloadTask = OverdriveDownloadTask(key: key, url: url, mediaType: mediaType)
+        self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType)
     }
 }

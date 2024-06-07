@@ -46,8 +46,8 @@ class PlayerMock: NSObject, Player {
         isPlaying = false
     }
     
-    func playAtLocation(_ newLocation: ChapterLocation, completion: Completion?) { }
+    func playAtLocation(_ newLocation: TrackPosition, completion: Completion?) { }
     
-    func movePlayheadToLocation(_ location: ChapterLocation, completion: Completion?) { }
+    func movePlayheadToLocation(_ location: TrackPosition, completion: Completion?) { }
     func move(to value: Double, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {}
 }

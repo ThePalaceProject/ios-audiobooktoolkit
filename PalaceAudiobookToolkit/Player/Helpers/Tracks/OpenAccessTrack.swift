@@ -49,7 +49,8 @@ public class OpenAccessTrack: Track {
         title: String?,
         duration: Double,
         index: Int,
-        token: String? = nil
+        token: String? = nil,
+        key: String?
     ) throws {
         guard let urlString, let url = URL(string: urlString)
         else {
@@ -61,7 +62,7 @@ public class OpenAccessTrack: Track {
         self.urls = [url]
         self.urlString = urlString
         self.mediaType = manifest.trackMediaType
-        self.key = "\(audiobookID)-\(index)"
+        self.key = key ?? "\(audiobookID)-\(index)"
         self.title = title ?? "Track \(index + 1)"
         self.index = index
         self.duration = duration
@@ -69,7 +70,7 @@ public class OpenAccessTrack: Track {
         self.feedbooksProfile = manifest.profile(for: .findaway)
         self.token = token
         self.downloadTask = OpenAccessDownloadTask(
-            key: key,
+            key: self.key,
             downloadURL: url,
             urlString: urlString,
             urlMediaType: mediaType,

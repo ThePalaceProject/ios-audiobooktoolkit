@@ -16,7 +16,8 @@ public protocol TrackFactoryProtocol {
         audiobookID: String,
         index: Int,
         duration: Double,
-        token: String?
+        token: String?,
+        key: String?
     ) -> (any Track)?
 }
 
@@ -28,7 +29,8 @@ class TrackFactory: TrackFactoryProtocol {
         audiobookID: String,
         index: Int,
         duration: Double,
-        token: String?
+        token: String?,
+        key: String?
     ) -> (any Track)? {
         switch manifest.audiobookType {
         case .lcp:
@@ -39,8 +41,8 @@ class TrackFactory: TrackFactoryProtocol {
                 title: title,
                 duration: duration,
                 index: index,
-                token: token
-
+                token: token,
+                key: key
             )
         case .findaway:
             return try? FindawayTrack(
@@ -60,7 +62,8 @@ class TrackFactory: TrackFactoryProtocol {
                 title: title,
                 duration: duration,
                 index: index,
-                token: token
+                token: token,
+                key: key
             )
         }
     }
@@ -136,7 +139,8 @@ public class Tracks {
             audiobookID: self.audiobookID,
             index: index,
             duration: item.duration,
-            token: token
+            token: token,
+            key: item.href
         )
     }
 
@@ -161,7 +165,8 @@ public class Tracks {
             audiobookID: self.audiobookID,
             index: index,
             duration: duration,
-            token: token
+            token: token,
+            key: link.href
         )
     }
 
@@ -199,7 +204,8 @@ public class Tracks {
             audiobookID: audiobookID,
             index: index,
             duration: Double(item.duration),
-            token: token
+            token: token,
+            key: item.href
         )
     }
 

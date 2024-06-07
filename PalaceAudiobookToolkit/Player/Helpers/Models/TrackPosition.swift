@@ -97,7 +97,7 @@ public struct TrackPosition: Equatable, Comparable {
     }
 
     public static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        lhs.track.id == rhs.track.id && lhs.timestamp == rhs.timestamp
+        lhs.track.id == rhs.track.id && Int(lhs.timestamp) == Int(rhs.timestamp)
     }
 }
 

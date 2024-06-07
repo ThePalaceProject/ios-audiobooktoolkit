@@ -16,7 +16,8 @@ public class FindawayTrackFactory: NSObject, TrackFactoryProtocol {
         audiobookID: String,
         index: Int,
         duration: Double,
-        token: String? = nil
+        token: String? = nil,
+        key: String? = nil
     ) -> (any PalaceAudiobookToolkit.Track)? {
         do {
             return try FindawayTrack(
@@ -37,8 +38,6 @@ public class `FindawayTrack`: Track {
         case missingPartOrSequenceInfo, missingSessionKeyOrLicenseID
     }
     
-    public var key: String { "FAEAudioEngine-\(audiobookID)-\(String(describing: chapterNumber))-\(String(describing: partNumber))" }
-
     public var downloadTask: (any DownloadTask)?
     public var title: String?
     public var index: Int
@@ -51,6 +50,7 @@ public class `FindawayTrack`: Track {
     public  var sessionKey: String
     public var licenseID: String
     public var audiobookID: String
+    public var key: String
 
     public required init(
         manifest: PalaceAudiobookToolkit.Manifest,
@@ -59,7 +59,8 @@ public class `FindawayTrack`: Track {
         title: String? = nil,
         duration: Double,
         index: Int,
-        token: String? = nil
+        token: String? = nil,
+        key: String? = nil
     ) throws {
         guard let partNumber = manifest.readingOrder?[index].findawayPart,
               let sequence = manifest.readingOrder?[index].findawaySequence else {
@@ -72,7 +73,8 @@ public class `FindawayTrack`: Track {
         }
         
         let fullfillmentID = manifest.metadata?.drmInformation?.fulfillmentId ?? audiobookID
-        
+
+        self.key = "urn:org.thepalaceproject:findaway:\(String(describing: chapterNumber)):\(String(describing: partNumber))"
         self.index = index
         self.title = title
         self.duration = duration

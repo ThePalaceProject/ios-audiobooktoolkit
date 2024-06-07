@@ -33,7 +33,8 @@ public protocol Track: class, Identifiable {
         title: String?,
         duration: Double,
         index: Int,
-        token: String?
+        token: String?,
+        key: String?
     ) throws
 }
 
@@ -69,7 +70,8 @@ class EmptyTrack: Track {
         title: String?,
         duration: Double,
         index: Int,
-        token: String?
+        token: String?,
+        key: String?
     ) throws {
         self.title = title
         self.duration = duration

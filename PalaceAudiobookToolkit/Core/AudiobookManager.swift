@@ -226,10 +226,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     @discardableResult
     public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
-        // Implement the logic to save the current location
-        return nil
+        var result: Result<Void, Error>? = nil
+        
+        bookmarkDelegate?.saveListeningPosition(at: location) { (serverId: String?) in
+            if let _ = serverId {
+                result = .success(())
+            } else {
+                result = .failure(NSError(domain: "com.example.error", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to post current location."]))
+                ATLog(.error, "Failed to post current location.")
+            }
+        }
+        
+        return result
     }
-    
+
     public func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?) {
         guard bookmarks.first(where: { $0 == audiobook.player.currentTrackPosition }) == nil else {
             ATLog(.error, "Bookmark already saved")

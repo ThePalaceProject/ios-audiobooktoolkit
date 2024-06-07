@@ -488,12 +488,12 @@
 		E57FCA232BC8D3C0008D8907 /* Tracks */ = {
 			isa = PBXGroup;
 			children = (
-				E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */,
 				E5DE01A92BA3E4610063E68E /* Tracks.swift */,
 				E5DE01A72BA3E4580063E68E /* Track.swift */,
 				E57FCA272BC8E768008D8907 /* LCPTrack.swift */,
 				E57FCA242BC8D3D2008D8907 /* OpenAccessTrack.swift */,
 				E55DE97F2BDC0B6300ECB153 /* OverdriveTrack.swift */,
+				E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */,
 			);
 			path = Tracks;
 			sourceTree = "<group>";

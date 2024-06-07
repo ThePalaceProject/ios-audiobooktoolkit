@@ -141,6 +141,10 @@ struct AudiobookNavigationView: View {
         }
     }
     
+    func title(for position: TrackPosition) -> String {
+        (try? playback.audiobookManager.audiobook.tableOfContents.chapter(forPosition: position).title) ?? position.track.title ?? ""
+    }
+
     @ViewBuilder
     private func bookmarkCell(for position: TrackPosition, action: @escaping () -> Void) -> some View {
         Button {
@@ -148,7 +152,7 @@ struct AudiobookNavigationView: View {
         } label: {
             HStack(alignment: .center) {
                 VStack(alignment: .leading) {
-                    Text(position.track.title ?? "")
+                    Text(title(for: position))
                         .lineLimit(1)
                         .palaceFont(.body)
                     Text(DateFormatter.convertISO8601String(position.lastSavedTimeStamp) ?? "")
