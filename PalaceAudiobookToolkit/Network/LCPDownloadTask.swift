@@ -25,6 +25,8 @@ final class LCPDownloadTask: DownloadTask {
     /// URL for decrypted audio file
     var decryptedUrls: [URL]? = []
     let urlMediaType: TrackMediaType
+
+    var needsRetry: Bool { false }
     
     init(key: String, urls: [URL]?, mediaType: TrackMediaType) {
         self.key = key

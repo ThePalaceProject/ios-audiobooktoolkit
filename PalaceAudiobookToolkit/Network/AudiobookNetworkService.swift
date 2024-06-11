@@ -15,6 +15,7 @@ public enum DownloadState {
     case deleted(track: any Track)
     case error(track: any Track, error: Error?)
     case overallProgress(progress: Float)
+    case downloadComplete
 }
 
 /// The protocol for managing the download of chapters. Implementers of
@@ -37,9 +38,14 @@ public protocol AudiobookNetworkService: AnyObject {
     ///
     /// Implementations of this should be non-blocking.
     /// Updates for the status of each download task will
-    /// come through delegate methods.
+    /// come through downloadStatePublisher.
     func fetch()
     
+    /// Implementations of this should be non-blocking.
+    /// Updates for the status of each download task will
+    /// come through downloadStatePublisher.
+    func fetchUndownloadedTracks()
+
     /// Implmenters of this should attempt to delete all
     /// spine elements.
     ///
@@ -54,6 +60,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public let tracks: [any Track]
     private var cancellables: Set<AnyCancellable> = []
     private var progressDictionary: [String: Float] = [:]
+    private var downloadStatus: [String: DownloadTaskState] = [:]
     private let downloadQueue = DispatchQueue(label: "com.palace.audiobook.downloadQueue", attributes: .concurrent)
     private let queue = DispatchQueue(label: "com.yourapp.progressDictionaryQueue", attributes: .concurrent)
     
@@ -64,6 +71,14 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     
     public func fetch() {
         tracks.forEach { $0.downloadTask?.fetch() }
+    }
+    
+    public func fetchUndownloadedTracks() {
+        tracks.forEach {
+            if $0.downloadTask?.needsRetry ?? false {
+                $0.downloadTask?.fetch()
+            }
+        }
     }
     
     public func deleteAll() {
@@ -89,11 +104,15 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
         case .completed:
             updateProgress(1.0, for: track)
             downloadStatePublisher.send(.completed(track: track))
+            updateDownloadStatus(for: track, state: .completed)
         case .error(let error):
             downloadStatePublisher.send(.error(track: track, error: error))
+            updateDownloadStatus(for: track, state: .error(error))
         case .deleted:
             downloadStatePublisher.send(.deleted(track: track))
         }
+        
+        checkIfAllTasksFinished()
     }
     
     private func updateProgress(_ progress: Float, for track: any Track) {
@@ -119,4 +138,33 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
             }
         }
     }
+    
+    private func updateDownloadStatus(for track: any Track, state: DownloadTaskState) {
+        queue.async(flags: .barrier) {
+            self.downloadStatus[track.key] = state
+        }
+    }
+    
+    private func checkIfAllTasksFinished() {
+        queue.sync {
+            let allFinished = tracks.allSatisfy { track in
+                if let state = downloadStatus[track.key] {
+                    switch state {
+                    case .completed, .error:
+                        return true
+                    default:
+                        return false
+                    }
+                }
+                return false
+            }
+            
+            if allFinished {
+                DispatchQueue.main.async {
+                    self.downloadStatePublisher.send(.downloadComplete)
+                }
+            }
+        }
+    }
 }
+

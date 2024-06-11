@@ -25,6 +25,7 @@ public protocol Track: class, Identifiable {
     var partNumber: Int? { get }
     var chapterNumber: Int? { get }
     var urls: [URL]? { get }
+    var downloadProgress: Float { get }
 
     init(
         manifest: Manifest,
@@ -53,6 +54,10 @@ extension Track {
         Duration: \(duration) seconds
         URLs: \(urlsDesc)
         """
+    }
+
+    public var downloadProgress: Float {
+        downloadTask?.downloadProgress ?? 0.0
     }
 }
 
