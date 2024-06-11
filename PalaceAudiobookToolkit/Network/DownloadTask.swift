@@ -24,4 +24,5 @@ public protocol DownloadTask: AnyObject {
     var statePublisher: PassthroughSubject<DownloadTaskState, Never> { get }
     var downloadProgress: Float { get set }
     var key: String { get }
+    var needsRetry: Bool { get }
 }

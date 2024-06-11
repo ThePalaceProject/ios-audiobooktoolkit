@@ -7,6 +7,15 @@ final class OverdriveDownloadTask: DownloadTask {
 
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
 
+    var needsRetry: Bool {
+        switch self.assetFileStatus() {
+        case .missing(_), .unknown:
+            return true
+        case .saved(_):
+            return false
+        }
+    }
+
     private static let DownloadTaskTimeoutValue = 60.0
     
     private var urlSession: URLSession?

@@ -38,6 +38,9 @@ struct AudiobookNavigationView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            if playback.audiobookManager.needsDownloadRetry {
+                RetryToolbar(retryAction: playback.audiobookManager.retryDownload)
+            }
             navigationPicker
             switch selectedSection {
             case .toc: chaptersList
@@ -84,10 +87,12 @@ struct AudiobookNavigationView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .frame(height: 40)
+                .disabled(playback.downloadProgress(for: chapter) < 1.0)
             }
         }
         .listStyle(.plain)
     }
+    
 
     
     @ViewBuilder

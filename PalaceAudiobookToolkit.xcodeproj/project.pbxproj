@@ -81,6 +81,7 @@
 		E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */; };
 		E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498C52BB31C9F00BCD49C /* Metadata.swift */; };
 		E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5797E9B2BAA35F40017AB03 /* Audiobook.swift */; };
+		E57F79D92C17FE6900E99297 /* RetryToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57F79D82C17FE6900E99297 /* RetryToolbar.swift */; };
 		E57FCA222BC8D0ED008D8907 /* DownloadTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD759C92017CEA3004CE65F /* DownloadTask.swift */; };
 		E57FCA252BC8D3D2008D8907 /* OpenAccessTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57FCA242BC8D3D2008D8907 /* OpenAccessTrack.swift */; };
 		E57FCA282BC8E768008D8907 /* LCPTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57FCA272BC8E768008D8907 /* LCPTrack.swift */; };
@@ -220,6 +221,7 @@
 		E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		E57498C52BB31C9F00BCD49C /* Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metadata.swift; sourceTree = "<group>"; };
 		E5797E9B2BAA35F40017AB03 /* Audiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audiobook.swift; sourceTree = "<group>"; };
+		E57F79D82C17FE6900E99297 /* RetryToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetryToolbar.swift; sourceTree = "<group>"; };
 		E57FCA242BC8D3D2008D8907 /* OpenAccessTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessTrack.swift; sourceTree = "<group>"; };
 		E57FCA272BC8E768008D8907 /* LCPTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPTrack.swift; sourceTree = "<group>"; };
 		E58496922BAB6B10003C83E6 /* bocas_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bocas_manifest.json; sourceTree = "<group>"; };
@@ -559,6 +561,7 @@
 				E79266962AB34315009901B7 /* AudiobookNavigationView.swift */,
 				E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */,
 				E56C00C52BC3912100A25A97 /* ChapterCell.swift */,
+				E57F79D82C17FE6900E99297 /* RetryToolbar.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -770,6 +773,7 @@
 				E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
 				E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */,
+				E57F79D92C17FE6900E99297 /* RetryToolbar.swift in Sources */,
 				7B8026A3206AB0AF00012808 /* HumanReadablePlaybackRate.swift in Sources */,
 				E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */,
 				E52C1C412C00437300D8F30B /* ManifestJSON.swift in Sources */,

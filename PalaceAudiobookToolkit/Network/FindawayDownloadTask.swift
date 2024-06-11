@@ -14,6 +14,15 @@ import Combine
 final class FindawayDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     var key: String
+    var needsRetry: Bool {
+        switch self.downloadStatus {
+        case .notDownloaded:
+            return true
+        default:
+            return false
+        }
+    }
+
     private var downloadRequest: FAEDownloadRequest
     private var session: URLSession?
     private var downloadTask: DownloadTask?

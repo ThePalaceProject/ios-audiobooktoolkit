@@ -183,6 +183,46 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         return try position - chapterStartPosition
     }
     
+    public func downloadProgress(for chapter: Chapter) -> Double {
+        guard let chapterIndex = toc.firstIndex(where: { $0 == chapter }) else {
+            return 0.0
+        }
+        
+        let startTrack = chapter.position.track
+        let endTrack: any Track
+        if chapterIndex + 1 < toc.count {
+            endTrack = toc[chapterIndex + 1].position.track
+        } else {
+            guard let lastTrack = tracks.tracks.last else {
+                return 0.0
+            }
+            endTrack = lastTrack
+        }
+        
+        let startTrackIndex = startTrack.index
+        let endTrackIndex = endTrack.index
+        
+        guard startTrackIndex <= endTrackIndex,
+              startTrackIndex >= 0, endTrackIndex < tracks.count else {
+            return 0.0
+        }
+        
+        var totalProgress: Double = 0.0
+        var totalDuration: Double = 0.0
+        
+        for trackIndex in startTrackIndex...endTrackIndex {
+            if let track = tracks[trackIndex] {
+                let trackDuration = track.duration
+                let trackProgress = Double(track.downloadProgress)
+                
+                totalProgress += trackProgress * trackDuration
+                totalDuration += trackDuration
+            }
+        }
+        
+        return totalDuration > 0 ? totalProgress / totalDuration : 0.0
+    }
+
     func areTracksEqual(_ lhs: any Track, _ rhs: any Track) -> Bool {
         lhs.key == rhs.key && lhs.index == rhs.index
     }

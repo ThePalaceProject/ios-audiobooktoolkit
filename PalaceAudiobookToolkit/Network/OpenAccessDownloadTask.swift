@@ -15,6 +15,14 @@ enum AssetResult {
 final class OpenAccessDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     var key: String
+    var needsRetry: Bool {
+        switch self.assetFileStatus() {
+        case .missing(_), .unknown:
+            return true
+        case .saved(_):
+            return false
+        }
+    }
 
     let urlMediaType: TrackMediaType
     let alternateLinks: [(TrackMediaType, URL)]?

@@ -203,6 +203,10 @@ class AudiobookPlaybackModel: ObservableObject {
         }
     }
     
+    public func downloadProgress(for chapter: Chapter) -> Double {
+        audiobookManager.downloadProgress(for: chapter)
+    }
+    
     func setPlaybackRate(_ playbackRate: PlaybackRate) {
         audiobookManager.audiobook.player.playbackRate = playbackRate
     }

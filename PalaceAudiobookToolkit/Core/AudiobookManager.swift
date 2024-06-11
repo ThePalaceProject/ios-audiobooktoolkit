@@ -41,7 +41,8 @@ public protocol AudiobookManager {
     var metadata: AudiobookMetadata { get }
     var audiobook: Audiobook { get }
     var bookmarks: [TrackPosition] { get }
-    
+    var needsDownloadRetry: Bool { get }
+
     var sleepTimer: SleepTimer { get }
     var audiobookBookmarksPublisher: CurrentValueSubject<[TrackPosition], Never> { get }
     
@@ -55,7 +56,9 @@ public protocol AudiobookManager {
     func play()
     func pause()
     func unload()
-    
+    func downloadProgress(for chapter: Chapter) -> Double
+    func retryDownload()
+
     @discardableResult func saveLocation(_ location: TrackPosition) -> Result<Void, Error>?
     func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?)
     func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
@@ -126,7 +129,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public lazy var sleepTimer: SleepTimer = {
         return SleepTimer(player: self.audiobook.player)
     }()
-    
+
+    public var needsDownloadRetry: Bool = false
+
     private(set) public var timer: Timer?
     
     public init(metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService) {
@@ -153,6 +158,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 switch downloadState {
                 case .error(let track, let error):
                     self?.statePublisher.send(.error(track, error))
+                case .downloadComplete:
+                    self?.checkIfRetryIsNeeded()
                 default:
                     break
                 }
@@ -160,6 +167,16 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 self?.calculateOverallDownloadProgress()
             }
             .store(in: &cancellables)
+    }
+    
+    private func checkIfRetryIsNeeded() {
+        for track in audiobook.tableOfContents.allTracks {
+            if (track.downloadTask?.needsRetry ?? false) {
+                needsDownloadRetry = true
+            }
+        }
+
+        needsDownloadRetry = false
     }
     
     private func calculateOverallDownloadProgress() {
@@ -207,6 +224,15 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
     
+    public func downloadProgress(for chapter: Chapter) -> Double {
+        self.tableOfContents.downloadProgress(for: chapter)
+    }
+    
+    public func retryDownload() {
+        needsDownloadRetry = false
+        self.networkService.fetchUndownloadedTracks()
+    }
+
     public func updateAudiobook(with tracks: [any Track]) {
         self.networkService = DefaultAudiobookNetworkService(tracks: tracks)
     }
@@ -214,7 +240,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public func play() {
         audiobook.player.play()
     }
-    
+
     public func pause() {
         audiobook.player.pause()
     }
