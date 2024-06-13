@@ -212,7 +212,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         guard let currentTrackPosition = position else { return }
         
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
-        nowPlayingInfo[MPMediaItemPropertyTitle] = currentTrackPosition.track.title
+        nowPlayingInfo[MPMediaItemPropertyTitle] = (try? tableOfContents.chapter(forPosition: currentTrackPosition).title) ?? currentTrackPosition.track.title
         nowPlayingInfo[MPMediaItemPropertyArtist] = self.metadata.title
         nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = self.metadata.authors?.joined(separator: ", ")
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTrackPosition.timestamp
