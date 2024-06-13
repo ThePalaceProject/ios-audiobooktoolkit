@@ -61,8 +61,8 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     private var cancellables: Set<AnyCancellable> = []
     private var progressDictionary: [String: Float] = [:]
     private var downloadStatus: [String: DownloadTaskState] = [:]
-    private let downloadQueue = DispatchQueue(label: "com.palace.audiobook.downloadQueue", attributes: .concurrent)
     private let queue = DispatchQueue(label: "com.yourapp.progressDictionaryQueue", attributes: .concurrent)
+    private var currentDownloadIndex: Int = 0
     
     public init(tracks: [any Track]) {
         self.tracks = tracks
@@ -70,15 +70,11 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
     
     public func fetch() {
-        tracks.forEach { $0.downloadTask?.fetch() }
+        startDownload(at: currentDownloadIndex)
     }
     
     public func fetchUndownloadedTracks() {
-        tracks.forEach {
-            if $0.downloadTask?.needsRetry ?? false {
-                $0.downloadTask?.fetch()
-            }
-        }
+        startNextUndownloadedTrack()
     }
     
     public func deleteAll() {
@@ -105,9 +101,11 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
             updateProgress(1.0, for: track)
             downloadStatePublisher.send(.completed(track: track))
             updateDownloadStatus(for: track, state: .completed)
+            startNextDownload()
         case .error(let error):
             downloadStatePublisher.send(.error(track: track, error: error))
             updateDownloadStatus(for: track, state: .error(error))
+            startNextDownload()
         case .deleted:
             downloadStatePublisher.send(.deleted(track: track))
         }
@@ -166,5 +164,34 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
             }
         }
     }
+    
+    private func startDownload(at index: Int) {
+        guard index < tracks.count else { return }
+        let track = tracks[index]
+        currentDownloadIndex = index
+        
+        if track.downloadTask?.downloadProgress ?? 0.0 < 1.0 {
+            track.downloadTask?.fetch()
+        } else {
+            startNextDownload()
+        }
+    }
+    
+    private func startNextDownload() {
+        let nextIndex = currentDownloadIndex + 1
+        if nextIndex < tracks.count {
+            startDownload(at: nextIndex)
+        }
+    }
+    
+    private func startNextUndownloadedTrack() {
+        for index in currentDownloadIndex..<tracks.count {
+            let track = tracks[index]
+            if track.downloadTask?.needsRetry ?? false {
+                currentDownloadIndex = index
+                track.downloadTask?.fetch()
+                break
+            }
+        }
+    }
 }
-
