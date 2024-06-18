@@ -61,31 +61,26 @@ public struct TrackPosition: Equatable, Comparable {
         return diff
     }
     
-    public static func + (lhs: TrackPosition, other: Double) throws -> TrackPosition {
+    public static func + (lhs: TrackPosition, other: Double) -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
         var currentTrack = lhs.track
         
-        // Handle subtraction
         while newTimestamp < 0 {
             guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
-                throw TrackPositionError.outOfBounds
+                return TrackPosition(track: currentTrack, timestamp: 0, tracks: lhs.tracks)
             }
             currentTrack = prevTrack
             newTimestamp += currentTrack.duration
         }
         
-        // Handle positive addition
         while newTimestamp >= currentTrack.duration {
             newTimestamp -= currentTrack.duration
             guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
-                if newTimestamp == 0.0 {
-                    return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
-                }
-                throw TrackPositionError.outOfBounds
+                return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
             }
             currentTrack = nextTrack
         }
-
+        
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
 

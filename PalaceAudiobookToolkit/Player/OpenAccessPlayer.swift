@@ -113,7 +113,7 @@ class OpenAccessPlayer: NSObject, Player {
         addPlayerObservers()
     }
     
-    private func configurePlayer() {
+    func configurePlayer() {
         setupAudioSession()
         buildPlayerQueue()
     }
@@ -228,7 +228,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
-    private func listenForDownloadCompletion(task: DownloadTask? = nil) {
+    public func listenForDownloadCompletion(task: DownloadTask? = nil) {
         (task ?? self.currentTrackPosition?.track.downloadTask)?.statePublisher
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { completion in
@@ -259,11 +259,91 @@ class OpenAccessPlayer: NSObject, Player {
         if let currentAssetURL = (avQueuePlayer.currentItem?.asset as? AVURLAsset)?.url,
            urls.contains(currentAssetURL) {
             rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
-        } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id{
+        } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id {
             buildPlayerQueue()
         } else {
             rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
         }
+    }
+
+    public func buildPlayerQueue() {
+        resetPlayerQueue()
+        
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
+        if playerItems.isEmpty {
+            isLoaded = false
+            return
+        }
+        
+        for item in playerItems {
+            if avQueuePlayer.canInsert(item, after: nil) {
+                avQueuePlayer.insert(item, after: nil)
+            } else {
+                isLoaded = avQueuePlayer.items().count > 0
+                return
+            }
+        }
+        
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        isLoaded = true
+    }
+    
+    public func resetPlayerQueue() {
+        for item in avQueuePlayer.items() {
+            NotificationCenter.default.removeObserver(
+                self, name: .AVPlayerItemDidPlayToEndTime,
+                object: item
+            )
+        }
+        avQueuePlayer.removeAllItems()
+    }
+    
+    public func rebuildPlayerQueueAndNavigate(
+        to trackPosition: TrackPosition?,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        avQueuePlayer.removeAllItems()
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
+        
+        var desiredIndex: Int? = nil
+        for (index, item) in playerItems.enumerated() {
+            avQueuePlayer.insert(item, after: nil)
+            if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
+                desiredIndex = index
+            }
+        }
+        
+        guard let index = desiredIndex, index < playerItems.count else {
+            completion?(false)
+            return
+        }
+        
+        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
+    }
+    
+    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+        var items = [AVPlayerItem]()
+        for track in tracks {
+            guard let fileStatus = assetFileStatus(track.downloadTask) else {
+                continue
+            }
+            
+            switch fileStatus {
+            case .saved(let urls):
+                for url in urls {
+                    let playerItem = AVPlayerItem(url: url)
+                    playerItem.audioTimePitchAlgorithm = .timeDomain
+                    playerItem.trackIdentifier = track.key
+                    items.append(playerItem)
+                }
+            case .missing:
+                listenForDownloadCompletion(task: track.downloadTask)
+                continue
+            case .unknown:
+                continue
+            }
+        }
+        return items
     }
 }
 
@@ -276,7 +356,7 @@ extension OpenAccessPlayer {
         playbackStatePublisher.send(.stopped(trackPosition))
     }
     
-    private func setupAudioSession() {
+    public func setupAudioSession() {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleAudioSessionInterruption(_:)),
@@ -292,7 +372,7 @@ extension OpenAccessPlayer {
         try? AVAudioSession.sharedInstance().setActive(true)
     }
     
-    private func addPlayerObservers() {
+    public func addPlayerObservers() {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(playerItemDidReachEnd(_:)),
@@ -466,7 +546,7 @@ extension OpenAccessPlayer {
     
     private func rebuildPlayerQueueAndNavigate(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         avQueuePlayer.removeAllItems()
-        let playerItems = buildPlayerItems()
+        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
         avQueuePlayer.items().forEach { avQueuePlayer.insert($0, after: nil) }
         
         navigateToPosition(position, in: playerItems, completion: completion)
@@ -502,16 +582,6 @@ extension OpenAccessPlayer {
             }
         }
     }
-
-    // Utilities and helpers
-    private func buildPlayerItems() -> [AVPlayerItem] {
-        return tableOfContents.allTracks.map { track in
-            let url = track.urls!.first! // Simplified for example purposes
-            let item = AVPlayerItem(url: url)
-            item.trackIdentifier = track.key
-            return item
-        }
-    }
     
     private func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
@@ -519,63 +589,8 @@ extension OpenAccessPlayer {
             completion?(success ? position : nil)
         }
     }
- 
-    private func buildPlayerQueue() {
-        resetPlayerQueue()
-        
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
-        if playerItems.isEmpty {
-            isLoaded = false
-            return
-        }
-        
-        for item in playerItems {
-            if avQueuePlayer.canInsert(item, after: nil) {
-                avQueuePlayer.insert(item, after: nil)
-            } else {
-                isLoaded = avQueuePlayer.items().count > 0
-                return
-            }
-        }
-        
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
-        isLoaded = true
-    }
     
-    private func resetPlayerQueue() {
-        for item in avQueuePlayer.items() {
-            NotificationCenter.default.removeObserver(
-                self, name: .AVPlayerItemDidPlayToEndTime,
-                object: item
-            )
-        }
-        avQueuePlayer.removeAllItems()
-    }
-    
-    private func rebuildPlayerQueueAndNavigate(
-        to trackPosition: TrackPosition?,
-        completion: ((Bool) -> Void)? = nil
-    ) {
-        avQueuePlayer.removeAllItems()
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
-        
-        var desiredIndex: Int? = nil
-        for (index, item) in playerItems.enumerated() {
-            avQueuePlayer.insert(item, after: nil)
-            if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
-                desiredIndex = index
-            }
-        }
-        
-        guard let index = desiredIndex, index < playerItems.count else {
-            completion?(false)
-            return
-        }
-        
-        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
-    }
-    
-    private func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
+    public func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
         let shouldPlay = avQueuePlayer.rate > 0
     
         avQueuePlayer.pause()
@@ -635,30 +650,5 @@ extension OpenAccessPlayer {
         }
         
         return AVPlayerItem(asset: composition)
-    }
-    
-    private func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
-        var items = [AVPlayerItem]()
-        for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
-                listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
-            }
-        }
-        return items
     }
 }
