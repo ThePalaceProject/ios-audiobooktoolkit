@@ -10,7 +10,6 @@ import UIKit
 import AudioEngine
 import Combine
 
-/// Handle network interactions with the AudioEngine SDK.
 final class FindawayDownloadTask: DownloadTask {
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
     var key: String
@@ -22,11 +21,11 @@ final class FindawayDownloadTask: DownloadTask {
             return false
         }
     }
-
+    
     private var downloadRequest: FAEDownloadRequest
     private var session: URLSession?
     private var downloadTask: DownloadTask?
-
+    
     var downloadProgress: Float = 0 {
         didSet {
             DispatchQueue.main.async { [weak self] in
@@ -36,7 +35,7 @@ final class FindawayDownloadTask: DownloadTask {
             }
         }
     }
-
+    
     private let pollRate: TimeInterval = 1.0
     private var pollAgainForPercentageAt: Date?
     private var retryAfterVerification = false
@@ -89,7 +88,7 @@ final class FindawayDownloadTask: DownloadTask {
             databaseVerification.registerDelegate(self)
         }
     }
-
+    
     convenience init(
         audiobookID: String,
         chapterNumber: UInt,
@@ -97,10 +96,10 @@ final class FindawayDownloadTask: DownloadTask {
         sessionKey: String,
         licenseID: String
     ) {
-      var request: FAEDownloadRequest! = FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests().first(where: { (existingRequest) -> Bool in
+        var request: FAEDownloadRequest! = FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests().first(where: { (existingRequest) -> Bool in
             return existingRequest.audiobookID == audiobookID
-                && existingRequest.chapterNumber == chapterNumber
-                && existingRequest.chapterNumber == partNumber
+            && existingRequest.chapterNumber == chapterNumber
+            && existingRequest.partNumber == partNumber
         })
         
         if request == nil {
@@ -121,88 +120,75 @@ final class FindawayDownloadTask: DownloadTask {
             key: "FAE.audioEngine/\(request.audiobookID)/\(request.partNumber)/\(request.chapterNumber)"
         )
     }
-
-    /**
-     This implementation of fetch() will wait until FAEAudioEngine has verified it's database
-     before attempting a download. If this object never sees a verified database from updated AudiobookLifeCycleManager
-     events, then it will never even hit the network.
-     */
+    
     public func fetch() {
         self.queue.sync {
             self.attemptFetch()
         }
     }
-
+    
     private func attemptFetch() {
         guard self.readyToDownload else {
             self.retryAfterVerification = true
             return
         }
-
+        
         let status = self.downloadStatus
         if status == .notDownloaded {
             FAEAudioEngine.shared()?.downloadEngine?.startDownload(with: self.downloadRequest)
             self.retryAfterVerification = false
+            self.pollAgainForPercentageAt = Date().addingTimeInterval(self.pollRate) // Ensure polling starts
+            self.pollForDownloadPercentage()
         } else if status == .downloaded {
             self.downloadProgress = 1.0
             self.statePublisher.send(.completed)
         }
     }
-
+    
     func nextScheduledPoll() -> DispatchTime {
         return DispatchTime.now() + self.pollRate
     }
-
+    
     func pollForDownloadPercentage() {
-        func notifyDelegate() {
-            guard let pollAt = self.pollAgainForPercentageAt else {
-                return
-            }
-
-            if Date() > pollAt {
-                if self.notifiedDownloadProgress != self.downloadProgress {
-                    updateDownloadProgress()
-                }
-            }
-
+        self.queue.asyncAfter(deadline: self.nextScheduledPoll()) {
             if self.downloadStatus == .downloading {
+                self.updateDownloadProgress()
+                self.pollAgainForPercentageAt = Date().addingTimeInterval(self.pollRate)
                 self.pollForDownloadPercentage()
+            } else if self.downloadStatus == .downloaded {
+                self.downloadProgress = 1.0
+                self.statePublisher.send(.completed)
+                self.pollAgainForPercentageAt = nil
             } else {
                 self.pollAgainForPercentageAt = nil
             }
-        }
-
-        self.queue.asyncAfter(deadline: self.nextScheduledPoll()) {
-            notifyDelegate()
         }
     }
     
     private func updateDownloadProgress() {
         DispatchQueue.main.async { [weak self] in
-            guard let self, readyToDownload else {
+            guard let self, self.readyToDownload else {
                 self?.downloadProgress = 0
                 return
             }
-
-            self.downloadProgress = findawayProgressToNYPLToolkit(
+            
+            let progress = findawayProgressToNYPLToolkit(
                 FAEAudioEngine.shared()?.downloadEngine?.percentage(
                     forAudiobookID: self.downloadRequest.audiobookID,
                     partNumber: self.downloadRequest.partNumber,
                     chapterNumber: self.downloadRequest.chapterNumber
                 )
             )
+            
+            if progress == 1.0 {
+                self.downloadProgress = 1.0
+                self.statePublisher.send(.completed)
+            } else {
+                self.downloadProgress = progress
+            }
         }
     }
-
-    /// If we try to download the book again before the deletion has
-    /// finished, AudioEngine will throw an error and fail the download.
-    ///
-    /// After the deletion has finished, we must aquire a new DownloadRequest
-    /// in order to perform another download.
-    ///
-    /// To compensate for this, if `fetch` is called directly after `delete`,
-    /// this object ought to wait until the new DownloadRequest is created
-    /// and then attempt the `fetch` again.
+    
     public func delete() {
         self.queue.sync {
             FAEAudioEngine.shared()?.downloadEngine?.delete(
@@ -222,11 +208,12 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
             self.pollAgainForPercentageAt = nil
         }
     }
-
+    
     func findawayDownloadNotificationHandler(_ findawayDownloadNotificationHandler: FindawayDownloadNotificationHandler, didSucceedDownloadFor chapterDescription: FAEChapterDescription) {
         self.queue.sync {
             guard self.isTaskFor(chapterDescription) else { return }
             self.pollAgainForPercentageAt = nil
+            self.downloadProgress = 1.0
             self.statePublisher.send(.completed)
         }
     }
@@ -239,7 +226,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
             self.pollForDownloadPercentage()
         }
     }
-
+    
     func findawayDownloadNotificationHandler(_ findawayDownloadNotificationHandler: FindawayDownloadNotificationHandler, didReceive error: NSError, for downloadRequestID: String) {
         self.queue.sync {
             if self.downloadRequest.requestIdentifier == downloadRequestID {
@@ -248,12 +235,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
             }
         }
     }
-
-    /// If a user attempts to download a book with a request thats already
-    /// been deleted from the filesystem, then AudioEngine will throw an error.
-    ///
-    /// As a result of this, once we have confirmed that a chapter has been removed,
-    /// we instantiate a new FAEDownloadRequest for our asset.
+    
     func findawayDownloadNotificationHandler(_ findawayDownloadNotificationHandler: FindawayDownloadNotificationHandler, didDeleteAudiobookFor chapterDescription: FAEChapterDescription) {
         self.queue.sync {
             if self.isTaskFor(chapterDescription) {
@@ -274,8 +256,8 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     
     func isTaskFor(_ chapter: FAEChapterDescription) -> Bool {
         return self.downloadRequest.audiobookID == chapter.audiobookID &&
-                self.downloadRequest.chapterNumber == chapter.chapterNumber &&
-                self.downloadRequest.partNumber == chapter.partNumber
+        self.downloadRequest.chapterNumber == chapter.chapterNumber &&
+        self.downloadRequest.partNumber == chapter.partNumber
     }
 }
 
