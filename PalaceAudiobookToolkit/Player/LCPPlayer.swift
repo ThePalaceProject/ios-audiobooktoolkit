@@ -14,7 +14,7 @@ class LCPPlayer: OpenAccessPlayer {
     private var decryptionQueue = DispatchQueue(label: "com.palace.LCPPlayer.decryptionQueue", qos: .background)
     
     override var taskCompleteNotification: Notification.Name {
-        return LCPDownloadTaskCompleteNotification
+        LCPDownloadTaskCompleteNotification
     }
     
     override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
@@ -167,7 +167,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             
             let remainingTracks = Array(self.tableOfContents.allTracks.dropFirst())
-            let batchSize = 3 // Number of tracks to decrypt at once
+            let batchSize = 1
             
             for batch in stride(from: 0, to: remainingTracks.count, by: batchSize) {
                 let endIndex = min(batch + batchSize, remainingTracks.count)
