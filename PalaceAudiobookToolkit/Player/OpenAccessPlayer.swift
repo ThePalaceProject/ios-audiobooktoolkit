@@ -489,20 +489,17 @@ extension OpenAccessPlayer {
             return
         }
         
-        if let newPosition = try? currentChapter.position + value * (currentChapter.duration ?? 0.0) {
-            seekTo(position: newPosition, completion: completion)
-        } else {
-            completion?(nil)
-        }
+        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
+        seekTo(position: newPosition, completion: completion)
     }
 
     func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition, 
-        let newPosition = (try? currentTrackPosition + timeInterval) else {
+        guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
             completion?(nil)
             return
         }
-        
+
+        let newPosition = currentTrackPosition + timeInterval
         seekTo(position: newPosition, completion: completion)
     }
     
@@ -530,15 +527,11 @@ extension OpenAccessPlayer {
         if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
             performSeek(to: position, completion: completion)
         } else {
-            if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
-                navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
-            } else {
-                rebuildPlayerQueueAndNavigate(to: position) { success in
-                    if success {
-                        self.performSeek(to: position, completion: completion)
-                    } else {
-                        completion?(nil)
-                    }
+            rebuildPlayerQueueAndNavigate(to: position) { success in
+                if success {
+                    self.performSeek(to: position, completion: completion)
+                } else {
+                    completion?(nil)
                 }
             }
         }
