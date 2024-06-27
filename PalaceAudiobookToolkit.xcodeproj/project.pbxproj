@@ -50,9 +50,6 @@
 		E5041F782BBF36B600AE363E /* MediaControlPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5041F772BBF36B600AE363E /* MediaControlPublisher.swift */; };
 		E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
-		E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */; };
-		E52C1C402C00435700D8F30B /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
-		E52C1C412C00437300D8F30B /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E52C1C422C00437F00D8F30B /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E52C1C432C00437F00D8F30B /* littleWomenDevotional_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */; };
 		E52C1C442C00437F00D8F30B /* secret_lives_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */; };
@@ -78,6 +75,8 @@
 		E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */; };
 		E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */; };
 		E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56C00C52BC3912100A25A97 /* ChapterCell.swift */; };
+		E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */; };
+		E57105E72C2CB8F400F1F033 /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */; };
 		E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498C52BB31C9F00BCD49C /* Metadata.swift */; };
 		E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5797E9B2BAA35F40017AB03 /* Audiobook.swift */; };
@@ -206,7 +205,6 @@
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
 		E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Extensions.swift"; sourceTree = "<group>"; };
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
-		E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterLocationTests.swift; sourceTree = "<group>"; };
 		E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestJSON.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
 		E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = littleWomenDevotional_manifest.json; sourceTree = "<group>"; };
@@ -218,6 +216,7 @@
 		E55DE97F2BDC0B6300ECB153 /* OverdriveTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverdriveTrack.swift; sourceTree = "<group>"; };
 		E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
 		E56C00C52BC3912100A25A97 /* ChapterCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterCell.swift; sourceTree = "<group>"; };
+		E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = endOfTheWorld_manifest.json; sourceTree = "<group>"; };
 		E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		E57498C52BB31C9F00BCD49C /* Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metadata.swift; sourceTree = "<group>"; };
 		E5797E9B2BAA35F40017AB03 /* Audiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audiobook.swift; sourceTree = "<group>"; };
@@ -346,7 +345,6 @@
 				8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */,
 				7BBF4DFF2050856400700731 /* PlayerMock.swift */,
 				7BBF4DFD2050850A00700731 /* SleepTimerTests.swift */,
-				E5231275286E81C3007D1DB5 /* ChapterLocationTests.swift */,
 				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
 				E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */,
 				E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */,
@@ -483,6 +481,7 @@
 				E58496922BAB6B10003C83E6 /* bocas_manifest.json */,
 				E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */,
 				E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */,
+				E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */,
 			);
 			path = TestResources;
 			sourceTree = "<group>";
@@ -709,6 +708,7 @@
 				E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */,
 				D5A0909C2B97986500C0FF2F /* theBigFail_manifest.json in Resources */,
 				E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */,
+				E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */,
 				E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -776,7 +776,6 @@
 				E57F79D92C17FE6900E99297 /* RetryToolbar.swift in Sources */,
 				7B8026A3206AB0AF00012808 /* HumanReadablePlaybackRate.swift in Sources */,
 				E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */,
-				E52C1C412C00437300D8F30B /* ManifestJSON.swift in Sources */,
 				E57FCA252BC8D3D2008D8907 /* OpenAccessTrack.swift in Sources */,
 				8C3CDB102422E82C0020FC0B /* HmacAlgorithm.swift in Sources */,
 				8C3CDB072422D85E0020FC0B /* Data+Base64.swift in Sources */,
@@ -844,12 +843,11 @@
 				7B78545D204DEE9900F6589B /* DownloadTaskMock.swift in Sources */,
 				E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */,
 				8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */,
+				E57105E72C2CB8F400F1F033 /* ManifestJSON.swift in Sources */,
 				8CD8A20F243E7A0D009DA4CC /* Data+BigEndianTest.swift in Sources */,
-				E52C1C402C00435700D8F30B /* ManifestJSON.swift in Sources */,
 				E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */,
 				E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */,
 				7B6C1BD420405C4D00EB791E /* CursorTests.swift in Sources */,
-				E5231276286E81C3007D1DB5 /* ChapterLocationTests.swift in Sources */,
 				E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -12,21 +12,76 @@ class FeedbookDRMProcessor {
     // @param manifest the audiobook manifest file
     // @param drmData the audiobook's DRM information dictionary holding relevant information for processing
     // @return true if the DRM processing was successful; false otherwise
-    class func processManifest(_ manifest: [String: Any], drmData: inout [String: Any]) -> Bool {
-        guard var metadata = manifest["metadata"] as? [String: Any] else {
+//    class func processManifest(_ manifest: [String: Any], drmData: inout [String: Any]) -> Bool {
+//        guard var metadata = manifest["metadata"] as? [String: Any] else {
+//            ATLog(.info, "[FeedbookDRMProcessor] no metadata in manifest")
+//            return true
+//        }
+//        
+//        // Perform Feedbooks DRM rights check
+//        if let feedbooksRights = metadata["http://www.feedbooks.com/audiobooks/rights"] as? [String: Any] {
+//            if let startDate = DateUtils.parseDate((feedbooksRights["start"] as? String) ?? "") {
+//                if Date() < startDate {
+//                    ATLog(.error, "Feedbook DRM rights start date is in the future!")
+//                    return false
+//                }
+//            }
+//            if let endDate = DateUtils.parseDate((feedbooksRights["end"] as? String) ?? "") {
+//                if Date() > endDate {
+//                    ATLog(.error, "Feedbook DRM rights end date is expired!")
+//                    return false
+//                }
+//            }
+//        }
+//        
+//        // Perform Feedbooks DRM license status check
+//        if let links = manifest["links"] as? [[String: Any]] {
+//            var href = ""
+//            var found = false
+//            for link in links {
+//                if (link["rel"] as? String) == "license" {
+//                    if found {
+//                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link["href"] ?? "") type:\(link["type"] ?? "")")
+//                        continue
+//                    }
+//                    found = true
+//                    href = (link["href"] as? String) ?? ""
+//                }
+//            }
+//            if let licenseCheckUrl = URL(string: href) {
+//                drmData["licenseCheckUrl"] = licenseCheckUrl
+//            }
+//            drmData["status"] = DRMStatus.processing
+//        }
+//        
+//        // Perform Feedbooks signature verification
+//        guard let signature = metadata.removeValue(forKey: "http://www.feedbooks.com/audiobooks/signature") as? [String:Any],
+//            let signatureValue = signature["value"] as? String else {
+//            ATLog(.error, "Feedbook manifest does not contain signature")
+//            return true
+//        }
+//        
+//        var licenseDocument = manifest
+//        licenseDocument["metadata"] = metadata
+//
+//        return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
+//    }
+    
+    class func processManifest(_ manifest: Manifest, drmData: inout [String: Any]) -> Bool {
+        guard let metadata = manifest.metadata else {
             ATLog(.info, "[FeedbookDRMProcessor] no metadata in manifest")
             return true
         }
         
         // Perform Feedbooks DRM rights check
-        if let feedbooksRights = metadata["http://www.feedbooks.com/audiobooks/rights"] as? [String: Any] {
-            if let startDate = DateUtils.parseDate((feedbooksRights["start"] as? String) ?? "") {
+        if let feedbooksRights = metadata.rights {
+            if let startDateStr = feedbooksRights.start, let startDate = DateUtils.parseDate(startDateStr) {
                 if Date() < startDate {
                     ATLog(.error, "Feedbook DRM rights start date is in the future!")
                     return false
                 }
             }
-            if let endDate = DateUtils.parseDate((feedbooksRights["end"] as? String) ?? "") {
+            if let endDateStr = feedbooksRights.end, let endDate = DateUtils.parseDate(endDateStr) {
                 if Date() > endDate {
                     ATLog(.error, "Feedbook DRM rights end date is expired!")
                     return false
@@ -35,17 +90,17 @@ class FeedbookDRMProcessor {
         }
         
         // Perform Feedbooks DRM license status check
-        if let links = manifest["links"] as? [[String: Any]] {
+        if let links = manifest.links {
             var href = ""
             var found = false
             for link in links {
-                if (link["rel"] as? String) == "license" {
+                if link.rel == "license" {
                     if found {
-                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link["href"] ?? "") type:\(link["type"] ?? "")")
+                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link.href) type:\(link.type ?? "")")
                         continue
                     }
                     found = true
-                    href = (link["href"] as? String) ?? ""
+                    href = link.href
                 }
             }
             if let licenseCheckUrl = URL(string: href) {
@@ -55,17 +110,17 @@ class FeedbookDRMProcessor {
         }
         
         // Perform Feedbooks signature verification
-        guard let signature = metadata.removeValue(forKey: "http://www.feedbooks.com/audiobooks/signature") as? [String:Any],
-            let signatureValue = signature["value"] as? String else {
+        guard let signature = metadata.signature, let signatureValue = signature.value else {
             ATLog(.error, "Feedbook manifest does not contain signature")
             return true
         }
         
-        var licenseDocument = manifest
-        licenseDocument["metadata"] = metadata
-
+        // Prepare the license document for signature verification
+        var licenseDocument = manifest.toJSONDictionary() ?? [:]
+        
         return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
     }
+
     
     /**
      Verify the signature within the manifest using the public key from Keychain
@@ -74,6 +129,76 @@ class FeedbookDRMProcessor {
      - Parameter forLicenseDoc: the manifest(license document) without the signature
      - Returns: Bool representing if the signature is valid
      */
+//    class private func verifySignature(_ signatureValue: String, forLicenseDoc: [String: Any]) -> Bool {
+//        guard let publicKeyData = getFeedbookPublicKeyFromKeychain(forVendor: "cantook") else {
+//            ATLog(.error, "Public key for Feedbook is not found")
+//            return false
+//        }
+//        
+//        do {
+//            let canonicalizedLicense = try JSONUtils.canonicalize(jsonObj: forLicenseDoc)
+//           
+//            guard let licenseData = canonicalizedLicense.data(using: .utf8) else {
+//                ATLog(.error, "Failed to create data from canonicalized license document")
+//                return false
+//            }
+//            
+//            var error: Unmanaged<CFError>?
+//            
+//            let publicSecKeyProperties = [
+//                kSecAttrKeyType: kSecAttrKeyTypeRSA,
+//                kSecAttrKeyClass: kSecAttrKeyClassPublic
+//            ]
+//
+//            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData,
+//                                                           publicSecKeyProperties as NSDictionary,
+//                                                           &error) else {
+//                ATLog(.error, "Failed to create SecKey from public key - \(String(describing: error))")
+//                return false
+//            }
+//
+//            guard SecKeyIsAlgorithmSupported(publicSecKey, .verify, SecKeyAlgorithm.rsaSignatureDigestPKCS1v15SHA256) else {
+//                ATLog(.error, "Public key does not support algorithm(rsaSignatureDigestPKCS1v15SHA256)")
+//                return false
+//            }
+//            
+//            let blockSize = SecKeyGetBlockSize(publicSecKey)
+//            
+//            guard Int(CC_SHA256_DIGEST_LENGTH) <= blockSize - 11 else {
+//                ATLog(.error, "Invalid data size, data size cannot be larger or equal to key size - 11 bytes")
+//                // ref: https://developer.apple.com/documentation/security/1618025-seckeyrawsign
+//                return false
+//            }
+//            
+//            var digestBytes = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+//            RSAUtils.SHA256HashedData(from: (licenseData as NSData)).getBytes(&digestBytes, length: Int(CC_SHA256_DIGEST_LENGTH))
+//            
+//            guard let signatureData = Data(base64Encoded: signatureValue) else {
+//                ATLog(.error, "Error decoding signature value")
+//                return false
+//            }
+//            var signatureBytes = Array(signatureData)
+//            let signatureDataLength = signatureBytes.count
+//            
+//            let status = SecKeyRawVerify(publicSecKey, .PKCS1SHA256, digestBytes, digestBytes.count, &signatureBytes, signatureDataLength)
+//            
+//            guard status == noErr else {
+//                if #available(iOS 11.3, *) {
+//                    var errorMessage = ""
+//                    SecCopyErrorMessageString(status, &errorMessage)
+//                    ATLog(.error, "Failed to verify data - \(errorMessage)")
+//                } else {
+//                    ATLog(.error, "Failed to verify data - \(status.description)")
+//                }
+//                return false
+//            }
+//        } catch {
+//            ATLog(.error, "Failed to canonicalize license document, \(error)")
+//            return false
+//        }
+//        
+//        return true
+//    }
     class private func verifySignature(_ signatureValue: String, forLicenseDoc: [String: Any]) -> Bool {
         guard let publicKeyData = getFeedbookPublicKeyFromKeychain(forVendor: "cantook") else {
             ATLog(.error, "Public key for Feedbook is not found")
@@ -82,7 +207,9 @@ class FeedbookDRMProcessor {
         
         do {
             let canonicalizedLicense = try JSONUtils.canonicalize(jsonObj: forLicenseDoc)
-           
+            
+            ATLog(.info, "Canonicalized license: \(canonicalizedLicense)")
+            
             guard let licenseData = canonicalizedLicense.data(using: .utf8) else {
                 ATLog(.error, "Failed to create data from canonicalized license document")
                 return false
@@ -90,18 +217,20 @@ class FeedbookDRMProcessor {
             
             var error: Unmanaged<CFError>?
             
-            let publicSecKeyProperties = [
+            let publicSecKeyProperties: [CFString: Any] = [
                 kSecAttrKeyType: kSecAttrKeyTypeRSA,
                 kSecAttrKeyClass: kSecAttrKeyClassPublic
             ]
-
-            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData,
-                                                           publicSecKeyProperties as NSDictionary,
-                                                           &error) else {
-                ATLog(.error, "Failed to create SecKey from public key - \(String(describing: error))")
+            
+            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData, publicSecKeyProperties as NSDictionary, &error) else {
+                if let error = error?.takeUnretainedValue() {
+                    ATLog(.error, "Failed to create SecKey from public key - \(error.localizedDescription)")
+                } else {
+                    ATLog(.error, "Failed to create SecKey from public key - unknown error")
+                }
                 return false
             }
-
+            
             guard SecKeyIsAlgorithmSupported(publicSecKey, .verify, SecKeyAlgorithm.rsaSignatureDigestPKCS1v15SHA256) else {
                 ATLog(.error, "Public key does not support algorithm(rsaSignatureDigestPKCS1v15SHA256)")
                 return false
@@ -111,7 +240,6 @@ class FeedbookDRMProcessor {
             
             guard Int(CC_SHA256_DIGEST_LENGTH) <= blockSize - 11 else {
                 ATLog(.error, "Invalid data size, data size cannot be larger or equal to key size - 11 bytes")
-                // ref: https://developer.apple.com/documentation/security/1618025-seckeyrawsign
                 return false
             }
             
@@ -127,13 +255,15 @@ class FeedbookDRMProcessor {
             
             let status = SecKeyRawVerify(publicSecKey, .PKCS1SHA256, digestBytes, digestBytes.count, &signatureBytes, signatureDataLength)
             
-            guard status == noErr else {
+            guard status == errSecSuccess else {
                 if #available(iOS 11.3, *) {
-                    var errorMessage = ""
-                    SecCopyErrorMessageString(status, &errorMessage)
-                    ATLog(.error, "Failed to verify data - \(errorMessage)")
+                    if let errorMessage = SecCopyErrorMessageString(status, nil) {
+                        ATLog(.error, "Failed to verify data - \(errorMessage as String)")
+                    } else {
+                        ATLog(.error, "Failed to verify data - status code \(status)")
+                    }
                 } else {
-                    ATLog(.error, "Failed to verify data - \(status.description)")
+                    ATLog(.error, "Failed to verify data - status code \(status)")
                 }
                 return false
             }
@@ -144,7 +274,7 @@ class FeedbookDRMProcessor {
         
         return true
     }
-    
+
     // Performs asynchronous DRM checks that couldn't be performed statically
     // @param book the audiobook
     // @param drmData the book's DRM data dictionary holding relevant info

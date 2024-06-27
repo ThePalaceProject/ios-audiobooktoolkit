@@ -100,10 +100,14 @@ public struct Manifest: Codable {
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
             
+            if dateString == "N/A" {
+                return Date(timeIntervalSince1970: 0)
+            }
+            
             let dateFormats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
                 "yyyy-MM-dd'T'HH:mm:ssZ",
-                "yyyy-MM-dd",
+                "yyyy-MM-dd"
             ]
             
             let dateFormatter = DateFormatter()
@@ -156,7 +160,8 @@ public struct Manifest: Codable {
         let duration: Int?
         let properties: Properties?
         let physicalFileLengthInBytes: Int?
-        
+        let alternates: [Link]?
+
         struct LocalizedString: Codable {
             let values: [String: String]
             
@@ -183,6 +188,9 @@ public struct Manifest: Codable {
         let href: String
         let type: String
         let duration: Int
+        let bitrate: Int?
+        let properties: Properties?
+        let alternates: [Link]?
     }
 
     public struct Properties: Codable {

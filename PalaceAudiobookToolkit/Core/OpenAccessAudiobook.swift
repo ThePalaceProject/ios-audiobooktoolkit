@@ -29,8 +29,9 @@ public class OpenAccessAudiobook: Audiobook {
         self.drmData["status"] = DRMStatus.succeeded
         self.token = token
         
-        if let JSON = manifest.toJSONDictionary(), !FeedbookDRMProcessor.processManifest(JSON, drmData: &drmData) {
-            ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON)")
+        
+        if !FeedbookDRMProcessor.processManifest(manifest, drmData: &drmData) {
+            ATLog(.error, "FeedbookDRMProcessor failed processing")
             return nil
         }
     }

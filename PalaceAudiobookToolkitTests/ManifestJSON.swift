@@ -7,6 +7,7 @@
 //
 
 import Foundation
+@testable import PalaceAudiobookToolkit
 
 extension Manifest {
     static func from(jsonFileName: String, bundle: Bundle = .main) throws -> Manifest {
@@ -35,6 +36,7 @@ enum ManifestJSON: String, CaseIterable {
     case snowcrash = "snowcrash_manifest"
     case secretLives = "secret_lives_manifest"
     case theSystemOfTheWorld = "the_system_of_the_world_manifest"
+    case endOfTheWorld = "endOfTheWorld_manifest"
     
     var chapterCount: Int {
         switch self {
@@ -52,6 +54,7 @@ enum ManifestJSON: String, CaseIterable {
         case .snowcrash: return 72
         case .secretLives: return 10
         case .theSystemOfTheWorld: return 47
+        case .endOfTheWorld: return 14
         }
     }
     
