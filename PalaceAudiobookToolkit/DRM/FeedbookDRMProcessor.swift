@@ -117,7 +117,7 @@ class FeedbookDRMProcessor {
         
         // Prepare the license document for signature verification
         var licenseDocument = manifest.toJSONDictionary() ?? [:]
-        
+ 
         return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
     }
 
@@ -129,76 +129,6 @@ class FeedbookDRMProcessor {
      - Parameter forLicenseDoc: the manifest(license document) without the signature
      - Returns: Bool representing if the signature is valid
      */
-//    class private func verifySignature(_ signatureValue: String, forLicenseDoc: [String: Any]) -> Bool {
-//        guard let publicKeyData = getFeedbookPublicKeyFromKeychain(forVendor: "cantook") else {
-//            ATLog(.error, "Public key for Feedbook is not found")
-//            return false
-//        }
-//        
-//        do {
-//            let canonicalizedLicense = try JSONUtils.canonicalize(jsonObj: forLicenseDoc)
-//           
-//            guard let licenseData = canonicalizedLicense.data(using: .utf8) else {
-//                ATLog(.error, "Failed to create data from canonicalized license document")
-//                return false
-//            }
-//            
-//            var error: Unmanaged<CFError>?
-//            
-//            let publicSecKeyProperties = [
-//                kSecAttrKeyType: kSecAttrKeyTypeRSA,
-//                kSecAttrKeyClass: kSecAttrKeyClassPublic
-//            ]
-//
-//            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData,
-//                                                           publicSecKeyProperties as NSDictionary,
-//                                                           &error) else {
-//                ATLog(.error, "Failed to create SecKey from public key - \(String(describing: error))")
-//                return false
-//            }
-//
-//            guard SecKeyIsAlgorithmSupported(publicSecKey, .verify, SecKeyAlgorithm.rsaSignatureDigestPKCS1v15SHA256) else {
-//                ATLog(.error, "Public key does not support algorithm(rsaSignatureDigestPKCS1v15SHA256)")
-//                return false
-//            }
-//            
-//            let blockSize = SecKeyGetBlockSize(publicSecKey)
-//            
-//            guard Int(CC_SHA256_DIGEST_LENGTH) <= blockSize - 11 else {
-//                ATLog(.error, "Invalid data size, data size cannot be larger or equal to key size - 11 bytes")
-//                // ref: https://developer.apple.com/documentation/security/1618025-seckeyrawsign
-//                return false
-//            }
-//            
-//            var digestBytes = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-//            RSAUtils.SHA256HashedData(from: (licenseData as NSData)).getBytes(&digestBytes, length: Int(CC_SHA256_DIGEST_LENGTH))
-//            
-//            guard let signatureData = Data(base64Encoded: signatureValue) else {
-//                ATLog(.error, "Error decoding signature value")
-//                return false
-//            }
-//            var signatureBytes = Array(signatureData)
-//            let signatureDataLength = signatureBytes.count
-//            
-//            let status = SecKeyRawVerify(publicSecKey, .PKCS1SHA256, digestBytes, digestBytes.count, &signatureBytes, signatureDataLength)
-//            
-//            guard status == noErr else {
-//                if #available(iOS 11.3, *) {
-//                    var errorMessage = ""
-//                    SecCopyErrorMessageString(status, &errorMessage)
-//                    ATLog(.error, "Failed to verify data - \(errorMessage)")
-//                } else {
-//                    ATLog(.error, "Failed to verify data - \(status.description)")
-//                }
-//                return false
-//            }
-//        } catch {
-//            ATLog(.error, "Failed to canonicalize license document, \(error)")
-//            return false
-//        }
-//        
-//        return true
-//    }
     class private func verifySignature(_ signatureValue: String, forLicenseDoc: [String: Any]) -> Bool {
         guard let publicKeyData = getFeedbookPublicKeyFromKeychain(forVendor: "cantook") else {
             ATLog(.error, "Public key for Feedbook is not found")
@@ -207,9 +137,7 @@ class FeedbookDRMProcessor {
         
         do {
             let canonicalizedLicense = try JSONUtils.canonicalize(jsonObj: forLicenseDoc)
-            
-            ATLog(.info, "Canonicalized license: \(canonicalizedLicense)")
-            
+           
             guard let licenseData = canonicalizedLicense.data(using: .utf8) else {
                 ATLog(.error, "Failed to create data from canonicalized license document")
                 return false
@@ -217,20 +145,18 @@ class FeedbookDRMProcessor {
             
             var error: Unmanaged<CFError>?
             
-            let publicSecKeyProperties: [CFString: Any] = [
+            let publicSecKeyProperties = [
                 kSecAttrKeyType: kSecAttrKeyTypeRSA,
                 kSecAttrKeyClass: kSecAttrKeyClassPublic
             ]
-            
-            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData, publicSecKeyProperties as NSDictionary, &error) else {
-                if let error = error?.takeUnretainedValue() {
-                    ATLog(.error, "Failed to create SecKey from public key - \(error.localizedDescription)")
-                } else {
-                    ATLog(.error, "Failed to create SecKey from public key - unknown error")
-                }
+
+            guard let publicSecKey = SecKeyCreateWithData(publicKeyData as NSData,
+                                                           publicSecKeyProperties as NSDictionary,
+                                                           &error) else {
+                ATLog(.error, "Failed to create SecKey from public key - \(String(describing: error))")
                 return false
             }
-            
+
             guard SecKeyIsAlgorithmSupported(publicSecKey, .verify, SecKeyAlgorithm.rsaSignatureDigestPKCS1v15SHA256) else {
                 ATLog(.error, "Public key does not support algorithm(rsaSignatureDigestPKCS1v15SHA256)")
                 return false
@@ -240,6 +166,7 @@ class FeedbookDRMProcessor {
             
             guard Int(CC_SHA256_DIGEST_LENGTH) <= blockSize - 11 else {
                 ATLog(.error, "Invalid data size, data size cannot be larger or equal to key size - 11 bytes")
+                // ref: https://developer.apple.com/documentation/security/1618025-seckeyrawsign
                 return false
             }
             
@@ -255,15 +182,13 @@ class FeedbookDRMProcessor {
             
             let status = SecKeyRawVerify(publicSecKey, .PKCS1SHA256, digestBytes, digestBytes.count, &signatureBytes, signatureDataLength)
             
-            guard status == errSecSuccess else {
+            guard status == noErr else {
                 if #available(iOS 11.3, *) {
-                    if let errorMessage = SecCopyErrorMessageString(status, nil) {
-                        ATLog(.error, "Failed to verify data - \(errorMessage as String)")
-                    } else {
-                        ATLog(.error, "Failed to verify data - status code \(status)")
-                    }
+                    var errorMessage = ""
+                    SecCopyErrorMessageString(status, &errorMessage)
+                    ATLog(.error, "Failed to verify data - \(errorMessage)")
                 } else {
-                    ATLog(.error, "Failed to verify data - status code \(status)")
+                    ATLog(.error, "Failed to verify data - \(status.description)")
                 }
                 return false
             }

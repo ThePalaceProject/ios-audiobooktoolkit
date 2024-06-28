@@ -49,15 +49,19 @@ extension Manifest {
             title = try container.decode(String.self, forKey: .title)
             subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
             language = try container.decodeIfPresent(String.self, forKey: .language)
-            modified = try container.decodeIfPresent(Date.self, forKey: .modified)
             published = try container.decodeIfPresent(Date.self, forKey: .published)
             publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
             duration = try container.decodeIfPresent(Double.self, forKey: .duration)
             drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
             signature = try container.decodeIfPresent(Signature.self, forKey: .signature)
             rights = try container.decodeIfPresent(Rights.self, forKey: .rights)
+            
+            if let modifiedDateString = try container.decodeIfPresent(String.self, forKey: .modified), modifiedDateString != "N/A" {
+                modified = try container.decode(Date.self, forKey: .modified)
+            } else {
+                modified = nil
+            }
 
-            // Decode author array from different formats
             if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
                 if let authorStrings {
                     author = authorStrings.map { Author(name: $0) }
@@ -187,5 +191,21 @@ extension Manifest.Metadata {
         if let drmInformation = drmInformation {
             try container.encode(drmInformation, forKey: .encrypted)
         }
+    }
+}
+
+extension Manifest.Metadata {
+    func toJSONDictionary() -> [String: Any]? {
+        let encoder = JSONEncoder()
+        
+        encoder.dateEncodingStrategy = .iso8601
+        
+        guard let jsonData = try? encoder.encode(self),
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+              let dictionary = jsonObject as? [String: Any] else {
+            return nil
+        }
+        
+        return dictionary
     }
 }

@@ -99,11 +99,7 @@ public struct Manifest: Codable {
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            
-            if dateString == "N/A" {
-                return Date(timeIntervalSince1970: 0)
-            }
-            
+
             let dateFormats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
                 "yyyy-MM-dd'T'HH:mm:ssZ",
@@ -214,12 +210,16 @@ public struct TOCItem: Codable {
 extension Manifest {
     func toJSONDictionary() -> [String: Any]? {
         let encoder = JSONEncoder()
+        
+        encoder.dateEncodingStrategy = .iso8601
+        
         guard let jsonData = try? encoder.encode(self),
-              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []) else {
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+              let dictionary = jsonObject as? [String: Any] else {
             return nil
         }
-
-        return jsonObject as? [String: Any]
+        
+        return dictionary
     }
 }
 
