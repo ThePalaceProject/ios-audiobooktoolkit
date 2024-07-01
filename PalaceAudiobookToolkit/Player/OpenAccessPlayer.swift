@@ -527,11 +527,15 @@ extension OpenAccessPlayer {
         if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
             performSeek(to: position, completion: completion)
         } else {
-            rebuildPlayerQueueAndNavigate(to: position) { success in
-                if success {
-                    self.performSeek(to: position, completion: completion)
-                } else {
-                    completion?(nil)
+            if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
+                navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
+            } else {
+                rebuildPlayerQueueAndNavigate(to: position) { success in
+                    if success {
+                        self.performSeek(to: position, completion: completion)
+                    } else {
+                        completion?(nil)
+                    }
                 }
             }
         }
