@@ -96,6 +96,7 @@
 		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
 		E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */; };
 		E5C3820C2BDACB7E00049CF1 /* AVPlayer+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C3820B2BDACB7E00049CF1 /* AVPlayer+Extensions.swift */; };
+		E5C5DC012C334EF00089D689 /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E5C8A84F2BCEC18D00F06F14 /* LCPPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */; };
 		E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */; };
 		E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC6E792BBB295F00C31ABD /* Player.swift */; };
@@ -765,6 +766,7 @@
 				8C6CD8AD240DB3C000E2DFB0 /* FeedbookDRMProcessor.swift in Sources */,
 				E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */,
 				21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */,
+				E5C5DC012C334EF00089D689 /* ManifestJSON.swift in Sources */,
 				E67CA9A5215C0D320081A10B /* Log.swift in Sources */,
 				E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */,
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,
