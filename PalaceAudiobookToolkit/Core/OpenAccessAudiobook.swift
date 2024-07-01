@@ -30,7 +30,7 @@ public class OpenAccessAudiobook: Audiobook {
         self.token = token
         
         
-        if !FeedbookDRMProcessor.processManifest(manifest, drmData: &drmData) {
+        if !FeedbookDRMProcessor.processManifest(manifest.toJSONDictionary()!, drmData: &drmData) {
             ATLog(.error, "FeedbookDRMProcessor failed processing")
             return nil
         }

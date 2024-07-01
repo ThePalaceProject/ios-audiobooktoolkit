@@ -12,76 +12,21 @@ class FeedbookDRMProcessor {
     // @param manifest the audiobook manifest file
     // @param drmData the audiobook's DRM information dictionary holding relevant information for processing
     // @return true if the DRM processing was successful; false otherwise
-//    class func processManifest(_ manifest: [String: Any], drmData: inout [String: Any]) -> Bool {
-//        guard var metadata = manifest["metadata"] as? [String: Any] else {
-//            ATLog(.info, "[FeedbookDRMProcessor] no metadata in manifest")
-//            return true
-//        }
-//        
-//        // Perform Feedbooks DRM rights check
-//        if let feedbooksRights = metadata["http://www.feedbooks.com/audiobooks/rights"] as? [String: Any] {
-//            if let startDate = DateUtils.parseDate((feedbooksRights["start"] as? String) ?? "") {
-//                if Date() < startDate {
-//                    ATLog(.error, "Feedbook DRM rights start date is in the future!")
-//                    return false
-//                }
-//            }
-//            if let endDate = DateUtils.parseDate((feedbooksRights["end"] as? String) ?? "") {
-//                if Date() > endDate {
-//                    ATLog(.error, "Feedbook DRM rights end date is expired!")
-//                    return false
-//                }
-//            }
-//        }
-//        
-//        // Perform Feedbooks DRM license status check
-//        if let links = manifest["links"] as? [[String: Any]] {
-//            var href = ""
-//            var found = false
-//            for link in links {
-//                if (link["rel"] as? String) == "license" {
-//                    if found {
-//                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link["href"] ?? "") type:\(link["type"] ?? "")")
-//                        continue
-//                    }
-//                    found = true
-//                    href = (link["href"] as? String) ?? ""
-//                }
-//            }
-//            if let licenseCheckUrl = URL(string: href) {
-//                drmData["licenseCheckUrl"] = licenseCheckUrl
-//            }
-//            drmData["status"] = DRMStatus.processing
-//        }
-//        
-//        // Perform Feedbooks signature verification
-//        guard let signature = metadata.removeValue(forKey: "http://www.feedbooks.com/audiobooks/signature") as? [String:Any],
-//            let signatureValue = signature["value"] as? String else {
-//            ATLog(.error, "Feedbook manifest does not contain signature")
-//            return true
-//        }
-//        
-//        var licenseDocument = manifest
-//        licenseDocument["metadata"] = metadata
-//
-//        return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
-//    }
-    
-    class func processManifest(_ manifest: Manifest, drmData: inout [String: Any]) -> Bool {
-        guard let metadata = manifest.metadata else {
+    class func processManifest(_ manifest: [String: Any], drmData: inout [String: Any]) -> Bool {
+        guard var metadata = manifest["metadata"] as? [String: Any] else {
             ATLog(.info, "[FeedbookDRMProcessor] no metadata in manifest")
             return true
         }
         
         // Perform Feedbooks DRM rights check
-        if let feedbooksRights = metadata.rights {
-            if let startDateStr = feedbooksRights.start, let startDate = DateUtils.parseDate(startDateStr) {
+        if let feedbooksRights = metadata["http://www.feedbooks.com/audiobooks/rights"] as? [String: Any] {
+            if let startDate = DateUtils.parseDate((feedbooksRights["start"] as? String) ?? "") {
                 if Date() < startDate {
                     ATLog(.error, "Feedbook DRM rights start date is in the future!")
                     return false
                 }
             }
-            if let endDateStr = feedbooksRights.end, let endDate = DateUtils.parseDate(endDateStr) {
+            if let endDate = DateUtils.parseDate((feedbooksRights["end"] as? String) ?? "") {
                 if Date() > endDate {
                     ATLog(.error, "Feedbook DRM rights end date is expired!")
                     return false
@@ -90,17 +35,17 @@ class FeedbookDRMProcessor {
         }
         
         // Perform Feedbooks DRM license status check
-        if let links = manifest.links {
+        if let links = manifest["links"] as? [[String: Any]] {
             var href = ""
             var found = false
             for link in links {
-                if link.rel == "license" {
+                if (link["rel"] as? String) == "license" {
                     if found {
-                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link.href) type:\(link.type ?? "")")
+                        ATLog(.warn, "[Feedbook License Status Check] More than one license status link found?! href:\(link["href"] ?? "") type:\(link["type"] ?? "")")
                         continue
                     }
                     found = true
-                    href = link.href
+                    href = (link["href"] as? String) ?? ""
                 }
             }
             if let licenseCheckUrl = URL(string: href) {
@@ -110,18 +55,18 @@ class FeedbookDRMProcessor {
         }
         
         // Perform Feedbooks signature verification
-        guard let signature = metadata.signature, let signatureValue = signature.value else {
+        guard let signature = metadata.removeValue(forKey: "http://www.feedbooks.com/audiobooks/signature") as? [String:Any],
+            let signatureValue = signature["value"] as? String else {
             ATLog(.error, "Feedbook manifest does not contain signature")
             return true
         }
         
-        // Prepare the license document for signature verification
-        var licenseDocument = manifest.toJSONDictionary() ?? [:]
- 
+        var licenseDocument = manifest
+        licenseDocument["metadata"] = metadata
+
         return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
     }
 
-    
     /**
      Verify the signature within the manifest using the public key from Keychain
      
