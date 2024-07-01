@@ -21,10 +21,25 @@ extension Manifest {
         public var author: [Author] = []
         public let duration: Double?
         public let drmInformation: DRMType?
+        public let signature: Signature?
+        public let rights: Rights?
         
         enum CodingKeys: String, CodingKey {
             case type = "@type"
             case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted
+            case signature = "http://www.feedbooks.com/audiobooks/signature"
+            case rights = "http://www.feedbooks.com/audiobooks/rights"
+        }
+        
+        public struct Signature: Codable {
+            let algorithm: String?
+            let value: String?
+            let issuer: String?
+        }
+        
+        public struct Rights: Codable {
+            let start: String?
+            let end: String?
         }
         
         public init(from decoder: Decoder) throws {
@@ -34,13 +49,19 @@ extension Manifest {
             title = try container.decode(String.self, forKey: .title)
             subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
             language = try container.decodeIfPresent(String.self, forKey: .language)
-            modified = try container.decodeIfPresent(Date.self, forKey: .modified)
             published = try container.decodeIfPresent(Date.self, forKey: .published)
             publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
             duration = try container.decodeIfPresent(Double.self, forKey: .duration)
             drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
+            signature = try container.decodeIfPresent(Signature.self, forKey: .signature)
+            rights = try container.decodeIfPresent(Rights.self, forKey: .rights)
             
-            // Decode author array from different formats
+            if let modifiedDateString = try container.decodeIfPresent(String.self, forKey: .modified), modifiedDateString != "N/A" {
+                modified = try container.decode(Date.self, forKey: .modified)
+            } else {
+                modified = nil
+            }
+
             if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
                 if let authorStrings {
                     author = authorStrings.map { Author(name: $0) }
@@ -55,6 +76,26 @@ extension Manifest {
                 }
             }
         }
+    }
+    
+    static func date(from string: String) -> Date? {
+        guard string != "N/A" else { return nil }
+        
+        let dateFormats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd"
+        ]
+        
+        let dateFormatter = DateFormatter()
+        for format in dateFormats {
+            dateFormatter.dateFormat = format
+            if let date = dateFormatter.date(from: string) {
+                return date
+            }
+        }
+        
+        return nil
     }
     
     public enum DRMType: Codable {
@@ -151,4 +192,20 @@ extension Manifest.Metadata {
             try container.encode(drmInformation, forKey: .encrypted)
         }
     }
+}
+
+extension Manifest.Metadata {
+    func toJSONDictionary() -> [String: Any]? {
+        let encoder = JSONEncoder()
+        
+        encoder.dateEncodingStrategy = .iso8601
+        
+        guard let jsonData = try? encoder.encode(self),
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+              let dictionary = jsonObject as? [String: Any] else {
+            return nil
+        }
+        
+        return dictionary
     }
+}

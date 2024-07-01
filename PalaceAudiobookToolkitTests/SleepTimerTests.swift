@@ -46,7 +46,8 @@ class SleepTimerTests: XCTestCase {
                 audiobookID: "TEST_ID",
                 title: "TEST_TITLE",
                 duration: duration,
-                index: 1
+                index: 1,
+                key: "testKey"
             ),
             timestamp: 0,
             tracks: tableOfContents.tracks

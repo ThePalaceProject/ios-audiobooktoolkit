@@ -99,11 +99,11 @@ public struct Manifest: Codable {
         decoder.dateDecodingStrategy = .custom({ (decoder) -> Date in
             let container = try decoder.singleValueContainer()
             let dateString = try container.decode(String.self)
-            
+
             let dateFormats = [
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
                 "yyyy-MM-dd'T'HH:mm:ssZ",
-                "yyyy-MM-dd",
+                "yyyy-MM-dd"
             ]
             
             let dateFormatter = DateFormatter()
@@ -156,7 +156,8 @@ public struct Manifest: Codable {
         let duration: Int?
         let properties: Properties?
         let physicalFileLengthInBytes: Int?
-        
+        let alternates: [Link]?
+
         struct LocalizedString: Codable {
             let values: [String: String]
             
@@ -183,6 +184,9 @@ public struct Manifest: Codable {
         let href: String
         let type: String
         let duration: Int
+        let bitrate: Int?
+        let properties: Properties?
+        let alternates: [Link]?
     }
 
     public struct Properties: Codable {
@@ -206,12 +210,16 @@ public struct TOCItem: Codable {
 extension Manifest {
     func toJSONDictionary() -> [String: Any]? {
         let encoder = JSONEncoder()
+        
+        encoder.dateEncodingStrategy = .iso8601
+        
         guard let jsonData = try? encoder.encode(self),
-              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []) else {
+              let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []),
+              let dictionary = jsonObject as? [String: Any] else {
             return nil
         }
-
-        return jsonObject as? [String: Any]
+        
+        return dictionary
     }
 }
 

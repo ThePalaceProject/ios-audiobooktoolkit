@@ -30,6 +30,7 @@ class DownloadTaskMock: DownloadTask {
     var downloadProgress: Float
     
     let key: String
+    var needsRetry: Bool = false
     
     var fetchClosure: TaskCallback?
     public init(progress: Float, key: String, fetchClosure: TaskCallback?) {

@@ -97,7 +97,8 @@ extension AudiobookNetworkServiceTest {
             title: String?,
             duration: Double,
             index: Int,
-            token: String?
+            token: String?,
+            key: String?
         ) throws {
             self.init(progress: 0.0, key: title ?? "")
         }
@@ -117,7 +118,8 @@ extension AudiobookNetworkServiceTest {
         var downloadProgress: Float
         var key: String
         var fetchClosure: ((DownloadTaskMock) -> Void)?
-        
+        var needsRetry: Bool = false
+
         init(progress: Float, key: String, fetchClosure: ((DownloadTaskMock) -> Void)?) {
             self.downloadProgress = progress
             self.key = key

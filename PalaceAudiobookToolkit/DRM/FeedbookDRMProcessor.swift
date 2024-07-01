@@ -66,7 +66,7 @@ class FeedbookDRMProcessor {
 
         return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
     }
-    
+
     /**
      Verify the signature within the manifest using the public key from Keychain
      
@@ -144,7 +144,7 @@ class FeedbookDRMProcessor {
         
         return true
     }
-    
+
     // Performs asynchronous DRM checks that couldn't be performed statically
     // @param book the audiobook
     // @param drmData the book's DRM data dictionary holding relevant info
