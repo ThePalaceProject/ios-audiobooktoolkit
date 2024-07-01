@@ -29,8 +29,8 @@ public class OpenAccessAudiobook: Audiobook {
         self.drmData["status"] = DRMStatus.succeeded
         self.token = token
         
-        
-        if !FeedbookDRMProcessor.processManifest(manifest, drmData: &drmData) {
+
+        if !FeedbookDRMProcessor.processManifest(manifest.toJSONDictionary()!, drmData: &drmData) {
             ATLog(.error, "FeedbookDRMProcessor failed processing")
             return nil
         }

@@ -121,7 +121,6 @@ class FeedbookDRMProcessor {
         return verifySignature(signatureValue, forLicenseDoc: licenseDocument)
     }
 
-    
     /**
      Verify the signature within the manifest using the public key from Keychain
      
