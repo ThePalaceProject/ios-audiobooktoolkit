@@ -87,7 +87,6 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
         
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
         isLoaded = true
     }
     
