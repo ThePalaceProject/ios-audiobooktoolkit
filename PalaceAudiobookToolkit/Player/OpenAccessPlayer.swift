@@ -278,6 +278,7 @@ class OpenAccessPlayer: NSObject, Player {
         for item in playerItems {
             if avQueuePlayer.canInsert(item, after: nil) {
                 avQueuePlayer.insert(item, after: nil)
+                addEndObserver(for: item)
             } else {
                 isLoaded = avQueuePlayer.items().count > 0
                 return
@@ -288,26 +289,17 @@ class OpenAccessPlayer: NSObject, Player {
         isLoaded = true
     }
     
-    public func resetPlayerQueue() {
-        for item in avQueuePlayer.items() {
-            NotificationCenter.default.removeObserver(
-                self, name: .AVPlayerItemDidPlayToEndTime,
-                object: item
-            )
-        }
-        avQueuePlayer.removeAllItems()
-    }
-    
     public func rebuildPlayerQueueAndNavigate(
         to trackPosition: TrackPosition?,
         completion: ((Bool) -> Void)? = nil
     ) {
-        avQueuePlayer.removeAllItems()
+        resetPlayerQueue()
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
         
         var desiredIndex: Int? = nil
         for (index, item) in playerItems.enumerated() {
             avQueuePlayer.insert(item, after: nil)
+            addEndObserver(for: item) // Add observer for each item
             if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
                 desiredIndex = index
             }
@@ -321,29 +313,28 @@ class OpenAccessPlayer: NSObject, Player {
         navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
     }
     
-    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
-        var items = [AVPlayerItem]()
-        for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
-                listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
-            }
+    public func resetPlayerQueue() {
+        for item in avQueuePlayer.items() {
+            removeEndObserver(for: item)
         }
-        return items
+        avQueuePlayer.removeAllItems()
+    }
+    
+    public func addEndObserver(for item: AVPlayerItem) {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(playerItemDidReachEnd(_:)),
+            name: .AVPlayerItemDidPlayToEndTime,
+            object: item
+        )
+    }
+    
+    public func removeEndObserver(for item: AVPlayerItem) {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: .AVPlayerItemDidPlayToEndTime,
+            object: item
+        )
     }
 }
 
@@ -375,35 +366,24 @@ extension OpenAccessPlayer {
     public func addPlayerObservers() {
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(playerItemDidReachEnd(_:)),
-            name: .AVPlayerItemDidPlayToEndTime, object: nil
+            selector: #selector(handleAudioSessionInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
         )
         
         avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
         avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
         isObservingPlayerStatus = true
     }
-
-    @objc func playerItemDidReachEnd(_ notification: Notification) {
-        guard let currentTrack = currentTrackPosition?.track else {
-            return 
-        }
-        
-        guard (tableOfContents.tracks.nextTrack(currentTrack) != nil) else {
-            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
-            return
-        }
-        
-        if let currentTrackPosition, let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
-            playbackStatePublisher.send(.completed(currentChapter))
-        }
-        
-        avQueuePlayer.advanceToNextItem()
-    }
     
     func removePlayerObservers() {
         guard isObservingPlayerStatus else { return }
-        NotificationCenter.default.removeObserver(self)
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
         avQueuePlayer.removeObserver(self, forKeyPath: "status")
         avQueuePlayer.removeObserver(self, forKeyPath: "rate")
         isObservingPlayerStatus = false
@@ -502,27 +482,7 @@ extension OpenAccessPlayer {
         let newPosition = currentTrackPosition + timeInterval
         seekTo(position: newPosition, completion: completion)
     }
-    
-    func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
-        defer {
-            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
-                
-                let endPosition = TrackPosition(
-                    track: firstTrack,
-                    timestamp: 0.0,
-                    tracks: currentTrackPosition.tracks
-                )
 
-                avQueuePlayer.pause()
-                rebuildPlayerQueueAndNavigate(to: endPosition)
-                completion?(endPosition)
-            }
-        }
-
-        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
-        playbackStatePublisher.send(.bookCompleted)
-    }
-    
     func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
             performSeek(to: position, completion: completion)
@@ -540,15 +500,7 @@ extension OpenAccessPlayer {
             }
         }
     }
-    
-    private func rebuildPlayerQueueAndNavigate(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        avQueuePlayer.removeAllItems()
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
-        avQueuePlayer.items().forEach { avQueuePlayer.insert($0, after: nil) }
-        
-        navigateToPosition(position, in: playerItems, completion: completion)
-    }
-    
+
     private func navigateToPosition(_ position: TrackPosition, in items: [AVPlayerItem], completion: ((TrackPosition?) -> Void)?) {
         guard let index = items.firstIndex(where: { $0.trackIdentifier == position.track.key }) else {
             completion?(nil)
@@ -647,5 +599,66 @@ extension OpenAccessPlayer {
         }
         
         return AVPlayerItem(asset: composition)
+    }
+    
+    @objc func playerItemDidReachEnd(_ notification: Notification) {
+        guard let currentTrack = currentTrackPosition?.track else {
+            return
+        }
+        
+        if let _ = tableOfContents.tracks.nextTrack(currentTrack) {
+            if let currentTrackPosition = currentTrackPosition,
+               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
+                playbackStatePublisher.send(.completed(currentChapter))
+            }
+            
+            avQueuePlayer.advanceToNextItem()
+        } else {
+            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+        }
+    }
+    
+    public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+                
+                avQueuePlayer.pause()
+                rebuildPlayerQueueAndNavigate(to: endPosition)
+                completion?(endPosition)
+            }
+        }
+        
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        playbackStatePublisher.send(.bookCompleted)
+    }
+    
+    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+        var items = [AVPlayerItem]()
+        for track in tracks {
+            guard let fileStatus = assetFileStatus(track.downloadTask) else {
+                continue
+            }
+            
+            switch fileStatus {
+            case .saved(let urls):
+                for url in urls {
+                    let playerItem = AVPlayerItem(url: url)
+                    playerItem.audioTimePitchAlgorithm = .timeDomain
+                    playerItem.trackIdentifier = track.key
+                    items.append(playerItem)
+                }
+            case .missing:
+                listenForDownloadCompletion(task: track.downloadTask)
+                continue
+            case .unknown:
+                continue
+            }
+        }
+        return items
     }
 }
