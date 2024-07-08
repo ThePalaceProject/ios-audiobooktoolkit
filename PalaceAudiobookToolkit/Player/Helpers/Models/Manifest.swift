@@ -164,7 +164,7 @@ public struct Manifest: Codable {
             func localizedTitle() -> String {
                 let currentLocale = Locale.autoupdatingCurrent
                 let languageCode = currentLocale.languageCode ?? "en"
-                return values[languageCode] ?? values["en"] ?? "Untitled"
+                return values[languageCode] ?? values["en"] ?? ""
             }
         }
     }
@@ -180,7 +180,7 @@ public struct Manifest: Codable {
     }
 
     public struct SpineItem: Codable {
-        let title: String
+        let title: String?
         let href: String
         let type: String
         let duration: Int

@@ -24,7 +24,7 @@ public protocol TrackFactoryProtocol {
 class TrackFactory: TrackFactoryProtocol {
     static func createTrack(
         from manifest: Manifest,
-        title: String? = "Untitled",
+        title: String? = "",
         urlString: String? = nil,
         audiobookID: String,
         index: Int,
@@ -145,7 +145,7 @@ public class Tracks {
     }
 
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
-        let title = link.title?.localizedTitle() ?? "Untitled"
+        let title = link.title?.localizedTitle() ?? ""
         let bitrate = (link.bitrate ?? 64) * 1024
         var duration: Double
         
