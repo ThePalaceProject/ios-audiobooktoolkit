@@ -299,7 +299,7 @@ class OpenAccessPlayer: NSObject, Player {
         var desiredIndex: Int? = nil
         for (index, item) in playerItems.enumerated() {
             avQueuePlayer.insert(item, after: nil)
-            addEndObserver(for: item) // Add observer for each item
+            addEndObserver(for: item) 
             if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
                 desiredIndex = index
             }
@@ -606,18 +606,22 @@ extension OpenAccessPlayer {
             return
         }
         
-        if let _ = tableOfContents.tracks.nextTrack(currentTrack) {
-            if let currentTrackPosition = currentTrackPosition,
+        if let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) {
+            if let currentTrackPosition,
                let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
                 playbackStatePublisher.send(.completed(currentChapter))
+                
+                if avQueuePlayer.items().count > nextTrack.index + 1 {
+                    avQueuePlayer.advanceToNextItem()
+                } else {
+                    rebuildPlayerQueueAndNavigate(to: TrackPosition(track: nextTrack, timestamp: 0.0, tracks: currentTrackPosition.tracks))
+                }
             }
-            
-            avQueuePlayer.advanceToNextItem()
         } else {
             handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
         }
     }
-    
+
     public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
         defer {
             if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {

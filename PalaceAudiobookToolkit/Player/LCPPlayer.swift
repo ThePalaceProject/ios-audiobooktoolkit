@@ -47,7 +47,7 @@ class LCPPlayer: OpenAccessPlayer {
         for item in playerItems {
             if avQueuePlayer.canInsert(item, after: nil) {
                 avQueuePlayer.insert(item, after: nil)
-                addEndObserver(for: item) // Add observer for each item
+                addEndObserver(for: item)
             }
         }
         
@@ -109,7 +109,7 @@ class LCPPlayer: OpenAccessPlayer {
         
         if avQueuePlayer.canInsert(item, after: nil) {
             avQueuePlayer.insert(item, after: nil)
-            addEndObserver(for: item) // Add observer for the new item
+            addEndObserver(for: item)
             navigateToItem(at: 0, with: trackPosition.timestamp, completion: completion)
         } else {
             completion?(false)
