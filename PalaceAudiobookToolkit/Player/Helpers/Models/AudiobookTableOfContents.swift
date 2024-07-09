@@ -83,7 +83,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         }
         
         let startPosition = TrackPosition(track: validTrack, timestamp: offsetInSeconds, tracks: tracks)
-        return Chapter(title: tocItem.title ?? "Untitled", position: startPosition)
+        return Chapter(title: tocItem.title ?? "", position: startPosition)
     }
     
     
@@ -100,7 +100,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             }
             
             if let validTrack = track {
-                let chapterTitle = item.title ?? "Untitled"
+                let chapterTitle = item.title ?? ""
                 let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0.0, tracks: tracks), duration: duration)
                 toc.append(chapter)
             }
@@ -113,7 +113,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
                 let chapter = Chapter(
-                    title: item.title?.localizedTitle() ?? "Untitled",
+                    title: item.title?.localizedTitle() ?? "",
                     position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks)
                 )
                 toc.append(chapter)
@@ -124,7 +124,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     private mutating func loadTocFromSpine(_ spine: [Manifest.SpineItem]) {
         spine.forEach { item in
             if let track = tracks.track(forHref: item.href) {
-                let chapterTitle = item.title
+                let chapterTitle = item.title ?? ""
                 let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
                 toc.append(chapter)
             }

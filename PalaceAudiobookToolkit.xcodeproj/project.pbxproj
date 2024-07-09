@@ -76,7 +76,6 @@
 		E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */; };
 		E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56C00C52BC3912100A25A97 /* ChapterCell.swift */; };
 		E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */; };
-		E57105E72C2CB8F400F1F033 /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */; };
 		E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498C52BB31C9F00BCD49C /* Metadata.swift */; };
 		E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5797E9B2BAA35F40017AB03 /* Audiobook.swift */; };
@@ -96,10 +95,11 @@
 		E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */; };
 		E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */; };
 		E5C3820C2BDACB7E00049CF1 /* AVPlayer+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C3820B2BDACB7E00049CF1 /* AVPlayer+Extensions.swift */; };
-		E5C5DC012C334EF00089D689 /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E5C8A84F2BCEC18D00F06F14 /* LCPPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */; };
 		E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */; };
 		E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC6E792BBB295F00C31ABD /* Player.swift */; };
+		E5D61EF92C3C82D80054029E /* where_the_line_is_drawn_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5D61EF82C3C82D80054029E /* where_the_line_is_drawn_manifest.json */; };
+		E5D61EFA2C3C836F0054029E /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
 		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
 		E5DE01A82BA3E4580063E68E /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A72BA3E4580063E68E /* Track.swift */; };
@@ -238,6 +238,7 @@
 		E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPPlayer.swift; sourceTree = "<group>"; };
 		E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPositionTests.swift; sourceTree = "<group>"; };
 		E5CC6E792BBB295F00C31ABD /* Player.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Player.swift; sourceTree = "<group>"; };
+		E5D61EF82C3C82D80054029E /* where_the_line_is_drawn_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = where_the_line_is_drawn_manifest.json; sourceTree = "<group>"; };
 		E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookTableOfContents.swift; sourceTree = "<group>"; };
 		E5DE01A32BA3E44A0063E68E /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		E5DE01A52BA3E4500063E68E /* TrackPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackPosition.swift; sourceTree = "<group>"; };
@@ -483,6 +484,7 @@
 				E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */,
 				E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */,
 				E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */,
+				E5D61EF82C3C82D80054029E /* where_the_line_is_drawn_manifest.json */,
 			);
 			path = TestResources;
 			sourceTree = "<group>";
@@ -707,6 +709,7 @@
 				E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */,
 				E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */,
 				E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */,
+				E5D61EF92C3C82D80054029E /* where_the_line_is_drawn_manifest.json in Resources */,
 				D5A0909C2B97986500C0FF2F /* theBigFail_manifest.json in Resources */,
 				E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */,
 				E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */,
@@ -766,7 +769,7 @@
 				8C6CD8AD240DB3C000E2DFB0 /* FeedbookDRMProcessor.swift in Sources */,
 				E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */,
 				21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */,
-				E5C5DC012C334EF00089D689 /* ManifestJSON.swift in Sources */,
+				E5D61EFA2C3C836F0054029E /* ManifestJSON.swift in Sources */,
 				E67CA9A5215C0D320081A10B /* Log.swift in Sources */,
 				E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */,
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,
@@ -845,7 +848,6 @@
 				7B78545D204DEE9900F6589B /* DownloadTaskMock.swift in Sources */,
 				E5B05DAA2BA4DB4500686897 /* TableOfContentsTests.swift in Sources */,
 				8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */,
-				E57105E72C2CB8F400F1F033 /* ManifestJSON.swift in Sources */,
 				8CD8A20F243E7A0D009DA4CC /* Data+BigEndianTest.swift in Sources */,
 				E5DE01AF2BA3EF360063E68E /* ManifestDecodingTests.swift in Sources */,
 				E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */,
