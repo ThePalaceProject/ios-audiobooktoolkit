@@ -74,7 +74,7 @@ public class `FindawayTrack`: Track {
         
         let fullfillmentID = manifest.metadata?.drmInformation?.fulfillmentId ?? audiobookID
 
-        self.key = "urn:org.thepalaceproject:findaway:\(String(describing: chapterNumber)):\(String(describing: partNumber))"
+        self.key = "urn:org.thepalaceproject:findaway:\(String(describing:  sequence)):\(String(describing: partNumber))"
         self.index = index
         self.title = title
         self.duration = duration
