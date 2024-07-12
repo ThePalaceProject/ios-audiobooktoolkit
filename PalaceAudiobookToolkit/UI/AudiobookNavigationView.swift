@@ -113,7 +113,7 @@ struct AudiobookNavigationView: View {
                 }
             } else {
                 List {
-                    ForEach(self.bookmarks, id: \.annotationId) { bookmark in
+                    ForEach(self.bookmarks, id: \.timestamp) { bookmark in
                         bookmarkCell(for: bookmark) {
                                 playback.selectedLocation = bookmark
                                 presentationMode.wrappedValue.dismiss()

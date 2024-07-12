@@ -59,14 +59,12 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     var currentChapterTitle: String {
-        if let currentChapter = audiobookManager.currentChapter, !currentChapter.title.isEmpty {
-            return currentChapter.title
-        } else if let title = currentLocation?.track.title, !title.isEmpty {
+        if let currentLocation, let title = try? audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation).title {
+            return title
+        }  else if let title = audiobookManager.audiobook.tableOfContents.toc.first?.title, !title.isEmpty {
             return title
         } else if let index = currentLocation?.track.index {
             return String(format: "Track %d", index + 1)
-        } else if let title = audiobookManager.audiobook.tableOfContents.toc.first?.title, !title.isEmpty {
-            return title
         } else {
             return "--"
         }

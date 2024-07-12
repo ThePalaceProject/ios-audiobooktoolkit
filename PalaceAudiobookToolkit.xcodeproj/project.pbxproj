@@ -66,6 +66,7 @@
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
 		E5338AD12BEAB816002387E1 /* littleWomenDevotional_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */; };
 		E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
+		E53A1B792C3E443200F490CD /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
@@ -99,7 +100,6 @@
 		E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */; };
 		E5CC6E7A2BBB295F00C31ABD /* Player.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CC6E792BBB295F00C31ABD /* Player.swift */; };
 		E5D61EF92C3C82D80054029E /* where_the_line_is_drawn_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5D61EF82C3C82D80054029E /* where_the_line_is_drawn_manifest.json */; };
-		E5D61EFA2C3C836F0054029E /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E5DE01A42BA3E44A0063E68E /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A32BA3E44A0063E68E /* Chapter.swift */; };
 		E5DE01A62BA3E4500063E68E /* TrackPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A52BA3E4500063E68E /* TrackPosition.swift */; };
 		E5DE01A82BA3E4580063E68E /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A72BA3E4580063E68E /* Track.swift */; };
@@ -769,7 +769,7 @@
 				8C6CD8AD240DB3C000E2DFB0 /* FeedbookDRMProcessor.swift in Sources */,
 				E5DE01AA2BA3E4610063E68E /* Tracks.swift in Sources */,
 				21B26CD0257FBA9F00A60238 /* LCPDownloadTask.swift in Sources */,
-				E5D61EFA2C3C836F0054029E /* ManifestJSON.swift in Sources */,
+				E53A1B792C3E443200F490CD /* ManifestJSON.swift in Sources */,
 				E67CA9A5215C0D320081A10B /* Log.swift in Sources */,
 				E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */,
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,

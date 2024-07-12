@@ -113,7 +113,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         links.contentLinks?.forEach { item in
             if let track = tracks.track(forHref: item.href) {
                 let chapter = Chapter(
-                    title: item.title?.localizedTitle() ?? "",
+                    title: item.title?.localizedTitle() ?? "Track \(track.index + 1)",
                     position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks)
                 )
                 toc.append(chapter)
