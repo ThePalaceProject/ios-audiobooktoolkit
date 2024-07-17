@@ -71,7 +71,7 @@ struct AudiobookPlayerView: View {
                                     .multilineTextAlignment(.center)
                                     .lineLimit(2)
                                     .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
-
+                                
                                 Spacer()
                                 Text("\(timeLeftText)")
                                     .palaceFont(.caption)
@@ -97,6 +97,10 @@ struct AudiobookPlayerView: View {
                 }
                 
                 bookmarkAddedToastView
+                
+                if !playbackModel.audiobookManager.audiobook.player.isLoaded {
+                    LoadingView()
+                }
             }
             .navigationBarTitle(Text(""), displayMode: .inline)
             .navigationBarItems(trailing: tocButton)
@@ -140,7 +144,7 @@ struct AudiobookPlayerView: View {
         .foregroundColor(Color(.label))
         .padding(.leading, -6)
     }
-
+    
     @ViewBuilder
     private func skipButton(_ imageName: String, textLabel: String, accessibilityString: String, action: @escaping () -> Void) -> some View {
         // Button size: 66 compact, 96 regular
@@ -315,7 +319,7 @@ struct AudiobookPlayerView: View {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)
                         }
-                        .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
+                            .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
                     )
             }
             .frame(minHeight: 40)
@@ -336,7 +340,7 @@ struct AudiobookPlayerView: View {
     private var chapterTitle: String {
         playbackModel.currentChapterTitle
     }
-
+    
     private var playbackRateText: String {
         if playbackModel.audiobookManager.audiobook.player.playbackRate == .normalTime {
             return NSLocalizedString("1.0×",
@@ -448,7 +452,7 @@ struct AudiobookPlayerView_Previews: PreviewProvider {
 // MARK: - Controls
 
 /// Airplay button
-struct AVRoutePickerViewRepresentable: UIViewRepresentable {    
+struct AVRoutePickerViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView()
         picker.tintColor = .white

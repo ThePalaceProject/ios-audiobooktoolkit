@@ -590,8 +590,8 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
 
     func audioEnginePlaybackFailed(_ notificationHandler: FindawayPlaybackNotificationHandler, withError error: NSError?, for chapter: FAEChapterDescription) {
         guard let locationOfError = self.chapter(for: chapter)?.position else { return }
-        DispatchQueue.main.async { [weak self] in
-            self?.playbackStatePublisher.send(.failed(locationOfError, error))
+        DispatchQueue.main.async {
+            self.playbackStatePublisher.send(.failed(locationOfError, error))
         }
     }
     

@@ -11,7 +11,8 @@ import AVFoundation
 class LCPPlayer: OpenAccessPlayer {
     
     var decryptionDelegate: DRMDecryptor?
-    private var decryptionQueue = DispatchQueue(label: "com.palace.LCPPlayer.decryptionQueue", qos: .background)
+    private var decryptionQueue = DispatchQueue(label: "com.palace.LCPPlayer.decryptionQueue", qos: .background, attributes: .concurrent)
+    private var playerQueueUpdateQueue = DispatchQueue(label: "com.palace.LCPPlayer.playerQueueUpdateQueue", qos: .userInitiated)
     
     override var taskCompleteNotification: Notification.Name {
         LCPDownloadTaskCompleteNotification
@@ -20,6 +21,7 @@ class LCPPlayer: OpenAccessPlayer {
     init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
         self.decryptionDelegate = decryptor
         super.init(tableOfContents: tableOfContents)
+        configurePlayer()
     }
     
     required init(tableOfContents: AudiobookTableOfContents) {
@@ -31,9 +33,8 @@ class LCPPlayer: OpenAccessPlayer {
         setupAudioSession()
         loadInitialPlayerQueue()
         addPlayerObservers()
-        decryptRemainingTracksInBackground()
     }
-
+    
     public func loadInitialPlayerQueue() {
         resetPlayerQueue()
         
@@ -42,77 +43,116 @@ class LCPPlayer: OpenAccessPlayer {
             return
         }
         
-        let playerItems = buildPlayerItems(fromTracks: [firstTrack])
-        
-        for item in playerItems {
-            if avQueuePlayer.canInsert(item, after: nil) {
-                avQueuePlayer.insert(item, after: nil)
-                addEndObserver(for: item)
+        decryptTrackIfNeeded(track: firstTrack) { [weak self] success in
+            guard let self = self else { return }
+            if success {
+                self.playerQueueUpdateQueue.async {
+                    let playerItems = self.buildPlayerItems(fromTracks: [firstTrack])
+                    DispatchQueue.main.async {
+                        for item in playerItems {
+                            if self.avQueuePlayer.canInsert(item, after: nil) {
+                                self.avQueuePlayer.insert(item, after: nil)
+                                self.addEndObserver(for: item)
+                            }
+                        }
+                        self.isLoaded = true
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.isLoaded = false
+                }
             }
         }
-        
-        isLoaded = true
     }
     
-    override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
-        if let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls {
-            var savedUrls = [URL]()
-            var missingUrls = [URL]()
-            
-            for (index, decryptedUrl) in decryptedUrls.enumerated() {
-                if FileManager.default.fileExists(atPath: decryptedUrl.path) {
-                    savedUrls.append(decryptedUrl)
-                    continue
+    override public func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        decryptTrackIfNeeded(track: position.track) { [weak self] success in
+            guard let self = self else { return }
+            if success {
+                self.updateQueueForTrack(position.track) {
+                    self.invokeSuperPlay(at: position, completion: completion)
                 }
-                
-                delegate.decrypt(url: task.urls[index], to: decryptedUrl) { error in
+            } else {
+                completion?(NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"]))
+            }
+        }
+    }
+    
+    override public func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
+        guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
+            completion?(nil)
+            return
+        }
+        let newPosition = currentTrackPosition + timeInterval
+        decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
+            guard let self = self else { return }
+            if success {
+                self.updateQueueForTrack(newPosition.track) {
+                    self.invokeSuperSeek(to: newPosition, completion: completion)
+                }
+            } else {
+                completion?(nil)
+            }
+        }
+    }
+    
+    private func invokeSuperPlay(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        super.play(at: position, completion: completion)
+    }
+    
+    private func invokeSuperSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        super.seekTo(position: position, completion: completion)
+    }
+    
+    private func decryptTrackIfNeeded(track: any Track, completion: @escaping (Bool) -> Void) {
+        guard let task = track.downloadTask as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls else {
+            completion(false)
+            return
+        }
+        
+        let missingUrls = decryptedUrls.filter { !FileManager.default.fileExists(atPath: $0.path) }
+        
+        if missingUrls.isEmpty {
+            completion(true)
+            return
+        }
+        
+        decryptionQueue.async(group: nil, qos: .background, flags: .barrier) {
+            let group = DispatchGroup()
+            var success = true
+            
+            for (index, decryptedUrl) in decryptedUrls.enumerated() where missingUrls.contains(decryptedUrl) {
+                group.enter()
+                self.decryptionDelegate?.decrypt(url: task.urls[index], to: decryptedUrl) { error in
                     if let error = error {
                         ATLog(.error, "Error decrypting file", error: error)
-                        return
+                        success = false
                     }
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
-                        task.statePublisher.send(.completed)
-                    }
+                    group.leave()
                 }
-                
-                missingUrls.append(task.urls[index])
             }
             
-            guard missingUrls.count == 0 else {
-                return .missing(missingUrls)
+            group.notify(queue: .main) {
+                completion(success)
             }
-            
-            return .saved(savedUrls)
-        } else {
-            return .unknown
         }
     }
     
-    override public func rebuildPlayerQueueAndNavigate(
-        to trackPosition: TrackPosition?,
-        completion: ((Bool) -> Void)? = nil
-    ) {
-        resetPlayerQueue()
-        
-        guard let trackPosition = trackPosition else {
-            completion?(false)
-            return
-        }
-        
-        let playerItems = buildPlayerItems(fromTracks: [trackPosition.track])
-        
-        guard let item = playerItems.first else {
-            completion?(false)
-            return
-        }
-        
-        if avQueuePlayer.canInsert(item, after: nil) {
-            avQueuePlayer.insert(item, after: nil)
-            addEndObserver(for: item)
-            navigateToItem(at: 0, with: trackPosition.timestamp, completion: completion)
-        } else {
-            completion?(false)
+    private func updateQueueForTrack(_ track: any Track, completion: @escaping () -> Void) {
+        playerQueueUpdateQueue.async { [weak self] in
+            guard let self = self else { return }
+            let playerItems = self.buildPlayerItems(fromTracks: [track])
+            
+            DispatchQueue.main.async {
+                for item in playerItems {
+                    if self.avQueuePlayer.canInsert(item, after: nil) {
+                        self.avQueuePlayer.insert(item, after: nil)
+                    }
+                }
+                self.avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+                completion()
+            }
         }
     }
     
@@ -135,64 +175,70 @@ class LCPPlayer: OpenAccessPlayer {
             return
         }
         
-        let nextPlayerItem = buildPlayerItems(fromTracks: [nextTrack])
-        if let item = nextPlayerItem.first, avQueuePlayer.canInsert(item, after: nil) {
-            avQueuePlayer.insert(item, after: nil)
-            addEndObserver(for: item)
-            avQueuePlayer.advanceToNextItem()
-        } else {
-            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
-        }
-    }
-    
-    override public func buildPlayerQueue() {
-        resetPlayerQueue()
-        
-        guard let firstTrack = tableOfContents.allTracks.first else {
-            isLoaded = false
-            return
-        }
-        
-        let playerItems = buildPlayerItems(fromTracks: [firstTrack])
-        if playerItems.isEmpty {
-            isLoaded = false
-            return
-        }
-        
-        for item in playerItems {
-            if avQueuePlayer.canInsert(item, after: nil) {
-                avQueuePlayer.insert(item, after: nil)
-            } else {
-                isLoaded = avQueuePlayer.items().count > 0
-                return
-            }
-        }
-        
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
-        isLoaded = true
-    }
-    
-    private func decryptRemainingTracksInBackground() {
-        decryptionQueue.async { [weak self] in
+        decryptTrackIfNeeded(track: nextTrack) { [weak self] success in
             guard let self = self else { return }
             
-            let remainingTracks = Array(self.tableOfContents.allTracks.dropFirst())
-            let batchSize = 1
-            
-            for batch in stride(from: 0, to: remainingTracks.count, by: batchSize) {
-                let endIndex = min(batch + batchSize, remainingTracks.count)
-                let batchTracks = Array(remainingTracks[batch..<endIndex])
-                
-                self.decryptBatch(tracks: batchTracks)
+            if success {
+                self.playerQueueUpdateQueue.async {
+                    let nextPlayerItem = self.buildPlayerItems(fromTracks: [nextTrack])
+                    
+                    DispatchQueue.main.async {
+                        for item in nextPlayerItem {
+                            if self.avQueuePlayer.canInsert(item, after: nil) {
+                                self.avQueuePlayer.insert(item, after: nil)
+                                self.addEndObserver(for: item)
+                                self.avQueuePlayer.advanceToNextItem()
+                            }
+                        }
+                    }
+                }
+            } else {
+                self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
             }
         }
     }
     
-    private func decryptBatch(tracks: [any Track]) {
-        for track in tracks {
-            guard let task = track.downloadTask as? LCPDownloadTask else { continue }
-            
-            _ = self.assetFileStatus(task)
+    override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
+        guard let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls else {
+            return .unknown
         }
+        
+        var savedUrls = [URL]()
+        var missingUrls = [URL]()
+        
+        let group = DispatchGroup()
+        
+        for (index, decryptedUrl) in decryptedUrls.enumerated() {
+            if FileManager.default.fileExists(atPath: decryptedUrl.path) {
+                savedUrls.append(decryptedUrl)
+                continue
+            }
+            
+            group.enter()
+            decryptionQueue.async {
+                delegate.decrypt(url: task.urls[index], to: decryptedUrl) { error in
+                    if let error = error {
+                        ATLog(.error, "Error decrypting file", error: error)
+                    } else {
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: self.taskCompleteNotification, object: task)
+                            task.statePublisher.send(.completed)
+                        }
+                    }
+                    group.leave()
+                }
+            }
+            
+            missingUrls.append(task.urls[index])
+        }
+        
+        group.wait()
+        
+        guard missingUrls.count == 0 else {
+            return .missing(missingUrls)
+        }
+        
+        return .saved(savedUrls)
     }
 }
+
