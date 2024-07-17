@@ -546,21 +546,3 @@ struct ToolkitImage: View {
         }
     }
 }
-
-struct LoadingView: View {
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.5)
-                .edgesIgnoringSafeArea(.all)
-            
-            VStack {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(2)
-                Text("Loading...")
-                    .foregroundColor(.white)
-                    .padding(.top, 8)
-            }
-        }
-    }
-}

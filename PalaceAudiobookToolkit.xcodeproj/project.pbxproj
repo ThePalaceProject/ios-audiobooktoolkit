@@ -86,6 +86,7 @@
 		E57FCA282BC8E768008D8907 /* LCPTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57FCA272BC8E768008D8907 /* LCPTrack.swift */; };
 		E58496932BAB6B10003C83E6 /* bocas_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58496922BAB6B10003C83E6 /* bocas_manifest.json */; };
 		E58496952BAB6FF1003C83E6 /* secret_lives_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */; };
+		E588DB3A2C477BE700144A73 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E588DB392C477BE700144A73 /* LoadingView.swift */; };
 		E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
 		E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53452B7550B000D861EE /* anathem_manifest.json */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
@@ -226,6 +227,7 @@
 		E57FCA272BC8E768008D8907 /* LCPTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPTrack.swift; sourceTree = "<group>"; };
 		E58496922BAB6B10003C83E6 /* bocas_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bocas_manifest.json; sourceTree = "<group>"; };
 		E58496942BAB6FF1003C83E6 /* secret_lives_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = secret_lives_manifest.json; sourceTree = "<group>"; };
+		E588DB392C477BE700144A73 /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = the_system_of_the_world_manifest.json; sourceTree = "<group>"; };
 		E58C53452B7550B000D861EE /* anathem_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = anathem_manifest.json; sourceTree = "<group>"; };
 		E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobook.swift; sourceTree = "<group>"; };
@@ -564,6 +566,7 @@
 				E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */,
 				E56C00C52BC3912100A25A97 /* ChapterCell.swift */,
 				E57F79D82C17FE6900E99297 /* RetryToolbar.swift */,
+				E588DB392C477BE700144A73 /* LoadingView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -827,6 +830,7 @@
 				7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */,
 				8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */,
 				E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */,
+				E588DB3A2C477BE700144A73 /* LoadingView.swift in Sources */,
 				E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */,
 				8CF57BDC2432788C0053C31E /* Data+BigEndian.swift in Sources */,
 				7BD8E4FA206EB49D008ED3F1 /* VoiceOverTimestamp.swift in Sources */,
