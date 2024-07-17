@@ -92,7 +92,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
     
     private var cancellables = Set<AnyCancellable>()
-    private var lastKnownPosition: TrackPosition?
+    public var lastKnownPosition: TrackPosition?
     private var isObservingPlayerStatus = false
 
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
@@ -336,6 +336,34 @@ class OpenAccessPlayer: NSObject, Player {
             object: item
         )
     }
+    
+    public func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
+        guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
+            completion?(nil)
+            return
+        }
+        
+        let newPosition = currentTrackPosition + timeInterval
+        seekTo(position: newPosition, completion: completion)
+    }
+    
+    public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
+            performSeek(to: position, completion: completion)
+        } else {
+            if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
+                navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
+            } else {
+                rebuildPlayerQueueAndNavigate(to: position) { success in
+                    if success {
+                        self.performSeek(to: position, completion: completion)
+                    } else {
+                        completion?(nil)
+                    }
+                }
+            }
+        }
+    }
 }
 
 extension OpenAccessPlayer {
@@ -471,34 +499,6 @@ extension OpenAccessPlayer {
         
         let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
         seekTo(position: newPosition, completion: completion)
-    }
-
-    func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
-            completion?(nil)
-            return
-        }
-
-        let newPosition = currentTrackPosition + timeInterval
-        seekTo(position: newPosition, completion: completion)
-    }
-
-    func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
-            performSeek(to: position, completion: completion)
-        } else {
-            if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
-                navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
-            } else {
-                rebuildPlayerQueueAndNavigate(to: position) { success in
-                    if success {
-                        self.performSeek(to: position, completion: completion)
-                    } else {
-                        completion?(nil)
-                    }
-                }
-            }
-        }
     }
 
     private func navigateToPosition(_ position: TrackPosition, in items: [AVPlayerItem], completion: ((TrackPosition?) -> Void)?) {

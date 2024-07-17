@@ -562,9 +562,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
                 if self.shouldPauseWhenPlaybackResumes {
                     self.performPause()
                 } else {
-                    DispatchQueue.main.async {
-                        self.playbackStatePublisher.send(.started(currentChapter.position))
-                    }
+                    self.playbackStatePublisher.send(.started(currentChapter.position))
                 }
             }
             self.shouldPauseWhenPlaybackResumes = false
@@ -590,9 +588,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
 
     func audioEnginePlaybackFailed(_ notificationHandler: FindawayPlaybackNotificationHandler, withError error: NSError?, for chapter: FAEChapterDescription) {
         guard let locationOfError = self.chapter(for: chapter)?.position else { return }
-        DispatchQueue.main.async { [weak self] in
-            self?.playbackStatePublisher.send(.failed(locationOfError, error))
-        }
+        self.playbackStatePublisher.send(.failed(locationOfError, error))
     }
     
     func audioEngineAudiobookCompleted(_ notificationHandler: FindawayPlaybackNotificationHandler, for audiobookID: String) {
