@@ -187,6 +187,17 @@ public class Tracks {
             return false
         })
     }
+    
+    public func track(forTitle key: String) -> (any Track)? {
+        let cleanedKey = key.replacingOccurrences(of: "urn:isbn:", with: "")
+        
+        return tracks.first { track in
+            if let title = track.title, title.contains(cleanedKey) {
+                return true
+            }
+            return false
+        }
+    }
 
     private func addTracksFromSpine(_ spine: [Manifest.SpineItem]) {
         for (index, item) in spine.enumerated() {

@@ -192,6 +192,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     private func setupNowPlayingInfoTimer() {
         let timerPublisher = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
         timerPublisher
+            .receive(on: DispatchQueue.global(qos: .background))
             .map { [weak self] _ -> TrackPosition? in
                 self?.audiobook.player.currentTrackPosition
             }
@@ -212,14 +213,25 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         guard let currentTrackPosition = position else { return }
         
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
-        nowPlayingInfo[MPMediaItemPropertyTitle] = (try? tableOfContents.chapter(forPosition: currentTrackPosition).title) ?? currentTrackPosition.track.title
-        nowPlayingInfo[MPMediaItemPropertyArtist] = self.metadata.title
-        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = self.metadata.authors?.joined(separator: ", ")
-        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTrackPosition.timestamp
-        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = currentTrackPosition.track.duration
+        
+        let titleKey = MPMediaItemPropertyTitle
+        let artistKey = MPMediaItemPropertyArtist
+        let albumTitleKey = MPMediaItemPropertyAlbumTitle
+        let elapsedTimeKey = MPNowPlayingInfoPropertyElapsedPlaybackTime
+        let playbackDurationKey = MPMediaItemPropertyPlaybackDuration
+        let defaultPlaybackRateKey = MPNowPlayingInfoPropertyDefaultPlaybackRate
+        let playbackRateKey = MPNowPlayingInfoPropertyPlaybackRate
+        
+        nowPlayingInfo[titleKey] = (try? tableOfContents.chapter(forPosition: currentTrackPosition).title) ?? currentTrackPosition.track.title
+        nowPlayingInfo[artistKey] = self.metadata.title
+        nowPlayingInfo[albumTitleKey] = self.metadata.authors?.joined(separator: ", ")
+        nowPlayingInfo[elapsedTimeKey] = currentTrackPosition.timestamp
+        nowPlayingInfo[playbackDurationKey] = currentTrackPosition.track.duration
+        
         let playbackRate = PlaybackRate.convert(rate: self.audiobook.player.playbackRate)
-        nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
-        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = self.audiobook.player.isPlaying ? playbackRate : 0
+        let isPlaying = self.audiobook.player.isPlaying
+        nowPlayingInfo[defaultPlaybackRateKey] = playbackRate
+        nowPlayingInfo[playbackRateKey] = isPlaying ? playbackRate : 0
         
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
