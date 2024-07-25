@@ -26,10 +26,11 @@ struct AudiobookNavigationView: View {
             }
         }
     }
-
+    
     @Environment(\.presentationMode) var presentationMode
     @State private var selectedSection: NavigationSection = .toc
     @State private var bookmarks: [TrackPosition] = []
+    @State private var isLoading: Bool = false
     
     @ObservedObject private var playback: AudiobookPlaybackModel
     init(model: AudiobookPlaybackModel) {
@@ -37,18 +38,31 @@ struct AudiobookNavigationView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            if playback.audiobookManager.needsDownloadRetry {
-                RetryToolbar(retryAction: playback.audiobookManager.retryDownload)
+        ZStack {
+            VStack(spacing: 0) {
+                if playback.audiobookManager.needsDownloadRetry {
+                    RetryToolbar(retryAction: playback.audiobookManager.retryDownload)
+                }
+                navigationPicker
+                switch selectedSection {
+                case .toc: chaptersList
+                case .bookmarks: bookmarksList
+                }
             }
-            navigationPicker
-            switch selectedSection {
-            case .toc: chaptersList
-            case .bookmarks: bookmarksList
+            .navigationBarBackButtonHidden(true)
+            .navigationBarItems(leading: backButton)
+            
+            if isLoading {
+                Color.black.opacity(0.4)
+                    .edgesIgnoringSafeArea(.all)
+                VStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .padding(.top, 200)
+                    Spacer()
+                }
             }
         }
-        .navigationBarBackButtonHidden(true)
-        .navigationBarItems(leading: backButton)
     }
     
     @ViewBuilder
@@ -93,8 +107,6 @@ struct AudiobookNavigationView: View {
         .listStyle(.plain)
     }
     
-
-    
     @ViewBuilder
     private var bookmarksList: some View {
         Group {
@@ -104,28 +116,26 @@ struct AudiobookNavigationView: View {
                         Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
                             .palaceFont(.body)
                             .padding(.top, 200)
+                            .opacity(isLoading ? 0.0 : 1.0)
                     }
                 }
                 .refreshable {
-                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                        self.bookmarks = bookmarks
-                    }
+                    fetchBookmarks(showLoading: false)
                 }
             } else {
                 List {
                     ForEach(self.bookmarks, id: \.timestamp) { bookmark in
                         bookmarkCell(for: bookmark) {
-                                playback.selectedLocation = bookmark
-                                presentationMode.wrappedValue.dismiss()
-                            }
+                            playback.selectedLocation = bookmark
+                            presentationMode.wrappedValue.dismiss()
+                        }
                     }
                     .onDelete { indexSet in
                         for index in indexSet.reversed() {
                             if let bookmark = playback.audiobookManager.bookmarks[safe: index] {
+                                self.bookmarks.removeAll { $0 == bookmark }
                                 playback.audiobookManager.deleteBookmark(at: bookmark) { _ in
-                                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                                        self.bookmarks = bookmarks
-                                    }
+                                    fetchBookmarks(showLoading: false)
                                 }
                             }
                         }
@@ -133,23 +143,27 @@ struct AudiobookNavigationView: View {
                 }
                 .listStyle(.plain)
                 .refreshable {
-                    playback.audiobookManager.fetchBookmarks { bookmarks in
-                        self.bookmarks = bookmarks
-                    }
+                    fetchBookmarks(showLoading: false)
                 }
             }
         }
         .onAppear {
-            playback.audiobookManager.fetchBookmarks { bookmarks in
-                self.bookmarks = bookmarks
-            }
+            fetchBookmarks()
+        }
+    }
+    
+    private func fetchBookmarks(showLoading: Bool = true) {
+        isLoading = showLoading
+        playback.audiobookManager.fetchBookmarks { bookmarks in
+            self.bookmarks = bookmarks
+            self.isLoading = false
         }
     }
     
     func title(for position: TrackPosition) -> String {
         (try? playback.audiobookManager.audiobook.tableOfContents.chapter(forPosition: position).title) ?? position.track.title ?? ""
     }
-
+    
     @ViewBuilder
     private func bookmarkCell(for position: TrackPosition, action: @escaping () -> Void) -> some View {
         Button {
@@ -202,7 +216,6 @@ extension AudiobookNavigationView {
         playback.selectedLocation = bookmark
     }
 }
-
 
 struct AudiobookNavigationView_Previews: PreviewProvider {
     static var previews: some View {
