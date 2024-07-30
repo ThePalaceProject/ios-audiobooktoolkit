@@ -161,39 +161,57 @@ class LCPPlayer: OpenAccessPlayer {
            let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
             playbackStatePublisher.send(.completed(currentChapter))
         }
-        
-        advanceToNextTrack()
     }
-    
-    private func advanceToNextTrack() {
-        guard let currentTrack = currentTrackPosition?.track else {
+
+    override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+        guard let currentTrackPosition = currentTrackPosition,
+              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
+            completion?(currentTrackPosition)
             return
         }
         
-        guard let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) else {
-            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
-            return
-        }
+        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
         
-        decryptTrackIfNeeded(track: nextTrack) { [weak self] success in
+        decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
-            
             if success {
-                self.playerQueueUpdateQueue.async {
-                    let nextPlayerItem = self.buildPlayerItems(fromTracks: [nextTrack])
-                    
-                    DispatchQueue.main.async {
-                        for item in nextPlayerItem {
-                            if self.avQueuePlayer.canInsert(item, after: nil) {
-                                self.avQueuePlayer.insert(item, after: nil)
-                                self.addEndObserver(for: item)
-                                self.avQueuePlayer.advanceToNextItem()
-                            }
-                        }
-                    }
+                self.rebuildQueueForPosition(newPosition) {
+                    self.invokeSuperSeek(to: newPosition, completion: completion)
                 }
             } else {
-                self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+                completion?(nil)
+            }
+        }
+    }
+    
+    private func rebuildQueueForPosition(_ position: TrackPosition, completion: @escaping () -> Void) {
+        playerQueueUpdateQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.resetPlayerQueue()
+            
+            var tracksToLoad: [any Track] = []
+            
+            if let currentTrack = self.tableOfContents.track(forKey: position.track.key) {
+                tracksToLoad.append(currentTrack)
+            }
+            
+            var nextTrack = self.tableOfContents.tracks.nextTrack(position.track)
+            while let track = nextTrack, tracksToLoad.count < 3 {
+                tracksToLoad.append(track)
+                nextTrack = self.tableOfContents.tracks.nextTrack(track)
+            }
+            
+            let playerItems = self.buildPlayerItems(fromTracks: tracksToLoad)
+            
+            DispatchQueue.main.async {
+                for item in playerItems {
+                    if self.avQueuePlayer.canInsert(item, after: nil) {
+                        self.avQueuePlayer.insert(item, after: nil)
+                        self.addEndObserver(for: item)
+                    }
+                }
+                completion()
             }
         }
     }
@@ -241,4 +259,3 @@ class LCPPlayer: OpenAccessPlayer {
         return .saved(savedUrls)
     }
 }
-
