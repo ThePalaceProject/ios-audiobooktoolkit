@@ -364,6 +364,81 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
+    
+    public func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
+        let shouldPlay = avQueuePlayer.rate > 0
+        
+        avQueuePlayer.pause()
+        
+        for _ in 0..<index {
+            avQueuePlayer.advanceToNextItem()
+        }
+        
+        guard let currentItem = avQueuePlayer.currentItem else {
+            completion?(false)
+            return
+        }
+        
+        let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        currentItem.seek(to: seekTime) { success in
+            if success {
+                if shouldPlay {
+                    self.avQueuePlayer.play()
+                }
+                
+                completion?(true)
+            } else {
+                completion?(false)
+            }
+        }
+    }
+
+    func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+        guard let currentTrackPosition = currentTrackPosition,
+              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
+            completion?(currentTrackPosition)
+            return
+        }
+        
+        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
+        seekTo(position: newPosition, completion: completion)
+    }
+    
+    public func navigateToPosition(_ position: TrackPosition, in items: [AVPlayerItem], completion: ((TrackPosition?) -> Void)?) {
+        guard let index = items.firstIndex(where: { $0.trackIdentifier == position.track.key }) else {
+            completion?(nil)
+            return
+        }
+        
+        let shouldPlay = avQueuePlayer.rate > 0
+        avQueuePlayer.pause()
+        
+        if avQueuePlayer.currentItem != items[index] {
+            let currentIndex = items.firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
+            
+            if index < currentIndex {
+                rebuildPlayerQueueAndNavigate(to: position) { success in
+                    completion?(position)
+                }
+            } else {
+                for _ in currentIndex..<index {
+                    avQueuePlayer.advanceToNextItem()
+                }
+            }
+        }
+        
+        let seekTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        avQueuePlayer.seek(to: seekTime) { success in
+            if success && shouldPlay {
+                self.avQueuePlayer.play()
+            }
+            
+            DispatchQueue.main.async {
+                completion?(success ? position : nil)
+            }
+        }
+    }
+
 }
 
 extension OpenAccessPlayer {
@@ -489,81 +564,11 @@ extension OpenAccessPlayer {
         default: ()
         }
     }
-    
-    func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition = currentTrackPosition,
-              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
-            completion?(currentTrackPosition)
-            return
-        }
         
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
-        seekTo(position: newPosition, completion: completion)
-    }
-
-    private func navigateToPosition(_ position: TrackPosition, in items: [AVPlayerItem], completion: ((TrackPosition?) -> Void)?) {
-        guard let index = items.firstIndex(where: { $0.trackIdentifier == position.track.key }) else {
-            completion?(nil)
-            return
-        }
-        
-        let desiredItem = items[index]
-
-        let wasPlaying = avQueuePlayer.rate > 0
-        avQueuePlayer.pause()
-        if avQueuePlayer.currentItem != desiredItem {
-            avQueuePlayer.removeAllItems()
-            avQueuePlayer.insert(desiredItem, after: nil)
-            
-            items.filter { $0 != desiredItem }.forEach { avQueuePlayer.insert($0, after: nil) }
-            
-            if wasPlaying {
-                avQueuePlayer.play()
-            }
-        }
-        
-        let seekTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        avQueuePlayer.seek(to: seekTime) { success in
-            if success {
-                completion?(position)
-            } else {
-                completion?(nil)
-            }
-        }
-    }
-    
-    private func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: cmTime) { success in
             completion?(success ? position : nil)
-        }
-    }
-    
-    public func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
-        let shouldPlay = avQueuePlayer.rate > 0
-    
-        avQueuePlayer.pause()
-        
-        for _ in 0..<index {
-            avQueuePlayer.advanceToNextItem()
-        }
-        
-        guard let currentItem = avQueuePlayer.currentItem else {
-            completion?(false)
-            return
-        }
-        
-        let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        currentItem.seek(to: seekTime) { success in
-            if success {
-                if shouldPlay {
-                    self.avQueuePlayer.play()
-                }
-    
-                completion?(true)
-            } else {
-                completion?(false)
-            }
         }
     }
 
