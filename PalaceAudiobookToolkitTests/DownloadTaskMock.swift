@@ -13,7 +13,7 @@ import PalaceAudiobookToolkit
 typealias TaskCallback = (_ task: DownloadTask) -> Void
 
 class DownloadTaskMock: DownloadTask {
-    var statePublisher: PassthroughSubject<PalaceAudiobookToolkit.DownloadTaskState, Never> = PassthroughSubject()
+    var statePublisher: PassthroughSubject<DownloadTaskState, Never> = PassthroughSubject()
     
     func fetch() {
         guard let fetchClosure = self.fetchClosure else { return }
@@ -37,5 +37,11 @@ class DownloadTaskMock: DownloadTask {
         self.downloadProgress = progress
         self.fetchClosure = fetchClosure
         self.key = key
+    }
+}
+
+extension DownloadTaskMock {
+    func assetFileStatus() -> AssetResult {
+        .unknown
     }
 }
