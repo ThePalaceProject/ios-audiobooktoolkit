@@ -30,7 +30,6 @@ public struct TrackPosition: Equatable, Comparable {
     
     public static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
         if lhs.track.id == rhs.track.id {
-            // Direct subtraction if both positions are in the same track
             return lhs.timestamp - rhs.timestamp
         }
         
@@ -39,23 +38,20 @@ public struct TrackPosition: Equatable, Comparable {
             throw TrackPositionError.differentTracks
         }
         
-        // Handle both possible track orderings
         var diff = 0.0
         if lhsTrackIndex > rhsTrackIndex {
-            // Accumulate duration starting from rhs to lhs
             diff += lhs.tracks[rhsTrackIndex].duration - rhs.timestamp // remaining time in rhs's track
             for index in (rhsTrackIndex + 1)..<lhsTrackIndex {
                 diff += lhs.tracks[index].duration
             }
-            diff += lhs.timestamp // time in lhs's track
+            diff += lhs.timestamp
         } else {
-            // Accumulate duration starting from lhs to rhs (negative because lhs is before rhs)
             diff -= rhs.timestamp - lhs.tracks[lhsTrackIndex].duration // remaining time in lhs's track
             for index in (lhsTrackIndex + 1)..<rhsTrackIndex {
                 diff -= lhs.tracks[index].duration
             }
-            diff -= rhs.timestamp // time in rhs's track
-            return -diff // return negative because lhs is before rhs
+            diff -= rhs.timestamp
+            return -diff
         }
         
         return diff
@@ -100,5 +96,9 @@ extension TrackPosition: CustomStringConvertible {
     public var description: String {
         let trackDesc = track.description
         return "Track: \(trackDesc) (Timestamp: \(timestamp)"
+    }
+    
+    public func durationToSelf() -> TimeInterval {
+        tracks.duration(to: self)
     }
 }

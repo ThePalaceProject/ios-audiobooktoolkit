@@ -20,6 +20,7 @@ public protocol DownloadTask: AnyObject {
     
     func fetch()
     func delete()
+    func assetFileStatus() -> AssetResult
 
     var statePublisher: PassthroughSubject<DownloadTaskState, Never> { get }
     var downloadProgress: Float { get set }

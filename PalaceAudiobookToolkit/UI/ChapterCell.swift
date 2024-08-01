@@ -21,7 +21,7 @@ struct ChapterCell: View {
                 Text(chapter.title)
                     .palaceFont(.body)
                 Spacer()
-                Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).timecode)
+                Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? chapter.position.track.duration).timecode)
                     .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
                     .palaceFont(.body)
             }
