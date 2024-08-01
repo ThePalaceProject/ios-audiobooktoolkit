@@ -33,6 +33,16 @@ class TrackFactory: TrackFactoryProtocol {
         key: String?
     ) -> (any Track)? {
         switch manifest.audiobookType {
+        case .findaway:
+            return try? FindawayTrack(
+                manifest: manifest,
+                urlString: urlString,
+                audiobookID: audiobookID,
+                title: title,
+                duration: duration,
+                index: index,
+                token: token
+            )
         case .lcp:
             return try? LCPTrack(
                 manifest: manifest,
@@ -44,15 +54,15 @@ class TrackFactory: TrackFactoryProtocol {
                 token: token,
                 key: key
             )
-        case .findaway:
-            return try? FindawayTrack(
+        case .overdrive:
+            return try? OverdriveTrack(
                 manifest: manifest,
                 urlString: urlString,
                 audiobookID: audiobookID,
                 title: title,
                 duration: duration,
                 index: index,
-                token: token
+                key: key
             )
         default:
             return try? OpenAccessTrack(
@@ -69,13 +79,11 @@ class TrackFactory: TrackFactoryProtocol {
     }
 }
 
-
-
 public class Tracks {
     var manifest: Manifest
     public var audiobookID: String
     public var tracks: [any Track] = []
-    public var totalDuration: Double = 0
+    public var totalDuration: Double { tracks.reduce(0) { $0 + $1.duration } }
     
     private var token: String?
     
@@ -84,14 +92,13 @@ public class Tracks {
         self.audiobookID = audiobookID
         self.token = token
         self.initializeTracks()
-        self.calculateTotalDuration()
     }
     
     public subscript(index: Int) -> (any Track)? {
         guard index >= 0 && index < tracks.count else {
             return nil
         }
-        return tracks[index]   
+        return tracks[index]
     }
     
     public var count: Int {
@@ -101,7 +108,7 @@ public class Tracks {
     public var first: (any Track)? {
         tracks.first
     }
-
+    
     private func initializeTracks() {
         if let spine = manifest.spine, !spine.isEmpty {
             addTracksFromSpine(spine)
@@ -130,12 +137,11 @@ public class Tracks {
         }
     }
     
-    
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
         TrackFactory.createTrack(
             from: manifest,
             title: item.title,
-            urlString: item.href, 
+            urlString: item.href,
             audiobookID: self.audiobookID,
             index: index,
             duration: item.duration,
@@ -143,7 +149,7 @@ public class Tracks {
             key: item.href
         )
     }
-
+    
     private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
         let title = link.title?.localizedTitle() ?? ""
         let bitrate = (link.bitrate ?? 64) * 1024
@@ -152,8 +158,8 @@ public class Tracks {
         if let explicitDuration = link.duration {
             duration = Double(explicitDuration)
         } else if let fileSizeInBytes = link.physicalFileLengthInBytes {
-            let fileSizeInBits = fileSizeInBytes * 8
-            duration = Double(fileSizeInBits / bitrate)
+            let fileSizeInBits = Double(fileSizeInBytes) * 8.0
+            duration = fileSizeInBits / Double(bitrate)
         } else {
             duration = 0
         }
@@ -169,7 +175,7 @@ public class Tracks {
             key: link.href
         )
     }
-
+    
     public func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
             if (track.urls?.first?.absoluteString ?? "") == href {
@@ -178,7 +184,7 @@ public class Tracks {
             return false
         })
     }
-
+    
     public func track(forKey key: String) -> (any Track)? {
         return tracks.first(where: { track in
             if track.key == key {
@@ -198,7 +204,7 @@ public class Tracks {
             return false
         }
     }
-
+    
     private func addTracksFromSpine(_ spine: [Manifest.SpineItem]) {
         for (index, item) in spine.enumerated() {
             if let track = createTrack(from: item, index: index) {
@@ -219,13 +225,13 @@ public class Tracks {
             key: item.href
         )
     }
-
+    
     public func track(forPart part: Int, sequence: Int) -> (any Track)? {
         return tracks.first(where: { track in
             return track.partNumber == part && track.chapterNumber == sequence
         })
     }
-
+    
     public func previousTrack(_ track: any Track) -> (any Track)? {
         guard let currentIndex = tracks.first(where: { $0.id == track.id
         })?.index, currentIndex > 0 else {
@@ -251,8 +257,13 @@ public class Tracks {
             track.downloadTask?.delete()
         }
     }
-    
-    private func calculateTotalDuration() {
-        self.totalDuration = tracks.reduce(0) { $0 + $1.duration }
+
+    public func duration(to position: TrackPosition) -> TimeInterval {
+        guard position.track.index >= 0 && position.track.index < tracks.count else {
+            return 0
+        }
+        
+        let tracksDuration = tracks.prefix(position.track.index).reduce(0) { $0 + $1.duration }
+        return tracksDuration + position.timestamp
     }
 }

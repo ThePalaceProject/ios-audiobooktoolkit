@@ -57,6 +57,10 @@ final class LCPDownloadTask: DownloadTask {
         // No need to download files.
     }
     
+    func assetFileStatus() -> AssetResult {
+        .unknown
+    }
+    
     /// Delete decrypted file
     func delete() {
         let fileManager = FileManager.default

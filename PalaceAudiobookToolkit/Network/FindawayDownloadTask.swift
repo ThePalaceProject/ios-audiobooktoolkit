@@ -199,6 +199,10 @@ final class FindawayDownloadTask: DownloadTask {
             self.readyToDownload = false
         }
     }
+    
+    func assetFileStatus() -> AssetResult {
+        .unknown
+    }
 }
 
 extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {

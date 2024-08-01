@@ -55,7 +55,7 @@ class AudiobookPlaybackModel: ObservableObject {
             return audiobookManager.totalDuration
         }
 
-        return audiobookManager.totalDuration - currentLocation.timestamp
+        return audiobookManager.totalDuration - currentLocation.durationToSelf()
     }
     
     var currentChapterTitle: String {
@@ -191,7 +191,6 @@ class AudiobookPlaybackModel: ObservableObject {
             self?.isWaitingForPlayer = false
         }
     }
-
 
     func move(to value: Double) {
         isWaitingForPlayer = true

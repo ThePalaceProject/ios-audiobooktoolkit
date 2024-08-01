@@ -40,7 +40,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             loadTocFromLinks(linksDictionary)
         }
         
-        if manifest.audiobookType != .findaway {
+        if manifest.audiobookType != .findaway && manifest.audiobookType != .overdrive {
             self.calculateDurations()
         }
     }
@@ -167,8 +167,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     
     func chapter(forPosition position: TrackPosition) throws -> Chapter {
         for chapter in toc {
-            let chapterDuration = chapter.duration ?? 0
-            let chapterEndPosition = try chapter.position + chapterDuration
+            let chapterDuration = chapter.duration ?? chapter.position.track.duration
+            let chapterEndPosition = chapter.position + chapterDuration
             
             // Check if the position is within the chapter's range
             if position >= chapter.position && position < chapterEndPosition {

@@ -172,7 +172,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
-        guard let task = task as? OpenAccessDownloadTask else {
+        guard let task else {
             return nil
         }
         return task.assetFileStatus()
@@ -400,7 +400,7 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
+        let newPosition = currentChapter.position + value * (currentChapter.duration ?? currentChapter.position.track.duration)
         seekTo(position: newPosition, completion: completion)
     }
     

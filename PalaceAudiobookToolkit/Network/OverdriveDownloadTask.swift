@@ -89,7 +89,7 @@ final class OverdriveDownloadTask: DownloadTask {
     }
 
     /// Directory of the downloaded file.
-    private func localDirectory() -> URL? {
+    func localDirectory() -> URL? {
         let fileManager = FileManager.default
         let cacheDirectories = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
         guard let cacheDirectory = cacheDirectories.first else {

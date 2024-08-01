@@ -3,7 +3,7 @@ import Combine
 
 let OpenAccessTaskCompleteNotification = NSNotification.Name(rawValue: "OpenAccessDownloadTaskCompleteNotification")
 
-enum AssetResult {
+public enum AssetResult {
     /// The file exists at the given URL.
     case saved([URL])
     /// The file is missing at the given URL.
