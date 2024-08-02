@@ -47,6 +47,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             if success {
                 self.insertTrackIntoQueue(track: firstTrack)
+                self.isLoaded = true
             } else {
                 self.isLoaded = false
             }
@@ -182,6 +183,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             
             if success {
+                resetPlayerQueue()
                 self.insertTrackIntoQueue(track: nextTrack)
             } else {
                 self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
