@@ -35,7 +35,7 @@ class LCPPlayer: OpenAccessPlayer {
         addPlayerObservers()
     }
     
-    public func loadInitialPlayerQueue() {
+    private func loadInitialPlayerQueue() {
         resetPlayerQueue()
         
         guard let firstTrack = tableOfContents.allTracks.first else {
@@ -46,22 +46,9 @@ class LCPPlayer: OpenAccessPlayer {
         decryptTrackIfNeeded(track: firstTrack) { [weak self] success in
             guard let self = self else { return }
             if success {
-                self.playerQueueUpdateQueue.async {
-                    let playerItems = self.buildPlayerItems(fromTracks: [firstTrack])
-                    DispatchQueue.main.async {
-                        for item in playerItems {
-                            if self.avQueuePlayer.canInsert(item, after: nil) {
-                                self.avQueuePlayer.insert(item, after: nil)
-                                self.addEndObserver(for: item)
-                            }
-                        }
-                        self.isLoaded = true
-                    }
-                }
+                self.insertTrackIntoQueue(track: firstTrack)
             } else {
-                DispatchQueue.main.async {
-                    self.isLoaded = false
-                }
+                self.isLoaded = false
             }
         }
     }
@@ -71,7 +58,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             if success {
                 self.updateQueueForTrack(position.track) {
-                    self.invokeSuperPlay(at: position, completion: completion)
+                    self.performSuperPlay(at: position, completion: completion)
                 }
             } else {
                 completion?(NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"]))
@@ -89,7 +76,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             if success {
                 self.updateQueueForTrack(newPosition.track) {
-                    self.invokeSuperSeek(to: newPosition, completion: completion)
+                    self.performSuperSeek(to: newPosition, completion: completion)
                 }
             } else {
                 completion?(nil)
@@ -97,11 +84,11 @@ class LCPPlayer: OpenAccessPlayer {
         }
     }
     
-    private func invokeSuperPlay(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+    private func performSuperPlay(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         super.play(at: position, completion: completion)
     }
     
-    private func invokeSuperSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    private func performSuperSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         super.seekTo(position: position, completion: completion)
     }
     
@@ -145,15 +132,32 @@ class LCPPlayer: OpenAccessPlayer {
             let playerItems = self.buildPlayerItems(fromTracks: [track])
             
             DispatchQueue.main.async {
-                for item in playerItems {
-                    if self.avQueuePlayer.canInsert(item, after: nil) {
-                        self.avQueuePlayer.insert(item, after: nil)
-                    }
-                }
-                self.avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+                self.insertPlayerItems(playerItems)
                 completion()
             }
         }
+    }
+    
+    private func insertTrackIntoQueue(track: any Track) {
+        playerQueueUpdateQueue.async { [weak self] in
+            guard let self = self else { return }
+            let playerItems = self.buildPlayerItems(fromTracks: [track])
+            
+            DispatchQueue.main.async {
+                self.insertPlayerItems(playerItems)
+                self.isLoaded = true
+            }
+        }
+    }
+    
+    private func insertPlayerItems(_ items: [AVPlayerItem]) {
+        for item in items {
+            if avQueuePlayer.canInsert(item, after: nil) {
+                avQueuePlayer.insert(item, after: nil)
+                addEndObserver(for: item)
+            }
+        }
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
     }
     
     @objc override func playerItemDidReachEnd(_ notification: Notification) {
@@ -161,8 +165,30 @@ class LCPPlayer: OpenAccessPlayer {
            let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
             playbackStatePublisher.send(.completed(currentChapter))
         }
+        advanceToNextTrack()
     }
-
+    
+    private func advanceToNextTrack() {
+        guard let currentTrack = currentTrackPosition?.track else {
+            return
+        }
+        
+        guard let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) else {
+            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            return
+        }
+        
+        decryptTrackIfNeeded(track: nextTrack) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                self.insertTrackIntoQueue(track: nextTrack)
+            } else {
+                self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            }
+        }
+    }
+    
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition = currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
@@ -176,7 +202,7 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             if success {
                 self.rebuildQueueForPosition(newPosition) {
-                    self.invokeSuperSeek(to: newPosition, completion: completion)
+                    self.performSuperSeek(to: newPosition, completion: completion)
                 }
             } else {
                 completion?(nil)
@@ -205,12 +231,7 @@ class LCPPlayer: OpenAccessPlayer {
             let playerItems = self.buildPlayerItems(fromTracks: tracksToLoad)
             
             DispatchQueue.main.async {
-                for item in playerItems {
-                    if self.avQueuePlayer.canInsert(item, after: nil) {
-                        self.avQueuePlayer.insert(item, after: nil)
-                        self.addEndObserver(for: item)
-                    }
-                }
+                self.insertPlayerItems(playerItems)
                 completion()
             }
         }
@@ -252,10 +273,6 @@ class LCPPlayer: OpenAccessPlayer {
         
         group.wait()
         
-        guard missingUrls.count == 0 else {
-            return .missing(missingUrls)
-        }
-        
-        return .saved(savedUrls)
+        return missingUrls.isEmpty ? .saved(savedUrls) : .missing(missingUrls)
     }
 }
