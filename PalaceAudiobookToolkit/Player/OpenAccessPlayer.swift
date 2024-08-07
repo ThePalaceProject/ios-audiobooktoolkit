@@ -12,7 +12,7 @@ import Combine
 
 let AudioInterruptionNotification =  AVAudioSession.interruptionNotification
 let AudioRouteChangeNotification =  AVAudioSession.routeChangeNotification
-        
+
 class OpenAccessPlayer: NSObject, Player {
     let avQueuePlayer: AVQueuePlayer
     var playbackStatePublisher = PassthroughSubject<PlaybackState, Never>()
@@ -20,6 +20,7 @@ class OpenAccessPlayer: NSObject, Player {
     var isPlaying: Bool {
         avQueuePlayer.rate != .zero
     }
+    private var debounceWorkItem: DispatchWorkItem?
     
     var taskCompleteNotification: Notification.Name {
         return OpenAccessTaskCompleteNotification
@@ -69,15 +70,15 @@ class OpenAccessPlayer: NSObject, Player {
         
         return try? tableOfContents.chapter(forPosition: currentTrackPosition)
     }
-
+    
     var currentTrackPosition: TrackPosition? {
         guard let currentItem = avQueuePlayer.currentItem,
               let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "") else {
             return nil
         }
-                
+        
         let currentTime = currentItem.currentTime().seconds
-
+        
         guard currentTime.isFinite else {
             return lastKnownPosition
         }
@@ -94,7 +95,7 @@ class OpenAccessPlayer: NSObject, Player {
     private var cancellables = Set<AnyCancellable>()
     public var lastKnownPosition: TrackPosition?
     private var isObservingPlayerStatus = false
-
+    
     private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
         didSet {
             handlePlayerStatusChange()
@@ -117,21 +118,6 @@ class OpenAccessPlayer: NSObject, Player {
         setupAudioSession()
         buildPlayerQueue()
     }
-
-    func play() {
-        guard isLoaded, let firstTrack = tableOfContents.allTracks.first else {
-            handlePlaybackError(.drmExpired)
-            return
-        }
-        
-        if !isDrmOk {
-            handlePlaybackError(.drmExpired)
-            return
-        }
-        
-        let trackPosition = currentTrackPosition ?? TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-        attemptToPlay(trackPosition)
-    }
     
     private func handlePlaybackError(_ error: OpenAccessPlayerError) {
         playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: error.rawValue)))
@@ -147,7 +133,7 @@ class OpenAccessPlayer: NSObject, Player {
             handlePlaybackError(.playerNotReady)
         }
     }
-
+    
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
             self?.avQueuePlayer.play()
@@ -155,12 +141,44 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
     
-    func pause() {
-        clearPositionCache()
-        avQueuePlayer.pause()
-        if let trackPosition = currentTrackPosition {
-            playbackStatePublisher.send(.stopped(trackPosition))
+    func play() {
+        debouncePlayPauseAction {
+            guard self.isLoaded, let currentTrackPosition = self.currentTrackPosition else {
+                self.handlePlaybackError(.drmExpired)
+                return
+            }
+            
+            if !self.isDrmOk {
+                self.handlePlaybackError(.drmExpired)
+                return
+            }
+            
+            self.attemptToPlay(currentTrackPosition)
         }
+    }
+    
+    func pause() {
+        debouncePlayPauseAction {
+            self.clearPositionCache()
+            self.avQueuePlayer.pause()
+            if let trackPosition = self.currentTrackPosition {
+                self.playbackStatePublisher.send(.stopped(trackPosition))
+            }
+        }
+    }
+    
+    private func debouncePlayPauseAction(action: @escaping () -> Void) {
+        debounceWorkItem?.cancel()
+        debounceWorkItem = DispatchWorkItem { [weak self] in
+            self?.synchronizedAccess(action)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: debounceWorkItem!)
+    }
+    
+    private func synchronizedAccess(_ action: () -> Void) {
+        objc_sync_enter(self)
+        defer { objc_sync_exit(self) }
+        action()
     }
     
     func unload() {
@@ -170,14 +188,14 @@ class OpenAccessPlayer: NSObject, Player {
         removePlayerObservers()
         cancellables.removeAll()
     }
-
+    
     func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
         guard let task else {
             return nil
         }
         return task.assetFileStatus()
     }
-
+    
     deinit {
         NotificationCenter.default.removeObserver(self)
         try? AVAudioSession.sharedInstance().setActive(false, options: [])
@@ -185,7 +203,7 @@ class OpenAccessPlayer: NSObject, Player {
         removePlayerObservers()
         clearPositionCache()
     }
-
+    
     func clearPositionCache() {
         lastKnownPosition = nil
     }
@@ -251,21 +269,26 @@ class OpenAccessPlayer: NSObject, Player {
         
         guard let track = trackToCheck,
               let fileStatus = assetFileStatus(track.downloadTask),
-              case .saved(let urls) = fileStatus,
-              !isPlaying else {
+              case .saved(let urls) = fileStatus else {
             return
         }
         
-        if let currentAssetURL = (avQueuePlayer.currentItem?.asset as? AVURLAsset)?.url,
-           urls.contains(currentAssetURL) {
-            rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
-        } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id {
-            buildPlayerQueue()
-        } else {
-            rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
+        if !isLoaded {
+            if let currentAssetURL = (avQueuePlayer.currentItem?.asset as? AVURLAsset)?.url,
+               urls.contains(currentAssetURL) {
+                rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
+            } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id {
+                buildPlayerQueue()
+                if let firstTrack = tableOfContents.allTracks.first {
+                    let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+                    play(at: firstTrackPosition, completion: nil)
+                }
+            } else {
+                rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
+            }
         }
     }
-
+    
     public func buildPlayerQueue() {
         resetPlayerQueue()
         
@@ -299,7 +322,7 @@ class OpenAccessPlayer: NSObject, Player {
         var desiredIndex: Int? = nil
         for (index, item) in playerItems.enumerated() {
             avQueuePlayer.insert(item, after: nil)
-            addEndObserver(for: item) 
+            addEndObserver(for: item)
             if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
                 desiredIndex = index
             }
@@ -392,7 +415,7 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
-
+    
     func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition = currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
@@ -438,7 +461,7 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
-
+    
 }
 
 extension OpenAccessPlayer {
@@ -512,7 +535,7 @@ extension OpenAccessPlayer {
             self.savePlaybackRate(rate: rate)
         }
     }
-
+    
     @objc private func handleAudioSessionInterruption(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -533,7 +556,7 @@ extension OpenAccessPlayer {
         default: ()
         }
     }
-
+    
     @objc private func handleAudioSessionRouteChange(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -564,14 +587,14 @@ extension OpenAccessPlayer {
         default: ()
         }
     }
-        
+    
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: cmTime) { success in
             completion?(success ? position : nil)
         }
     }
-
+    
     private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
         guard files.count > 1 else { return AVPlayerItem(url: files[0]) }
         
@@ -626,7 +649,7 @@ extension OpenAccessPlayer {
             handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
         }
     }
-
+    
     public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
         defer {
             if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
