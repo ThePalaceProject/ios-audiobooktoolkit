@@ -362,7 +362,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 guard let self = self else { return }
                 switch command {
                 case .playPause:
-                    self?.audiobook.player.isPlaying == true ? self?.audiobook.player.pause() : self?.audiobook.player.play()
+                    self.audiobook.player.isPlaying == true ? self.audiobook.player.pause() : self.audiobook.player.play()
                 case .skipForward:
                     self.audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval, completion: nil)
                 case .skipBackward:
