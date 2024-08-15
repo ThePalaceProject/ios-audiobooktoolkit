@@ -19,10 +19,10 @@ class AudiobookPlaybackModel: ObservableObject {
     @Published var trackErrors: [String: Error] = [:]
     @Published var coverImage: UIImage?
     @Published var toastMessage: String = ""
-    
+
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
-    
+
     @Published var currentLocation: TrackPosition?
     var selectedLocation: TrackPosition? {
         didSet {
@@ -37,15 +37,15 @@ class AudiobookPlaybackModel: ObservableObject {
     var offset: TimeInterval {
         audiobookManager.currentOffset
     }
-    
+
     var duration: TimeInterval {
         audiobookManager.currentDuration
     }
-    
+
     var timeLeft: TimeInterval {
         max(duration - offset, 0.0)
     }
-    
+
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
             return audiobookManager.totalDuration
@@ -54,7 +54,7 @@ class AudiobookPlaybackModel: ObservableObject {
         guard currentLocation.timestamp.isFinite else {
             return audiobookManager.totalDuration
         }
-        
+
         return audiobookManager.totalDuration - currentLocation.durationToSelf()
     }
     
@@ -69,7 +69,7 @@ class AudiobookPlaybackModel: ObservableObject {
             return "--"
         }
     }
-    
+
     var isPlaying: Bool {
         audiobookManager.audiobook.player.isPlaying
     }
@@ -77,13 +77,13 @@ class AudiobookPlaybackModel: ObservableObject {
     var tracks: [any Track] {
         audiobookManager.networkService.tracks
     }
-    
+
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
-        
+
         setupBindings()
         subscribeToPublisher()
         self.audiobookManager.networkService.fetch()
@@ -121,10 +121,10 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        
+
         self.audiobookManager.fetchBookmarks { _ in }
     }
-    
+
     private func setupBindings() {
         self.reachability.startMonitoring()
         self.reachability.$isConnected
@@ -135,9 +135,8 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        
     }
-    
+
     private func updateProgress() {
         playbackProgress = offset / duration
     }
@@ -158,18 +157,18 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.unload()
         subscriptions.removeAll()
     }
-    
+
     private func saveLocation() {
         if let currentLocation {
             audiobookManager.saveLocation(currentLocation)
         }
     }
-    
+
     func skipBack() {
         guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
             return
         }
-        
+
         isWaitingForPlayer = true
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
@@ -190,10 +189,10 @@ class AudiobookPlaybackModel: ObservableObject {
             self?.isWaitingForPlayer = false
         }
     }
-    
+
     func move(to value: Double) {
         isWaitingForPlayer = true
-        
+
         self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
             self?.saveLocation()

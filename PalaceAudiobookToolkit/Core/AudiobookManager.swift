@@ -35,22 +35,22 @@ public protocol AudiobookBookmarkDelegate {
 
 public protocol AudiobookManager {
     typealias SaveBookmarkResult = Result<TrackPosition, BookmarkError>
-    
+
     var bookmarkDelegate: AudiobookBookmarkDelegate? { get }
     var networkService: AudiobookNetworkService { get }
     var metadata: AudiobookMetadata { get }
     var audiobook: Audiobook { get }
     var bookmarks: [TrackPosition] { get }
     var needsDownloadRetry: Bool { get }
-    
+
     var sleepTimer: SleepTimer { get }
     var audiobookBookmarksPublisher: CurrentValueSubject<[TrackPosition], Never> { get }
-    
+
     var currentOffset: Double { get }
     var currentDuration: Double { get }
     var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
-    
+
     static func setLogHandler(_ handler: @escaping LogHandler)
     
     func play()
@@ -58,7 +58,7 @@ public protocol AudiobookManager {
     func unload()
     func downloadProgress(for chapter: Chapter) -> Double
     func retryDownload()
-    
+
     @discardableResult func saveLocation(_ location: TrackPosition) -> Result<Void, Error>?
     func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?)
     func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
@@ -107,27 +107,27 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     public var currentOffset: Double {
-        return audiobook.player.currentTrackPosition?.timestamp ?? 0.0
+        audiobook.player.currentTrackPosition?.timestamp ?? 0.0
     }
     
     public var currentDuration: Double {
-        return currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
+        currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
     }
     
     public var totalDuration: Double {
-        return audiobook.tableOfContents.tracks.totalDuration
+        audiobook.tableOfContents.tracks.totalDuration
     }
     
     public var currentChapter: Chapter? {
-        return audiobook.player.currentChapter
+        audiobook.player.currentChapter
     }
     
     public lazy var sleepTimer: SleepTimer = {
-        return SleepTimer(player: self.audiobook.player)
+        SleepTimer(player: self.audiobook.player)
     }()
-    
+
     public var needsDownloadRetry: Bool = false
-    
+
     private(set) public var timer: Timer?
     
     public init(metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService) {
@@ -214,22 +214,22 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     public func downloadProgress(for chapter: Chapter) -> Double {
-        return tableOfContents.downloadProgress(for: chapter)
+        tableOfContents.downloadProgress(for: chapter)
     }
     
     public func retryDownload() {
         needsDownloadRetry = false
         networkService.fetchUndownloadedTracks()
     }
-    
+
     public func updateAudiobook(with tracks: [any Track]) {
         networkService = DefaultAudiobookNetworkService(tracks: tracks)
     }
-    
+
     public func play() {
         audiobook.player.play()
     }
-    
+
     public func pause() {
         audiobook.player.pause()
     }
@@ -256,7 +256,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         semaphore.wait()
         return result
     }
-    
+
     public func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?) {
         guard bookmarks.first(where: { $0 == audiobook.player.currentTrackPosition }) == nil else {
             ATLog(.error, "Bookmark already saved")
