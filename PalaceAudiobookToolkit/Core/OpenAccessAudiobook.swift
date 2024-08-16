@@ -1,83 +1,41 @@
-final class OpenAccessAudiobook: Audiobook {
-    let player: Player
-    var spine: [SpineElement]
-    let uniqueIdentifier: String
-    var token: String? = nil
-    var annotationsId: String { uniqueIdentifier }
+//
+//  OpenAccessAudiobook.swift
+//  PalaceAudiobookToolkit
+//
+//  Created by Maurice Carrier on 3/25/24.
+//  Copyright © 2024 The Palace Project. All rights reserved.
+//
 
-    private var drmData: [String: Any]
-    
-    var drmStatus: DrmStatus {
+import Foundation
+
+public class OpenAccessAudiobook: Audiobook {
+    public var token: String?
+
+    public override var drmStatus: DRMStatus {
         get {
-            // Avoids force unwrapping
-            // Should be save since the initializer should always set this value
-            // Access to `drmData` is private and can only be modified by internal code
-            return (drmData["status"] as? DrmStatus) ?? DrmStatus.succeeded
+            return (drmData["status"] as? DRMStatus) ?? DRMStatus.succeeded
         }
         set {
             drmData["status"] = newValue
-            player.isDrmOk = (DrmStatus.succeeded == newValue)
+            player.isDrmOk = (DRMStatus.succeeded == newValue)
         }
     }
+    
+    private var drmData: [String: Any] = [:]
 
-    @available(*, deprecated, message: "Use init?(JSON: Any?, token: String?) instead")
-    public required convenience init?(JSON: Any?, audiobookId: String?) {
-        self.init(JSON: JSON, token: nil)
-    }
+    public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String?) {
+        super.init(manifest: manifest, bookIdentifier: bookIdentifier, decryptor: decryptor, token: token)
 
-    public init?(JSON: Any?, token: String?) {
-        drmData = [String: Any]()
-        drmData["status"] = DrmStatus.succeeded
-        guard let payload = JSON as? [String: Any],
-        let metadata = payload["metadata"] as? [String: Any],
-        let identifier = metadata["identifier"] as? String,
-        let payloadSpine = ((payload["readingOrder"] as? [Any]) ?? (payload["spine"] as? [Any])) else {
-            ATLog(.error, "OpenAccessAudiobook failed to init from JSON: \n\(JSON ?? "nil")")
-            return nil
-        }
+        self.drmData["status"] = DRMStatus.succeeded
         self.token = token
-
-        // Feedbook DRM Check
-        if !FeedbookDRMProcessor.processManifest(payload, drmData: &drmData) {
-            ATLog(.error, "FeedbookDRMProcessor failed to pass JSON: \n\(JSON ?? "nil")")
+        
+        if !FeedbookDRMProcessor.processManifest(manifest.toJSONDictionary()!, drmData: &drmData) {
+            ATLog(.error, "FeedbookDRMProcessor failed processing")
             return nil
-        }
-
-        let mappedSpine: [OpenAccessSpineElement] = payloadSpine.enumerated().compactMap { (tupleItem:(offset: Int, element: Any)) -> OpenAccessSpineElement? in
-            do {
-                return try OpenAccessSpineElement(
-                    JSON: tupleItem.element,
-                    index: UInt(tupleItem.offset),
-                    audiobookID: identifier,
-                    token: token
-                )
-            } catch {
-                ATLog(.error, "Failed to map element at index \(tupleItem.offset): \(error.localizedDescription)")
-                return nil
-            }
-        }.sorted { $0.chapterNumber < $1.chapterNumber }
-    
-        if (mappedSpine.count == 0 || mappedSpine.count != payloadSpine.count) {
-            ATLog(.error, "Failure to create any or all spine elements from the manifest.")
-            return nil
-        }
-        self.spine = mappedSpine
-        self.uniqueIdentifier = identifier
-        guard let cursor = Cursor(data: self.spine) else {
-            ATLog(.error, "Cursor could not be cast to Cursor<OpenAccessSpineElement>")
-            return nil
-        }
-        self.player = OpenAccessPlayer(cursor: cursor, audiobookID: uniqueIdentifier, drmOk: (drmData["status"] as? DrmStatus) == DrmStatus.succeeded)
-    }
-
-    public func deleteLocalContent() {
-        for element in self.spine {
-            let task = element.downloadTask
-            task.delete()
         }
     }
     
-    public func checkDrmAsync() {
+    public override func checkDrmAsync() {
         FeedbookDRMProcessor.performAsyncDrm(book: self, drmData: drmData)
     }
 }

@@ -8,140 +8,142 @@
 
 import XCTest
 @testable import PalaceAudiobookToolkit
-
-class RetryAfterErrorAudiobookNetworkServiceDelegate: AudiobookNetworkServiceDelegate {
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateOverallDownloadProgress progress: Float) { }
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didCompleteDownloadFor spineElement: SpineElement) { }
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didUpdateProgressFor spineElement: SpineElement) { }
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didDeleteFileFor spineElement: SpineElement) { }
-    
-    func audiobookNetworkService(_ audiobookNetworkService: AudiobookNetworkService, didReceive error: NSError?, for spineElement: SpineElement) {
-        audiobookNetworkService.fetch()
-    }
-}
+import Combine
 
 class AudiobookNetworkServiceTest: XCTestCase {
     
-    func testDownloadProgressWithEmptySpine() {
-        let service = DefaultAudiobookNetworkService(spine: [])
-        XCTAssertEqual(service.downloadProgress, 0)
+    var cancellables: Set<AnyCancellable>!
+    
+    override func setUp() {
+        super.setUp()
+        cancellables = []
     }
     
-    func testDownloadProgressWithTwoSpineElements() {
-        let task1 = DownloadTaskMock(progress: 0.50, key: "http://chap1", fetchClosure: nil)
-        let chapter1 = ChapterLocation(number: 1, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The Start", audiobookID: "somebook")
-        let spine1 = SpineElementMock(key: task1.key, downloadTask: task1, chapter: chapter1)
-
-        let task2 = DownloadTaskMock(progress: 0.25, key: "http://chap2", fetchClosure: nil)
-        let chapter2 = ChapterLocation(number: 2, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The End", audiobookID: "somebook")
-        let spine2 = SpineElementMock(key: task2.key, downloadTask: task2, chapter: chapter2)
-
-        let service = DefaultAudiobookNetworkService(spine: [spine1, spine2])
-        XCTAssertEqual(service.downloadProgress, 0.375, accuracy: 0.001)
+    override func tearDown() {
+        cancellables = nil
+        super.tearDown()
     }
-
-    func testDownloadInSerialOrder() {
-        let expectTask1ToFetch = expectation(description: "Task 1 was fetched")
-        let fetchClosureForTask1 = { (task: DownloadTask) -> Void in
-            expectTask1ToFetch.fulfill()
-            task.delegate?.downloadTaskReadyForPlayback(task)
-        }
     
-        let expectTask2ToFetch = expectation(description: "Task 2 was fetched")
-        let fetchClosureForTask2 = { (task: DownloadTask) -> Void in
-            expectTask2ToFetch.fulfill()
-            task.delegate?.downloadTaskReadyForPlayback(task)
-        }
-
-        let task1 = DownloadTaskMock(progress: 0, key: "http://chap1", fetchClosure: fetchClosureForTask1)
-        let chapter1 = ChapterLocation(number: 1, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The Start", audiobookID: "somebook")
-        let spine1 = SpineElementMock(key: task1.key, downloadTask: task1, chapter: chapter1)
-    
-        let task2 = DownloadTaskMock(progress: 0, key: "http://chap2", fetchClosure: fetchClosureForTask2)
-        let chapter2 = ChapterLocation(number: 2, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The End", audiobookID: "somebook")
-        let spine2 = SpineElementMock(key: task2.key, downloadTask: task2, chapter: chapter2)
-
-        let service = DefaultAudiobookNetworkService(spine: [spine1, spine2])
+    func testDownloadProgressWithEmptyTracks() {
+        let service = DefaultAudiobookNetworkService(tracks: [])
+        let expectation = XCTestExpectation(description: "Expect no download state updates")
         
-        service.fetch()
-        wait(for: [expectTask1ToFetch, expectTask2ToFetch], timeout: 5, enforceOrder: true)
+        service.downloadStatePublisher
+            .sink(receiveValue: { state in
+                XCTFail("Should not receive any download state updates")
+            })
+            .store(in: &cancellables)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            expectation.fulfill()
+        }
+        
+        wait(for: [expectation], timeout: 2)
     }
-
-    /// This test confirms that we stop requesting files after we hit an error.
-    /// It also confirms that every time we call fetch, it starts at the first
-    /// spine element.
-    func testFetchAttemptsEveryFile() {
-        // firstFetchAttempt is a flag for which attempt
-        // the network service is making.
-        // This variable is mutable so it can be modified
-        // by the closures called within the download tasks.
-        var firstFetchAttempt = true
-        let expectTask1ToFetchFirstTime = expectation(
-            description: "Task 1 was fetched once"
-        )
-        let expectTask1ToFetchSecondTime = expectation(
-            description: "Task 1 was fetched twice"
-        )
-        let fetchClosureForTask1 = { (task: DownloadTask) -> Void in
-            if firstFetchAttempt {
-                expectTask1ToFetchFirstTime.fulfill()
-            } else {
-                expectTask1ToFetchSecondTime.fulfill()
-            }
-            task.delegate?.downloadTaskReadyForPlayback(task)
+    
+    func testDownloadProgressWithTwoTracks() {
+        // Prepare
+        let track1 = TrackMock(progress: 0.50, key: "track1")
+        let track2 = TrackMock(progress: 0.25, key: "track2")
+        
+        let service = DefaultAudiobookNetworkService(tracks: [track1, track2])
+        let expectation = XCTestExpectation(description: "Expect correct overall download progress")
+        
+        // This will collect all progress updates
+        var receivedProgress: [Float] = []
+        
+        // Observe changes
+        service.downloadStatePublisher
+            .sink(receiveValue: { state in
+                switch state {
+                case .overallProgress(let progress):
+                    receivedProgress.append(progress)
+                    if receivedProgress.contains(0.375) {
+                        expectation.fulfill()
+                    }
+                default:
+                    break
+                }
+            })
+            .store(in: &self.cancellables)
+        
+        // Simulate fetch sequentially
+        DispatchQueue.global().async {
+            track1.simulateProgressUpdate(0.50)
+            track2.simulateProgressUpdate(0.25)
         }
         
-        let expectTask2ToFail = expectation(
-            description: "Task 2 hit an error"
-        )
-        let expectTask2ToFetch = expectation(
-            description: "Task 2 was fetched"
-        )
-        let fetchClosureForTask2 = { (task: DownloadTask) -> Void in
-            if firstFetchAttempt {
-                // We expect to retry on an error,
-                // so we change the flag so we are
-                // no longer in the first attempt.
-                firstFetchAttempt = false
-                expectTask2ToFail.fulfill()
-                task.delegate?.downloadTaskFailed(task, withError: NSError())
-            } else {
-                expectTask2ToFetch.fulfill()
-                task.delegate?.downloadTaskReadyForPlayback(task)
-            }
-        }
-
-        let expectTask3ToFetch = expectation(description: "Task 3 was fetched")
-        let fetchClosureForTask3 = { (task: DownloadTask) -> Void in
-            // This should not be hit until the second request,
-            // so there is no need to check the flag.
-            expectTask3ToFetch.fulfill()
-            task.delegate?.downloadTaskReadyForPlayback(task)
-        }
-
-        let task1 = DownloadTaskMock(progress: 0, key: "http://chap1", fetchClosure: fetchClosureForTask1)
-        let chapter1 = ChapterLocation(number: 1, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The Start", audiobookID: "somebook")
-        let spine1 = SpineElementMock(key: task1.key, downloadTask: task1, chapter: chapter1)
-        
-        let task2 = DownloadTaskMock(progress: 0, key: "http://chap2", fetchClosure: fetchClosureForTask2)
-        let chapter2 = ChapterLocation(number: 2, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The Middle", audiobookID: "somebook")
-        let spine2 = SpineElementMock(key: task2.key, downloadTask: task2, chapter: chapter2)
-        
-        let task3 = DownloadTaskMock(progress: 0, key: "http://chap2", fetchClosure: fetchClosureForTask3)
-        let chapter3 = ChapterLocation(number: 3, part: 0, duration: 10, startOffset: 0, playheadOffset: 0, title: "The End", audiobookID: "somebook")
-        let spine3 = SpineElementMock(key: task3.key, downloadTask: task3, chapter: chapter3)
-        
-        let service = DefaultAudiobookNetworkService(spine: [spine1, spine2, spine3])
-        let serviceDelegate = RetryAfterErrorAudiobookNetworkServiceDelegate()
-        service.registerDelegate(serviceDelegate)
-        service.fetch()
-
-        wait(for: [
-            expectTask1ToFetchFirstTime,
-            expectTask2ToFail,
-            expectTask1ToFetchSecondTime,
-            expectTask2ToFetch,
-            expectTask3ToFetch
-        ], timeout: 10, enforceOrder: true)
+        // Wait for the results
+        wait(for: [expectation], timeout: 5)
     }
 }
+
+
+extension AudiobookNetworkServiceTest {
+    class TrackMock: Track {
+        var key: String
+        var downloadTask: DownloadTask?
+        var title: String?
+        var index: Int = 0
+        var duration: TimeInterval = 0
+        var partNumber: Int?
+        var chapterNumber: Int?
+        var urls: [URL]?
+        
+        required convenience init(
+            manifest: PalaceAudiobookToolkit.Manifest,
+            urlString: String?,
+            audiobookID: String,
+            title: String?,
+            duration: Double,
+            index: Int,
+            token: String?,
+            key: String?
+        ) throws {
+            self.init(progress: 0.0, key: title ?? "")
+        }
+        
+        init(progress: Float, key: String) {
+            self.key = key
+            self.downloadTask = DownloadTaskMock(progress: progress, key: key, fetchClosure: nil)
+        }
+        
+        func simulateProgressUpdate(_ progress: Float) {
+            (downloadTask as? DownloadTaskMock)?.simulateProgress(progress)
+        }
+    }
+    
+    class DownloadTaskMock: DownloadTask {
+        var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+        var downloadProgress: Float
+        var key: String
+        var fetchClosure: ((DownloadTaskMock) -> Void)?
+        var needsRetry: Bool = false
+
+        init(progress: Float, key: String, fetchClosure: ((DownloadTaskMock) -> Void)?) {
+            self.downloadProgress = progress
+            self.key = key
+            self.fetchClosure = fetchClosure
+        }
+        
+        func fetch() {
+            fetchClosure?(self)
+        }
+        
+        func delete() {
+            statePublisher.send(.deleted)
+        }
+        
+        func simulateProgress(_ progress: Float) {
+            statePublisher.send(.progress(progress))
+        }
+    }
+}
+
+extension Manifest {
+    static var mockManifest: Manifest {
+        try! Manifest.from(jsonFileName: ManifestJSON.flatland.rawValue, bundle: Bundle(for: AudiobookNetworkServiceTest.self))
+    }
+}
+
+

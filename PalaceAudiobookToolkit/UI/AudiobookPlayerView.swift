@@ -18,7 +18,6 @@ struct AudiobookPlayerView: View {
     
     @State private var uiTabarController: UITabBarController?
     @ObservedObject var playbackModel: AudiobookPlaybackModel
-    @State private var selectedLocation: ChapterLocation = .emptyLocation
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
     @State private var toastMessage: String = ""
     @State private var showPlaybackSpeed = false
@@ -72,7 +71,7 @@ struct AudiobookPlayerView: View {
                                     .multilineTextAlignment(.center)
                                     .lineLimit(2)
                                     .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
-
+                                
                                 Spacer()
                                 Text("\(timeLeftText)")
                                     .palaceFont(.caption)
@@ -98,6 +97,10 @@ struct AudiobookPlayerView: View {
                 }
                 
                 bookmarkAddedToastView
+                
+                if !playbackModel.audiobookManager.audiobook.player.isLoaded {
+                    LoadingView()
+                }
             }
             .navigationBarTitle(Text(""), displayMode: .inline)
             .navigationBarItems(trailing: tocButton)
@@ -105,11 +108,6 @@ struct AudiobookPlayerView: View {
         }
         .palaceFont(.body)
         .navigationViewStyle(.stack)
-        .onChange(of: selectedLocation) { newValue in
-            playbackModel.audiobookManager.audiobook.player.playAtLocation(newValue) { error in
-                // present error
-            }
-        }
     }
     
     private func showToast(message: String) {
@@ -124,7 +122,7 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var tocButton: some View {
         NavigationLink {
-            AudiobookNavigationView(model: playbackModel, selectedLocation: $selectedLocation)
+            AudiobookNavigationView(model: playbackModel)
         } label: {
             ToolkitImage(name: "table_of_contents", renderingMode: .template)
                 .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
@@ -146,7 +144,7 @@ struct AudiobookPlayerView: View {
         .foregroundColor(Color(.label))
         .padding(.leading, -6)
     }
-
+    
     @ViewBuilder
     private func skipButton(_ imageName: String, textLabel: String, accessibilityString: String, action: @escaping () -> Void) -> some View {
         // Button size: 66 compact, 96 regular
@@ -321,7 +319,7 @@ struct AudiobookPlayerView: View {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)
                         }
-                        .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
+                            .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
                     )
             }
             .frame(minHeight: 40)
@@ -340,25 +338,7 @@ struct AudiobookPlayerView: View {
     typealias DisplayStrings = Strings.AudiobookPlayerViewController
     
     private var chapterTitle: String {
-        guard let currentLocation = playbackModel.currentLocation else {
-            return "--"
-        }
-        let defaultTitleFormat = DisplayStrings.trackAt
-        let indexString = oneBasedSpineIndex() ?? "--"
-        return currentLocation.title ?? String(format: defaultTitleFormat, indexString)
-    }
-    
-    private func oneBasedSpineIndex() -> String? {
-        guard let currentLocation = playbackModel.currentLocation else {
-            return nil
-        }
-        let spine = playbackModel.audiobookManager.audiobook.spine
-        for index in 0..<spine.count {
-            if currentLocation.inSameChapter(other: spine[index].chapter) {
-                return String(index + 1)
-            }
-        }
-        return nil
+        playbackModel.currentChapterTitle
     }
     
     private var playbackRateText: String {
@@ -449,14 +429,15 @@ extension AudiobookPlayerView {
     fileprivate init?() {
         guard let resource = Bundle.audiobookToolkit()?.url(forResource: "alice_manifest", withExtension: "json"),
               let audiobookData = try? Data(contentsOf: resource),
-              let audiobookJSON = try? JSONSerialization.jsonObject(with: audiobookData) as? [String: Any],
-              let audiobook = OpenAccessAudiobook(JSON: audiobookJSON, token: nil) else
+              let manifest = try? JSONDecoder().decode(Manifest.self, from: audiobookData),
+              let audiobook = OpenAccessAudiobook(manifest: manifest, bookIdentifier: "test_book_id", token: nil) else
         {
             return nil
         }
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
-            audiobook: audiobook
+            audiobook: audiobook,
+            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
         )
         self.playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
     }

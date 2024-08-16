@@ -53,7 +53,7 @@ struct Strings {
                                                      comment: "Notifies user that a bookmark has been set")
         static let destinationAvailabilityAccessiblityHint = NSLocalizedString("If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", value: "If another device is available, send the audio over Bluetooth or Airplay. Otherwise do nothing.", comment: "Longer description to describe action of the button.")
         static let timeToPause = NSLocalizedString("%@ until playback pauses", value: "%@ until playback pauses", comment: "localized time until playback pauses, for voice over")
-        static let trackAt = NSLocalizedString("Track %@", value: "Track %@", comment: "Default track title")
+        static let trackAt = NSLocalizedString("Track %d", value: "Track %d", comment: "Default track title")
         static let fileNumber = NSLocalizedString("%@ (file %@ of %d)", value: "%@ (file %@ of %d)", comment: "Current chapter and the amount of chapters left in the book")
         static let problemHasOccurred = NSLocalizedString("A Problem Has Occurred",
                                                           value: "A Problem Has Occurred",
@@ -73,8 +73,8 @@ struct Strings {
     
     struct Generic {
         static let downloading = NSLocalizedString("Downloading:", value: "Downloading:", comment: "")
+        static let loading = NSLocalizedString("Loading...", value: "Loading...", comment: "")
         static let downloadingFormatted = NSLocalizedString("Downloading: %@%%", value: "Downloading: %@%%", comment: "The percentage of the chapter that has been downloaded, formatting for string should be localized at this point.")
-        static let loading = NSLocalizedString("Downloading: %@%%", value: "Downloading: %@%%", comment: "The percentage of the chapter that has been downloaded, formatting for string should be localized at this point.")
         static let pause = NSLocalizedString("Pause", value: "Pause", comment: "Pause")
         static let play = NSLocalizedString("Play", value: "Play", comment: "Play")
         static let sec = NSLocalizedString("sec", value: "sec", comment: "Abbreviations for seconds")
