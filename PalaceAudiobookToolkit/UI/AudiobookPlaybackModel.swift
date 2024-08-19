@@ -31,8 +31,9 @@ class AudiobookPlaybackModel: ObservableObject {
             }
         }
     }
-    
+
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+    
     
     var offset: TimeInterval {
         audiobookManager.currentOffset
@@ -77,7 +78,7 @@ class AudiobookPlaybackModel: ObservableObject {
     var tracks: [any Track] {
         audiobookManager.networkService.tracks
     }
-
+        
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
@@ -135,12 +136,13 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
+        
     }
 
     private func updateProgress() {
-        playbackProgress = offset / duration
+        playbackProgress = offset/duration
     }
-    
+
     deinit {
         self.reachability.stopMonitoring()
         self.audiobookManager.audiobook.player.unload()

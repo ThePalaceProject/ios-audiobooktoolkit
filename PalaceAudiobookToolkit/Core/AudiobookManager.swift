@@ -45,12 +45,12 @@ public protocol AudiobookManager {
 
     var sleepTimer: SleepTimer { get }
     var audiobookBookmarksPublisher: CurrentValueSubject<[TrackPosition], Never> { get }
-
+    
     var currentOffset: Double { get }
     var currentDuration: Double { get }
     var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
-
+    
     static func setLogHandler(_ handler: @escaping LogHandler)
     
     func play()
@@ -376,3 +376,4 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             .store(in: &cancellables)
     }
 }
+
