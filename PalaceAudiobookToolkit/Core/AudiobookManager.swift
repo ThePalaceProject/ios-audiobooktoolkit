@@ -244,46 +244,43 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         var result: Result<Void, Error>? = nil
         let semaphore = DispatchSemaphore(value: 0)
         
-        bookmarkDelegate?.saveListeningPosition(at: location) { serverId in
-            result = serverId != nil ? .success(()) : .failure(NSError(domain: "com.example.error", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to post current location."]))
-            
-            if case .failure = result {
+
+        bookmarkDelegate?.saveListeningPosition(at: location) { (serverId: String?) in
+            if let _ = serverId {
+                result = .success(())
+            } else {
+                result = .failure(NSError(domain: OpenAccessPlayerErrorDomain, code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to post current location."]))
                 ATLog(.error, "Failed to post current location.")
             }
-            semaphore.signal()
         }
-        
-        semaphore.wait()
         return result
     }
 
     public func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?) {
-        guard bookmarks.first(where: { $0 == audiobook.player.currentTrackPosition }) == nil else {
+        guard bookmarks.first(where: { $0 == location }) == nil else {
             ATLog(.error, "Bookmark already saved")
             completion?(.failure(.bookmarkAlreadyExists))
             return
         }
         
-        guard let currentLocation = audiobook.player.currentTrackPosition else {
-            ATLog(.error, "Failed to save to post bookmark at current location.")
-            completion?(.failure(.bookmarkFailedToSave))
-            return
-        }
-        
-        bookmarkDelegate?.saveBookmark(at: currentLocation) { savedLocation in
-            if let savedLocation {
-                self.bookmarks.append(savedLocation)
-                completion?(.success(savedLocation))
-            } else {
+        bookmarkDelegate?.saveBookmark(at: location) { [weak self] savedLocation in
+            guard let savedLocation = savedLocation else {
                 completion?(.failure(.bookmarkFailedToSave))
+                return
             }
+            self?.bookmarks.append(savedLocation)
+            completion?(.success(savedLocation))
         }
     }
     
     public func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?) {
         bookmarkDelegate?.deleteBookmark(at: location) { [weak self] success in
+            guard success else {
+                completion?(false)
+                return
+            }
             self?.bookmarks.removeAll { $0 == location }
-            completion?(success)
+            completion?(true)
         }
     }
     
