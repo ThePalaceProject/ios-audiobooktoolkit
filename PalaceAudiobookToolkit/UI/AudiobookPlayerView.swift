@@ -16,10 +16,9 @@ struct AudiobookPlayerView: View {
     @Environment(\.presentationMode) private var presentationMode
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
-    @State private var uiTabarController: UITabBarController?
     @ObservedObject var playbackModel: AudiobookPlaybackModel
     @ObservedObject private var showToast = BoolWithDelay(delay: 3)
-    @State private var toastMessage: String = ""
+    
     @State private var showPlaybackSpeed = false
     @State private var showSleepTimer = false
     
@@ -39,53 +38,51 @@ struct AudiobookPlayerView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
-                    Group {
-                        downloadProgressView(value: playbackModel.overallDownloadProgress)
-                        
-                        VStack {
-                            Text(playbackModel.audiobookManager.metadata.title ?? "")
-                                .palaceFont(.headline)
-                                .accessibilityLabel(Strings.Accessibility.audiobookTitleLabel)
-                            Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
-                                .palaceFont(.body)
-                                .accessibilityLabel(Strings.Accessibility.audiobookAuthorsLabel)
-                        }
-                        
-                        VStack(spacing: 5) {
-                            Text(timeLeftInBookText)
-                                .palaceFont(.caption)
-                                .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
-                            
-                            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
-                                playbackModel.move(to: newValue)
-                            }
-                            .padding(.horizontal)
-                            
-                            HStack(alignment: .firstTextBaseline) {
-                                Text("\(playheadOffsetText)")
-                                    .palaceFont(.caption)
-                                    .accessibilityLabel(Strings.Accessibility.audiobookTimeElapsedLabel)
-                                Spacer()
-                                Text(chapterTitle)
-                                    .palaceFont(.headline)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
-                                
-                                Spacer()
-                                Text("\(timeLeftText)")
-                                    .palaceFont(.caption)
-                                    .accessibilityLabel(Strings.Accessibility.audiobookChapterTimeLeftLabel)
-                            }
-                            .padding(.horizontal)
-                        }
-                        
-                        Spacer()
-                        
-                        ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
-                            .padding(.horizontal)
+                    downloadProgressView(value: playbackModel.overallDownloadProgress)
+                    
+                    VStack {
+                        Text(playbackModel.audiobookManager.metadata.title ?? "")
+                            .palaceFont(.headline)
+                            .accessibilityLabel(Strings.Accessibility.audiobookTitleLabel)
+                        Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
+                            .palaceFont(.body)
+                            .accessibilityLabel(Strings.Accessibility.audiobookAuthorsLabel)
                     }
-                    .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
+                    
+                    VStack(spacing: 5) {
+                        Text(timeLeftInBookText)
+                            .palaceFont(.caption)
+                            .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
+                        
+                        PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
+                            playbackModel.move(to: newValue)
+                        }
+                        .padding(.horizontal)
+                        
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("\(playheadOffsetText)")
+                                .palaceFont(.caption)
+                                .accessibilityLabel(Strings.Accessibility.audiobookTimeElapsedLabel)
+                            Spacer()
+                            Text(chapterTitle)
+                                .palaceFont(.headline)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
+                            
+                            Spacer()
+                            Text("\(timeLeftText)")
+                                .palaceFont(.caption)
+                                .accessibilityLabel(Strings.Accessibility.audiobookChapterTimeLeftLabel)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    Spacer()
+                    
+                    ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
+                        .padding(.horizontal)
+                        .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
                     
                     Spacer()
                     
@@ -93,7 +90,6 @@ struct AudiobookPlayerView: View {
                         .padding(.bottom)
                     
                     controlPanelView
-                    
                 }
                 
                 bookmarkAddedToastView
@@ -112,7 +108,7 @@ struct AudiobookPlayerView: View {
     
     private func showToast(message: String) {
         Task {
-            toastMessage = message
+            playbackModel.toastMessage = message
             showToast.value = true
         }
     }
@@ -218,7 +214,7 @@ struct AudiobookPlayerView: View {
     @ViewBuilder
     private var bookmarkAddedToastView: some View {
         HStack {
-            Text(toastMessage)
+            Text(playbackModel.toastMessage)
                 .multilineTextAlignment(.leading)
             Spacer()
             Button {
@@ -270,9 +266,6 @@ struct AudiobookPlayerView: View {
     private var controlPanelView: some View {
         VStack {
             HStack {
-                // Playback speed
-                // This makes buttons remain at the same position
-                // when the size of one changes
                 Spacer()
                     .overlay(
                         Button {
@@ -287,14 +280,12 @@ struct AudiobookPlayerView: View {
                             .accessibility(label: Text(Strings.Accessibility.playbackSpeedButton))
                     )
                 
-                // AirPlay
                 Spacer()
                     .overlay(
                         AVRoutePickerViewWrapper()
                             .accessibility(label: Text(Strings.Accessibility.airplaybutton))
                     )
                 
-                // Sleep Timer
                 Spacer()
                     .overlay(
                         Button {
@@ -310,7 +301,6 @@ struct AudiobookPlayerView: View {
                     )
                 Spacer()
                     .overlay(
-                        // Bookmarks
                         Button {
                             playbackModel.addBookmark { error in
                                 showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?.localizedDescription ?? "")
@@ -351,7 +341,6 @@ struct AudiobookPlayerView: View {
             return HumanReadablePlaybackRate(rate: playbackModel.audiobookManager.audiobook.player.playbackRate).value
         }
     }
-    
     
     private var sleepTimerDefaultText = "☾"
     
