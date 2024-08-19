@@ -242,8 +242,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     @discardableResult
     public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
         var result: Result<Void, Error>? = nil
-        let semaphore = DispatchSemaphore(value: 0)
-        
 
         bookmarkDelegate?.saveListeningPosition(at: location) { (serverId: String?) in
             if let _ = serverId {
