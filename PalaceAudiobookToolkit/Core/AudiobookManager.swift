@@ -273,8 +273,13 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     public func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?) {
         bookmarkDelegate?.deleteBookmark(at: location) { [weak self] success in
+            guard success else {
+                completion?(false)
+                return
+            }
+            
             self?.bookmarks.removeAll { $0 == location }
-            completion?(success)
+            completion?(true)
         }
     }
     
