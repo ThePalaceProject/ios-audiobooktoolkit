@@ -485,7 +485,7 @@ extension OpenAccessPlayer {
             name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
         )
         
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowAirPlay])
         try? AVAudioSession.sharedInstance().setActive(true)
     }
     

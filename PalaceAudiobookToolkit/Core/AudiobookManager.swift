@@ -177,7 +177,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     private func setupNowPlayingInfoTimer() {
-        Timer.publish(every: 1, on: .main, in: .common)
+        let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
+        Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .receive(on: DispatchQueue.global(qos: .background))
             .map { [weak self] _ in self?.audiobook.player.currentTrackPosition }
