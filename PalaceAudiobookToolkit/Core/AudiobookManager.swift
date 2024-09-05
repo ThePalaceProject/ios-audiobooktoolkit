@@ -98,8 +98,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public var statePublisher = PassthroughSubject<AudiobookManagerState, Never>()
     public var audiobookBookmarksPublisher = CurrentValueSubject<[TrackPosition], Never>([])
     private var mediaControlPublisher: MediaControlPublisher
-    
+    private var playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate?
     public var playbackCompletionHandler: (() -> ())?
+
     public static let skipTimeInterval: TimeInterval = 30
     
     public var tableOfContents: AudiobookTableOfContents {
@@ -130,12 +131,18 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     private(set) public var timer: Timer?
     
-    public init(metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService) {
+    public init(
+        metadata: AudiobookMetadata,
+        audiobook: Audiobook,
+        networkService: AudiobookNetworkService,
+        playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate? = nil
+    ) {
         self.metadata = metadata
         self.audiobook = audiobook
         self.networkService = networkService
+        self.playbackTrackerDelegate = playbackTrackerDelegate
         self.mediaControlPublisher = MediaControlPublisher()
-        
+
         super.init()
         setupBindings()
         subscribeToPlayer()
@@ -227,14 +234,17 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
 
     public func play() {
+        playbackTrackerDelegate?.playbackStarted()
         audiobook.player.play()
     }
 
     public func pause() {
+        playbackTrackerDelegate?.playbackStopped()
         audiobook.player.pause()
     }
     
     public func unload() {
+        playbackTrackerDelegate?.playbackStopped()
         audiobook.player.unload()
         cancellables.removeAll()
     }
@@ -330,23 +340,28 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     private func handlePlaybackBegan(_ trackPosition: TrackPosition) {
         waitingForPlayer = false
         statePublisher.send(.playbackBegan(trackPosition))
+        playbackTrackerDelegate?.playbackStarted()
     }
     
     private func handlePlaybackStopped(_ trackPosition: TrackPosition) {
         waitingForPlayer = false
         statePublisher.send(.playbackStopped(trackPosition))
+        playbackTrackerDelegate?.playbackStopped()
     }
     
     private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error: Error?) {
         statePublisher.send(.playbackFailed(trackPosition))
+        playbackTrackerDelegate?.playbackStopped()
     }
     
     private func handlePlaybackCompleted(_ chapter: Chapter) {
         waitingForPlayer = false
+        playbackTrackerDelegate?.playbackStopped()
         statePublisher.send(.playbackStopped(chapter.position))
     }
     
     private func handlePlayerUnloaded() {
+        playbackTrackerDelegate?.playbackStopped()
         mediaControlPublisher.tearDown()
         timer?.invalidate()
         statePublisher.send(.playbackUnloaded)
