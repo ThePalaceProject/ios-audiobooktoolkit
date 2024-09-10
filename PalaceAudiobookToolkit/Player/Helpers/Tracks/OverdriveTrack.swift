@@ -52,7 +52,7 @@ class OverdriveTrack: Track {
         self.title = title
         self.index = index
         self.mediaType = manifest.trackMediaType
-        self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType)
+        self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType, bookID: audiobookID)
  
         downloadTask?.statePublisher
             .sink(receiveValue: { [weak self] state in
