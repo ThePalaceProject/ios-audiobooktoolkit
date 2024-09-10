@@ -4,9 +4,9 @@ import Combine
 let OverdriveTaskCompleteNotification = NSNotification.Name(rawValue: "OverdriveDownloadTaskCompleteNotification")
 
 final class OverdriveDownloadTask: DownloadTask {
-    
+
     var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
-    
+
     var needsRetry: Bool {
         switch self.assetFileStatus() {
         case .missing(_), .unknown:
@@ -15,11 +15,11 @@ final class OverdriveDownloadTask: DownloadTask {
             return false
         }
     }
-    
+
     private static let DownloadTaskTimeoutValue = 60.0
-    
+
     private var urlSession: URLSession?
-    
+
     var downloadProgress: Float = 0 {
         didSet {
             DispatchQueue.main.async { [weak self] in
@@ -28,19 +28,19 @@ final class OverdriveDownloadTask: DownloadTask {
             }
         }
     }
-    
+
     let key: String
     let url: URL
     let urlMediaType: TrackMediaType
-    let bookID: String // Add a book ID to differentiate between books
-    
+    let bookID: String
+
     init(key: String, url: URL, mediaType: TrackMediaType, bookID: String) {
         self.key = key
         self.url = url
         self.urlMediaType = mediaType
-        self.bookID = bookID // Store the unique book ID
+        self.bookID = bookID
     }
-    
+
     func fetch() {
         switch self.assetFileStatus() {
         case .saved(_):
@@ -59,7 +59,7 @@ final class OverdriveDownloadTask: DownloadTask {
             self.statePublisher.send(.error(nil))
         }
     }
-    
+
     func delete() {
         switch self.assetFileStatus() {
         case .saved(let urls):
@@ -77,7 +77,7 @@ final class OverdriveDownloadTask: DownloadTask {
             ATLog(.error, "Invalid file directory from command")
         }
     }
-    
+
     func assetFileStatus() -> AssetResult {
         guard let localAssetURL = localDirectory() else {
             return AssetResult.unknown
@@ -88,7 +88,7 @@ final class OverdriveDownloadTask: DownloadTask {
             return AssetResult.missing([localAssetURL])
         }
     }
-    
+
     func localDirectory() -> URL? {
         let fileManager = FileManager.default
         let cacheDirectories = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
@@ -96,7 +96,7 @@ final class OverdriveDownloadTask: DownloadTask {
             ATLog(.error, "Could not find caches directory.")
             return nil
         }
-        // Use the book ID and URL hash to ensure unique file paths
+
         guard let filename = hash("\(bookID)-\(url)") else {
             ATLog(.error, "Could not create a valid hash from download task ID.")
             return nil
@@ -110,7 +110,7 @@ final class OverdriveDownloadTask: DownloadTask {
         let delegate = DownloadTaskURLSessionDelegate(downloadTask: self,
                                                       statePublisher: self.statePublisher,
                                                       finalDirectory: finalURL)
-        
+
         urlSession = URLSession(configuration: config,
                                 delegate: delegate,
                                 delegateQueue: nil)
@@ -118,15 +118,15 @@ final class OverdriveDownloadTask: DownloadTask {
         var request = URLRequest(url: remoteURL,
                                  cachePolicy: .reloadIgnoringLocalCacheData, // Ensure we ignore any cached data
                                  timeoutInterval: OverdriveDownloadTask.DownloadTaskTimeoutValue)
-        
+
         guard let urlSession = urlSession else {
             return
         }
-        
+
         let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
         task.resume()
     }
-    
+
     private func hash(_ key: String) -> String? {
         guard let hash = key.sha256?.hexString else {
             return nil
