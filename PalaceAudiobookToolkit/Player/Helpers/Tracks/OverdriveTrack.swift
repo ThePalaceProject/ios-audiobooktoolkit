@@ -23,7 +23,7 @@ class OverdriveTrack: Track {
     var url: URL
     var urls: [URL]? { [url] }
     let mediaType: TrackMediaType
-    
+
     var cancellables = Set<AnyCancellable>()
     
     var duration: TimeInterval {
@@ -32,7 +32,7 @@ class OverdriveTrack: Track {
             return _duration
         }
     }
-    
+
     required init(
         manifest: Manifest,
         urlString: String?,
@@ -46,14 +46,14 @@ class OverdriveTrack: Track {
         guard let urlString, let url = URL(string: urlString) else {
             throw NSError(domain: "Invalid URL", code: 0, userInfo: nil)
         }
-        
+
         self.key = "urn:org.thepalaceproject:readingOrder:\(String(describing: index))"
         self.url = url
         self.title = title
         self.index = index
         self.mediaType = manifest.trackMediaType
-        self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType)
- 
+        self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType, bookID: audiobookID)
+
         downloadTask?.statePublisher
             .sink(receiveValue: { [weak self] state in
                 guard let self = self else { return }
@@ -66,10 +66,10 @@ class OverdriveTrack: Track {
             })
             .store(in: &cancellables)
     }
-    
+
     func updateDuration() {
         guard let localURL = (downloadTask as? OverdriveDownloadTask)?.localDirectory() else { return }
-        
+
         let asset = AVURLAsset(url: localURL)
         asset.loadValuesAsynchronously(forKeys: ["duration"]) {
             var error: NSError? = nil
@@ -84,7 +84,7 @@ class OverdriveTrack: Track {
             }
         }
     }
-    
+
     func requestDurationUpdate() {
         updateDuration()
     }

@@ -17,10 +17,9 @@ final class OverdriveDownloadTask: DownloadTask {
     }
 
     private static let DownloadTaskTimeoutValue = 60.0
-    
+
     private var urlSession: URLSession?
-        
-    /// Progress should be set to 1 if the file already exists.
+
     var downloadProgress: Float = 0 {
         didSet {
             DispatchQueue.main.async { [weak self] in
@@ -29,15 +28,17 @@ final class OverdriveDownloadTask: DownloadTask {
             }
         }
     }
-    
+
     let key: String
     let url: URL
     let urlMediaType: TrackMediaType
+    let bookID: String
 
-    init(key: String, url: URL, mediaType: TrackMediaType) {
+    init(key: String, url: URL, mediaType: TrackMediaType, bookID: String) {
         self.key = key
         self.url = url
         self.urlMediaType = mediaType
+        self.bookID = bookID
     }
 
     func fetch() {
@@ -88,7 +89,6 @@ final class OverdriveDownloadTask: DownloadTask {
         }
     }
 
-    /// Directory of the downloaded file.
     func localDirectory() -> URL? {
         let fileManager = FileManager.default
         let cacheDirectories = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
@@ -96,33 +96,33 @@ final class OverdriveDownloadTask: DownloadTask {
             ATLog(.error, "Could not find caches directory.")
             return nil
         }
-        guard let filename = hash(self.key) else {
+
+        guard let filename = hash("\(bookID)-\(url)") else {
             ATLog(.error, "Could not create a valid hash from download task ID.")
             return nil
         }
         return cacheDirectory.appendingPathComponent(filename, isDirectory: false).appendingPathExtension("mp3")
     }
     
-    private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL)
-    {
-        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".overdriveBackgroundIdentifier.\(remoteURL.hashValue)")
+    private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL) {
+        let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "").appending(".overdriveBackgroundIdentifier.\(bookID)-\(remoteURL.hashValue)")
         let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
         let delegate = DownloadTaskURLSessionDelegate(downloadTask: self,
                                                       statePublisher: self.statePublisher,
                                                       finalDirectory: finalURL)
-        
+
         urlSession = URLSession(configuration: config,
                                 delegate: delegate,
                                 delegateQueue: nil)
         
         var request = URLRequest(url: remoteURL,
-                                 cachePolicy: .useProtocolCachePolicy,
+                                 cachePolicy: .reloadIgnoringLocalCacheData, // Ensure we ignore any cached data
                                  timeoutInterval: OverdriveDownloadTask.DownloadTaskTimeoutValue)
-        
+
         guard let urlSession = urlSession else {
             return
         }
-        
+
         let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
         task.resume()
     }

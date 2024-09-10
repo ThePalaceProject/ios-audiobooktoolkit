@@ -52,10 +52,8 @@ class OpenAccessPlayer: NSObject, Player {
     
     var playbackRate: PlaybackRate {
         set {
-            if isPlaying {
-                self.avQueuePlayer.rate = PlaybackRate.convert(rate: newValue)
-                savePlaybackRate(rate: newValue)
-            }
+            self.avQueuePlayer.rate = PlaybackRate.convert(rate: newValue)
+            savePlaybackRate(rate: newValue)
         }
         
         get {
@@ -137,6 +135,7 @@ class OpenAccessPlayer: NSObject, Player {
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
             self?.avQueuePlayer.play()
+            self?.avQueuePlayer.rate = PlaybackRate.convert(rate: self?.playbackRate ?? .normalTime)
             completion?(nil)
         }
     }
@@ -154,6 +153,7 @@ class OpenAccessPlayer: NSObject, Player {
             }
             
             self.attemptToPlay(currentTrackPosition)
+            self.avQueuePlayer.rate = PlaybackRate.convert(rate: self.playbackRate)
         }
     }
     
