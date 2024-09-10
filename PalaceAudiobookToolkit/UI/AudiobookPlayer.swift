@@ -39,9 +39,9 @@ public class AudiobookPlayer: UIViewController {
     private var playerViewController: UIHostingController<AudiobookPlayerView>? {
         children.first as? UIHostingController<AudiobookPlayerView>
     }
-
-    public override func viewIsAppearing(_ animated: Bool) {
-        super.viewIsAppearing(animated)
+    
+    public override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
     }
     
@@ -49,6 +49,10 @@ public class AudiobookPlayer: UIViewController {
         super.viewWillDisappear(animated)
         navigationController?.setNavigationBarHidden(false, animated: false)
         playerViewController?.rootView.unload()
+        
+        playerViewController?.willMove(toParent: nil)
+        playerViewController?.view.removeFromSuperview()
+        playerViewController?.removeFromParent()
     }
     
     @objc

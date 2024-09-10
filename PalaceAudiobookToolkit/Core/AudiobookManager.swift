@@ -1,9 +1,7 @@
 //
 //  AudiobookManager.swift
-//  NYPLAudibookKit
+//  PalaceAudibookKit
 //
-//  Created by Dean Silfen on 1/12/18.
-//  Copyright © 2018 Dean Silfen. All rights reserved.
 //
 
 import Combine
@@ -127,8 +125,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }()
 
     public var needsDownloadRetry: Bool = false
-
-    private(set) public var timer: Timer?
+    
+    private(set) public var timer: Cancellable?
+    
+    // MARK: - Initialization
     
     public init(metadata: AudiobookMetadata, audiobook: Audiobook, networkService: AudiobookNetworkService) {
         self.metadata = metadata
@@ -147,6 +147,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public static func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
     }
+    
+    // MARK: - Setup Bindings
     
     private func setupBindings() {
         networkService.downloadStatePublisher
@@ -176,23 +178,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         statePublisher.send(.overallDownloadProgress(overallProgress))
     }
     
+    // MARK: - Now Playing Info
+    
     private func setupNowPlayingInfoTimer() {
         let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
-        Timer.publish(every: interval, on: .main, in: .common)
+        timer = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
-            .receive(on: DispatchQueue.global(qos: .background))
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .map { [weak self] _ in self?.audiobook.player.currentTrackPosition }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] position in
-                self?.statePublisher.send(.positionUpdated(position))
-                self?.updateNowPlayingInfo(position)
+                guard let self = self else { return }
+                self.statePublisher.send(.positionUpdated(position))
+                self.updateNowPlayingInfo(position)
             }
-            .store(in: &cancellables)
-    }
-    
-    deinit {
-        ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
-        cancellables.removeAll()
     }
     
     private func updateNowPlayingInfo(_ position: TrackPosition?) {
@@ -213,6 +212,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
+    
+    // MARK: - Audiobook Actions
     
     public func downloadProgress(for chapter: Chapter) -> Double {
         tableOfContents.downloadProgress(for: chapter)
@@ -243,8 +244,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     @discardableResult
     public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
         var result: Result<Void, Error>? = nil
-
-        bookmarkDelegate?.saveListeningPosition(at: location) { (serverId: String?) in
+        
+        bookmarkDelegate?.saveListeningPosition(at: location) { serverId in
             if let _ = serverId {
                 result = .success(())
             } else {
@@ -299,6 +300,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         }
     }
     
+    // MARK: - Player Subscription
+    
     private func subscribeToPlayer() {
         audiobook.player.playbackStatePublisher
             .receive(on: RunLoop.main)
@@ -349,9 +352,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     private func handlePlayerUnloaded() {
         mediaControlPublisher.tearDown()
-        timer?.invalidate()
+        timer?.cancel()
         statePublisher.send(.playbackUnloaded)
     }
+    
+    // MARK: - Media Control Commands
     
     private func subscribeToMediaControlCommands() {
         mediaControlPublisher.commandPublisher
@@ -372,5 +377,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
             .store(in: &cancellables)
     }
+    
+    deinit {
+        ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
+        cancellables.removeAll()
+    }
 }
-
