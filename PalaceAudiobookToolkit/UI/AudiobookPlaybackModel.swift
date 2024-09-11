@@ -11,7 +11,7 @@ import Combine
 import MediaPlayer
 
 class AudiobookPlaybackModel: ObservableObject {
-    @ObservedObject private var reachability = Reachability()
+    @Published private var reachability = Reachability()
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
     @Published var isDownloading = false
@@ -19,10 +19,10 @@ class AudiobookPlaybackModel: ObservableObject {
     @Published var trackErrors: [String: Error] = [:]
     @Published var coverImage: UIImage?
     @Published var toastMessage: String = ""
-
+    
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
-
+    
     @Published var currentLocation: TrackPosition?
     var selectedLocation: TrackPosition? {
         didSet {
@@ -31,22 +31,21 @@ class AudiobookPlaybackModel: ObservableObject {
             }
         }
     }
-
-    let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
+    let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
         audiobookManager.currentOffset
     }
-
+    
     var duration: TimeInterval {
         audiobookManager.currentDuration
     }
-
+    
     var timeLeft: TimeInterval {
         max(duration - offset, 0.0)
     }
-
+    
     var timeLeftInBook: TimeInterval {
         guard let currentLocation else {
             return audiobookManager.totalDuration
@@ -55,7 +54,7 @@ class AudiobookPlaybackModel: ObservableObject {
         guard currentLocation.timestamp.isFinite else {
             return audiobookManager.totalDuration
         }
-
+        
         return audiobookManager.totalDuration - currentLocation.durationToSelf()
     }
     
@@ -70,7 +69,7 @@ class AudiobookPlaybackModel: ObservableObject {
             return "--"
         }
     }
-
+    
     var isPlaying: Bool {
         audiobookManager.audiobook.player.isPlaying
     }
@@ -78,13 +77,13 @@ class AudiobookPlaybackModel: ObservableObject {
     var tracks: [any Track] {
         audiobookManager.networkService.tracks
     }
-        
+    
     init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
-
+        
         setupBindings()
         subscribeToPublisher()
         self.audiobookManager.networkService.fetch()
@@ -115,6 +114,8 @@ class AudiobookPlaybackModel: ObservableObject {
                     self.isWaitingForPlayer = false
                     if let position = position {
                         ATLog(.debug, "Playback error at position: \(position.timestamp)")
+                    } else {
+                        ATLog(.error, "Playback failed but position is nil.")
                     }
                     
                 default:
@@ -122,27 +123,30 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-
+        
         self.audiobookManager.fetchBookmarks { _ in }
     }
-
+    
     private func setupBindings() {
         self.reachability.startMonitoring()
         self.reachability.$isConnected
             .receive(on: RunLoop.current)
-            .sink { isConnected in
-                if isConnected && self.overallDownloadProgress != 0 {
+            .sink { [weak self] isConnected in
+                if let self = self, isConnected && self.overallDownloadProgress != 0 {
                     self.audiobookManager.networkService.fetch()
                 }
             }
             .store(in: &subscriptions)
-        
     }
-
+    
     private func updateProgress() {
-        playbackProgress = offset/duration
+        guard duration > 0 else {
+            playbackProgress = 0
+            return
+        }
+        playbackProgress = offset / duration
     }
-
+    
     deinit {
         self.reachability.stopMonitoring()
         self.audiobookManager.audiobook.player.unload()
@@ -159,23 +163,24 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.unload()
         subscriptions.removeAll()
     }
-
+    
     private func saveLocation() {
         if let currentLocation {
             audiobookManager.saveLocation(currentLocation)
         }
     }
-
+    
     func skipBack() {
         guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
             return
         }
-
+        
         isWaitingForPlayer = true
+        defer { isWaitingForPlayer = false }
+        
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
             self?.saveLocation()
-            self?.isWaitingForPlayer = false
         }
     }
     
@@ -185,20 +190,21 @@ class AudiobookPlaybackModel: ObservableObject {
         }
         
         isWaitingForPlayer = true
+        defer { isWaitingForPlayer = false }
+        
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
             self?.saveLocation()
-            self?.isWaitingForPlayer = false
         }
     }
-
+    
     func move(to value: Double) {
         isWaitingForPlayer = true
-
+        defer { isWaitingForPlayer = false }
+        
         self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
             self?.currentLocation = adjustedLocation
             self?.saveLocation()
-            self?.isWaitingForPlayer = false
         }
     }
     
@@ -268,20 +274,16 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func updateLockScreenCoverArtwork(image: UIImage?) {
-        if let image = image {
-            let itemArtwork = MPMediaItemArtwork(boundsSize: image.size) { requestedSize -> UIImage in
-                // Scale aspect fit to size requested by system
-                let rect = AVMakeRect(aspectRatio: image.size, insideRect: CGRect(origin: .zero, size: requestedSize))
-                UIGraphicsBeginImageContextWithOptions(rect.size, true, 0.0)
-                image.draw(in: CGRect(origin: .zero, size: rect.size))
-                let scaledImage = UIGraphicsGetImageFromCurrentImageContext()
-                UIGraphicsEndImageContext()
-                return scaledImage ?? image
+        DispatchQueue.main.async {
+            if let image = image {
+                let itemArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in
+                    return image
+                }
+                
+                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+                info[MPMediaItemPropertyArtwork] = itemArtwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             }
-            
-            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
-            info[MPMediaItemPropertyArtwork] = itemArtwork
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 }

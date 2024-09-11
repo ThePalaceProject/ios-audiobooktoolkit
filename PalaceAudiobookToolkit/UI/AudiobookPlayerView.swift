@@ -21,9 +21,11 @@ struct AudiobookPlayerView: View {
     
     @State private var showPlaybackSpeed = false
     @State private var showSleepTimer = false
+    @State private var isInBackground = false
     
     init(model: AudiobookPlaybackModel) {
         self.playbackModel = model
+        setupBackgroundStateHandling()
     }
     
     public func updateImage(_ image: UIImage) {
@@ -38,7 +40,9 @@ struct AudiobookPlayerView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
-                    downloadProgressView(value: playbackModel.overallDownloadProgress)
+                    if !isInBackground {  // Don't show download progress in the background
+                        downloadProgressView(value: playbackModel.overallDownloadProgress)
+                    }
                     
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
@@ -50,14 +54,16 @@ struct AudiobookPlayerView: View {
                     }
                     
                     VStack(spacing: 5) {
-                        Text(timeLeftInBookText)
-                            .palaceFont(.caption)
-                            .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
-                        
-                        PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
-                            playbackModel.move(to: newValue)
+                        if !isInBackground {  // Avoid updating playhead in background
+                            Text(timeLeftInBookText)
+                                .palaceFont(.caption)
+                                .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
+                            
+                            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
+                                playbackModel.move(to: newValue)
+                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                         
                         HStack(alignment: .firstTextBaseline) {
                             Text("\(playheadOffsetText)")
@@ -106,8 +112,38 @@ struct AudiobookPlayerView: View {
         .navigationViewStyle(.stack)
     }
     
+    private func setupBackgroundStateHandling() {
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.isInBackground = true
+            self.pauseUIUpdates()
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.isInBackground = false
+            self.resumeUIUpdates()
+        }
+    }
+    
+    private func pauseUIUpdates() {
+        // Pausing any UI updates that should not happen in the background
+        playbackModel.audiobookManager.audiobook.player.pause()  // Example: pause audio in background if needed
+    }
+    
+    private func resumeUIUpdates() {
+        // Resuming UI updates when app is in the foreground
+        playbackModel.audiobookManager.audiobook.player.play()  // Example: resume audio playback
+    }
+    
     private func showToast(message: String) {
-        Task {
+        Task { @MainActor in
             playbackModel.toastMessage = message
             showToast.value = true
         }
