@@ -40,7 +40,7 @@ struct AudiobookPlayerView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
-                    if !isInBackground {  // Don't show download progress in the background
+                    if !isInBackground {
                         downloadProgressView(value: playbackModel.overallDownloadProgress)
                     }
                     
@@ -54,7 +54,7 @@ struct AudiobookPlayerView: View {
                     }
                     
                     VStack(spacing: 5) {
-                        if !isInBackground {  // Avoid updating playhead in background
+                        if !isInBackground {
                             Text(timeLeftInBookText)
                                 .palaceFont(.caption)
                                 .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
@@ -119,7 +119,6 @@ struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = true
-            self.pauseUIUpdates()
         }
         
         NotificationCenter.default.addObserver(
@@ -128,20 +127,9 @@ struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = false
-            self.resumeUIUpdates()
         }
     }
-    
-    private func pauseUIUpdates() {
-        // Pausing any UI updates that should not happen in the background
-        playbackModel.audiobookManager.audiobook.player.pause()  // Example: pause audio in background if needed
-    }
-    
-    private func resumeUIUpdates() {
-        // Resuming UI updates when app is in the foreground
-        playbackModel.audiobookManager.audiobook.player.play()  // Example: resume audio playback
-    }
-    
+
     private func showToast(message: String) {
         Task { @MainActor in
             playbackModel.toastMessage = message
