@@ -189,6 +189,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     private func setupNowPlayingInfoTimer() {
         let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
+        playbackTrackerDelegate?.playbackStarted()
+
         timer = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
             .receive(on: DispatchQueue.global(qos: .userInitiated))
