@@ -30,7 +30,11 @@ class OpenAccessPlayer: NSObject, Player {
     var taskCompletion: Completion? = nil
     var isLoaded: Bool = false
     var queuedTrackPosition: TrackPosition?
-    
+
+    var currentOffset: Double {
+        currentTrackPosition?.timestamp ?? 0.0
+    }
+
     var isDrmOk: Bool = true {
         didSet {
             if !isDrmOk {

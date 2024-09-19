@@ -137,6 +137,10 @@ extension AudiobookNetworkServiceTest {
         func simulateProgress(_ progress: Float) {
             statePublisher.send(.progress(progress))
         }
+
+        func assetFileStatus() -> PalaceAudiobookToolkit.AssetResult {
+            return PalaceAudiobookToolkit.AssetResult.saved([])
+        }
     }
 }
 

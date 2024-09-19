@@ -17,7 +17,19 @@ class LCPPlayer: OpenAccessPlayer {
     override var taskCompleteNotification: Notification.Name {
         LCPDownloadTaskCompleteNotification
     }
-    
+
+    override var currentOffset: Double {
+        guard let currentTrackPosition, let currentChapter else {
+            return 0
+        }
+
+//        if currentTrackPosition.track.id == currentChapter.position.track.id {
+//            return currentTrackPosition.timestamp - currentChapter.position.timestamp
+//        } else {
+        return (try? currentTrackPosition - currentChapter.position) ?? 0.0
+//        }
+    }
+
     init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
         self.decryptionDelegate = decryptor
         super.init(tableOfContents: tableOfContents)
@@ -191,15 +203,40 @@ class LCPPlayer: OpenAccessPlayer {
         }
     }
     
+//    override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+//        guard let currentTrackPosition = currentTrackPosition,
+//              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
+//            completion?(currentTrackPosition)
+//            return
+//        }
+//
+//        let chapterDuration = currentChapter.duration ?? 0.0
+//        let offset = value * chapterDuration - currentChapter.position.timestamp
+//        let newPosition = currentChapter.position + offset
+//
+//        decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
+//            guard let self = self else { return }
+//            if success {
+//                self.rebuildQueueForPosition(newPosition) {
+//                    self.performSuperSeek(to: newPosition, completion: completion)
+//                }
+//            } else {
+//                completion?(nil)
+//            }
+//        }
+//    }
+//    
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition = currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
             completion?(currentTrackPosition)
             return
         }
-        
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
-        
+
+        let chapterDuration = currentChapter.duration ?? 0.0
+        let offset = value * chapterDuration
+        let newPosition = currentTrackPosition + offset
+
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
             if success {
@@ -211,7 +248,7 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
+
     private func rebuildQueueForPosition(_ position: TrackPosition, completion: @escaping () -> Void) {
         playerQueueUpdateQueue.async { [weak self] in
             guard let self = self else { return }

@@ -46,7 +46,7 @@ final class FindawayPlayer: NSObject, Player {
         
         return try? tableOfContents.chapter(forPosition: currentTrackPosition)
     }
-    
+
     private var readyForPlayback: Bool = false
     private var queuedPlayerState: PlayerState = .none
     private let audioPlaybackRateIdentifierKey = "audioPlaybackRateKey"
@@ -87,8 +87,8 @@ final class FindawayPlayer: NSObject, Player {
     }
 
     /// If no book is loaded, AudioEngine returns 0, so this is consistent with their behavior
-    private var currentOffset: UInt {
-        audioEngine?.playbackEngine?.currentOffset ?? 0
+    var currentOffset: Double {
+        Double(audioEngine?.playbackEngine?.currentOffset ?? 0)
     }
 
     var isPlaying: Bool {

@@ -145,12 +145,23 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
                 let nextChapter = toc[index + 1]
                 toc[index].duration = try? nextChapter.position - chapter.position
             } else {
-                // Last chapter in the list
-                toc[index].duration = chapter.position.track.duration - chapter.position.timestamp
+                toc[index].duration = calculateRemainingDuration(from: chapter.position)
             }
         }
     }
-    
+
+    private func calculateRemainingDuration(from start: TrackPosition) -> Double {
+        var totalDuration = start.track.duration - start.timestamp
+
+        if let startTrackIndex = tracks.tracks.firstIndex(where: { $0.id == start.track.id }) {
+            for index in (startTrackIndex + 1)..<tracks.tracks.count {
+                totalDuration += tracks[index].duration
+            }
+        }
+
+        return totalDuration
+    }
+
     func nextChapter(after chapter: Chapter) -> Chapter? {
         guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index + 1 < toc.count else {
             return nil
