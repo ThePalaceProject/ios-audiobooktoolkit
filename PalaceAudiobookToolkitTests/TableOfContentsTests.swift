@@ -73,7 +73,7 @@ class TableOfContentsTests: XCTestCase {
     }
     
     func testChapterDurationCalculations() {
-        for manifestJSON in [ManifestJSON.quickSilver] {
+        for manifestJSON in ManifestJSON.allCases {
             do {
                 let manifest = try loadManifest(for: manifestJSON)
                 let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
