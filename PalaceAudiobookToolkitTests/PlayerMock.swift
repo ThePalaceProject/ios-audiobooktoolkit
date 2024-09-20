@@ -11,6 +11,7 @@ import PalaceAudiobookToolkit
 import Combine
 
 class PlayerMock: NSObject, Player {
+    var currentOffset: Double = 0
     var isPlaying: Bool = false
     var queuesEvents: Bool = false
     var isDrmOk: Bool = true

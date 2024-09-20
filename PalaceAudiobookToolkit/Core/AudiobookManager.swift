@@ -106,7 +106,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
     
     public var currentOffset: Double {
-        audiobook.player.currentTrackPosition?.timestamp ?? 0.0
+        audiobook.player.currentOffset
     }
     
     public var currentDuration: Double {

@@ -17,7 +17,16 @@ class LCPPlayer: OpenAccessPlayer {
     override var taskCompleteNotification: Notification.Name {
         LCPDownloadTaskCompleteNotification
     }
-    
+
+    override var currentOffset: Double {
+        guard let currentTrackPosition, let currentChapter else {
+            return 0
+        }
+
+        let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
+        return offset
+    }
+
     init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
         self.decryptionDelegate = decryptor
         super.init(tableOfContents: tableOfContents)
@@ -190,16 +199,18 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
+
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition = currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
             completion?(currentTrackPosition)
             return
         }
-        
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? 0.0)
-        
+
+        let chapterDuration = currentChapter.duration ?? 0.0
+        let offset = value * chapterDuration
+        let newPosition = currentTrackPosition + offset
+
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
             if success {
@@ -211,7 +222,26 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
+
+    override public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+
+                avQueuePlayer.pause()
+                loadInitialPlayerQueue()
+                completion?(endPosition)
+            }
+        }
+
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        playbackStatePublisher.send(.bookCompleted)
+    }
+
     private func rebuildQueueForPosition(_ position: TrackPosition, completion: @escaping () -> Void) {
         playerQueueUpdateQueue.async { [weak self] in
             guard let self = self else { return }

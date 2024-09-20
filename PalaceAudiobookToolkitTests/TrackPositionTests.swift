@@ -61,22 +61,22 @@ class TrackPositionTests: XCTestCase {
 
 
     private func testTimeAdditionWithinTrack(_ position: TrackPosition) throws {
-        let newPosition = try position + (position.track.duration/2)
-        XCTAssertLessThan(newPosition.timestamp, position.track.duration, "Addition should stay within the same track.")
+        let newPosition = position + (position.track.duration/2)
+        XCTAssertLessThanOrEqual(newPosition.timestamp, position.track.duration, "Addition should stay within the same track.")
     }
     
     private func testTimeSubtractionWithinTrack(_ position: TrackPosition) throws {
-        let newPosition = try position + (position.track.duration/2)
+        let newPosition = position + (position.track.duration/2)
         XCTAssertGreaterThanOrEqual(newPosition.timestamp, 0, "Subtraction should not result in a negative timestamp.")
     }
     
     private func testMovingToNextTrack(from position: TrackPosition, in tracks: Tracks) throws {
-        let newPosition = try position + (position.track.duration - position.timestamp + 10)
+        let newPosition = position + (position.track.duration - position.timestamp + 10)
         XCTAssertNotEqual(newPosition.track.id, position.track.id, "Should move to the next track.")
     }
     
     private func testMovingToPreviousTrack(from position: TrackPosition, in tracks: Tracks) throws {
-        let newPosition = try position + (-1 * (position.timestamp + 10))
+        let newPosition = position + (-1 * (position.timestamp + 10))
         XCTAssertNotEqual(newPosition.track.id, position.track.id, "Should move to the previous track.")
     }
 }

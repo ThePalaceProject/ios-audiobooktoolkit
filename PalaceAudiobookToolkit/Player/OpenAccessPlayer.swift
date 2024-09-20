@@ -30,7 +30,11 @@ class OpenAccessPlayer: NSObject, Player {
     var taskCompletion: Completion? = nil
     var isLoaded: Bool = false
     var queuedTrackPosition: TrackPosition?
-    
+
+    var currentOffset: Double {
+        currentTrackPosition?.timestamp ?? 0.0
+    }
+
     var isDrmOk: Bool = true {
         didSet {
             if !isDrmOk {
@@ -461,7 +465,26 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
     }
-    
+
+    public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+
+                avQueuePlayer.pause()
+                rebuildPlayerQueueAndNavigate(to: endPosition)
+                completion?(endPosition)
+            }
+        }
+
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        playbackStatePublisher.send(.bookCompleted)
+    }
+
 }
 
 extension OpenAccessPlayer {
@@ -648,25 +671,6 @@ extension OpenAccessPlayer {
         } else {
             handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
         }
-    }
-    
-    public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
-        defer {
-            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
-                let endPosition = TrackPosition(
-                    track: firstTrack,
-                    timestamp: 0.0,
-                    tracks: currentTrackPosition.tracks
-                )
-                
-                avQueuePlayer.pause()
-                rebuildPlayerQueueAndNavigate(to: endPosition)
-                completion?(endPosition)
-            }
-        }
-        
-        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
-        playbackStatePublisher.send(.bookCompleted)
     }
     
     public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {

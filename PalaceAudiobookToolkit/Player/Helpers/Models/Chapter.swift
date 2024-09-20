@@ -14,4 +14,13 @@ public struct Chapter: Identifiable, Equatable {
     public var title: String
     public var position: TrackPosition
     public var duration: Double?
+    public var endPosition: TrackPosition?
+
+    mutating func calculateEndPosition(using tracks: Tracks) {
+        guard let duration = duration else {
+            self.endPosition = nil
+            return
+        }
+        self.endPosition = position + duration
+    }
 }

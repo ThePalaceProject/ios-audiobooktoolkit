@@ -32,35 +32,41 @@ public struct TrackPosition: Equatable, Comparable {
         if lhs.track.id == rhs.track.id {
             return lhs.timestamp - rhs.timestamp
         }
-        
+
         guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == lhs.track.id }),
               let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == rhs.track.id }) else {
             throw TrackPositionError.differentTracks
         }
-        
+
         var diff = 0.0
+
         if lhsTrackIndex > rhsTrackIndex {
-            diff += lhs.tracks[rhsTrackIndex].duration - rhs.timestamp // remaining time in rhs's track
+            diff += rhs.track.duration - rhs.timestamp
+
             for index in (rhsTrackIndex + 1)..<lhsTrackIndex {
                 diff += lhs.tracks[index].duration
             }
+
             diff += lhs.timestamp
         } else {
-            diff -= rhs.timestamp - lhs.tracks[lhsTrackIndex].duration // remaining time in lhs's track
+            diff -= lhs.timestamp
+
             for index in (lhsTrackIndex + 1)..<rhsTrackIndex {
                 diff -= lhs.tracks[index].duration
             }
-            diff -= rhs.timestamp
+
+            diff -= rhs.track.duration - rhs.timestamp
+
             return -diff
         }
-        
+
         return diff
     }
-    
+
     public static func + (lhs: TrackPosition, other: Double) -> TrackPosition {
         var newTimestamp = lhs.timestamp + other
         var currentTrack = lhs.track
-        
+
         while newTimestamp < 0 {
             guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
                 return TrackPosition(track: currentTrack, timestamp: 0, tracks: lhs.tracks)
@@ -68,15 +74,17 @@ public struct TrackPosition: Equatable, Comparable {
             currentTrack = prevTrack
             newTimestamp += currentTrack.duration
         }
-        
-        while newTimestamp >= currentTrack.duration {
-            newTimestamp -= currentTrack.duration
+
+        var remainingTimeInCurrentTrack = currentTrack.duration
+        while newTimestamp >= remainingTimeInCurrentTrack {
+            newTimestamp -= remainingTimeInCurrentTrack
             guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
                 return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
             }
             currentTrack = nextTrack
+            remainingTimeInCurrentTrack = currentTrack.duration
         }
-        
+
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
 

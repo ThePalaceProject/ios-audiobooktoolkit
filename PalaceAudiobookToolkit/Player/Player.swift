@@ -37,6 +37,7 @@ public protocol Player: NSObject {
     var isPlaying: Bool { get }
     var queuesEvents: Bool { get }
     var isDrmOk: Bool { get set }
+    var currentOffset: Double { get }
     var tableOfContents: AudiobookTableOfContents { get }
     var currentTrackPosition: TrackPosition? { get }
     var currentChapter: Chapter? { get }

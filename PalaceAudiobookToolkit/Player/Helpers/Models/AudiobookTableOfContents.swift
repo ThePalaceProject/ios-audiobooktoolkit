@@ -42,6 +42,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         
         if manifest.audiobookType != .findaway && manifest.audiobookType != .overdrive {
             self.calculateDurations()
+            self.calculateEndPositions()
         }
     }
     
@@ -83,7 +84,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         }
         
         let startPosition = TrackPosition(track: validTrack, timestamp: offsetInSeconds, tracks: tracks)
-        return Chapter(title: tocItem.title ?? "", position: startPosition)
+        return Chapter(title: tocItem.title ?? "Track \(validTrack.index + 1)", position: startPosition)
     }
     
     
@@ -100,7 +101,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             }
             
             if let validTrack = track {
-                let chapterTitle = item.title ?? ""
+                let chapterTitle = item.title ?? "Track \(validTrack.index + 1)"
                 let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: validTrack, timestamp: 0.0, tracks: tracks), duration: duration)
                 toc.append(chapter)
             }
@@ -124,7 +125,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     private mutating func loadTocFromSpine(_ spine: [Manifest.SpineItem]) {
         spine.forEach { item in
             if let track = tracks.track(forHref: item.href) {
-                let chapterTitle = item.title ?? ""
+                let chapterTitle = item.title ?? "Track \(track.index + 1)"
                 let chapter = Chapter(title: chapterTitle, position: TrackPosition(track: track, timestamp: 0.0, tracks: tracks))
                 toc.append(chapter)
             }
@@ -145,12 +146,29 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
                 let nextChapter = toc[index + 1]
                 toc[index].duration = try? nextChapter.position - chapter.position
             } else {
-                // Last chapter in the list
-                toc[index].duration = chapter.position.track.duration - chapter.position.timestamp
+                toc[index].duration = calculateRemainingDuration(from: chapter.position)
             }
         }
     }
-    
+
+    private mutating func calculateEndPositions() {
+        for index in toc.indices {
+            toc[index].calculateEndPosition(using: tracks)
+        }
+    }
+
+    private func calculateRemainingDuration(from start: TrackPosition) -> Double {
+        var totalDuration = start.track.duration - start.timestamp
+
+        if let startTrackIndex = tracks.tracks.firstIndex(where: { $0.id == start.track.id }) {
+            for index in (startTrackIndex + 1)..<tracks.tracks.count {
+                totalDuration += tracks[index].duration
+            }
+        }
+
+        return totalDuration
+    }
+
     func nextChapter(after chapter: Chapter) -> Chapter? {
         guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index + 1 < toc.count else {
             return nil
@@ -166,16 +184,26 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     func chapter(forPosition position: TrackPosition) throws -> Chapter {
-        for chapter in toc {
-            let chapterDuration = chapter.duration ?? chapter.position.track.duration
-            let chapterEndPosition = chapter.position + chapterDuration
-            
-            // Check if the position is within the chapter's range
+        var lowerBound = 0
+        var upperBound = toc.count - 1
+
+        while lowerBound <= upperBound {
+            let middleIndex = (lowerBound + upperBound) / 2
+            let chapter = toc[middleIndex]
+
+            guard let chapterEndPosition = chapter.endPosition else {
+                throw ChapterError.invalidChapterDuration
+            }
+
             if position >= chapter.position && position < chapterEndPosition {
                 return chapter
+            } else if position < chapter.position {
+                upperBound = middleIndex - 1
+            } else {
+                lowerBound = middleIndex + 1
             }
         }
-        
+
         throw ChapterError.noChapterFoundForPosition
     }
     
