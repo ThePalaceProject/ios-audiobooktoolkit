@@ -75,17 +75,18 @@ public struct TrackPosition: Equatable, Comparable {
             newTimestamp += currentTrack.duration
         }
 
-        while newTimestamp >= currentTrack.duration {
-            newTimestamp -= currentTrack.duration
+        var remainingTimeInCurrentTrack = currentTrack.duration
+        while newTimestamp >= remainingTimeInCurrentTrack {
+            newTimestamp -= remainingTimeInCurrentTrack
             guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
                 return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
             }
             currentTrack = nextTrack
+            remainingTimeInCurrentTrack = currentTrack.duration
         }
 
         return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
     }
-
 
     public static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
         if lhs.track.id == rhs.track.id {

@@ -42,6 +42,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         
         if manifest.audiobookType != .findaway && manifest.audiobookType != .overdrive {
             self.calculateDurations()
+            self.calculateEndPositions()
         }
     }
     
@@ -150,6 +151,12 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         }
     }
 
+    private mutating func calculateEndPositions() {
+        for index in toc.indices {
+            toc[index].calculateEndPosition(using: tracks)
+        }
+    }
+
     private func calculateRemainingDuration(from start: TrackPosition) -> Double {
         var totalDuration = start.track.duration - start.timestamp
 
@@ -177,16 +184,26 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     func chapter(forPosition position: TrackPosition) throws -> Chapter {
-        for chapter in toc {
-            let chapterDuration = chapter.duration ?? chapter.position.track.duration
-            let chapterEndPosition = chapter.position + chapterDuration
-            
-            // Check if the position is within the chapter's range
+        var lowerBound = 0
+        var upperBound = toc.count - 1
+
+        while lowerBound <= upperBound {
+            let middleIndex = (lowerBound + upperBound) / 2
+            let chapter = toc[middleIndex]
+
+            guard let chapterEndPosition = chapter.endPosition else {
+                throw ChapterError.invalidChapterDuration
+            }
+
             if position >= chapter.position && position < chapterEndPosition {
                 return chapter
+            } else if position < chapter.position {
+                upperBound = middleIndex - 1
+            } else {
+                lowerBound = middleIndex + 1
             }
         }
-        
+
         throw ChapterError.noChapterFoundForPosition
     }
     

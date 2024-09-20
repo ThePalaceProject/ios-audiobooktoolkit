@@ -23,11 +23,8 @@ class LCPPlayer: OpenAccessPlayer {
             return 0
         }
 
-//        if currentTrackPosition.track.id == currentChapter.position.track.id {
-//            return currentTrackPosition.timestamp - currentChapter.position.timestamp
-//        } else {
-        return (try? currentTrackPosition - currentChapter.position) ?? 0.0
-//        }
+        let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
+        return offset
     }
 
     init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
@@ -202,30 +199,7 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
-//    override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
-//        guard let currentTrackPosition = currentTrackPosition,
-//              let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
-//            completion?(currentTrackPosition)
-//            return
-//        }
-//
-//        let chapterDuration = currentChapter.duration ?? 0.0
-//        let offset = value * chapterDuration - currentChapter.position.timestamp
-//        let newPosition = currentChapter.position + offset
-//
-//        decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
-//            guard let self = self else { return }
-//            if success {
-//                self.rebuildQueueForPosition(newPosition) {
-//                    self.performSuperSeek(to: newPosition, completion: completion)
-//                }
-//            } else {
-//                completion?(nil)
-//            }
-//        }
-//    }
-//    
+
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition = currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
@@ -247,6 +221,25 @@ class LCPPlayer: OpenAccessPlayer {
                 completion?(nil)
             }
         }
+    }
+
+    override public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+
+                avQueuePlayer.pause()
+                loadInitialPlayerQueue()
+                completion?(endPosition)
+            }
+        }
+
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+        playbackStatePublisher.send(.bookCompleted)
     }
 
     private func rebuildQueueForPosition(_ position: TrackPosition, completion: @escaping () -> Void) {
