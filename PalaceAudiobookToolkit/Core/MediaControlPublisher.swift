@@ -25,12 +25,24 @@ class MediaControlPublisher {
     }
 
     private func setup() {
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
         commandCenter.togglePlayPauseCommand.isEnabled = true
         commandCenter.skipForwardCommand.isEnabled = true
         commandCenter.skipForwardCommand.preferredIntervals = [30]
         commandCenter.skipBackwardCommand.isEnabled = true
         commandCenter.skipBackwardCommand.preferredIntervals = [30]
         commandCenter.changePlaybackRateCommand.isEnabled = true
+
+        commandCenter.playCommand.addTarget { [unowned self] _ in
+            self.commandPublisher.send(.playPause)
+            return .success
+        }
+
+        commandCenter.pauseCommand.addTarget { [unowned self] _ in
+            self.commandPublisher.send(.playPause)
+            return .success
+        }
 
         commandCenter.togglePlayPauseCommand.addTarget { [unowned self] _ in
             self.commandPublisher.send(.playPause)
