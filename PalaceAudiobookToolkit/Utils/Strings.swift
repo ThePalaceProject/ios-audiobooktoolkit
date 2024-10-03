@@ -99,8 +99,6 @@ struct Strings {
         static let playedVsRemaining = NSLocalizedString("%@ played. %@ remaining.",
                                                          value: "%@ played. %@ remaining.",
                                                          comment: "Time into the current chapter, then time remaining in the current chapter.")
-        static let downloading = NSLocalizedString("Downloading...",
-                                                   value: "Downloading...",
-                                                   comment: "Downloading...")
+        
     }
 }
