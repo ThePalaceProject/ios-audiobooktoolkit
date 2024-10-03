@@ -40,10 +40,6 @@ struct AudiobookPlayerView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
-                    if !isInBackground {
-                        downloadProgressView(value: playbackModel.overallDownloadProgress)
-                    }
-                    
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
                             .palaceFont(.headline)
@@ -89,7 +85,11 @@ struct AudiobookPlayerView: View {
                     ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
                         .padding(.horizontal)
                         .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
-                    
+
+                    if !isInBackground {
+                        downloadProgressView(value: playbackModel.overallDownloadProgress)
+                    }
+
                     Spacer()
                     
                     playbackControlsView
@@ -210,25 +210,23 @@ struct AudiobookPlayerView: View {
     private func downloadProgressView(value: Float) -> some View {
         let progressHeight: CGFloat = 6
         HStack(alignment: .bottom) {
-            HStack {
-                Text("Downloading:")
+            VStack(alignment: .center) {
                 ZStack {
                     GeometryReader { geometry in
-                        Capsule()
+                        Rectangle()
                             .frame(height: progressHeight)
                             .opacity(0.3)
-                        Capsule()
+                        Rectangle()
                             .frame(height: progressHeight)
                             .frame(width: geometry.size.width * CGFloat(value))
                     }
                     .frame(maxHeight: 6)
                 }
-                Text("\(Int(value * 100))%")
+                Text(Strings.ScrubberView.downloading)
             }
             .palaceFont(.caption)
             .padding(8)
-            .foregroundColor(.white)
-            .background(Color.black)
+            .padding(.horizontal)
         }
         .frame(maxWidth: .infinity)
         .frame(height: playbackModel.isDownloading ? nil : 0)
