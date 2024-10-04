@@ -191,9 +191,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             let middleIndex = (lowerBound + upperBound) / 2
             let chapter = toc[middleIndex]
 
-            guard let chapterEndPosition = chapter.endPosition else {
-                throw ChapterError.invalidChapterDuration
-            }
+            let chapterDuration = chapter.duration ?? chapter.position.track.duration
+            let chapterEndPosition = chapter.endPosition ?? chapter.position + chapterDuration
 
             if position >= chapter.position && position < chapterEndPosition {
                 return chapter
