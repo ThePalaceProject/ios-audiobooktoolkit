@@ -43,14 +43,14 @@ public protocol AudiobookManager {
 
     var sleepTimer: SleepTimer { get }
     var audiobookBookmarksPublisher: CurrentValueSubject<[TrackPosition], Never> { get }
-    
+
     var currentOffset: Double { get }
     var currentDuration: Double { get }
     var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
-    
+
     static func setLogHandler(_ handler: @escaping LogHandler)
-    
+
     func play()
     func pause()
     func unload()
@@ -61,16 +61,16 @@ public protocol AudiobookManager {
     func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?)
     func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
     func fetchBookmarks(completion: (([TrackPosition]) -> Void)?)
-    
+
     var statePublisher: PassthroughSubject<AudiobookManagerState, Never> { get }
-    
+
     var playbackCompletionHandler: (() -> Void)? { get set }
 }
 
 public enum BookmarkError: Error {
     case bookmarkAlreadyExists
     case bookmarkFailedToSave
-    
+
     var localizedDescription: String {
         switch self {
         case .bookmarkAlreadyExists:
@@ -86,12 +86,12 @@ var sharedLogHandler: LogHandler?
 public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     private var waitingForPlayer: Bool = false
     public var bookmarkDelegate: AudiobookBookmarkDelegate?
-    
+
     public var metadata: AudiobookMetadata
     public var audiobook: Audiobook
     public var networkService: AudiobookNetworkService
     public var bookmarks: [TrackPosition] = []
-    
+
     private var cancellables = Set<AnyCancellable>()
     public var statePublisher = PassthroughSubject<AudiobookManagerState, Never>()
     public var audiobookBookmarksPublisher = CurrentValueSubject<[TrackPosition], Never>([])
@@ -100,37 +100,37 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public var playbackCompletionHandler: (() -> ())?
 
     public static let skipTimeInterval: TimeInterval = 30
-    
+
     public var tableOfContents: AudiobookTableOfContents {
         audiobook.tableOfContents
     }
-    
+
     public var currentOffset: Double {
         audiobook.player.currentOffset
     }
-    
+
     public var currentDuration: Double {
         currentChapter?.duration ?? audiobook.player.currentTrackPosition?.track.duration ?? 0.0
     }
-    
+
     public var totalDuration: Double {
         audiobook.tableOfContents.tracks.totalDuration
     }
-    
+
     public var currentChapter: Chapter? {
         audiobook.player.currentChapter
     }
-    
+
     public lazy var sleepTimer: SleepTimer = {
         SleepTimer(player: self.audiobook.player)
     }()
 
     public var needsDownloadRetry: Bool = false
-    
+
     private(set) public var timer: Cancellable?
-    
+
     // MARK: - Initialization
-    
+
     public init(
         metadata: AudiobookMetadata,
         audiobook: Audiobook,
@@ -150,13 +150,13 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         subscribeToMediaControlCommands()
         calculateOverallDownloadProgress()
     }
-    
+
     public static func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
     }
-    
+
     // MARK: - Setup Bindings
-    
+
     private func setupBindings() {
         networkService.downloadStatePublisher
             .sink { [weak self] downloadState in
@@ -173,20 +173,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
             .store(in: &cancellables)
     }
-    
+
     private func checkIfRetryIsNeeded() {
         needsDownloadRetry = audiobook.tableOfContents.allTracks.contains { $0.downloadTask?.needsRetry ?? false }
     }
-    
+
     private func calculateOverallDownloadProgress() {
         let tracks = audiobook.tableOfContents.allTracks
         let totalProgress = tracks.compactMap { $0.downloadTask?.downloadProgress }.reduce(0, +)
         let overallProgress = totalProgress / Float(tracks.count)
         statePublisher.send(.overallDownloadProgress(overallProgress))
     }
-    
+
     // MARK: - Now Playing Info
-    
+
     private func setupNowPlayingInfoTimer() {
         let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
         playbackTrackerDelegate?.playbackStarted()
@@ -202,32 +202,32 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 self.updateNowPlayingInfo(position)
             }
     }
-    
+
     private func updateNowPlayingInfo(_ position: TrackPosition?) {
         guard let currentTrackPosition = position else { return }
-        
+
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
-        
+
         nowPlayingInfo[MPMediaItemPropertyTitle] = (try? tableOfContents.chapter(forPosition: currentTrackPosition).title) ?? currentTrackPosition.track.title
         nowPlayingInfo[MPMediaItemPropertyArtist] = metadata.title
         nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = metadata.authors?.joined(separator: ", ")
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTrackPosition.timestamp
         nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = currentTrackPosition.track.duration
-        
+
         let playbackRate = PlaybackRate.convert(rate: audiobook.player.playbackRate)
         let isPlaying = audiobook.player.isPlaying
         nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
-        
+
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
-    
+
     // MARK: - Audiobook Actions
-    
+
     public func downloadProgress(for chapter: Chapter) -> Double {
         tableOfContents.downloadProgress(for: chapter)
     }
-    
+
     public func retryDownload() {
         needsDownloadRetry = false
         networkService.fetchUndownloadedTracks()
@@ -246,17 +246,18 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         playbackTrackerDelegate?.playbackStopped()
         audiobook.player.pause()
     }
-    
+
     public func unload() {
         playbackTrackerDelegate?.playbackStopped()
         audiobook.player.unload()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         cancellables.removeAll()
     }
-    
+
     @discardableResult
     public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
         var result: Result<Void, Error>? = nil
-        
+
         bookmarkDelegate?.saveListeningPosition(at: location) { serverId in
             if let _ = serverId {
                 result = .success(())
@@ -274,7 +275,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             completion?(.failure(.bookmarkAlreadyExists))
             return
         }
-        
+
         bookmarkDelegate?.saveBookmark(at: location) { [weak self] savedLocation in
             guard let savedLocation = savedLocation else {
                 completion?(.failure(.bookmarkFailedToSave))
@@ -284,19 +285,19 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             completion?(.success(savedLocation))
         }
     }
-    
+
     public func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?) {
         bookmarkDelegate?.deleteBookmark(at: location) { [weak self] success in
             guard success else {
                 completion?(false)
                 return
             }
-            
+
             self?.bookmarks.removeAll { $0 == location }
             completion?(true)
         }
     }
-    
+
     public func fetchBookmarks(completion: (([TrackPosition]) -> Void)? = nil) {
         bookmarkDelegate?.fetchBookmarks(for: audiobook.tableOfContents.tracks, toc: audiobook.tableOfContents.toc) { [weak self] bookmarks in
             self?.bookmarks = bookmarks.sorted {
@@ -307,73 +308,73 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 }
                 return date1 > date2
             }
-            
+
             completion?(self?.bookmarks ?? [])
         }
     }
-    
+
     // MARK: - Player Subscription
-    
+
     private func subscribeToPlayer() {
         audiobook.player.playbackStatePublisher
             .receive(on: RunLoop.main)
             .sink { [weak self] playbackState in
                 guard let self = self else { return }
-                
+
                 switch playbackState {
                 case .started(let trackPosition):
                     self.handlePlaybackBegan(trackPosition)
-                    
+
                 case .stopped(let trackPosition):
                     self.handlePlaybackStopped(trackPosition)
-                    
+
                 case .failed(let trackPosition, let error):
                     self.handlePlaybackFailed(trackPosition, error: error)
-                    
+
                 case .completed(let chapter):
                     self.handlePlaybackCompleted(chapter)
-                    
+
                 case .unloaded:
                     self.handlePlayerUnloaded()
-                    
+
                 case .bookCompleted:
                     self.playbackCompletionHandler?()
                 }
             }
             .store(in: &cancellables)
     }
-    
+
     private func handlePlaybackBegan(_ trackPosition: TrackPosition) {
         waitingForPlayer = false
         statePublisher.send(.playbackBegan(trackPosition))
         playbackTrackerDelegate?.playbackStarted()
     }
-    
+
     private func handlePlaybackStopped(_ trackPosition: TrackPosition) {
         waitingForPlayer = false
         statePublisher.send(.playbackStopped(trackPosition))
         playbackTrackerDelegate?.playbackStopped()
     }
-    
+
     private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error: Error?) {
         statePublisher.send(.playbackFailed(trackPosition))
         playbackTrackerDelegate?.playbackStopped()
     }
-    
+
     private func handlePlaybackCompleted(_ chapter: Chapter) {
         waitingForPlayer = false
         statePublisher.send(.playbackStopped(chapter.position))
     }
-    
+
     private func handlePlayerUnloaded() {
         playbackTrackerDelegate?.playbackStopped()
         mediaControlPublisher.tearDown()
         timer?.cancel()
         statePublisher.send(.playbackUnloaded)
     }
-    
+
     // MARK: - Media Control Commands
-    
+
     private func subscribeToMediaControlCommands() {
         mediaControlPublisher.commandPublisher
             .sink { [weak self] command in
@@ -393,7 +394,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
             .store(in: &cancellables)
     }
-    
+
     deinit {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
         cancellables.removeAll()
