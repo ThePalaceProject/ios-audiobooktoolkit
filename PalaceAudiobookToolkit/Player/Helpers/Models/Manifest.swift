@@ -76,7 +76,6 @@ public struct Manifest: Codable {
         crossRefId = try container.decodeIfPresent(Int.self, forKey: .crossRefId)
         metadata = try container.decodeIfPresent(Metadata.self, forKey: .metadata)
         readingOrder = try container.decodeIfPresent([ReadingOrderItem].self, forKey: .readingOrder)
-        resources = try container.decodeIfPresent([Link].self, forKey: .resources)
         toc = try container.decodeIfPresent([TOCItem].self, forKey: .toc)
         formatType = try container.decodeIfPresent(String.self, forKey: .formatType)
         spine = try container.decodeIfPresent([SpineItem].self, forKey: .spine)
@@ -90,6 +89,13 @@ public struct Manifest: Codable {
         } else {
             links = nil
             linksDictionary = nil
+        }
+
+        if let decodedResources = try? container.decode([Link].self, forKey: .resources) {
+            resources = decodedResources
+        } else {
+            resources = []
+            print("Failed to decode resources or resources were empty. Defaulting to an empty array.")
         }
     }
     
@@ -146,7 +152,7 @@ public struct Manifest: Codable {
     }
     
     public struct Link: Codable {
-        let rel: String?
+        let rel: [String]?
         let href: String
         let type: String?
         let height: Int?
@@ -158,17 +164,59 @@ public struct Manifest: Codable {
         let physicalFileLengthInBytes: Int?
         let alternates: [Link]?
 
+        // Nested struct for localized title
         struct LocalizedString: Codable {
             let values: [String: String]
-            
+
             func localizedTitle() -> String {
                 let currentLocale = Locale.autoupdatingCurrent
                 let languageCode = currentLocale.languageCode ?? "en"
                 return values[languageCode] ?? values["en"] ?? ""
             }
         }
+
+        // Add a placeholder for `Properties` struct
+        struct Properties: Codable {
+            let encrypted: Encrypted?
+
+            struct Encrypted: Codable {
+                let algorithm: String?
+                let profile: String?
+                let scheme: String?
+            }
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+
+            if let relArray = try? container.decode([String].self, forKey: .rel) {
+                rel = relArray
+            } else if let relString = try? container.decode(String.self, forKey: .rel) {
+                rel = [relString]
+            } else {
+                rel = nil
+            }
+
+            href = try container.decode(String.self, forKey: .href)
+            type = try container.decodeIfPresent(String.self, forKey: .type)
+            height = try container.decodeIfPresent(Int.self, forKey: .height)
+            width = try container.decodeIfPresent(Int.self, forKey: .width)
+            bitrate = try container.decodeIfPresent(Int.self, forKey: .bitrate)
+            title = try container.decodeIfPresent(LocalizedString.self, forKey: .title)
+            duration = try container.decodeIfPresent(Int.self, forKey: .duration)
+            properties = try container.decodeIfPresent(Properties.self, forKey: .properties)
+            physicalFileLengthInBytes = try container.decodeIfPresent(Int.self, forKey: .physicalFileLengthInBytes)
+
+            if let alternatesArray = try? container.decode([Link].self, forKey: .alternates) {
+                alternates = alternatesArray
+            } else if let alternateSingle = try? container.decode(Link.self, forKey: .alternates) {
+                alternates = [alternateSingle]
+            } else {
+                alternates = nil
+            }
+        }
     }
-    
+
     struct LinksDictionary: Codable {
         var contentLinks: [Link]?
         var selfLink: Link?

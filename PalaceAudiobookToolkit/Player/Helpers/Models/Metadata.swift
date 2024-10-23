@@ -12,7 +12,7 @@ extension Manifest {
     public struct Metadata: Codable {
         public let type: String?
         public let identifier: String?
-        public let title: String
+        public let title: String?
         public let subtitle: String?
         public let language: String?
         public let modified: Date?
@@ -23,61 +23,71 @@ extension Manifest {
         public let drmInformation: DRMType?
         public let signature: Signature?
         public let rights: Rights?
-        
+
         enum CodingKeys: String, CodingKey {
             case type = "@type"
             case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted
             case signature = "http://www.feedbooks.com/audiobooks/signature"
             case rights = "http://www.feedbooks.com/audiobooks/rights"
         }
-        
+
         public struct Signature: Codable {
             let algorithm: String?
             let value: String?
             let issuer: String?
         }
-        
+
         public struct Rights: Codable {
             let start: String?
             let end: String?
         }
-        
+
+        public struct Author: Codable {
+            let name: String
+        }
+
+        public struct Publisher: Codable {
+            let name: String
+        }
+
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             type = try container.decodeIfPresent(String.self, forKey: .type)
             identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
-            title = try container.decode(String.self, forKey: .title)
+            title = try container.decodeIfPresent(String.self, forKey: .title)
             subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
-            language = try container.decodeIfPresent(String.self, forKey: .language)
             published = try container.decodeIfPresent(Date.self, forKey: .published)
-            publisher = try container.decodeIfPresent(String.self, forKey: .publisher)
             duration = try container.decodeIfPresent(Double.self, forKey: .duration)
             drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
             signature = try container.decodeIfPresent(Signature.self, forKey: .signature)
             rights = try container.decodeIfPresent(Rights.self, forKey: .rights)
-            
+
+            if let languageArray = try? container.decode([String].self, forKey: .language), let firstLanguage = languageArray.first {
+                language = firstLanguage
+            } else if let singleLanguage = try? container.decodeIfPresent(String.self, forKey: .language) {
+                language = singleLanguage
+            } else {
+                language = nil
+            }
+
+            if let publisherArray = try? container.decode([Publisher].self, forKey: .publisher), let firstPublisher = publisherArray.first {
+                publisher = firstPublisher.name
+            } else {
+                publisher = nil
+            }
+
             if let modifiedDateString = try container.decodeIfPresent(String.self, forKey: .modified), modifiedDateString != "N/A" {
                 modified = try container.decode(Date.self, forKey: .modified)
             } else {
                 modified = nil
             }
 
-            if let authorStrings = try? container.decodeIfPresent([String].self, forKey: .author) {
-                if let authorStrings {
-                    author = authorStrings.map { Author(name: $0) }
-                }
-            } else if let singleAuthor = try? container.decodeIfPresent(String.self, forKey: .author) {
-                if let singleAuthor {
-                    author = [Author(name: singleAuthor)]
-                }
-            } else if let authorArray = try? container.decodeIfPresent([Author].self, forKey: .author) {
-                if let authorArray {
-                    author = authorArray
-                }
+            if let authorArray = try? container.decode([Author].self, forKey: .author) {
+                author = authorArray
             }
         }
     }
-    
+
     static func date(from string: String) -> Date? {
         guard string != "N/A" else { return nil }
         
