@@ -136,6 +136,7 @@ class LCPPlayer: OpenAccessPlayer {
         }
     }
     
+    
     private func updateQueueForTrack(_ track: any Track, completion: @escaping () -> Void) {
         playerQueueUpdateQueue.async { [weak self] in
             guard let self = self else { return }
@@ -268,23 +269,25 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
+
     override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
-        guard let delegate = decryptionDelegate, let task = task as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls else {
+        guard let delegate = decryptionDelegate,
+              let task = task as? LCPDownloadTask,
+              let decryptedUrls = task.decryptedUrls else {
             return .unknown
         }
-        
+
         var savedUrls = [URL]()
         var missingUrls = [URL]()
-        
+
         let group = DispatchGroup()
-        
+
         for (index, decryptedUrl) in decryptedUrls.enumerated() {
             if FileManager.default.fileExists(atPath: decryptedUrl.path) {
                 savedUrls.append(decryptedUrl)
                 continue
             }
-            
+
             group.enter()
             decryptionQueue.async {
                 delegate.decrypt(url: task.urls[index], to: decryptedUrl) { error in
@@ -299,12 +302,12 @@ class LCPPlayer: OpenAccessPlayer {
                     group.leave()
                 }
             }
-            
+
             missingUrls.append(task.urls[index])
         }
-        
+
         group.wait()
-        
+
         return missingUrls.isEmpty ? .saved(savedUrls) : .missing(missingUrls)
     }
 }
