@@ -17,13 +17,17 @@ public enum DownloadTaskState {
 }
 
 public protocol DownloadTask: AnyObject {
-    
-    func fetch()
-    func delete()
-    func assetFileStatus() -> AssetResult
-
     var statePublisher: PassthroughSubject<DownloadTaskState, Never> { get }
     var downloadProgress: Float { get set }
     var key: String { get }
     var needsRetry: Bool { get }
+
+    func fetch()
+    func delete()
+    func cancel()
+    func assetFileStatus() -> AssetResult
+}
+
+extension DownloadTask {
+    func cancel() {}
 }

@@ -53,6 +53,7 @@ public protocol AudiobookNetworkService: AnyObject {
     /// Updates for the status of each download task will
     /// come through delegate methods.
     func deleteAll()
+    func cleanup()
 }
 
 public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
@@ -99,6 +100,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
             updateProgress(progress, for: track)
         case .completed:
             updateProgress(1.0, for: track)
+
             downloadStatePublisher.send(.completed(track: track))
             updateDownloadStatus(for: track, state: .completed)
             startNextDownload()
@@ -193,5 +195,17 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
                 break
             }
         }
+    }
+
+
+    deinit {
+        cleanup() 
+    }
+
+    public func cleanup() {
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+        // Cancel download tasks if they’re in progress
+        tracks.forEach { $0.downloadTask?.cancel() }
     }
 }

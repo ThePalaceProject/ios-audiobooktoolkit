@@ -133,4 +133,13 @@ final class OverdriveDownloadTask: DownloadTask {
         }
         return hash
     }
+
+    func cancel() {
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
+
+        self.downloadProgress = 0.0
+        self.statePublisher.send(.error(nil)) 
+        ATLog(.debug, "Download task cancelled for key: \(self.key)")
+    }
 }
