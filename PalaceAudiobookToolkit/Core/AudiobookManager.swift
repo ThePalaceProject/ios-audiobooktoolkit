@@ -233,10 +233,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         networkService.fetchUndownloadedTracks()
     }
 
-    public func updateAudiobook(with tracks: [any Track]) {
-        networkService = DefaultAudiobookNetworkService(tracks: tracks)
-    }
-
     public func play() {
         playbackTrackerDelegate?.playbackStarted()
         audiobook.player.play()
@@ -250,6 +246,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public func unload() {
         playbackTrackerDelegate?.playbackStopped()
         audiobook.player.unload()
+        networkService.cleanup()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         cancellables.removeAll()
     }
