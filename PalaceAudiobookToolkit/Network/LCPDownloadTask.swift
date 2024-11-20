@@ -58,7 +58,7 @@ final class LCPDownloadTask: DownloadTask {
     }
     
     func assetFileStatus() -> AssetResult {
-        .unknown
+        .saved(urls)
     }
     
     /// Delete decrypted file
