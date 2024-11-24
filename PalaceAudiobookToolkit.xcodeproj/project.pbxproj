@@ -114,7 +114,6 @@
 		E5ECFA852BED6C430008670F /* FindawayDatabaseVerification.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */; };
 		E5ECFA872BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */; };
 		E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */; };
-		E5ECFA9C2BED70E80008670F /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
 		E71168B82AB453A800629DC7 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B72AB453A800629DC7 /* Reachability.swift */; };
 		E71168BC2AB4BEFC00629DC7 /* AudiobookPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168BB2AB4BEFC00629DC7 /* AudiobookPlayer.swift */; };
@@ -278,7 +277,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E5ECFA9C2BED70E80008670F /* AudioEngine.xcframework in Frameworks */,
 				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
 				E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
