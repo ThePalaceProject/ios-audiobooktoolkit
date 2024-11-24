@@ -79,8 +79,6 @@ class OverdriveTrack: Track {
                 DispatchQueue.main.async {
                     self._duration = duration
                 }
-            } else {
-                print("Failed to load duration with error: \(error?.localizedDescription ?? "unknown error")")
             }
         }
     }

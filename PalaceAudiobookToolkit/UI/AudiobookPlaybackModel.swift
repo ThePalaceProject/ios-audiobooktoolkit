@@ -90,6 +90,8 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func subscribeToPublisher() {
+        subscriptions.removeAll()
+
         audiobookManager.statePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in

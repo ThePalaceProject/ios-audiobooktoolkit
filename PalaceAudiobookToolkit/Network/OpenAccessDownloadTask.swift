@@ -218,6 +218,18 @@ final class OpenAccessDownloadTask: DownloadTask {
         }
         return hash
     }
+
+    func cancel() {
+        downloadTask?.cancel()
+        downloadTask = nil
+
+        session?.invalidateAndCancel()
+        session = nil
+
+        self.downloadProgress = 0.0
+        self.statePublisher.send(.error(nil))
+        ATLog(.debug, "Download task cancelled for key: \(self.key)")
+    }
 }
 
 final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
