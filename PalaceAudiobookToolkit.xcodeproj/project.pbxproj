@@ -64,12 +64,12 @@
 		E52C1C4D2C00437F00D8F30B /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E52C1C4E2C00437F00D8F30B /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
+		E531FF072D0691D70003E2FA /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; };
 		E5338AD12BEAB816002387E1 /* littleWomenDevotional_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */; };
 		E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
 		E53A1B792C3E443200F490CD /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
 		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */; };
-		E54ACF012D036A3E00693EA8 /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
 		E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */; };
 		E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55D1D182BBB9E70004FE948 /* OpenAccessPlayer.swift */; };
@@ -278,7 +278,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E54ACF012D036A3E00693EA8 /* AudioEngine.xcframework in Frameworks */,
+				E531FF072D0691D70003E2FA /* AudioEngine.xcframework in Frameworks */,
 				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
 				E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
