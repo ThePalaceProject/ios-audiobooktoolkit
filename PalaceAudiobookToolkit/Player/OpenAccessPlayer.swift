@@ -130,6 +130,7 @@ class OpenAccessPlayer: NSObject, Player {
         switch playerIsReady {
         case .readyToPlay:
             avQueuePlayer.play()
+            restorePlaybackRate()
             playbackStatePublisher.send(.started(trackPosition))
         default:
             handlePlaybackError(.playerNotReady)
@@ -139,7 +140,7 @@ class OpenAccessPlayer: NSObject, Player {
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
             self?.avQueuePlayer.play()
-            self?.avQueuePlayer.rate = PlaybackRate.convert(rate: self?.playbackRate ?? .normalTime)
+            self?.restorePlaybackRate()
             completion?(nil)
         }
     }
@@ -412,7 +413,8 @@ class OpenAccessPlayer: NSObject, Player {
                 if shouldPlay {
                     self.avQueuePlayer.play()
                 }
-                
+
+                self.restorePlaybackRate()
                 completion?(true)
             } else {
                 completion?(false)
@@ -459,11 +461,16 @@ class OpenAccessPlayer: NSObject, Player {
             if success && shouldPlay {
                 self.avQueuePlayer.play()
             }
-            
+            self.restorePlaybackRate()
+
             DispatchQueue.main.async {
                 completion?(success ? position : nil)
             }
         }
+    }
+
+    private func restorePlaybackRate() {
+        avQueuePlayer.rate = PlaybackRate.convert(rate: playbackRate)
     }
 
     public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
