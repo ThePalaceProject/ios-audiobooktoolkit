@@ -202,7 +202,7 @@ class LCPPlayer: OpenAccessPlayer {
     }
 
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
-        guard let currentTrackPosition = currentTrackPosition,
+        guard let currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
             completion?(currentTrackPosition)
             return
@@ -210,7 +210,8 @@ class LCPPlayer: OpenAccessPlayer {
 
         let chapterDuration = currentChapter.duration ?? 0.0
         let offset = value * chapterDuration
-        let newPosition = currentTrackPosition + offset
+        var newPosition = currentTrackPosition
+        newPosition.timestamp = offset
 
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
