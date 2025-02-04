@@ -28,27 +28,30 @@ public enum DRMStatus: Int {
 }
 
 public struct AudiobookFactory {
+    public static func audiobookClass(
+        for manifest: Manifest
+    ) -> Audiobook.Type {
+        switch manifest.audiobookType {
+        case .findaway:
+            return FindawayAudiobook.self
+        default:
+            return OpenAccessAudiobook.self
+        }
+    }
+
     public static func audiobook(
         for manifest: Manifest,
         bookIdentifier: String,
         decryptor: DRMDecryptor?,
         token: String?
     ) -> Audiobook? {
-        switch manifest.audiobookType {
-        case .findaway:
-            return FindawayAudiobook(
-                manifest: manifest,
-                bookIdentifier: bookIdentifier,
-                token: token
-            )
-        default:
-            return OpenAccessAudiobook(
-                manifest: manifest,
-                bookIdentifier: bookIdentifier,
-                decryptor: decryptor,
-                token: token
-            )
-        }
+        let cls = audiobookClass(for: manifest)
+        return cls.init(
+            manifest: manifest,
+            bookIdentifier: bookIdentifier,
+            decryptor: decryptor,
+            token: token
+        )
     }
 }
 
@@ -84,9 +87,10 @@ open class Audiobook: NSObject {
     
     open func checkDrmAsync() {}
     
-    open func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void) {
+    public class func deleteLocalContent(manifest: Manifest, bookIdentifier: String, token: String? = nil) {
+        let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
+        let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
         tableOfContents.tracks.deleteTracks()
-        completion(true, nil)
     }
     
     open func update(manifest: Manifest, bookIdentifier: String, token: String?) {

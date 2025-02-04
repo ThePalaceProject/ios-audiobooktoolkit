@@ -11,16 +11,22 @@ import AudioEngine
 
 public final class FindawayAudiobook: Audiobook {
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor? = nil, token: String? = nil) {
-        guard let fulfillmentId = manifest.metadata?.drmInformation?.fulfillmentId else {
+        guard let fulfillmentId = type(of: self).getFulfillmentId(from: manifest) else {
             return nil
         }
         
         super.init(manifest: manifest, bookIdentifier: fulfillmentId, decryptor: decryptor, token: token)
         self.uniqueId = fulfillmentId
     }
-    
-    public override func deleteLocalContent(completion: @escaping (Bool, Error?) -> Void) {
-        FAEAudioEngine.shared()?.downloadEngine?.delete(forAudiobookID: self.uniqueId)
-        completion(true, nil)
+
+    private class func getFulfillmentId(from manifest: Manifest) -> String? {
+        return manifest.metadata?.drmInformation?.fulfillmentId
+    }
+
+    public override class func deleteLocalContent(manifest: Manifest, bookIdentifier: String, token: String? = nil) {
+        guard let fulfillmentId = getFulfillmentId(from: manifest) else {
+            return
+        }
+        FAEAudioEngine.shared()?.downloadEngine?.delete(forAudiobookID: fulfillmentId)
     }
 }
