@@ -7,18 +7,20 @@
 //
 
 import SwiftUI
+import Combine
 
 
 public class AudiobookPlayer: UIViewController {
     
     private var model: AudiobookPlaybackModel!
-    
+    private var cancellables = Set<AnyCancellable>()
+
     @available(*, unavailable, message: "Use init?(audiobookManager:) instead")
     public required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
     }
         
-    public init(audiobookManager: AudiobookManager) {
+    public init(audiobookManager: AudiobookManager, coverImagePublisher: AnyPublisher<UIImage?, Never>) {
         model = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         super.init(nibName: nil, bundle: nil)
         let playerViewController =  UIHostingController(rootView: AudiobookPlayerView(model: model))
@@ -34,8 +36,15 @@ public class AudiobookPlayer: UIViewController {
         ])
         playerViewController.didMove(toParent: self)
         hidesBottomBarWhenPushed = true
-    }
 
+        coverImagePublisher
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newImage in
+                self?.updateImage(newImage)
+            }
+            .store(in: &cancellables)
+    }
     private var playerViewController: UIHostingController<AudiobookPlayerView>? {
         children.first as? UIHostingController<AudiobookPlayerView>
     }
@@ -55,7 +64,6 @@ public class AudiobookPlayer: UIViewController {
         playerViewController?.removeFromParent()
     }
     
-    @objc
     public func updateImage(_ image: UIImage) {
         playerViewController?.rootView.updateImage(image)
     }
