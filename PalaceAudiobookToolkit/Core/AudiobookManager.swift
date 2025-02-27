@@ -151,6 +151,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         calculateOverallDownloadProgress()
     }
 
+
     public static func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
     }
@@ -188,6 +189,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     // MARK: - Now Playing Info
 
     private func setupNowPlayingInfoTimer() {
+        timer?.cancel()
+        timer = nil
+
         let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
         playbackTrackerDelegate?.playbackStarted()
 
@@ -394,6 +398,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     deinit {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
+        timer?.cancel()
+        timer = nil
         cancellables.removeAll()
     }
 }
