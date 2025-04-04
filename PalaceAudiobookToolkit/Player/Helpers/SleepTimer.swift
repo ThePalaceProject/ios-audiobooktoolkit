@@ -37,8 +37,14 @@ private enum TimerState {
     private let player: Player
     private var cancellables = Set<AnyCancellable>()
     private let queue = DispatchQueue(label: "com.palaceaudiobooktoolkit.SleepTimer")
-    private var timeLeftInChapter: Double { Double((self.player.currentChapter?.duration ?? 0.0) - (self.player.currentTrackPosition?.timestamp ?? 0.0)) + (self.player.currentChapter?.position.timestamp ?? 0.0)}
-    
+    private var timeLeftInChapter: Double {
+        guard let duration = self.player.currentChapter?.duration ?? self.player.currentTrackPosition?.track.duration else {
+            return 0.0
+        }
+
+        return Double(duration - self.player.currentOffset)
+    }
+
     public var isActive: Bool {
         return self.queue.sync {
             switch self.timerState {
