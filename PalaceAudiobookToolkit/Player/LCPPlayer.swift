@@ -11,8 +11,9 @@ import AVFoundation
 class LCPPlayer: OpenAccessPlayer {
     
     var decryptionDelegate: DRMDecryptor?
-    private var decryptionQueue = DispatchQueue(label: "com.palace.LCPPlayer.decryptionQueue", qos: .background, attributes: .concurrent)
-    private var playerQueueUpdateQueue = DispatchQueue(label: "com.palace.LCPPlayer.playerQueueUpdateQueue", qos: .userInitiated)
+    private let decryptionQueue = DispatchQueue(label: "com.palace.LCPPlayer.decryptionQueue", qos: .background)
+    private let playerQueueUpdateQueue = DispatchQueue(label: "com.palace.LCPPlayer.playerQueueUpdateQueue", qos: .userInitiated)
+    private let decryptionLock = NSLock()
     
     override var taskCompleteNotification: Notification.Name {
         LCPDownloadTaskCompleteNotification
@@ -115,17 +116,25 @@ class LCPPlayer: OpenAccessPlayer {
             return
         }
         
-        decryptionQueue.async(group: nil, qos: .background, flags: .barrier) {
+        decryptionQueue.async { [weak self] in
+            guard let self = self else {
+                completion(false)
+                return
+            }
+            
             let group = DispatchGroup()
             var success = true
             
             for (index, decryptedUrl) in decryptedUrls.enumerated() where missingUrls.contains(decryptedUrl) {
                 group.enter()
+                
+                self.decryptionLock.lock()
                 self.decryptionDelegate?.decrypt(url: task.urls[index], to: decryptedUrl) { error in
                     if let error = error {
                         ATLog(.error, "Error decrypting file", error: error)
                         success = false
                     }
+                    self.decryptionLock.unlock()
                     group.leave()
                 }
             }
@@ -135,7 +144,6 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
     
     private func updateQueueForTrack(_ track: any Track, completion: @escaping () -> Void) {
         playerQueueUpdateQueue.async { [weak self] in
