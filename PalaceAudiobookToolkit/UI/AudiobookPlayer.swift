@@ -57,9 +57,6 @@ public class AudiobookPlayer: UIViewController {
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         navigationController?.setNavigationBarHidden(false, animated: false)
-        if #available(iOS 18.0, *), UIDevice.current.userInterfaceIdiom == .pad {
-            tabBarController?.setTabBarHidden(false, animated: true)
-        }
         playerViewController?.rootView.unload()
         
         playerViewController?.willMove(toParent: nil)
