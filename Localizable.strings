@@ -121,3 +121,6 @@
 /* Abbreviations for seconds */
 "sec" = "sec";
 
+/* Playback slider value description for VoiceOver */
+"Playback progress %.2f percent" = "Playback progress %.2f percent";
+

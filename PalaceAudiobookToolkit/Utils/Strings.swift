@@ -15,6 +15,7 @@ struct Strings {
         static let audiobookPlaybackSlider = "audiobookPlaybackSlider"
         static let audiobookChapterTimeLeftLabel = "audiobookChapterTimeLeftLabel"
         static let audiobookTimeRemainingLabel = "audiobookTimeRemainingLabel"
+        static let audiobookPlaybackSliderLabel = "audiobookPlaybackSliderLabel"
         static let audiobookTitleLabel = "audiobookTitleLabel"
         static let audiobookTimeElapsedLabel = "audiobookTimeElapsedLabel"
         static let audiobookAuthorsLabel = "audiobookAuthorsLabel"
@@ -25,6 +26,7 @@ struct Strings {
         static let skipForwardButton = "skipForwardButton"
         static let playbackSpeedButton = "playbackSpeedButton"
         static let airplaybutton = "airplaybutton"
+        static let backNavigationButton = "backNavigationButton"
     }
 
     struct AudiobookPlayerViewController {
@@ -102,5 +104,6 @@ struct Strings {
         static let downloading = NSLocalizedString("Downloading...",
                                                    value: "Downloading...",
                                                    comment: "Downloading...")
+        static let playbackSliderValueDescription = NSLocalizedString("Playback progress %.2f percent", value: "Playback progress %.2f percent", comment: "Playback slider value description for VoiceOver")
     }
 }
