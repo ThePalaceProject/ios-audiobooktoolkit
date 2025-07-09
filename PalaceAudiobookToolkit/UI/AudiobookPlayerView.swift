@@ -43,39 +43,47 @@ struct AudiobookPlayerView: View {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
                             .palaceFont(.headline)
-                            .accessibilityLabel(Strings.Accessibility.audiobookTitleLabel)
+                            .accessibilityLabel(Text(Strings.Accessibility.audiobookTitleLabel))
+                            .accessibilityValue(Text(playbackModel.audiobookManager.metadata.title ?? ""))
                         Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                             .palaceFont(.body)
-                            .accessibilityLabel(Strings.Accessibility.audiobookAuthorsLabel)
+                            .accessibilityLabel(Text(Strings.Accessibility.audiobookAuthorsLabel))
+                            .accessibilityValue(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
                     
                     VStack(spacing: 5) {
                         if !isInBackground {
                             Text(timeLeftInBookText)
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Strings.Accessibility.audiobookTimeRemainingLabel)
+                                .accessibilityLabel(Text(Strings.Accessibility.audiobookTimeRemainingLabel))
+                                .accessibilityValue(Text(timeLeftInBookText))
                             
                             PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
                                 playbackModel.move(to: newValue)
                             }
                             .padding(.horizontal)
+                            .accessibilityLabel(Text(Strings.Accessibility.audiobookPlaybackSliderLabel))
+                            .accessibilityValue(Text(playbackModel.playbackSliderValueDescription))
                         }
                         
                         HStack(alignment: .firstTextBaseline) {
                             Text("\(playheadOffsetText)")
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Strings.Accessibility.audiobookTimeElapsedLabel)
+                                .accessibilityLabel(Text(Strings.Accessibility.audiobookTimeElapsedLabel))
+                                .accessibilityValue(Text(playheadOffsetText))
                             Spacer()
                             Text(chapterTitle)
                                 .palaceFont(.headline)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
-                                .accessibilityLabel(Strings.Accessibility.audiobookChapterTitleLabel)
+                                .accessibilityLabel(Text(Strings.Accessibility.audiobookChapterTitleLabel))
+                                .accessibilityValue(Text(chapterTitle))
                             
                             Spacer()
                             Text("\(timeLeftText)")
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Strings.Accessibility.audiobookChapterTimeLeftLabel)
+                                .accessibilityLabel(Text(Strings.Accessibility.audiobookChapterTimeLeftLabel))
+                                .accessibilityValue(Text(timeLeftText))
                         }
                         .padding(.horizontal)
                     }
@@ -161,6 +169,7 @@ struct AudiobookPlayerView: View {
                 Text("My Books")
             }
         }
+        .accessibility(label: Text(Strings.Accessibility.backNavigationButton))
         .foregroundColor(Color(.label))
         .padding(.leading, -6)
     }
@@ -300,6 +309,7 @@ struct AudiobookPlayerView: View {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
                             }
                             .accessibility(label: Text(Strings.Accessibility.playbackSpeedButton))
+                            .accessibility(value: Text(playbackRateText))
                     )
                 
                 Spacer()
@@ -331,7 +341,7 @@ struct AudiobookPlayerView: View {
                             ToolkitImage(name: "bookmark", renderingMode: .template)
                                 .frame(height: 20)
                         }
-                            .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
+                        .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
                     )
             }
             .frame(minHeight: 40)

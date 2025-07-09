@@ -70,6 +70,11 @@ class AudiobookPlaybackModel: ObservableObject {
         }
     }
     
+    var playbackSliderValueDescription: String {
+        let percent = playbackProgress * 100
+        return String(format: Strings.ScrubberView.playbackSliderValueDescription, percent)
+    }
+    
     var isPlaying: Bool {
         audiobookManager.audiobook.player.isPlaying
     }
