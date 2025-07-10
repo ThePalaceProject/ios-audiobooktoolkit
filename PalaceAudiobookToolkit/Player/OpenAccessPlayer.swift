@@ -138,9 +138,21 @@ class OpenAccessPlayer: NSObject, Player {
     }
     
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        ATLog(.debug, "[LCPDIAG] Attempting to play at position: \(position.track.key), timestamp: \(position.timestamp)")
         seekTo(position: position) { [weak self] trackPosition in
-            self?.avQueuePlayer.play()
-            self?.restorePlaybackRate()
+            guard let self = self else { return }
+            if let item = self.avQueuePlayer.currentItem {
+                ATLog(.debug, "[LCPDIAG] Current AVPlayerItem status: \(item.status.rawValue), error: \(String(describing: item.error))")
+            }
+            ATLog(.debug, "[LCPDIAG] Calling play() on AVQueuePlayer")
+            self.avQueuePlayer.play()
+            ATLog(.debug, "[LCPDIAG] AVQueuePlayer rate after play: \(self.avQueuePlayer.rate)")
+            if let item = self.avQueuePlayer.currentItem {
+                let duration = item.asset.duration.seconds
+                let currentTime = item.currentTime().seconds
+                ATLog(.debug, "[LCPDIAG] Current item duration: \(duration), current time: \(currentTime)")
+            }
+            self.restorePlaybackRate()
             completion?(nil)
         }
     }
@@ -551,7 +563,18 @@ extension OpenAccessPlayer {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ) {
-        if keyPath == "status", let player = object as? AVQueuePlayer {
+        if keyPath == "status", let item = object as? AVPlayerItem {
+            switch item.status {
+            case .readyToPlay:
+                ATLog(.debug, "[LCPDIAG] AVPlayerItem ready to play: \(item.trackIdentifier ?? "unknown")")
+            case .failed:
+                ATLog(.error, "[LCPDIAG] AVPlayerItem failed: \(item.trackIdentifier ?? "unknown"), error: \(String(describing: item.error))")
+            case .unknown:
+                ATLog(.debug, "[LCPDIAG] AVPlayerItem status unknown: \(item.trackIdentifier ?? "unknown")")
+            @unknown default:
+                ATLog(.debug, "[LCPDIAG] AVPlayerItem status unknown default: \(item.trackIdentifier ?? "unknown")")
+            }
+        } else if keyPath == "status", let player = object as? AVQueuePlayer {
             switch player.status {
             case .readyToPlay:
                 playerIsReady = .readyToPlay
@@ -690,9 +713,15 @@ extension OpenAccessPlayer {
             switch fileStatus {
             case .saved(let urls):
                 for url in urls {
+                    // [LCPDIAG] Log file existence and size
+                    let fileExists = FileManager.default.fileExists(atPath: url.path)
+                    let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
+                    ATLog(.debug, "[LCPDIAG] Creating AVPlayerItem for track: \(track.key), url: \(url), exists: \(fileExists), size: \(fileSize)")
                     let playerItem = AVPlayerItem(url: url)
                     playerItem.audioTimePitchAlgorithm = .timeDomain
                     playerItem.trackIdentifier = track.key
+                    // [LCPDIAG] Observe status changes
+                    playerItem.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
                     items.append(playerItem)
                 }
             case .missing:

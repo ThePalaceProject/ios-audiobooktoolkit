@@ -111,10 +111,35 @@ struct AudiobookPlayerView: View {
                 if !playbackModel.audiobookManager.audiobook.player.isLoaded {
                     LoadingView()
                 }
+                // NEW: Show spinner overlay when decrypting
+                if playbackModel.isDecrypting {
+                    Color.black.opacity(0.4)
+                        .edgesIgnoringSafeArea(.all)
+                    ProgressView("Decrypting audio...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(12)
+                }
             }
             .navigationBarTitle(Text(""), displayMode: .inline)
             .navigationBarItems(trailing: tocButton)
             .navigationBarItems(leading: backButton)
+            // NEW: Show alert on decryption error
+            .alert(isPresented: Binding<Bool>(
+                get: { playbackModel.decryptionError != nil },
+                set: { if !$0 { playbackModel.decryptionError = nil } }
+            )) {
+                Alert(
+                    title: Text("Decryption Error"),
+                    message: Text(playbackModel.decryptionError ?? ""),
+                    primaryButton: .default(Text("Retry")) {
+                        playbackModel.playPause()
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
         }
         .palaceFont(.body)
         .navigationViewStyle(.stack)

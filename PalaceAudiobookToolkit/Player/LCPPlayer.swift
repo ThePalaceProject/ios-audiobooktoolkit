@@ -70,6 +70,8 @@ class LCPPlayer: OpenAccessPlayer {
             if success {
                 self.updateQueueForTrack(position.track) {
                     self.performSuperPlay(at: position, completion: completion)
+                    // Prefetch next track in background
+                    self.prefetchNextTrack(from: position.track)
                 }
             } else {
                 completion?(NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"]))
@@ -105,20 +107,30 @@ class LCPPlayer: OpenAccessPlayer {
     
     private func decryptTrackIfNeeded(track: any Track, completion: @escaping (Bool) -> Void) {
         guard let task = track.downloadTask as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls else {
+            ATLog(.error, "[LCPDIAG] No download task or decrypted URLs for track: \(track.key)")
             completion(false)
             return
         }
         
         let missingUrls = decryptedUrls.filter { !FileManager.default.fileExists(atPath: $0.path) }
+        ATLog(.debug, "[LCPDIAG] Decrypting track: \(track.key), missingUrls: \(missingUrls)")
         
         if missingUrls.isEmpty {
+            ATLog(.debug, "[LCPDIAG] All decrypted files exist for track: \(track.key)")
             completion(true)
             return
         }
         
+        // Publish decrypting state for UI feedback
+        let position = currentTrackPosition
+        DispatchQueue.main.async {
+            self.playbackStatePublisher.send(.decrypting(position))
+        }
+        
         decryptionQueue.async { [weak self] in
             guard let self = self else {
-                completion(false)
+                ATLog(.error, "[LCPDIAG] Self is nil in decryptionQueue for track: \(track.key)")
+                DispatchQueue.main.async { completion(false) }
                 return
             }
             
@@ -127,12 +139,14 @@ class LCPPlayer: OpenAccessPlayer {
             
             for (index, decryptedUrl) in decryptedUrls.enumerated() where missingUrls.contains(decryptedUrl) {
                 group.enter()
-                
+                ATLog(.debug, "[LCPDIAG] Starting decryption for: \(task.urls[index]) to \(decryptedUrl)")
                 self.decryptionLock.lock()
                 self.decryptionDelegate?.decrypt(url: task.urls[index], to: decryptedUrl) { error in
                     if let error = error {
-                        ATLog(.error, "Error decrypting file", error: error)
+                        ATLog(.error, "[LCPDIAG] Error decrypting file \(task.urls[index]) to \(decryptedUrl): \(error)")
                         success = false
+                    } else {
+                        ATLog(.debug, "[LCPDIAG] Successfully decrypted file \(task.urls[index]) to \(decryptedUrl)")
                     }
                     self.decryptionLock.unlock()
                     group.leave()
@@ -140,6 +154,12 @@ class LCPPlayer: OpenAccessPlayer {
             }
             
             group.notify(queue: .main) {
+                if !success {
+                    ATLog(.error, "[LCPDIAG] Decryption failed for track: \(track.key)")
+                    self.playbackStatePublisher.send(.failed(position, NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"])))
+                } else {
+                    ATLog(.debug, "[LCPDIAG] Decryption completed for track: \(track.key)")
+                }
                 completion(success)
             }
         }
@@ -201,8 +221,10 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             
             if success {
-                resetPlayerQueue()
+                self.resetPlayerQueue()
                 self.insertTrackIntoQueue(track: nextTrack)
+                // Prefetch the following track
+                self.prefetchNextTrack(from: nextTrack)
             } else {
                 self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
             }
@@ -318,5 +340,10 @@ class LCPPlayer: OpenAccessPlayer {
         group.wait()
 
         return missingUrls.isEmpty ? .saved(savedUrls) : .missing(missingUrls)
+    }
+
+    private func prefetchNextTrack(from track: any Track) {
+        guard let nextTrack = tableOfContents.tracks.nextTrack(track) else { return }
+        decryptTrackIfNeeded(track: nextTrack) { _ in /* ignore result, just prefetch */ }
     }
 }
