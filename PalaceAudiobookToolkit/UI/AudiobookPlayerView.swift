@@ -43,47 +43,40 @@ struct AudiobookPlayerView: View {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
                             .palaceFont(.headline)
-                            .accessibilityLabel(Text(Strings.Accessibility.audiobookTitleLabel))
-                            .accessibilityValue(Text(playbackModel.audiobookManager.metadata.title ?? ""))
+                            .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
                         Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
                             .palaceFont(.body)
-                            .accessibilityLabel(Text(Strings.Accessibility.audiobookAuthorsLabel))
-                            .accessibilityValue(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
+                            .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
                     
                     VStack(spacing: 5) {
                         if !isInBackground {
                             Text(timeLeftInBookText)
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Text(Strings.Accessibility.audiobookTimeRemainingLabel))
-                                .accessibilityValue(Text(timeLeftInBookText))
+                                .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
                             
                             PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
                                 playbackModel.move(to: newValue)
                             }
                             .padding(.horizontal)
-                            .accessibilityLabel(Text(Strings.Accessibility.audiobookPlaybackSliderLabel))
-                            .accessibilityValue(Text(playbackModel.playbackSliderValueDescription))
+                            .accessibilityLabel(Text("Playback slider value: \(playbackModel.playbackSliderValueDescription)"))
                         }
                         
                         HStack(alignment: .firstTextBaseline) {
                             Text("\(playheadOffsetText)")
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Text(Strings.Accessibility.audiobookTimeElapsedLabel))
-                                .accessibilityValue(Text(playheadOffsetText))
+                                .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
                             Spacer()
                             Text(chapterTitle)
                                 .palaceFont(.headline)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
-                                .accessibilityLabel(Text(Strings.Accessibility.audiobookChapterTitleLabel))
-                                .accessibilityValue(Text(chapterTitle))
+                                .accessibilityLabel(Text(chapterTitle))
                             
                             Spacer()
                             Text("\(timeLeftText)")
                                 .palaceFont(.caption)
-                                .accessibilityLabel(Text(Strings.Accessibility.audiobookChapterTimeLeftLabel))
-                                .accessibilityValue(Text(timeLeftText))
+                                .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
                         }
                         .padding(.horizontal)
                     }
@@ -192,7 +185,7 @@ struct AudiobookPlayerView: View {
                 )
                 .frame(width: size, height: size)
         }
-        .accessibility(label: Text(accessibilityString))
+        .accessibilityLabel(accessibilityString)
         .foregroundColor(.primary)
     }
     
@@ -212,7 +205,7 @@ struct AudiobookPlayerView: View {
             }
         }
         .foregroundColor(.primary)
-        .accessibility(label: Text(isPlaying ? Strings.Accessibility.pauseButton : Strings.Accessibility.playButton))
+        .accessibilityLabel(Text(isPlaying ? Strings.Accessibility.pauseButton : Strings.Accessibility.playButton))
     }
     
     @ViewBuilder
@@ -308,8 +301,7 @@ struct AudiobookPlayerView: View {
                             .actionSheet(isPresented: $showPlaybackSpeed) {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
                             }
-                            .accessibility(label: Text(Strings.Accessibility.playbackSpeedButton))
-                            .accessibility(value: Text(playbackRateText))
+                            .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
                     )
                 
                 Spacer()
@@ -396,8 +388,16 @@ struct AudiobookPlayerView: View {
         HumanReadableTimestamp(timeInterval: playbackModel.offset).timecode
     }
     
+    private var playheadOffsetAccessibleText: String {
+        HumanReadableTimestamp(timeInterval: playbackModel.offset).accessibleDescription
+    }
+    
     private var timeLeftText: String {
         HumanReadableTimestamp(timeInterval: playbackModel.timeLeft).timecode
+    }
+    
+    private var timeLeftAccessibleText: String {
+        HumanReadableTimestamp(timeInterval: playbackModel.timeLeft).accessibleDescription
     }
     
     private var timeLeftInBookText: String {

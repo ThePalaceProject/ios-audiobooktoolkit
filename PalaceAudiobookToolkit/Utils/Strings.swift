@@ -10,8 +10,8 @@ import Foundation
 
 struct Strings {
     struct Accessibility {
-        static let addBookmarksButton = "addBookmarksButton"
-        static let tableOfContentsButton = "tableOfContentsButton"
+        static let addBookmarksButton = "addBookmarks"
+        static let tableOfContentsButton = "tableOfContents"
         static let audiobookPlaybackSlider = "audiobookPlaybackSlider"
         static let audiobookChapterTimeLeftLabel = "audiobookChapterTimeLeftLabel"
         static let audiobookTimeRemainingLabel = "audiobookTimeRemainingLabel"
@@ -20,13 +20,13 @@ struct Strings {
         static let audiobookTimeElapsedLabel = "audiobookTimeElapsedLabel"
         static let audiobookAuthorsLabel = "audiobookAuthorsLabel"
         static let audiobookChapterTitleLabel = "audiobookChapterTitleLabel"
-        static let skipBackButton = "skipBackButton"
-        static let playButton = "playButton"
-        static let pauseButton = "pauseButton"
-        static let skipForwardButton = "skipForwardButton"
-        static let playbackSpeedButton = "playbackSpeedButton"
-        static let airplaybutton = "airplaybutton"
-        static let backNavigationButton = "backNavigationButton"
+        static let skipBackButton = "skipBack"
+        static let playButton = "play"
+        static let pauseButton = "pause"
+        static let skipForwardButton = "skipForward"
+        static let playbackSpeedButton = "playbackSpeed"
+        static let airplaybutton = "airplay"
+        static let backNavigationButton = "backNavigation"
     }
 
     struct AudiobookPlayerViewController {
