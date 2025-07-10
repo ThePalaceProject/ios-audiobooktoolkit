@@ -72,7 +72,7 @@ struct AudiobookPlayerView: View {
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .accessibilityLabel(Text(chapterTitle))
-                            
+
                             Spacer()
                             Text("\(timeLeftText)")
                                 .palaceFont(.caption)
