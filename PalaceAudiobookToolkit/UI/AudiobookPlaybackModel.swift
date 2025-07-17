@@ -114,14 +114,14 @@ class AudiobookPlaybackModel: ObservableObject {
                 case .playbackBegan(let position), .playbackCompleted(let position):
                     self.currentLocation = position
                     self.isWaitingForPlayer = false
-                    self.isDecrypting = false // NEW: reset spinner
+                    self.isDecrypting = false
                     self.decryptionError = nil
                     self.updateProgress()
                 case .playbackUnloaded:
                     break
                 case .playbackFailed(let position):
                     self.isWaitingForPlayer = false
-                    self.isDecrypting = false // NEW: reset spinner
+                    self.isDecrypting = false
                     self.decryptionError = "Playback failed."
                     if let position = position {
                         ATLog(.debug, "Playback error at position: \(position.timestamp)")
@@ -129,7 +129,7 @@ class AudiobookPlaybackModel: ObservableObject {
                         ATLog(.error, "Playback failed but position is nil.")
                     }
                 case .decrypting:
-                    self.isDecrypting = true // NEW: show spinner
+                    self.isDecrypting = true
                     self.decryptionError = nil
                 default:
                     break
