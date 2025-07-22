@@ -44,33 +44,17 @@ class TrackFactory: TrackFactoryProtocol {
                 token: token
             )
         case .lcp:
-            ATLog(.debug, "[LCPStreaming] Creating LCP track, checking streaming availability")
-            // For LCP audiobooks, use streaming track if streaming is enabled, otherwise use regular LCP track
-            if LCPStreamingDownloadTask.isStreamingEnabled() {
-                ATLog(.debug, "[LCPStreaming] Creating LCPStreamingTrack for key: \(key ?? "unknown")")
-                return try? LCPStreamingTrack(
-                    manifest: manifest,
-                    urlString: urlString,
-                    audiobookID: audiobookID,
-                    title: title,
-                    duration: duration,
-                    index: index,
-                    token: token,
-                    key: key
-                )
-            } else {
-                ATLog(.debug, "[LCPStreaming] Creating traditional LCPTrack for key: \(key ?? "unknown")")
-                return try? LCPTrack(
-                    manifest: manifest,
-                    urlString: urlString,
-                    audiobookID: audiobookID,
-                    title: title,
-                    duration: duration,
-                    index: index,
-                    token: token,
-                    key: key
-                )
-            }
+            ATLog(.debug, "[LCPStreaming] Creating LCPStreamingTrack for key: \(key ?? "unknown")")
+            return try? LCPStreamingTrack(
+                manifest: manifest,
+                urlString: urlString,
+                audiobookID: audiobookID,
+                title: title,
+                duration: duration,
+                index: index,
+                token: token,
+                key: key
+            )
         case .overdrive:
             return try? OverdriveTrack(
                 manifest: manifest,

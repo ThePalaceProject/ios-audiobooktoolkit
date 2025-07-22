@@ -30,16 +30,12 @@ public final class LCPStreamingDownloadTask: DownloadTask {
     /// Streaming tasks don't need retry since they fetch on-demand
     public  var needsRetry: Bool { false }
     
-    /// Configuration flag to enable/disable streaming
-    static var streamingEnabled: Bool = true
-    
     init(key: String, urls: [URL]?, mediaType: TrackMediaType) {
         self.key = key
         self.urls = urls ?? []
         self.urlMediaType = mediaType
         self.streamingUrls = self.urls.compactMap { streamingURL(for: $0) }
         
-        // Mark as immediately ready for streaming
         DispatchQueue.main.async {
             self.statePublisher.send(.completed)
         }
@@ -49,10 +45,8 @@ public final class LCPStreamingDownloadTask: DownloadTask {
     /// - Parameter url: Original URL (e.g., `media/sound.mp3`)
     /// - Returns: Streaming URL with custom scheme (e.g., `lcp-stream://media/sound.mp3`)
     private func streamingURL(for url: URL) -> URL? {
-        // Create a custom URL scheme that our resource loader will intercept
         let streamingScheme = "lcp-stream"
         
-        // Clean the path to remove leading slashes
         let cleanPath = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
         let urlString = "\(streamingScheme)://\(key)/\(cleanPath)"
         
@@ -68,7 +62,6 @@ public final class LCPStreamingDownloadTask: DownloadTask {
     
     /// For streaming, we don't need to pre-fetch anything
     public func fetch() {
-        // Streaming tasks are always ready - no pre-download needed
         downloadProgress = 1.0
         statePublisher.send(.completed)
     }
@@ -83,7 +76,6 @@ public final class LCPStreamingDownloadTask: DownloadTask {
     
     /// For streaming, we don't have files to delete, but we can clear any cached ranges
     public func delete() {
-        // Clear any cached range data for this track
         NotificationCenter.default.post(
             name: NSNotification.Name("LCPStreamingClearCache"),
             object: nil,
@@ -93,30 +85,11 @@ public final class LCPStreamingDownloadTask: DownloadTask {
     }
     
     /// Cancel streaming preparation (no-op for streaming tasks)
-    public func cancel() {
-        // Nothing to cancel for streaming tasks
-    }
+    public func cancel() {}
     
     /// Original URLs from the manifest (for reference)
     var originalUrls: [URL] {
         return urls
-    }
-    
-    /// Check if streaming is currently enabled
-    /// - Returns: true if streaming is enabled, false otherwise
-    static func isStreamingEnabled() -> Bool {
-        return streamingEnabled
-    }
-}
-
-// MARK: - Streaming Configuration
-
-public extension LCPStreamingDownloadTask {
-    /// Enable or disable streaming mode globally
-    /// - Parameter enabled: Whether to enable streaming mode
-    static func setStreamingEnabled(_ enabled: Bool) {
-        streamingEnabled = enabled
-        ATLog(.info, "LCP streaming mode \(enabled ? "enabled" : "disabled")")
     }
 }
 
@@ -132,7 +105,6 @@ extension LCPStreamingDownloadTask {
             return nil 
         }
         
-        // Format: lcp-stream://trackKey/media/sound.mp3
         let pathComponents = streamingURL.pathComponents
         ATLog(.debug, "[LCPStreaming] URL path components: \(pathComponents)")
         
@@ -141,7 +113,6 @@ extension LCPStreamingDownloadTask {
             return nil 
         }
         
-        // Remove the leading "/" and reconstruct the path
         let originalPath = pathComponents.dropFirst().joined(separator: "/")
         ATLog(.debug, "[LCPStreaming] Extracted original path: '\(originalPath)' from URL: \(streamingURL.absoluteString)")
         return originalPath
@@ -174,14 +145,11 @@ extension LCPStreamingDownloadTask {
     /// - Parameter mediaType: The track media type
     /// - Returns: True if streaming should be used, false for traditional download
     static func shouldUseStreaming(for mediaType: TrackMediaType) -> Bool {
-        guard streamingEnabled else { return false }
-        
         switch mediaType {
         case .audioMP3, .audioMP4, .audioMPEG, .audioAAC:
-            return true
+            true
         case .rbDigital:
-            // RBDigital might need special handling
-            return false
+            false
         }
     }
 } 

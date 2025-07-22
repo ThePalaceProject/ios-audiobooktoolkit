@@ -129,19 +129,9 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         }
     }
     
-
     private func createLCPPlayer(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
-        ATLog(.debug, "[LCPStreaming] Creating LCP player, checking if streaming is enabled")
-        
-        // Check if we should use streaming for LCP audiobooks
-        if LCPStreamingDownloadTask.isStreamingEnabled() {
-            ATLog(.debug, "[LCPStreaming] Streaming is enabled, attempting to create streaming player")
-            return createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
-        } else {
-            ATLog(.debug, "[LCPStreaming] Streaming is disabled, using traditional LCP player")
-            // Use traditional LCP player
-            return LCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
-        }
+        ATLog(.debug, "[LCPStreaming] Streaming is enabled, attempting to create streaming player")
+        return createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
     }
     
     private func createStreamingLCPPlayer(

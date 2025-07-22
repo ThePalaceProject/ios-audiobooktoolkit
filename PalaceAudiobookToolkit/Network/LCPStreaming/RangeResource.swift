@@ -18,7 +18,6 @@ public class RangeResource: Resource {
         self.httpClient = httpClient
     }
 
-    /// HEAD via `stream(request:consume:)` with an empty consume.
     public func properties() async -> ReadResult<ResourceProperties> {
         guard let httpURL = sourceURL?.httpURL else {
             return .failure(.access(.other(NSError(domain: "InvalidURL", code: -1))))
@@ -26,14 +25,12 @@ public class RangeResource: Resource {
         let req = HTTPRequest(url: httpURL, method: .head)
 
         do {
-            // consume: just drop any (empty) body chunks
             let response = try await httpClient
                 .stream(request: req, consume: { _chunk, _progress in
-                    .success(())    // always continue
+                    .success(())
                 })
                 .get()
 
-            // Build ResourceProperties from HTTPResponse headers
             var props = ResourceProperties()
             if let len = response.contentLength {
                 props["length"] = UInt64(len)
@@ -48,13 +45,11 @@ public class RangeResource: Resource {
         }
     }
 
-    /// GET via `stream(request:consume:)`, accumulate into `data`.
     public func read(range: Range<UInt64>? = nil) async -> ReadResult<Data> {
         guard let httpURL = sourceURL?.httpURL else {
             return .failure(.access(.other(NSError(domain: "InvalidURL", code: -1))))
         }
 
-        // Build Range header
         var headers = [String:String]()
         if let r = range {
             headers["Range"] = "bytes=\(r.lowerBound)-\(r.upperBound-1)"
@@ -91,7 +86,6 @@ public class RangeResource: Resource {
         }
     }
 
-    /// HEAD‐backed length
     private func getLength() async throws -> UInt64 {
         if let cached = lengthCache { return cached }
         let props = try await properties().get()

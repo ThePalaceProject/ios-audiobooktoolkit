@@ -29,7 +29,6 @@ public class HTTPRangeRetriever {
       range: Range<Int>,
       completion: @escaping (Result<Data, Error>) -> Void
     ) {
-      // Check cache first
       if let cachedData = cacheManager.getCachedRange(for: url, range: range) {
         completion(.success(cachedData))
         return
@@ -92,7 +91,6 @@ public class HTTPRangeRetriever {
                 let req      = HTTPRequest(url: httpURL, method: .head)
                 let response = try await httpClient.fetch(req).get()
                 
-                // contentLength is your total length (HEAD or full GET)
                 if let len = response.contentLength {
                     completion(.success(Int(len)))
                 } else {
@@ -128,12 +126,10 @@ private class RangeCacheManager {
         return cacheQueue.sync {
             guard let urlCache = cache[url.string] else { return nil }
             
-            // Check if we have the exact range
             if let data = urlCache[range] {
                 return data
             }
             
-            // Check if any cached range contains our requested range
             for (cachedRange, cachedData) in urlCache {
                 if cachedRange.contains(range.lowerBound) && cachedRange.contains(range.upperBound - 1) {
                     let startOffset = range.lowerBound - cachedRange.lowerBound
