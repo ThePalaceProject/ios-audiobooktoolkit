@@ -112,24 +112,19 @@ protocol PlayerFactoryProtocol {
 
 class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
-        ATLog(.debug, "[LCPStreaming] Creating player for audiobook type: \(type)")
         
         switch type {
         case .lcp:
-            ATLog(.debug, "[LCPStreaming] Identified as LCP audiobook, creating LCP player")
-            return createLCPPlayer(tableOfContents: toc, decryptor: decryptor)
+            createLCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
-            ATLog(.debug, "[LCPStreaming] Identified as Findaway audiobook")
-            return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
+            FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
         default:
-            ATLog(.debug, "[LCPStreaming] Using default OpenAccess player for type: \(type)")
-            return OpenAccessPlayer(tableOfContents: toc)
+            OpenAccessPlayer(tableOfContents: toc)
         }
     }
     
     private func createLCPPlayer(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
-        ATLog(.debug, "[LCPStreaming] Streaming is enabled, attempting to create streaming player")
-        return createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
+        createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
     }
     
     private func createStreamingLCPPlayer(

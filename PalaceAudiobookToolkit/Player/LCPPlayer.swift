@@ -107,21 +107,17 @@ class LCPPlayer: OpenAccessPlayer {
     
     private func decryptTrackIfNeeded(track: any Track, completion: @escaping (Bool) -> Void) {
         guard let task = track.downloadTask as? LCPDownloadTask, let decryptedUrls = task.decryptedUrls else {
-            ATLog(.error, "[LCPDIAG] No download task or decrypted URLs for track: \(track.key)")
             completion(false)
             return
         }
         
         let missingUrls = decryptedUrls.filter { !FileManager.default.fileExists(atPath: $0.path) }
-        ATLog(.debug, "[LCPDIAG] Decrypting track: \(track.key), missingUrls: \(missingUrls)")
         
         if missingUrls.isEmpty {
-            ATLog(.debug, "[LCPDIAG] All decrypted files exist for track: \(track.key)")
             completion(true)
             return
         }
         
-        // Publish decrypting state for UI feedback
         let position = currentTrackPosition
         DispatchQueue.main.async {
             self.playbackStatePublisher.send(.decrypting(position))
@@ -129,7 +125,6 @@ class LCPPlayer: OpenAccessPlayer {
         
         decryptionQueue.async { [weak self] in
             guard let self = self else {
-                ATLog(.error, "[LCPDIAG] Self is nil in decryptionQueue for track: \(track.key)")
                 DispatchQueue.main.async { completion(false) }
                 return
             }
@@ -139,11 +134,9 @@ class LCPPlayer: OpenAccessPlayer {
             
             for (index, decryptedUrl) in decryptedUrls.enumerated() where missingUrls.contains(decryptedUrl) {
                 group.enter()
-                ATLog(.debug, "[LCPDIAG] Starting decryption for: \(task.urls[index]) to \(decryptedUrl)")
                 self.decryptionLock.lock()
                 self.decryptionDelegate?.decrypt(url: task.urls[index], to: decryptedUrl) { error in
                     if let error = error {
-                        ATLog(.error, "[LCPDIAG] Error decrypting file \(task.urls[index]) to \(decryptedUrl): \(error)")
                         success = false
                     } else {
                         ATLog(.debug, "[LCPDIAG] Successfully decrypted file \(task.urls[index]) to \(decryptedUrl)")
@@ -270,7 +263,6 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
 
-        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
     }
 

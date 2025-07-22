@@ -138,19 +138,12 @@ class OpenAccessPlayer: NSObject, Player {
     }
     
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
-        ATLog(.debug, "[LCPDIAG] Attempting to play at position: \(position.track.key), timestamp: \(position.timestamp)")
         seekTo(position: position) { [weak self] trackPosition in
             guard let self = self else { return }
-            if let item = self.avQueuePlayer.currentItem {
-                ATLog(.debug, "[LCPDIAG] Current AVPlayerItem status: \(item.status.rawValue), error: \(String(describing: item.error))")
-            }
-            ATLog(.debug, "[LCPDIAG] Calling play() on AVQueuePlayer")
             self.avQueuePlayer.play()
-            ATLog(.debug, "[LCPDIAG] AVQueuePlayer rate after play: \(self.avQueuePlayer.rate)")
             if let item = self.avQueuePlayer.currentItem {
                 let duration = item.asset.duration.seconds
                 let currentTime = item.currentTime().seconds
-                ATLog(.debug, "[LCPDIAG] Current item duration: \(duration), current time: \(currentTime)")
             }
             self.restorePlaybackRate()
             completion?(nil)
