@@ -29,9 +29,7 @@ public enum DRMStatus: Int {
 }
 
 public protocol LCPStreamingProvider: DRMDecryptor {
-  /// After you’ve opened the manifest, this returns the Readium Publication
   func getPublication() -> Publication?
-  /// The HTTP-range retriever to use for on‐demand streaming
   func getHTTPRangeRetriever() -> HTTPRangeRetriever
 }
 
@@ -135,38 +133,19 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
     }
     
     private func createStreamingLCPPlayer(
-      tableOfContents: AudiobookTableOfContents,
+      tableOfContents toc: AudiobookTableOfContents,
       decryptor: DRMDecryptor?
     ) -> Player {
-      ATLog(.debug, "[LCPStreaming] Attempting to create streaming LCP player")
-      
-      guard let decryptor = decryptor else {
-        ATLog(.error, "[LCPStreaming] no decryptor—falling back")
-        return LCPPlayer(tableOfContents: tableOfContents, decryptor: nil)
-      }
-      
-      ATLog(.debug, "[LCPStreaming] Decryptor provided, checking LCPStreamingProvider conformance")
-
-      // look for the streaming‐provider conformance, not a concrete class
-      if let streaming = decryptor as? LCPStreamingProvider {
-        ATLog(.debug, "[LCPStreaming] Decryptor conforms to LCPStreamingProvider")
-        
-        if let publication = streaming.getPublication() {
-          ATLog(.debug, "[LCPStreaming] Publication available, creating streaming player")
-          return LCPStreamingPlayer(
-            tableOfContents: tableOfContents,
-            decryptor: decryptor,
-            publication: publication,
-            rangeRetriever: streaming.getHTTPRangeRetriever()
-          )
-        } else {
-          ATLog(.warn, "[LCPStreaming] LCPStreamingProvider has no publication—falling back")
-        }
-      } else {
-        ATLog(.warn, "[LCPStreaming] Decryptor does not conform to LCPStreamingProvider—falling back")
+      if let provider = decryptor as? LCPStreamingProvider,
+         let publication = provider.getPublication() {
+        return LCPStreamingPlayer(
+          tableOfContents: toc,
+          decryptor: provider,
+          publication: publication,
+          rangeRetriever: provider.getHTTPRangeRetriever()
+        )
       }
 
-      ATLog(.warn, "[LCPStreaming] provider missing or not ready—falling back")
-      return LCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
+      return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
     }
 }
