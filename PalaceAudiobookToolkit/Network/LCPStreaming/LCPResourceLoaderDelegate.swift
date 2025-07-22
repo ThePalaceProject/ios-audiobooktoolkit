@@ -97,40 +97,74 @@ class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
             
             ATLog(.debug, "[LCPStreaming] Extracted original path: '\(originalPath)' from URL: '\(url.absoluteString)'")
             
-            // Verify the resource exists in the publication before proceeding
-            guard lcpPublication.getResource(at: originalPath) != nil else {
+            // Find the resource using the same logic as LCPAudiobooks.getResource
+            guard let resolvedPath = findResourcePath(originalPath) else {
                 ATLog(.error, "[LCPStreaming] Resource not found in LCP publication: '\(originalPath)'")
                 ATLog(.debug, "[LCPStreaming] Available resources in publication:")
                 for resource in lcpPublication.manifest.readingOrder {
                     ATLog(.debug, "[LCPStreaming]   - \(resource.href)")
                 }
                 
-                // Try alternative path formats
-                let alternatives = [
-                    originalPath.hasPrefix("/") ? String(originalPath.dropFirst()) : "/\(originalPath)",
-                    originalPath.replacingOccurrences(of: "%20", with: " "),
-                    URL(string: originalPath)?.lastPathComponent
-                ].compactMap { $0 }
-                
-                for altPath in alternatives {
-                    if lcpPublication.getResource(at: altPath) != nil {
-                        ATLog(.debug, "[LCPStreaming] Found resource with alternative path: '\(altPath)'")
-                        handleResourceRequest(loadingRequest, for: altPath)
-                        return
-                    }
-                }
-                
                 loadingRequest.finishLoading(with: NSError.resourceLoadingError("Resource not found: \(originalPath)"))
                 return
             }
             
-            ATLog(.debug, "[LCPStreaming] Successfully mapped URL to resource: \(originalPath)")
-            handleResourceRequest(loadingRequest, for: originalPath)
+            ATLog(.debug, "[LCPStreaming] Successfully resolved path '\(originalPath)' to '\(resolvedPath)'")
+            handleResourceRequest(loadingRequest, for: resolvedPath)
             
         } catch {
             ATLog(.error, "[LCPStreaming] Error processing loading request: \(error.localizedDescription)")
             loadingRequest.finishLoading(with: NSError.resourceLoadingError("Request processing failed: \(error.localizedDescription)"))
         }
+    }
+    
+    /// Find the correct resource path in the publication using the same logic as LCPAudiobooks
+    private func findResourcePath(_ originalPath: String) -> String? {
+        // Use the same getResource logic as LCPAudiobooks extension
+        if lcpPublication.getResource(at: originalPath) != nil {
+            ATLog(.debug, "[LCPStreaming] Found resource with direct path: '\(originalPath)'")
+            return originalPath
+        }
+        
+        // Try with leading slash
+        let pathWithSlash = originalPath.hasPrefix("/") ? originalPath : "/\(originalPath)"
+        if lcpPublication.getResource(at: pathWithSlash) != nil {
+            ATLog(.debug, "[LCPStreaming] Found resource with leading slash: '\(pathWithSlash)'")
+            return pathWithSlash
+        }
+        
+        // Try without leading slash
+        let pathWithoutSlash = originalPath.hasPrefix("/") ? String(originalPath.dropFirst()) : originalPath
+        if lcpPublication.getResource(at: pathWithoutSlash) != nil {
+            ATLog(.debug, "[LCPStreaming] Found resource without leading slash: '\(pathWithoutSlash)'")
+            return pathWithoutSlash
+        }
+        
+        // Try URL decoding in case there are encoded characters
+        let decodedPath = originalPath.removingPercentEncoding ?? originalPath
+        if decodedPath != originalPath && lcpPublication.getResource(at: decodedPath) != nil {
+            ATLog(.debug, "[LCPStreaming] Found resource with URL-decoded path: '\(decodedPath)'")
+            return decodedPath
+        }
+        
+        // Try matching by just the filename (last path component)
+        let filename = URL(string: originalPath)?.lastPathComponent ?? originalPath
+        for link in lcpPublication.manifest.readingOrder {
+            if let linkFilename = URL(string: link.href)?.lastPathComponent,
+               linkFilename == filename {
+                ATLog(.debug, "[LCPStreaming] Found resource by filename match: '\(link.href)' matches '\(filename)'")
+                return link.href
+            }
+        }
+        
+        // Log all available resources for debugging
+        ATLog(.debug, "[LCPStreaming] Could not find resource for path: '\(originalPath)'")
+        ATLog(.debug, "[LCPStreaming] Available resources in manifest:")
+        for (index, link) in lcpPublication.manifest.readingOrder.enumerated() {
+            ATLog(.debug, "[LCPStreaming]   [\(index)] href: '\(link.href)'")
+        }
+        
+        return nil
     }
     
     private func handleResourceRequest(_ loadingRequest: AVAssetResourceLoadingRequest, for path: String) {
@@ -667,3 +701,5 @@ public extension ResourceProperties {
     }
   }
 }
+
+
