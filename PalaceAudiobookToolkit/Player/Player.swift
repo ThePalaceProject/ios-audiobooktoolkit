@@ -29,6 +29,7 @@ public enum PlaybackState {
     case completed(Chapter)
     case bookCompleted
     case unloaded
+    case decrypting(TrackPosition?) // NEW: Indicates decryption in progress
 }
 
 public protocol Player: NSObject {

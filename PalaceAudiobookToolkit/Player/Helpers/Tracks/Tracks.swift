@@ -34,7 +34,7 @@ class TrackFactory: TrackFactoryProtocol {
     ) -> (any Track)? {
         switch manifest.audiobookType {
         case .findaway:
-            return try? FindawayTrack(
+            try? FindawayTrack(
                 manifest: manifest,
                 urlString: urlString,
                 audiobookID: audiobookID,
@@ -44,7 +44,7 @@ class TrackFactory: TrackFactoryProtocol {
                 token: token
             )
         case .lcp:
-            return try? LCPTrack(
+            try? LCPStreamingTrack(
                 manifest: manifest,
                 urlString: urlString,
                 audiobookID: audiobookID,
@@ -55,7 +55,7 @@ class TrackFactory: TrackFactoryProtocol {
                 key: key
             )
         case .overdrive:
-            return try? OverdriveTrack(
+            try? OverdriveTrack(
                 manifest: manifest,
                 urlString: urlString,
                 audiobookID: audiobookID,
@@ -65,7 +65,7 @@ class TrackFactory: TrackFactoryProtocol {
                 key: key
             )
         default:
-            return try? OpenAccessTrack(
+            try? OpenAccessTrack(
                 manifest: manifest,
                 urlString: urlString ?? "",
                 audiobookID: audiobookID,
@@ -257,7 +257,7 @@ public class Tracks {
             track.downloadTask?.delete()
         }
     }
-
+    
     public func duration(to position: TrackPosition) -> TimeInterval {
         guard position.track.index >= 0 && position.track.index < tracks.count else {
             return 0
