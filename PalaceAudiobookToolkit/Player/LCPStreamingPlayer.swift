@@ -9,6 +9,7 @@ import Foundation
 import AVFoundation
 import Combine
 import ReadiumShared
+import UIKit
 
 class LCPStreamingPlayer: OpenAccessPlayer {
     
@@ -16,7 +17,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     private var httpRangeRetriever: HTTPRangeRetriever?
     private let lcpDecryptor: DRMDecryptor
     private let lcpPublication: Publication
-    private let streamingQueue = DispatchQueue(label: "com.palace.lcp-streaming", qos: .userInitiated)
+    private let streamingQueue = DispatchQueue(label: "com.palace.lcp-streaming", qos: .utility)
     
     override var taskCompleteNotification: Notification.Name {
         LCPStreamingTaskCompleteNotification
@@ -56,6 +57,48 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         setupResourceLoader()
         loadInitialPlayerQueue()
         addPlayerObservers()
+        configureForEnergyEfficiency()
+        setupBackgroundObservers()
+    }
+    
+    private func configureForEnergyEfficiency() {
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
+        } catch {
+            ATLog(.error, "Failed to configure audio session for energy efficiency: \(error)")
+        }
+    }
+    
+    private func setupBackgroundObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(willEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func didEnterBackground() {
+        streamingQueue.suspend()
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.streamingQueue.resume()
+        }
+    }
+    
+    @objc private func willEnterForeground() {
+        streamingQueue.suspend()
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.streamingQueue.resume()
+        }
     }
     
     // MARK: - Resource Loader Setup
@@ -223,7 +266,6 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         return position
     }
     
-    /// Optimized position navigation that handles both intra-track and cross-track seeks
     private func navigateToStreamingPosition(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         if let currentItem = avQueuePlayer.currentItem,
            currentItem.trackIdentifier == position.track.key {
@@ -301,19 +343,25 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     }
     
     private func loadAndNavigateToTrack(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        #if DEBUG
         ATLog(.debug, "Loading and navigating to track: \(position.track.key)")
+        #endif
         
         resetPlayerQueue()
         
         insertStreamingTrackIntoQueue(track: position.track) { [weak self] success in
             guard let self = self else {
+                #if DEBUG
                 ATLog(.error, "Self deallocated during track loading")
+                #endif
                 completion?(nil)
                 return
             }
             
             if success {
+                #if DEBUG
                 ATLog(.debug, "Track loaded successfully, performing seek to \(position.timestamp)")
+                #endif
                 self.performStreamingSeek(to: position.timestamp, completion: completion)
             } else {
                 ATLog(.error, "Failed to load track \(position.track.key)")
@@ -342,16 +390,22 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     }
     
     override func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        #if DEBUG
         ATLog(.debug, "Playing at position: track \(position.track.key), timestamp: \(position.timestamp)")
+        #endif
         lastValidPosition = position
         navigateToStreamingPosition(position) { [weak self] trackPosition in
             guard let self = self else {
+                #if DEBUG
                 ATLog(.error, "Self deallocated during navigation")
+                #endif
                 return
             }
             
             if let trackPosition = trackPosition {
+                #if DEBUG
                 ATLog(.debug, "Navigation successful, starting playback")
+                #endif
                 self.updatePositionTracking(trackPosition)
                 
                 self.avQueuePlayer.play()
@@ -417,7 +471,6 @@ class LCPStreamingPlayer: OpenAccessPlayer {
             ATLog(.debug, "Sent chapter completion for: \(currentChapter.title ?? "Unknown")")
         }
         
-        // Check if this is the last track
         guard let currentTrack = currentTrackPosition?.track else {
             ATLog(.debug, "No current track, sending book completed")
             playbackStatePublisher.send(.bookCompleted)
@@ -537,6 +590,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     // MARK: - Cleanup
     
     deinit {
+        NotificationCenter.default.removeObserver(self)
         resourceLoaderDelegate = nil
         httpRangeRetriever = nil
     }

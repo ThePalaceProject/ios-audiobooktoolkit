@@ -119,6 +119,18 @@ class OpenAccessPlayer: NSObject, Player {
     func configurePlayer() {
         setupAudioSession()
         buildPlayerQueue()
+        configureForEnergyEfficiency()
+    }
+    
+    private func configureForEnergyEfficiency() {
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
+        } catch {
+            ATLog(.error, "Failed to configure audio session for energy efficiency: \(error)")
+        }
     }
     
     private func handlePlaybackError(_ error: OpenAccessPlayerError) {

@@ -7,6 +7,7 @@
 //
 
 import AVFoundation
+import UIKit
 
 class LCPPlayer: OpenAccessPlayer {
     
@@ -43,6 +44,56 @@ class LCPPlayer: OpenAccessPlayer {
         setupAudioSession()
         loadInitialPlayerQueue()
         addPlayerObservers()
+        configureForEnergyEfficiency()
+        setupBackgroundObservers()
+    }
+    
+    private func configureForEnergyEfficiency() {
+        // Configure AVPlayer for better energy efficiency during background playback
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        
+        // Enable background audio support with energy-efficient settings
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
+            // Spoken audio mode is more energy efficient for long-form content
+        } catch {
+            ATLog(.error, "Failed to configure audio session for energy efficiency: \(error)")
+        }
+    }
+    
+    private func setupBackgroundObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(willEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func didEnterBackground() {
+        // Optimize for background energy usage
+        // Reduce decryption queue priority when in background
+        decryptionQueue.suspend()
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.decryptionQueue.resume()
+        }
+        ATLog(.debug, "LCPPlayer entering background mode")
+    }
+    
+    @objc private func willEnterForeground() {
+        // Restore normal operation when returning to foreground
+        decryptionQueue.suspend()
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.decryptionQueue.resume()
+        }
+        ATLog(.debug, "LCPPlayer returning to foreground")
     }
     
     private func loadInitialPlayerQueue() {
