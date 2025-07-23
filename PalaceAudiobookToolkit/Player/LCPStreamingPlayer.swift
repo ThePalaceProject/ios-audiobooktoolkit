@@ -53,6 +53,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     
     override func configurePlayer() {
         setupAudioSession()
+        setupResourceLoader()
         loadInitialPlayerQueue()
         addPlayerObservers()
     }
@@ -61,7 +62,6 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     
     private func setupResourceLoader() {
         guard let httpRangeRetriever = httpRangeRetriever else {
-            ATLog(.error, "[LCPStreaming] No HTTP range retriever available")
             return
         }
         
@@ -69,8 +69,6 @@ class LCPStreamingPlayer: OpenAccessPlayer {
             httpRangeRetriever: httpRangeRetriever,
             lcpPublication: lcpPublication
         )
-        
-        ATLog(.debug, "Resource loader delegate configured")
     }
     
     // MARK: - Player Queue Management
@@ -113,6 +111,8 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         // Add items to the player queue
         for item in playerItems {
             avQueuePlayer.insert(item, after: nil)
+            // CRITICAL: Add end observer so playerItemDidReachEnd gets called
+            addEndObserver(for: item)
         }
         
         completion(true)
@@ -127,10 +127,8 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         var playerItems: [AVPlayerItem] = []
         
         for url in urls {
-            // Create AVURLAsset with custom scheme
             let asset = AVURLAsset(url: url)
             
-            // Set our custom resource loader
             asset.resourceLoader.setDelegate(
                 resourceLoaderDelegate,
                 queue: streamingQueue
@@ -309,13 +307,16 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         
         insertStreamingTrackIntoQueue(track: position.track) { [weak self] success in
             guard let self = self else {
+                ATLog(.error, "Self deallocated during track loading")
                 completion?(nil)
                 return
             }
             
             if success {
+                ATLog(.debug, "Track loaded successfully, performing seek to \(position.timestamp)")
                 self.performStreamingSeek(to: position.timestamp, completion: completion)
             } else {
+                ATLog(.error, "Failed to load track \(position.track.key)")
                 completion?(nil)
             }
         }
@@ -341,19 +342,23 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     }
     
     override func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        ATLog(.debug, "Playing at position: track \(position.track.key), timestamp: \(position.timestamp)")
         lastValidPosition = position
         navigateToStreamingPosition(position) { [weak self] trackPosition in
             guard let self = self else {
+                ATLog(.error, "Self deallocated during navigation")
                 return
             }
             
             if let trackPosition = trackPosition {
+                ATLog(.debug, "Navigation successful, starting playback")
                 self.updatePositionTracking(trackPosition)
                 
                 self.avQueuePlayer.play()
                 self.restorePlaybackRate()
                 completion?(nil)
             } else {
+                ATLog(.error, "Navigation failed for track \(position.track.key)")
                 completion?(NSError(domain: "LCPStreamingPlayer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to navigate to position"]))
             }
         }
@@ -398,52 +403,80 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     override func resetPlayerQueue() {
         for item in avQueuePlayer.items() {
             item.removeObserver(self, forKeyPath: "status")
+            removeEndObserver(for: item)
         }
         avQueuePlayer.removeAllItems()
     }
     
-    override func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
-        if let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) {
-            let nextPosition = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-            
-            navigateToStreamingPosition(nextPosition) { [weak self] trackPosition in
-                guard let self = self else {
-                    completion?(nil)
-                    return
-                }
-                
-                if let position = trackPosition {
-                    self.avQueuePlayer.play()
-                    self.restorePlaybackRate()
-                    completion?(position)
-                } else {
-                    completion?(nil)
-                }
-            }
-        } else {
-            let endPosition = TrackPosition(
-                track: currentTrack,
-                timestamp: currentTrack.duration,
-                tracks: tableOfContents.tracks
-            )
-            
-            avQueuePlayer.pause()
-            playbackStatePublisher.send(.bookCompleted)
-            completion?(endPosition)
-        }
-    }
-    
     @objc override func playerItemDidReachEnd(_ notification: Notification) {
-        guard let currentTrack = currentTrackPosition?.track else {
-            return
-        }
+        ATLog(.debug, "Player item did reach end")
         
         if let currentTrackPosition = currentTrackPosition,
            let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
             playbackStatePublisher.send(.completed(currentChapter))
+            ATLog(.debug, "Sent chapter completion for: \(currentChapter.title ?? "Unknown")")
         }
         
-        handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+        // Check if this is the last track
+        guard let currentTrack = currentTrackPosition?.track else {
+            ATLog(.debug, "No current track, sending book completed")
+            playbackStatePublisher.send(.bookCompleted)
+            return
+        }
+        
+        if let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) {
+            ATLog(.debug, "Advancing to next track: \(nextTrack.key)")
+            advanceToNextTrack()
+        } else {
+            ATLog(.debug, "No more tracks, handling book completion")
+            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+        }
+    }
+    
+    private func advanceToNextTrack() {
+        guard let currentTrack = currentTrackPosition?.track else {
+            return
+        }
+        
+        guard let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) else {
+            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            return
+        }
+        
+        let nextPosition = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+        
+        navigateToStreamingPosition(nextPosition) { [weak self] trackPosition in
+            guard let self = self else { return }
+            
+            if let position = trackPosition {
+                self.avQueuePlayer.play()
+                self.restorePlaybackRate()
+            } else {
+                // If we can't navigate to next track, treat as end of book
+                self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            }
+        }
+    }
+    
+    override func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        ATLog(.debug, "Handling book completion")
+        
+        defer {
+            if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
+                let endPosition = TrackPosition(
+                    track: firstTrack,
+                    timestamp: 0.0,
+                    tracks: currentTrackPosition.tracks
+                )
+                
+                ATLog(.debug, "Resetting to beginning and pausing")
+                self.pause()
+                loadInitialPlayerQueue()
+                completion?(endPosition)
+            }
+        }
+        
+        playbackStatePublisher.send(.bookCompleted)
     }
     
     // MARK: - Asset Status Handling

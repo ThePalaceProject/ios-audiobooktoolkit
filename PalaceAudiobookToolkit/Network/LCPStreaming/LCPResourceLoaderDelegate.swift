@@ -55,8 +55,6 @@ class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         _ resourceLoader: AVAssetResourceLoader,
         didCancel loadingRequest: AVAssetResourceLoadingRequest
     ) {
-        ATLog(.debug, "[LCPStreaming] Cancelled resource request")
-        
         requestsLock.lock()
         let requestToRemove = activeRequests.first { $0.value === loadingRequest }
         if let key = requestToRemove?.key {
@@ -101,7 +99,6 @@ class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     /// Find the correct resource path in the publication using the same logic as LCPAudiobooks
     private func findResourcePath(_ originalPath: String) -> String? {
         if lcpPublication.getResource(at: originalPath) != nil {
-            ATLog(.debug, "[LCPStreaming] Found resource with direct path: '\(originalPath)'")
             return originalPath
         }
         
@@ -184,7 +181,7 @@ class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
                     if let length = contentLength {
                         request.contentLength = length
                     } else {
-                        ATLog(.debug, "[LCPStreaming] Content length unknown, letting AVPlayer handle dynamically")
+                        ATLog(.debug, "Content length unknown, letting AVPlayer handle dynamically")
                     }
                     
                     loadingRequest.finishLoading()
@@ -408,7 +405,7 @@ class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
                 return (hasTag: true, size: tagSize, audioOffset: tagSize)
             }
         } catch {
-            ATLog(.debug, "[LCPStreaming] Could not read header for ID3 detection: \(error)")
+            ATLog(.debug, "Could not read header for ID3 detection: \(error)")
         }
         
         return (hasTag: false, size: 0, audioOffset: 0)

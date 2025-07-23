@@ -43,10 +43,10 @@ class LCPStreamingTrack: Track {
         
         if LCPStreamingDownloadTask.shouldUseStreaming(for: mediaType) {
             self.downloadTask = LCPStreamingDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
-            ATLog(.debug, "[LCPStreaming] Created streaming track: \(self.key)")
+            ATLog(.debug, "Created streaming track: \(self.key)")
         } else {
             self.downloadTask = LCPDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
-            ATLog(.debug, "[LCPStreaming] Created traditional LCP track (streaming not available): \(self.key)")
+            ATLog(.debug, "Created traditional LCP track (streaming not available): \(self.key)")
         }
     }
     

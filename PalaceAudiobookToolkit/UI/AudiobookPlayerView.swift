@@ -426,9 +426,7 @@ struct AudiobookPlayerView: View {
     }
     
     private var timeLeftInBookText: String {
-        let timeLeft = HumanReadableTimestamp(timeInterval: playbackModel.timeLeftInBook).stringDescription
-        let formatString = Strings.ScrubberView.timeRemaining
-        return String(format: formatString, timeLeft)
+        playbackModel.timeLeftInBook.humanReadableRemaining
     }
     
     private var playbackRateButtons: [ActionSheet.Button] {

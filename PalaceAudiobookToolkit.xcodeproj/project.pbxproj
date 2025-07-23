@@ -30,7 +30,7 @@
 		7BD8E4FC20753BC6008ED3F1 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD8E4FB20753BC6008ED3F1 /* Bundle.swift */; };
 		7BDD33AF204461A000CC8807 /* HumanReadableTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BDD33AE204461A000CC8807 /* HumanReadableTimestamp.swift */; };
 		7BDD33B320470A7100CC8807 /* HumanReadablePercentage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BDD33B220470A7000CC8807 /* HumanReadablePercentage.swift */; };
-		7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF3C445205B0A010056D46B /* HumanReadableTimeRemaining.swift */; };
+		7BF3C446205B0A010056D46B /* TimeInterval+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF3C445205B0A010056D46B /* TimeInterval+Extension.swift */; };
 		8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */; };
 		8C3CDB042422AB060020FC0B /* JSONUtilsTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */; };
 		8C3CDB072422D85E0020FC0B /* Data+Base64.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CDB062422D85E0020FC0B /* Data+Base64.swift */; };
@@ -195,7 +195,7 @@
 		7BD8E4FB20753BC6008ED3F1 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		7BDD33AE204461A000CC8807 /* HumanReadableTimestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanReadableTimestamp.swift; sourceTree = "<group>"; };
 		7BDD33B220470A7000CC8807 /* HumanReadablePercentage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanReadablePercentage.swift; sourceTree = "<group>"; };
-		7BF3C445205B0A010056D46B /* HumanReadableTimeRemaining.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanReadableTimeRemaining.swift; sourceTree = "<group>"; };
+		7BF3C445205B0A010056D46B /* TimeInterval+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extension.swift"; sourceTree = "<group>"; };
 		8C218AE7242C4C8500C53F0A /* AVPlayer+Description.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AVPlayer+Description.swift"; sourceTree = "<group>"; };
 		8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONUtilsTest.swift; sourceTree = "<group>"; };
 		8C3CDB062422D85E0020FC0B /* Data+Base64.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Base64.swift"; sourceTree = "<group>"; };
@@ -419,7 +419,6 @@
 				A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */,
 				7BDD33B220470A7000CC8807 /* HumanReadablePercentage.swift */,
 				7B8026A2206AB0AF00012808 /* HumanReadablePlaybackRate.swift */,
-				7BF3C445205B0A010056D46B /* HumanReadableTimeRemaining.swift */,
 				7BDD33AE204461A000CC8807 /* HumanReadableTimestamp.swift */,
 				E67CA9A4215C0D320081A10B /* Log.swift */,
 				7BD8E4F9206EB49D008ED3F1 /* VoiceOverTimestamp.swift */,
@@ -549,6 +548,7 @@
 		E5DE01A02BA3E1830063E68E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
+				7BF3C445205B0A010056D46B /* TimeInterval+Extension.swift */,
 				E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */,
 				E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */,
 				7B5441DF200EA82C0047B6C6 /* AudiobookLifecycleManager.swift */,
@@ -798,7 +798,7 @@
 				E55D1D192BBB9E70004FE948 /* OpenAccessPlayer.swift in Sources */,
 				E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */,
 				E72707E92A54A3930088B86A /* AudiobookPlaybackTrackerDelegate.swift in Sources */,
-				7BF3C446205B0A010056D46B /* HumanReadableTimeRemaining.swift in Sources */,
+				7BF3C446205B0A010056D46B /* TimeInterval+Extension.swift in Sources */,
 				E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */,
 				7B6C1BD0203F1CDA00EB791E /* AudiobookNetworkService.swift in Sources */,
 				E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */,

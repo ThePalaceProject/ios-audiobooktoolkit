@@ -49,11 +49,9 @@ public final class LCPStreamingDownloadTask: DownloadTask {
         
         let cleanPath = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
         let urlString = "\(streamingScheme)://\(key)/\(cleanPath)"
-        
-        ATLog(.debug, "[LCPStreaming] Generated streaming URL: '\(urlString)' for original URL: '\(url.absoluteString)'")
-        
+                
         guard let streamingURL = URL(string: urlString) else {
-            ATLog(.error, "[LCPStreaming] Failed to create streaming URL from string: \(urlString)")
+            ATLog(.error, "Failed to create streaming URL from string: \(urlString)")
             return nil
         }
         
@@ -101,20 +99,20 @@ extension LCPStreamingDownloadTask {
     /// - Returns: Original URL path, or nil if not a valid streaming URL
     static func originalPath(from streamingURL: URL) -> String? {
         guard streamingURL.scheme == "lcp-stream" else { 
-            ATLog(.error, "[LCPStreaming] Invalid scheme for streaming URL: \(streamingURL.scheme ?? "nil")")
+            ATLog(.error, "Invalid scheme for streaming URL: \(streamingURL.scheme ?? "nil")")
             return nil 
         }
         
         let pathComponents = streamingURL.pathComponents
-        ATLog(.debug, "[LCPStreaming] URL path components: \(pathComponents)")
+        ATLog(.debug, "URL path components: \(pathComponents)")
         
         guard pathComponents.count > 1 else { 
-            ATLog(.error, "[LCPStreaming] Insufficient path components in URL: \(streamingURL.absoluteString)")
+            ATLog(.error, "Insufficient path components in URL: \(streamingURL.absoluteString)")
             return nil 
         }
         
         let originalPath = pathComponents.dropFirst().joined(separator: "/")
-        ATLog(.debug, "[LCPStreaming] Extracted original path: '\(originalPath)' from URL: \(streamingURL.absoluteString)")
+        ATLog(.debug, "Extracted original path: '\(originalPath)' from URL: \(streamingURL.absoluteString)")
         return originalPath
     }
     
