@@ -59,7 +59,6 @@ public class HTTPRangeRetriever {
                           userInfo: [NSLocalizedDescriptionKey:"Empty response body"])
           }
 
-          // Cache + return
           cacheManager.cacheRange(for: url, range: range, data: data)
           completion(.success(data))
 

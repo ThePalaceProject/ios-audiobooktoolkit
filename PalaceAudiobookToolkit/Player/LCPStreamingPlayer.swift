@@ -10,8 +10,6 @@ import AVFoundation
 import Combine
 import ReadiumShared
 
-/// LCPStreamingPlayer provides true HTTP-byte-range streaming for LCP audiobooks
-/// without pre-downloading and decrypting entire track files
 class LCPStreamingPlayer: OpenAccessPlayer {
     
     private var resourceLoaderDelegate: LCPResourceLoaderDelegate?
@@ -72,7 +70,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
             lcpPublication: lcpPublication
         )
         
-        ATLog(.debug, "[LCPStreaming] Resource loader delegate configured")
+        ATLog(.debug, "Resource loader delegate configured")
     }
     
     // MARK: - Player Queue Management
@@ -93,23 +91,21 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     
     private func insertStreamingTrackIntoQueue(track: any Track, completion: @escaping (Bool) -> Void) {
         guard let streamingTask = track.downloadTask as? LCPStreamingDownloadTask else {
-            ATLog(.error, "[LCPStreaming] Track does not have a streaming download task: \(track.key)")
+            ATLog(.error, "Track does not have a streaming download task: \(track.key)")
             completion(false)
             return
         }
         
         guard let streamingUrls = streamingTask.streamingUrls, !streamingUrls.isEmpty else {
-            ATLog(.error, "[LCPStreaming] No streaming URLs available for track: \(track.key)")
+            ATLog(.error, "No streaming URLs available for track: \(track.key)")
             completion(false)
             return
         }
-        
-        ATLog(.debug, "[LCPStreaming] Creating streaming player items for track: \(track.key)")
-        
+                
         let playerItems = createStreamingPlayerItems(for: streamingUrls, trackKey: track.key)
         
         if playerItems.isEmpty {
-            ATLog(.error, "[LCPStreaming] Failed to create player items for track: \(track.key)")
+            ATLog(.error, "Failed to create player items for track: \(track.key)")
             completion(false)
             return
         }
@@ -124,7 +120,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     
     private func createStreamingPlayerItems(for urls: [URL], trackKey: String) -> [AVPlayerItem] {
         guard let resourceLoaderDelegate = resourceLoaderDelegate else {
-            ATLog(.error, "[LCPStreaming] No resource loader delegate available")
+            ATLog(.error, "No resource loader delegate available")
             return []
         }
         
@@ -169,7 +165,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         }
         
         guard let position = referencePosition else {
-            ATLog(.error, "[LCPStreaming] No reference position available for skip")
+            ATLog(.error, "No reference position available for skip")
             if let firstTrack = tableOfContents.allTracks.first {
                 let fallbackPosition = TrackPosition(
                     track: firstTrack,
@@ -231,8 +227,6 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     
     /// Optimized position navigation that handles both intra-track and cross-track seeks
     private func navigateToStreamingPosition(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        ATLog(.debug, "[LCPStreaming] Navigating to position: track \(position.track.key), timestamp: \(position.timestamp)")
-        
         if let currentItem = avQueuePlayer.currentItem,
            currentItem.trackIdentifier == position.track.key {
             performStreamingSeek(to: position.timestamp, completion: completion)
@@ -309,7 +303,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
     }
     
     private func loadAndNavigateToTrack(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        ATLog(.debug, "[LCPStreaming] Loading and navigating to track: \(position.track.key)")
+        ATLog(.debug, "Loading and navigating to track: \(position.track.key)")
         
         resetPlayerQueue()
         
@@ -477,7 +471,7 @@ class LCPStreamingPlayer: OpenAccessPlayer {
         
         switch item.status {
         case .readyToPlay:
-            ATLog(.debug, "[LCPStreaming] Player item ready to play: \(trackKey)")
+            ATLog(.debug, "Player item ready to play: \(trackKey)")
             
         case .failed:
             if let error = item.error {
@@ -500,10 +494,10 @@ class LCPStreamingPlayer: OpenAccessPlayer {
             }
             
         case .unknown:
-            ATLog(.debug, "[LCPStreaming] Player item status unknown: \(trackKey)")
+            ATLog(.debug, "Player item status unknown: \(trackKey)")
             
         @unknown default:
-            ATLog(.debug, "[LCPStreaming] Player item status unknown default: \(trackKey)")
+            ATLog(.debug, "Player item status unknown default: \(trackKey)")
         }
     }
     
@@ -518,31 +512,35 @@ class LCPStreamingPlayer: OpenAccessPlayer {
 // MARK: - Track Prefetching
 
 extension LCPStreamingPlayer {
-    
-    /// Prefetch the next track for smoother playback transitions
-    /// For streaming, this might involve preloading some initial bytes
     private func prefetchNextTrack(from currentTrack: any Track) {
         guard let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) else {
             return
         }
         
-        
-        // For streaming, we can optionally preload the first few KB of the next track
-        // to ensure smooth transitions. This is optional and can be implemented later.
-        
-        // Example: Preload first 64KB of next track
         prefetchTrackHead(track: nextTrack, bytes: 64 * 1024)
     }
     
     private func prefetchTrackHead(track: any Track, bytes: Int) {
-        guard let streamingTask = track.downloadTask as? LCPStreamingDownloadTask,
-              let originalUrl = streamingTask.originalUrls.first else {
-            return
+        guard
+          let streamingTask = track.downloadTask as? LCPStreamingDownloadTask,
+          let fileURL = streamingTask.originalUrls.first,
+          let httpRangeRetriever = self.httpRangeRetriever
+        else {
+          return
         }
-        
-        // This would use the HTTPRangeRetriever to fetch the first N bytes
-        // Implementation can be added for performance optimization
-        ATLog(.debug, "[LCPStreaming] Would prefetch \(bytes) bytes of track: \(track.key)")
+
+        guard let absoluteURL = fileURL.absoluteURL else {
+          return
+        }
+
+        httpRangeRetriever.fetchRange(
+          from: absoluteURL,
+          range: 0..<bytes
+        ) { result in
+          if case .failure(let err) = result {
+              ATLog(.debug, "Prefetch failed for \(track.key): \(err)")
+          }
+        }
     }
 }
 

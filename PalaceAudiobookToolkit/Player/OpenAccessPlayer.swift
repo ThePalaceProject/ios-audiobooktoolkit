@@ -141,12 +141,22 @@ class OpenAccessPlayer: NSObject, Player {
         seekTo(position: position) { [weak self] trackPosition in
             guard let self = self else { return }
             self.avQueuePlayer.play()
+
             if let item = self.avQueuePlayer.currentItem {
-                let duration = item.asset.duration.seconds
-                let currentTime = item.currentTime().seconds
+                Task {
+                    do {
+                        let time = try await item.asset.load(.duration)
+                        let durationSeconds = time.seconds
+                        let currentTime = item.currentTime().seconds
+                    } catch {
+                    }
+                    self.restorePlaybackRate()
+                    completion?(nil)
+                }
+            } else {
+                self.restorePlaybackRate()
+                completion?(nil)
             }
-            self.restorePlaybackRate()
-            completion?(nil)
         }
     }
     
@@ -706,14 +716,11 @@ extension OpenAccessPlayer {
             switch fileStatus {
             case .saved(let urls):
                 for url in urls {
-                    // [LCPDIAG] Log file existence and size
                     let fileExists = FileManager.default.fileExists(atPath: url.path)
                     let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
-                    ATLog(.debug, "[LCPDIAG] Creating AVPlayerItem for track: \(track.key), url: \(url), exists: \(fileExists), size: \(fileSize)")
                     let playerItem = AVPlayerItem(url: url)
                     playerItem.audioTimePitchAlgorithm = .timeDomain
                     playerItem.trackIdentifier = track.key
-                    // [LCPDIAG] Observe status changes
                     playerItem.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
                     items.append(playerItem)
                 }

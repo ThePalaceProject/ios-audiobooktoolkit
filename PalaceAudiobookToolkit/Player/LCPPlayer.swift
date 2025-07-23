@@ -70,7 +70,6 @@ class LCPPlayer: OpenAccessPlayer {
             if success {
                 self.updateQueueForTrack(position.track) {
                     self.performSuperPlay(at: position, completion: completion)
-                    // Prefetch next track in background
                     self.prefetchNextTrack(from: position.track)
                 }
             } else {
@@ -139,7 +138,7 @@ class LCPPlayer: OpenAccessPlayer {
                     if let error = error {
                         success = false
                     } else {
-                        ATLog(.debug, "[LCPDIAG] Successfully decrypted file \(task.urls[index]) to \(decryptedUrl)")
+                        ATLog(.debug, "Successfully decrypted file \(task.urls[index]) to \(decryptedUrl)")
                     }
                     self.decryptionLock.unlock()
                     group.leave()
@@ -148,10 +147,9 @@ class LCPPlayer: OpenAccessPlayer {
             
             group.notify(queue: .main) {
                 if !success {
-                    ATLog(.error, "[LCPDIAG] Decryption failed for track: \(track.key)")
                     self.playbackStatePublisher.send(.failed(position, NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"])))
                 } else {
-                    ATLog(.debug, "[LCPDIAG] Decryption completed for track: \(track.key)")
+                    ATLog(.debug, "Decryption completed for track: \(track.key)")
                 }
                 completion(success)
             }
@@ -216,7 +214,6 @@ class LCPPlayer: OpenAccessPlayer {
             if success {
                 self.resetPlayerQueue()
                 self.insertTrackIntoQueue(track: nextTrack)
-                // Prefetch the following track
                 self.prefetchNextTrack(from: nextTrack)
             } else {
                 self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)

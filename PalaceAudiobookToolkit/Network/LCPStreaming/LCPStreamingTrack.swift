@@ -7,7 +7,6 @@
 
 import Foundation
 
-/// LCPStreamingTrack implements the Track protocol for LCP audiobooks using streaming instead of pre-download
 class LCPStreamingTrack: Track {
     var key: String
     var downloadTask: (any DownloadTask)?
@@ -42,23 +41,19 @@ class LCPStreamingTrack: Track {
         self.index = index
         self.mediaType = manifest.trackMediaType
         
-        // Use streaming download task if streaming is enabled and supported
         if LCPStreamingDownloadTask.shouldUseStreaming(for: mediaType) {
             self.downloadTask = LCPStreamingDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
             ATLog(.debug, "[LCPStreaming] Created streaming track: \(self.key)")
         } else {
-            // Fallback to traditional LCP download task
             self.downloadTask = LCPDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
             ATLog(.debug, "[LCPStreaming] Created traditional LCP track (streaming not available): \(self.key)")
         }
     }
     
-    /// Check if this track is configured for streaming
     var isStreaming: Bool {
         return downloadTask is LCPStreamingDownloadTask
     }
     
-    /// Get the streaming URLs if available
     var streamingUrls: [URL]? {
         guard let streamingTask = downloadTask as? LCPStreamingDownloadTask else {
             return nil
@@ -66,7 +61,6 @@ class LCPStreamingTrack: Track {
         return streamingTask.streamingUrls
     }
     
-    /// Get the original URLs from the manifest
     var originalUrls: [URL]? {
         if let streamingTask = downloadTask as? LCPStreamingDownloadTask {
             return streamingTask.originalUrls
