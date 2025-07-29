@@ -9,509 +9,231 @@ import Foundation
 import AVFoundation
 import ReadiumShared
 
-/// LCPResourceLoaderDelegate handles AVPlayer resource loading requests for LCP streaming audiobooks
-/// It intercepts custom URLs (lcp-stream://) and provides decrypted audio data on-demand
-class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
+#if LCP
+
+/// LCP Resource Loader Delegate for handling decrypted audio streaming
+/// This class implements AVAssetResourceLoaderDelegate to provide decrypted
+/// audio data for streaming LCP audiobooks using Readium's streaming architecture
+public class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
+  
+  private let publication: Publication
+  private let decryptor: LCPStreamingProvider
+  private let rangeRetriever: HTTPRangeRetriever
+  private let backgroundQueue: DispatchQueue
+  
+  /// Initialize with Readium Publication and decryption provider
+  /// - Parameters:
+  ///   - publication: The Readium Publication containing track information
+  ///   - decryptor: LCP decryption provider
+  ///   - rangeRetriever: HTTP range retriever for byte-range requests
+  public init(publication: Publication, decryptor: LCPStreamingProvider, rangeRetriever: HTTPRangeRetriever) {
+    self.publication = publication
+    self.decryptor = decryptor
+    self.rangeRetriever = rangeRetriever
+    self.backgroundQueue = DispatchQueue(label: "lcp-resource-loader", qos: .userInitiated)
     
-    private let httpRangeRetriever: HTTPRangeRetriever
-    private let lcpPublication: Publication
-    private let processingQueue = DispatchQueue(label: "com.palace.lcp-resource-loader", qos: .userInitiated)
-    private var activeRequests: [String: AVAssetResourceLoadingRequest] = [:]
-    private let requestsLock = NSLock()
+    super.init()
     
-    init(
-        httpRangeRetriever: HTTPRangeRetriever,
-        lcpPublication: Publication
-    ) {
-        self.httpRangeRetriever = httpRangeRetriever
-        self.lcpPublication = lcpPublication
-        super.init()
+    ATLog(.debug, "LCPResourceLoaderDelegate initialized for publication: \(publication.metadata.title ?? "Unknown")")
+  }
+  
+  // MARK: - AVAssetResourceLoaderDelegate
+  
+  public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
+    
+    guard let url = loadingRequest.request.url else {
+      ATLog(.error, "No URL in loading request")
+      loadingRequest.finishLoading(with: NSError(domain: "LCPResourceLoader", code: -1, userInfo: [NSLocalizedDescriptionKey: "No URL in request"]))
+      return false
     }
     
-    // MARK: - AVAssetResourceLoaderDelegate
+    ATLog(.debug, "Resource loading requested for URL: \(url)")
     
-    func resourceLoader(
-        _ resourceLoader: AVAssetResourceLoader,
-        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
-    ) -> Bool {
-        guard let url = loadingRequest.request.url,
-              url.scheme == "lcp-stream" else {
-            return false
-        }
-        
-        let requestId = UUID().uuidString
-        requestsLock.lock()
-        activeRequests[requestId] = loadingRequest
-        requestsLock.unlock()
-        
-        processingQueue.async { [weak self] in
-            self?.handleLoadingRequest(loadingRequest, requestId: requestId)
-        }
-        
-        return true
+    // Extract track path from custom URL scheme
+    guard let trackPath = extractTrackPath(from: url) else {
+      ATLog(.error, "Failed to extract track path from URL: \(url)")
+      loadingRequest.finishLoading(with: NSError(domain: "LCPResourceLoader", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid URL format"]))
+      return false
     }
     
-    func resourceLoader(
-        _ resourceLoader: AVAssetResourceLoader,
-        didCancel loadingRequest: AVAssetResourceLoadingRequest
-    ) {
-        requestsLock.lock()
-        let requestToRemove = activeRequests.first { $0.value === loadingRequest }
-        if let key = requestToRemove?.key {
-            activeRequests.removeValue(forKey: key)
-        }
-        requestsLock.unlock()
+    // Find the reading order item for this track
+    guard let readingOrderItem = findReadingOrderItem(for: trackPath) else {
+      ATLog(.error, "No reading order item found for track: \(trackPath)")
+      loadingRequest.finishLoading(with: NSError(domain: "LCPResourceLoader", code: -3, userInfo: [NSLocalizedDescriptionKey: "Track not found in publication"]))
+      return false
     }
     
-    // MARK: - Request Handling
-    
-    private func handleLoadingRequest(_ loadingRequest: AVAssetResourceLoadingRequest, requestId: String) {
-        defer {
-            requestsLock.lock()
-            activeRequests.removeValue(forKey: requestId)
-            requestsLock.unlock()
-        }
-        
-        guard let url = loadingRequest.request.url else {
-            loadingRequest.finishLoading(with: NSError.resourceLoadingError("Invalid URL"))
-            return
-        }
-        
-        
-        do {
-            guard let originalPath = LCPStreamingDownloadTask.originalPath(from: url) else {
-                loadingRequest.finishLoading(with: NSError.resourceLoadingError("Invalid streaming URL format"))
-                return
-            }
-                        
-            guard let resolvedPath = findResourcePath(originalPath) else {
-                loadingRequest.finishLoading(with: NSError.resourceLoadingError("Resource not found: \(originalPath)"))
-                return
-            }
-            
-            handleResourceRequest(loadingRequest, for: resolvedPath)
-            
-        } catch {
-            loadingRequest.finishLoading(with: NSError.resourceLoadingError("Request processing failed: \(error.localizedDescription)"))
-        }
+    // Handle the loading request asynchronously
+    backgroundQueue.async { [weak self] in
+      self?.handleLoadingRequest(loadingRequest, for: readingOrderItem, trackPath: trackPath)
     }
     
-    /// Find the correct resource path in the publication using the same logic as LCPAudiobooks
-    private func findResourcePath(_ originalPath: String) -> String? {
-        if lcpPublication.getResource(at: originalPath) != nil {
-            return originalPath
-        }
-        
-        let pathWithSlash = originalPath.hasPrefix("/") ? originalPath : "/\(originalPath)"
-        if lcpPublication.getResource(at: pathWithSlash) != nil {
-            return pathWithSlash
-        }
-        
-        let pathWithoutSlash = originalPath.hasPrefix("/") ? String(originalPath.dropFirst()) : originalPath
-        if lcpPublication.getResource(at: pathWithoutSlash) != nil {
-            return pathWithoutSlash
-        }
-        
-        let decodedPath = originalPath.removingPercentEncoding ?? originalPath
-        if decodedPath != originalPath && lcpPublication.getResource(at: decodedPath) != nil {
-            return decodedPath
-        }
-        
-        let filename = URL(string: originalPath)?.lastPathComponent ?? originalPath
-        for link in lcpPublication.manifest.readingOrder {
-            if let linkFilename = URL(string: link.href)?.lastPathComponent,
-               linkFilename == filename {
-                return link.href
-            }
-        }
-        
-        return nil
+    return true
+  }
+  
+  public func resourceLoader(_ resourceLoader: AVAssetResourceLoader, didCancel loadingRequest: AVAssetResourceLoadingRequest) {
+    ATLog(.debug, "Resource loading cancelled for: \(loadingRequest.request.url?.absoluteString ?? "unknown")")
+  }
+  
+  // MARK: - Private Methods
+  
+  /// Extract track path from custom lcp-stream:// URL
+  private func extractTrackPath(from url: URL) -> String? {
+    // Expected format: lcp-stream://trackkey/path/to/audio.mp3
+    guard url.scheme == "lcp-stream" else {
+      return nil
     }
     
-    private func handleResourceRequest(_ loadingRequest: AVAssetResourceLoadingRequest, for path: String) {
-        if let contentRequest = loadingRequest.contentInformationRequest {
-            handleContentInformationRequest(contentRequest, for: path, loadingRequest: loadingRequest)
-        }
-        
-        if let dataRequest = loadingRequest.dataRequest {
-            handleDataRequest(dataRequest, for: path, loadingRequest: loadingRequest)
-        }
-        
-        if loadingRequest.contentInformationRequest == nil && loadingRequest.dataRequest == nil {
-            loadingRequest.finishLoading()
-        }
+    // Remove the custom scheme and reconstruct the original path
+    let pathComponents = url.pathComponents
+    guard pathComponents.count > 1 else {
+      return nil
     }
     
-    private func handleContentInformationRequest(
-        _ request: AVAssetResourceLoadingContentInformationRequest,
-        for path: String,
-        loadingRequest: AVAssetResourceLoadingRequest
-    ) {
-        
-        guard let resource = lcpPublication.getResource(at: path) else {
-            loadingRequest.finishLoading(with: NSError.resourceLoadingError("Resource not found"))
-            return
-        }
-                
-        Task {
-            do {
-                let properties = try await resource.properties().get()
-                var contentLength: Int64? = nil
-                
-                let id3Info = await getID3Info(for: resource)
-                
-                if let resourceLength = properties.length, resourceLength > 0 {
-                    let virtualLength = Int64(resourceLength) - Int64(id3Info.audioOffset)
-                    contentLength = max(0, virtualLength)
-                } else {
-                    if let probedSize = await probeActualFileSize(resource: resource) {
-                        let virtualLength = Int64(probedSize) - Int64(id3Info.audioOffset)
-                        contentLength = max(0, virtualLength)
-                    } else {
-                        contentLength = nil
-                    }
-                }
-                
-                DispatchQueue.main.async { [weak self] in
-                    let contentType = self?.getContentType(for: path) ?? "audio/mpeg"
-                    request.contentType = contentType
-                    
-                    request.isByteRangeAccessSupported = true
-                    
-                    if let length = contentLength {
-                        request.contentLength = length
-                    } else {
-                        ATLog(.debug, "Content length unknown, letting AVPlayer handle dynamically")
-                    }
-                    
-                    loadingRequest.finishLoading()
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    loadingRequest.finishLoading(with: NSError.resourceLoadingError("Failed to get resource properties: \(error)"))
-                }
-            }
-        }
+    // Join path components excluding the leading "/"
+    let trackPath = pathComponents.dropFirst().joined(separator: "/")
+    ATLog(.debug, "Extracted track path: \(trackPath)")
+    return trackPath
+  }
+  
+  /// Find reading order item in publication for the given track path
+  private func findReadingOrderItem(for trackPath: String) -> Link? {
+    // Search through publication's reading order for matching href
+    for item in publication.readingOrder {
+      if item.href.path == trackPath || item.href.path.hasSuffix(trackPath) {
+        ATLog(.debug, "Found reading order item for track: \(trackPath)")
+        return item
+      }
     }
     
-    private func getContentLengthViaHTTP(for path: String) async -> Int64? {
-        do {
-            guard let httpURL = getOriginalHTTPURL(for: path) else {
-                return nil
-            }
-                        
-            let httpRequest = HTTPRequest(url: httpURL, method: .head)
-            let response = try await httpRangeRetriever.httpClient.fetch(httpRequest).get()
-            
-            if let contentLengthHeader = response.headers["Content-Length"] ?? response.headers["content-length"] {
-                if let contentLength = Int64(contentLengthHeader) {
-                    return contentLength
-                }
-            }
-            
-            return nil
-            
-        } catch {
-            return nil
-        }
+    ATLog(.warn, "No reading order item found for track: \(trackPath)")
+    return nil
+  }
+  
+  /// Handle the actual loading request with byte-range support
+  private func handleLoadingRequest(_ loadingRequest: AVAssetResourceLoadingRequest, for readingOrderItem: Link, trackPath: String) {
+    
+    // Get content information if requested
+    if let contentInformationRequest = loadingRequest.contentInformationRequest {
+      handleContentInformationRequest(contentInformationRequest, for: readingOrderItem)
     }
     
-    private func getOriginalHTTPURL(for path: String) -> HTTPURL? {
-        for link in lcpPublication.manifest.readingOrder {
-            if link.href == path {
-                if let baseURL = lcpPublication.manifest.metadata.identifier,
-                   let url = URL(string: baseURL),
-                   let httpURL = HTTPURL(string: url.appendingPathComponent(path).absoluteString) {
-                    return httpURL
-                }
-                break
-            }
-        }
-        
-        if let httpURL = HTTPURL(string: "https://example.com/\(path)") {
-            return httpURL
-        }
-        
-        return nil
+    // Handle data request with byte-range support
+    if let dataRequest = loadingRequest.dataRequest {
+      handleDataRequest(loadingRequest, dataRequest: dataRequest, for: readingOrderItem, trackPath: trackPath)
+    } else {
+      // If no data request, just finish loading
+      DispatchQueue.main.async {
+        loadingRequest.finishLoading()
+      }
+    }
+  }
+  
+  /// Handle content information request (file size, content type, etc.)
+  private func handleContentInformationRequest(_ contentRequest: AVAssetResourceLoadingContentInformationRequest, for readingOrderItem: Link) {
+    
+    // Set content type for audio files
+    if let mediaType = readingOrderItem.type {
+      contentRequest.contentType = mediaType
+      ATLog(.debug, "Set content type: \(mediaType)")
+    } else {
+      // Default to MP3 if no type specified
+      contentRequest.contentType = "audio/mpeg"
     }
     
-    private func handleDataRequest(
-        _ request: AVAssetResourceLoadingDataRequest,
-        for path: String,
-        loadingRequest: AVAssetResourceLoadingRequest
-    ) {
-        guard let resource = lcpPublication.getResource(at: path) else {
-            loadingRequest.finishLoading(with: NSError.resourceLoadingError("Resource not found: \(path)"))
-            return
-        }
-                
-        Task {
-            do {
-                let properties = try await resource.properties().get()
-           
-                
-                let id3Info = await getID3Info(for: resource)
-                
-                let currentOffset = request.currentOffset
-                let requestedLength = request.requestedLength
-                
-                let physicalOffset = UInt64(currentOffset) + UInt64(id3Info.audioOffset)
-                let startOffset = UInt64(max(id3Info.audioOffset, Int(physicalOffset)))
-                
-                var actualFileSize: UInt64? = nil
-                if let resourceLength = properties.length, resourceLength > 0 {
-                    actualFileSize = resourceLength
-                } else {
-                    actualFileSize = await probeActualFileSize(resource: resource)
-                }
-                
-                let range: Range<UInt64>
-                if requestedLength == 0 {
-                    if let fileSize = actualFileSize {
-                        let clampedEnd = min(fileSize, startOffset + 1024*1024)
-                        range = startOffset..<clampedEnd
-                    } else {
-                        range = startOffset..<(startOffset + 1024*1024)
-                    }
-                } else {
-                    let endOffset = startOffset + UInt64(requestedLength)
-                    
-                    if let fileSize = actualFileSize {
-                        let clampedEnd = min(endOffset, fileSize)
-                        range = startOffset..<clampedEnd
-                    } else {
-                        let maxChunkSize: UInt64 = 10 * 1024 * 1024
-                        let safeEnd = min(endOffset, startOffset + maxChunkSize)
-                        range = startOffset..<safeEnd
-                    }
-                }
-                
-                guard range.lowerBound < range.upperBound else {
-                    DispatchQueue.main.async {
-                        loadingRequest.finishLoading(with: NSError.resourceLoadingError("Invalid range"))
-                    }
-                    return
-                }
-                
-                var streamedData = Data()
-                let streamResult = await resource.stream(range: range) { data in
-                    streamedData.append(data)
-                }
-                
-                guard case .success = streamResult else {
-                    throw NSError.resourceLoadingError("Failed to stream data from LCP resource")
-                }
-                
-                let decryptedData = streamedData
-                                
-                if decryptedData.count > 0 {
-                    let headerBytes = decryptedData.prefix(min(8, decryptedData.count))
-                    let headerHex = headerBytes.map { String(format: "%02X", $0) }.joined(separator: " ")
-                    
-                    if headerBytes.count >= 2 {
-                        let firstByte = headerBytes[headerBytes.startIndex]
-                        let secondByte = headerBytes[headerBytes.index(after: headerBytes.startIndex)]
-                    }
-                }
-                
-                guard !decryptedData.isEmpty else {
-                    DispatchQueue.main.async {
-                        loadingRequest.finishLoading(with: NSError.resourceLoadingError("No data available"))
-                    }
-                    return
-                }
-                
-                DispatchQueue.main.async {
-                    request.respond(with: decryptedData)
-                    loadingRequest.finishLoading()
-                }
-                
-            } catch {
-                DispatchQueue.main.async {
-                    loadingRequest.finishLoading(with: NSError.resourceLoadingError("Failed to read data: \(error.localizedDescription)"))
-                }
-            }
-        }
+    // Set content length if available
+    if let contentLength = readingOrderItem.properties.additionalProperties["contentLength"] as? Int64 {
+      contentRequest.contentLength = contentLength
+      ATLog(.debug, "Set content length: \(contentLength)")
     }
     
-    /// Probe the actual file size by attempting to read at various offsets
-    private func probeActualFileSize(resource: Resource) async -> UInt64? {
-        let estimatedResult = await resource.estimatedLength()
-        if case .success(let estimatedLength) = estimatedResult, let length = estimatedLength {
-            return length
-        }
-        
-        let stepSize: UInt64 = 5 * 1024 * 1024
-        var currentOffset: UInt64 = 0
-        var lastValidOffset: UInt64 = 0
-        
-        while currentOffset < 50 * 1024 * 1024 {
-            let range = currentOffset..<(currentOffset + 1024)
-            
-            var dataReceived = false
-            let result = await resource.stream(range: range) { data in
-                dataReceived = !data.isEmpty
-            }
-            
-            if case .success = result, dataReceived {
-                lastValidOffset = currentOffset + 1024
-                currentOffset += stepSize
-            } else {
-                break
-            }
-        }
-        
-        if lastValidOffset == 0 {
-            return nil
-        }
-        
-        var low = lastValidOffset
-        var high = currentOffset
-        var actualFileSize = lastValidOffset
-                
-        while low + 1024 < high {
-            let mid = low + (high - low) / 2
-            
-            let range = mid..<(mid + 1024)
-            
-            var dataReceived = false
-            let result = await resource.stream(range: range) { data in
-                dataReceived = !data.isEmpty
-            }
-            
-            if case .success = result, dataReceived {
-                actualFileSize = mid + 1024
-                low = mid
-            } else {
-                high = mid
-            }
-        }
-        
-        return actualFileSize
+    // Enable byte range requests
+    contentRequest.isByteRangeAccessSupported = true
+  }
+  
+  /// Handle data request with byte-range support and LCP decryption
+  private func handleDataRequest(_ loadingRequest: AVAssetResourceLoadingRequest, dataRequest: AVAssetResourceLoadingDataRequest, for readingOrderItem: Link, trackPath: String) {
+    
+    let requestedOffset = dataRequest.requestedOffset
+    let requestedLength = dataRequest.requestedLength
+    
+    ATLog(.debug, "Data request for track: \(trackPath), offset: \(requestedOffset), length: \(requestedLength)")
+    
+    // Create range for HTTP request
+    let range = requestedOffset..<(requestedOffset + Int64(requestedLength))
+    
+    // Get the actual URL for the reading order item
+    guard let trackURL = resolveTrackURL(for: readingOrderItem) else {
+      DispatchQueue.main.async {
+        loadingRequest.finishLoading(with: NSError(domain: "LCPResourceLoader", code: -4, userInfo: [NSLocalizedDescriptionKey: "Could not resolve track URL"]))
+      }
+      return
     }
     
-    private func getID3Info(for resource: Resource) async -> (hasTag: Bool, size: Int, audioOffset: Int) {
-        do {
-            let headerData = try await resource.read(range: 0..<64).get()
-            
-            if headerData.count >= 10 && headerData.starts(with: "ID3".data(using: .ascii)!) {
-                let sizeBytes = Array(headerData[6..<10])
-                var tagSize = 0
-                for byte in sizeBytes {
-                    tagSize = (tagSize << 7) | Int(byte & 0x7F)
-                }
-                tagSize += 10
-                
-                return (hasTag: true, size: tagSize, audioOffset: tagSize)
-            }
-        } catch {
-            ATLog(.debug, "Could not read header for ID3 detection: \(error)")
+    // Perform byte-range request with decryption
+    performByteRangeRequest(trackURL: trackURL, range: range) { [weak self] result in
+      DispatchQueue.main.async {
+        switch result {
+        case .success(let data):
+          // Provide decrypted data to AVPlayer
+          dataRequest.respond(with: data)
+          loadingRequest.finishLoading()
+          ATLog(.debug, "Successfully provided \(data.count) bytes for track: \(trackPath)")
+          
+        case .failure(let error):
+          ATLog(.error, "Failed to load data for track: \(trackPath), error: \(error)")
+          loadingRequest.finishLoading(with: error)
         }
-        
-        return (hasTag: false, size: 0, audioOffset: 0)
+      }
+    }
+  }
+  
+  /// Resolve the actual URL for a reading order item
+  private func resolveTrackURL(for item: Link) -> URL? {
+    // The item.href should contain the relative path within the publication
+    // We need to resolve this against the publication's base URL
+    
+    if let baseURL = publication.baseURL {
+      return baseURL.appendingPathComponent(item.href.path)
     }
     
-    // MARK: - Decryption Support
+    // Fallback: try to construct URL from href
+    return URL(string: item.href.path)
+  }
+  
+  /// Perform byte-range HTTP request with LCP decryption
+  private func performByteRangeRequest(trackURL: URL, range: Range<Int64>, completion: @escaping (Result<Data, Error>) -> Void) {
     
-    private func getContentType(for path: String) -> String {
-        if path.lowercased().hasSuffix(".mp3") {
-            return "audio/mpeg"
-        } else if path.lowercased().hasSuffix(".m4a") {
-            return "audio/mp4"
-        } else if path.lowercased().hasSuffix(".wav") {
-            return "audio/wav"
-        } else {
-            // Default to audio/mpeg for unknown types
-            return "audio/mpeg"
-        }
+    // Use the publication to get the resource and decrypt the data
+    guard let resource = publication.get(Link(href: trackURL.path)) else {
+      completion(.failure(NSError(domain: "LCPResourceLoader", code: -5, userInfo: [NSLocalizedDescriptionKey: "Resource not found"])))
+      return
     }
+    
+    // Convert range to UInt64 for Readium
+    let readiumRange = UInt64(range.lowerBound)..<UInt64(range.upperBound)
+    
+    // Use Readium's resource reading with range
+    Task {
+      let result = await resource.read(range: readiumRange)
+      
+      switch result {
+      case .success(let data):
+        completion(.success(data))
+      case .failure(let error):
+        completion(.failure(error))
+      }
+    }
+  }
+  
+  /// Decrypt data using LCP decryptor (simplified - actual decryption handled by Readium)
+  private func decryptData(_ encryptedData: Data, completion: @escaping (Result<Data, Error>) -> Void) {
+    // With Readium's LCP integration, the resource.read() already returns decrypted data
+    // So we can pass through the data directly
+    completion(.success(encryptedData))
+  }
 }
 
-// MARK: - Error Extensions
-
-private extension NSError {
-    static func resourceLoadingError(_ message: String) -> NSError {
-        return NSError(
-            domain: "LCPResourceLoaderError",
-            code: -1,
-            userInfo: [NSLocalizedDescriptionKey: message]
-        )
-    }
-}
-
-// MARK: - Publication Extension
-
-private extension Publication {
-    func getResource(at path: String) -> Resource? {
-        // Try the path as-is first
-        let resource = get(Link(href: path))
-        guard type(of: resource) != FailureResource.self else {
-            // Try with leading slash
-            return get(Link(href: "/" + path))
-        }
-        return resource
-    }
-}
-
-private let filenameKey = "https://readium.org/webpub-manifest/properties#filename"
-private let mediaTypeKey = "https://readium.org/webpub-manifest/properties#mediaType"
-
-public extension ResourceProperties {
-    /// The length of the resource in bytes, if provided.
-    var contentLength: Int64? {
-        get {
-            // Readium tends to use "length" or "contentLength" as the key
-            if let u64 = properties["length"] as? UInt64 {
-                return Int64(u64)
-            }
-            if let i64 = properties["contentLength"] as? Int64 {
-                return i64
-            }
-            return nil
-        }
-        set {
-            if let v = newValue {
-                properties["length"] = UInt64(v)
-            } else {
-                properties.removeValue(forKey: "length")
-            }
-        }
-    }
-    
-    /// The length of the resource in bytes, if provided (UInt64 version).
-    var length: UInt64? {
-        get {
-            if let u64 = properties["length"] as? UInt64 {
-                return u64
-            }
-            if let i64 = properties["contentLength"] as? Int64 {
-                return UInt64(i64)
-            }
-            return nil
-        }
-        set {
-            if let v = newValue {
-                properties["length"] = v
-            } else {
-                properties.removeValue(forKey: "length")
-            }
-        }
-    }
-    
-    /// The MIME type for this resource, if provided.
-    var contentType: String? {
-        get {
-            // `mediaType` comes from your existing extension
-            return mediaType?.rawValue
-        }
-        set {
-            if let mime = newValue {
-                properties[mediaTypeKey] = mime
-            } else {
-                properties.removeValue(forKey: mediaTypeKey)
-            }
-        }
-    }
-}
+#endif
 
 

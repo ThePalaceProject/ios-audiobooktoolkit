@@ -36,6 +36,8 @@ public final class LCPStreamingDownloadTask: DownloadTask {
         self.urlMediaType = mediaType
         self.streamingUrls = self.urls.compactMap { streamingURL(for: $0) }
         
+        ATLog(.debug, "LCPStreamingDownloadTask init - key: \(key), original URLs: \(self.urls), streaming URLs: \(self.streamingUrls ?? [])")
+        
         DispatchQueue.main.async {
             self.statePublisher.send(.completed)
         }

@@ -9,6 +9,10 @@
 import Foundation
 import ReadiumShared
 
+#if LCP
+import ReadiumStreamer
+#endif
+
 public enum DRMStatus: Int {
     public typealias RawValue = Int
     case failed
@@ -131,16 +135,31 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
       tableOfContents toc: AudiobookTableOfContents,
       decryptor: DRMDecryptor?
     ) -> Player {
-      if let provider = decryptor as? LCPStreamingProvider,
-         let publication = provider.getPublication() {
-        return LCPStreamingPlayer(
-          tableOfContents: toc,
-          decryptor: provider,
-          publication: publication,
-          rangeRetriever: provider.getHTTPRangeRetriever()
-        )
+      ATLog(.debug, "createStreamingLCPPlayer - checking for streaming provider")
+      
+#if LCP
+      if let provider = decryptor as? LCPStreamingProvider {
+        ATLog(.debug, "createStreamingLCPPlayer - found LCPStreamingProvider")
+        if let publication = provider.getPublication() {
+          ATLog(.debug, "createStreamingLCPPlayer - publication available, creating LCPStreamingPlayer")
+          return LCPStreamingPlayer(
+            tableOfContents: toc.chapterLocations,
+            decryptor: provider,
+            publication: publication,
+            rangeRetriever: provider.getHTTPRangeRetriever()
+          )
+        } else {
+          ATLog(.debug, "createStreamingLCPPlayer - publication not available, falling back to LCPPlayer")
+        }
+      } else {
+        ATLog(.debug, "createStreamingLCPPlayer - decryptor is not LCPStreamingProvider, falling back to LCPPlayer")
       }
 
+      ATLog(.debug, "createStreamingLCPPlayer - creating LCPPlayer")
       return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
+#else
+      ATLog(.debug, "createStreamingLCPPlayer - LCP not available, creating OpenAccessPlayer")
+      return OpenAccessPlayer(tableOfContents: toc)
+#endif
     }
 }
