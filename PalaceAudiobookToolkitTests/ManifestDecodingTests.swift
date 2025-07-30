@@ -252,18 +252,8 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
         
         let jsonLink = jsonLinks[index]
         
-        // — REL can be String or [String]
-        if let relValue = jsonLink["rel"] {
-            let expectedRels: [String]
-            if let relString = relValue as? String {
-                expectedRels = [relString]
-            } else if let relArray = relValue as? [String] {
-                expectedRels = relArray
-            } else {
-                XCTFail("Invalid 'rel' type in JSON at index \(index)")
-                continue
-            }
-            XCTAssertEqual(manifestLink.rel, expectedRels, "Rel mismatch in link at index \(index)")
+        if let rel = jsonLink["rel"] as? String {
+            XCTAssertEqual(manifestLink.rel, rel, "Rel mismatch in link at index \(index)")
         }
         
         if let href = jsonLink["href"] as? String {

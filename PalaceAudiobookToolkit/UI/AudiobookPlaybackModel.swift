@@ -19,8 +19,6 @@ class AudiobookPlaybackModel: ObservableObject {
     @Published var trackErrors: [String: Error] = [:]
     @Published var coverImage: UIImage?
     @Published var toastMessage: String = ""
-    @Published var isDecrypting: Bool = false // NEW: for UI spinner
-    @Published var decryptionError: String? = nil // NEW: for error alert
     
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
@@ -111,26 +109,22 @@ class AudiobookPlaybackModel: ObservableObject {
                     guard let position else { return }
                     self.currentLocation = position
                     self.updateProgress()
+                    
                 case .playbackBegan(let position), .playbackCompleted(let position):
                     self.currentLocation = position
                     self.isWaitingForPlayer = false
-                    self.isDecrypting = false
-                    self.decryptionError = nil
                     self.updateProgress()
+                    
                 case .playbackUnloaded:
                     break
                 case .playbackFailed(let position):
                     self.isWaitingForPlayer = false
-                    self.isDecrypting = false
-                    self.decryptionError = "Playback failed."
                     if let position = position {
                         ATLog(.debug, "Playback error at position: \(position.timestamp)")
                     } else {
                         ATLog(.error, "Playback failed but position is nil.")
                     }
-                case .decrypting:
-                    self.isDecrypting = true
-                    self.decryptionError = nil
+                    
                 default:
                     break
                 }

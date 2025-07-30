@@ -20,7 +20,6 @@ public enum AudiobookManagerState {
     case playbackFailed(TrackPosition?)
     case playbackCompleted(TrackPosition)
     case playbackUnloaded
-    case decrypting
     case overallDownloadProgress(Float)
     case error((any Track)?, Error?)
 }
@@ -338,9 +337,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
                 case .unloaded:
                     self.handlePlayerUnloaded()
-                    
-                case .decrypting:
-                    return
+
                 case .bookCompleted:
                     self.playbackCompletionHandler?()
                 }

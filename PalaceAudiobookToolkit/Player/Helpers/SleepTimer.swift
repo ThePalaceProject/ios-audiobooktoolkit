@@ -185,7 +185,7 @@ extension SleepTimer {
     private func handlePlaybackState(_ playbackState: PlaybackState) {
         self.queue.sync {
             switch playbackState {
-            case .started(_ ), .decrypting:
+            case .started(_ ):
                 switch self.timerState {
                 case .inactive, .playing:
                     break

@@ -7,7 +7,6 @@
 //
 
 import AVFoundation
-import UIKit
 
 class LCPPlayer: OpenAccessPlayer {
     
@@ -44,56 +43,6 @@ class LCPPlayer: OpenAccessPlayer {
         setupAudioSession()
         loadInitialPlayerQueue()
         addPlayerObservers()
-        configureForEnergyEfficiency()
-        setupBackgroundObservers()
-    }
-    
-    private func configureForEnergyEfficiency() {
-        // Configure AVPlayer for better energy efficiency during background playback
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
-        
-        // Enable background audio support with energy-efficient settings
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
-            // Spoken audio mode is more energy efficient for long-form content
-        } catch {
-            ATLog(.error, "Failed to configure audio session for energy efficiency: \(error)")
-        }
-    }
-    
-    private func setupBackgroundObservers() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(didEnterBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(willEnterForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
-    }
-    
-    @objc private func didEnterBackground() {
-        // Optimize for background energy usage
-        // Reduce decryption queue priority when in background
-        decryptionQueue.suspend()
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.decryptionQueue.resume()
-        }
-        ATLog(.debug, "LCPPlayer entering background mode")
-    }
-    
-    @objc private func willEnterForeground() {
-        // Restore normal operation when returning to foreground
-        decryptionQueue.suspend()
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.decryptionQueue.resume()
-        }
-        ATLog(.debug, "LCPPlayer returning to foreground")
     }
     
     private func loadInitialPlayerQueue() {
@@ -121,7 +70,6 @@ class LCPPlayer: OpenAccessPlayer {
             if success {
                 self.updateQueueForTrack(position.track) {
                     self.performSuperPlay(at: position, completion: completion)
-                    self.prefetchNextTrack(from: position.track)
                 }
             } else {
                 completion?(NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"]))
@@ -168,14 +116,9 @@ class LCPPlayer: OpenAccessPlayer {
             return
         }
         
-        let position = currentTrackPosition
-        DispatchQueue.main.async {
-            self.playbackStatePublisher.send(.decrypting(position))
-        }
-        
         decryptionQueue.async { [weak self] in
             guard let self = self else {
-                DispatchQueue.main.async { completion(false) }
+                completion(false)
                 return
             }
             
@@ -184,12 +127,12 @@ class LCPPlayer: OpenAccessPlayer {
             
             for (index, decryptedUrl) in decryptedUrls.enumerated() where missingUrls.contains(decryptedUrl) {
                 group.enter()
+                
                 self.decryptionLock.lock()
                 self.decryptionDelegate?.decrypt(url: task.urls[index], to: decryptedUrl) { error in
                     if let error = error {
+                        ATLog(.error, "Error decrypting file", error: error)
                         success = false
-                    } else {
-                        ATLog(.debug, "Successfully decrypted file \(task.urls[index]) to \(decryptedUrl)")
                     }
                     self.decryptionLock.unlock()
                     group.leave()
@@ -197,11 +140,6 @@ class LCPPlayer: OpenAccessPlayer {
             }
             
             group.notify(queue: .main) {
-                if !success {
-                    self.playbackStatePublisher.send(.failed(position, NSError(domain: "com.palace.LCPPlayer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt track"])))
-                } else {
-                    ATLog(.debug, "Decryption completed for track: \(track.key)")
-                }
                 completion(success)
             }
         }
@@ -263,9 +201,8 @@ class LCPPlayer: OpenAccessPlayer {
             guard let self = self else { return }
             
             if success {
-                self.resetPlayerQueue()
+                resetPlayerQueue()
                 self.insertTrackIntoQueue(track: nextTrack)
-                self.prefetchNextTrack(from: nextTrack)
             } else {
                 self.handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
             }
@@ -311,6 +248,7 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
 
+        ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
     }
 
@@ -380,10 +318,5 @@ class LCPPlayer: OpenAccessPlayer {
         group.wait()
 
         return missingUrls.isEmpty ? .saved(savedUrls) : .missing(missingUrls)
-    }
-
-    private func prefetchNextTrack(from track: any Track) {
-        guard let nextTrack = tableOfContents.tracks.nextTrack(track) else { return }
-        decryptTrackIfNeeded(track: nextTrack) { _ in /* ignore result, just prefetch */ }
     }
 }

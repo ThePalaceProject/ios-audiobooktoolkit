@@ -119,18 +119,6 @@ class OpenAccessPlayer: NSObject, Player {
     func configurePlayer() {
         setupAudioSession()
         buildPlayerQueue()
-        configureForEnergyEfficiency()
-    }
-    
-    private func configureForEnergyEfficiency() {
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
-        
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
-        } catch {
-            ATLog(.error, "Failed to configure audio session for energy efficiency: \(error)")
-        }
     }
     
     private func handlePlaybackError(_ error: OpenAccessPlayerError) {
@@ -151,24 +139,9 @@ class OpenAccessPlayer: NSObject, Player {
     
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
-            guard let self = self else { return }
-            self.avQueuePlayer.play()
-
-            if let item = self.avQueuePlayer.currentItem {
-                Task {
-                    do {
-                        let time = try await item.asset.load(.duration)
-                        let durationSeconds = time.seconds
-                        let currentTime = item.currentTime().seconds
-                    } catch {
-                    }
-                    self.restorePlaybackRate()
-                    completion?(nil)
-                }
-            } else {
-                self.restorePlaybackRate()
-                completion?(nil)
-            }
+            self?.avQueuePlayer.play()
+            self?.restorePlaybackRate()
+            completion?(nil)
         }
     }
     
@@ -578,18 +551,7 @@ extension OpenAccessPlayer {
         change: [NSKeyValueChangeKey : Any]?,
         context: UnsafeMutableRawPointer?
     ) {
-        if keyPath == "status", let item = object as? AVPlayerItem {
-            switch item.status {
-            case .readyToPlay:
-                ATLog(.debug, "[LCPDIAG] AVPlayerItem ready to play: \(item.trackIdentifier ?? "unknown")")
-            case .failed:
-                ATLog(.error, "[LCPDIAG] AVPlayerItem failed: \(item.trackIdentifier ?? "unknown"), error: \(String(describing: item.error))")
-            case .unknown:
-                ATLog(.debug, "[LCPDIAG] AVPlayerItem status unknown: \(item.trackIdentifier ?? "unknown")")
-            @unknown default:
-                ATLog(.debug, "[LCPDIAG] AVPlayerItem status unknown default: \(item.trackIdentifier ?? "unknown")")
-            }
-        } else if keyPath == "status", let player = object as? AVQueuePlayer {
+        if keyPath == "status", let player = object as? AVQueuePlayer {
             switch player.status {
             case .readyToPlay:
                 playerIsReady = .readyToPlay
@@ -728,12 +690,9 @@ extension OpenAccessPlayer {
             switch fileStatus {
             case .saved(let urls):
                 for url in urls {
-                    let fileExists = FileManager.default.fileExists(atPath: url.path)
-                    let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
                     let playerItem = AVPlayerItem(url: url)
                     playerItem.audioTimePitchAlgorithm = .timeDomain
                     playerItem.trackIdentifier = track.key
-                    playerItem.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
                     items.append(playerItem)
                 }
             case .missing:

@@ -38,8 +38,6 @@ class DownloadTaskMock: DownloadTask {
         self.fetchClosure = fetchClosure
         self.key = key
     }
-    
-    func cancel() {}
 }
 
 extension DownloadTaskMock {
