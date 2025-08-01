@@ -23,10 +23,11 @@ extension Manifest {
         public let drmInformation: DRMType?
         public let signature: Signature?
         public let rights: Rights?
+        public let lcpStreamingEnabled: Bool?  // 🚀 LCP Streaming capability flag
 
         enum CodingKeys: String, CodingKey {
             case type = "@type"
-            case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted
+            case identifier, title, subtitle, language, modified, published, publisher, author, duration, encrypted, lcpStreamingEnabled
             case signature = "http://www.feedbooks.com/audiobooks/signature"
             case rights = "http://www.feedbooks.com/audiobooks/rights"
         }
@@ -61,6 +62,7 @@ extension Manifest {
             drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
             signature = try container.decodeIfPresent(Signature.self, forKey: .signature)
             rights = try container.decodeIfPresent(Rights.self, forKey: .rights)
+            lcpStreamingEnabled = try container.decodeIfPresent(Bool.self, forKey: .lcpStreamingEnabled)
 
             if let languageArray = try? container.decode([String].self, forKey: .language), let firstLanguage = languageArray.first {
                 language = firstLanguage

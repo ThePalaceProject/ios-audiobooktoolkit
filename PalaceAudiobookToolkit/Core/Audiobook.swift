@@ -35,6 +35,7 @@ public enum DRMStatus: Int {
 public protocol LCPStreamingProvider: DRMDecryptor {
   func getPublication() -> Publication?
   func getHTTPRangeRetriever() -> HTTPRangeRetriever
+  func getStreamingBaseURL() -> URL?  // 🚀 Base URL for streaming (from license)
 }
 
 public struct AudiobookFactory {
@@ -86,11 +87,13 @@ open class Audiobook: NSObject {
         self.tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
      
         let playerFactory = DynamicPlayerFactory()
+        ATLog(.debug, "🎵 [PlayerFactory] Creating player for type: \(manifest.audiobookType), decryptor: \(String(describing: decryptor))")
         self.player = playerFactory.createPlayer(
             forType: manifest.audiobookType,
             withTableOfContents: tableOfContents,
             decryptor: decryptor
         )
+        ATLog(.debug, "🎵 [PlayerFactory] Created player: \(type(of: self.player))")
 
         super.init()
     }
@@ -116,26 +119,31 @@ protocol PlayerFactoryProtocol {
 
 class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
+        ATLog(.debug, "🎵 [DynamicPlayerFactory] createPlayer called with type: \(type)")
         
         switch type {
         case .lcp:
-            createLCPPlayer(tableOfContents: toc, decryptor: decryptor)
+            ATLog(.debug, "🎵 [DynamicPlayerFactory] LCP type detected, creating LCP player")
+            return createLCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
-            FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
+            ATLog(.debug, "🎵 [DynamicPlayerFactory] Findaway type detected")
+            return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
         default:
-            OpenAccessPlayer(tableOfContents: toc)
+            ATLog(.debug, "🎵 [DynamicPlayerFactory] Default type (\(type)), creating OpenAccessPlayer")
+            return OpenAccessPlayer(tableOfContents: toc)
         }
     }
     
     private func createLCPPlayer(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
-        createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
+        ATLog(.debug, "🎵 [DynamicPlayerFactory] createLCPPlayer called")
+        return createStreamingLCPPlayer(tableOfContents: tableOfContents, decryptor: decryptor)
     }
     
     private func createStreamingLCPPlayer(
       tableOfContents toc: AudiobookTableOfContents,
       decryptor: DRMDecryptor?
     ) -> Player {
-      ATLog(.debug, "createStreamingLCPPlayer - checking for streaming provider")
+      ATLog(.debug, "createStreamingLCPPlayer - checking for LCP streaming provider")
       
 #if LCP
       if let provider = decryptor as? LCPStreamingProvider {
@@ -143,7 +151,7 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         if let publication = provider.getPublication() {
           ATLog(.debug, "createStreamingLCPPlayer - publication available, creating LCPStreamingPlayer")
           return LCPStreamingPlayer(
-            tableOfContents: toc.chapterLocations,
+            tableOfContents: toc,
             decryptor: provider,
             publication: publication,
             rangeRetriever: provider.getHTTPRangeRetriever()

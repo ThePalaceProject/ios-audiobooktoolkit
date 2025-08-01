@@ -136,12 +136,13 @@ public struct Manifest: Codable {
         let duration: Double
         let href: String?
         let properties: Properties?
+        let lcpStreamingUrl: String?  // 🚀 LCP Streaming URL for direct HTTP access
         
         public let findawayPart: Int?
         public let findawaySequence: Int?
         
         enum CodingKeys: String, CodingKey {
-            case title, type, duration, href, properties
+            case title, type, duration, href, properties, lcpStreamingUrl
             case findawayPart = "findaway:part"
             case findawaySequence = "findaway:sequence"
         }
@@ -315,5 +316,18 @@ extension Manifest.ReadingOrderItem {
 extension Manifest.SpineItem {
     var trackMediaType: TrackMediaType? {
         TrackMediaType(rawValue: self.type)
+    }
+}
+
+// MARK: - LCP Streaming Support
+extension Manifest {
+    /// Check if this manifest has LCP streaming enabled
+    public var isLCPStreamingEnabled: Bool {
+        return metadata?.lcpStreamingEnabled == true
+    }
+    
+    /// Check if any readingOrder items have streaming URLs
+    public var hasStreamingUrls: Bool {
+        return readingOrder?.contains { $0.lcpStreamingUrl != nil } == true
     }
 }

@@ -138,15 +138,29 @@ public class Tracks {
     }
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        TrackFactory.createTrack(
+        // 🚀 LCP Streaming Support: Use streaming URL when available, but keep original href as key
+        ATLog(.debug, "🔍 [Track Creation] Item \(index): href=\(item.href ?? "nil"), lcpStreamingUrl=\(item.lcpStreamingUrl ?? "nil"), audiobookType=\(manifest.audiobookType)")
+        
+        let urlString: String?
+        if manifest.audiobookType == .lcp, let streamingUrl = item.lcpStreamingUrl {
+            // For LCP audiobooks, prefer streaming URL for playback
+            urlString = streamingUrl
+            ATLog(.debug, "🎯 [Track Creation] Using LCP streaming URL: \(streamingUrl)")
+        } else {
+            // Use original href for non-LCP or when streaming URL unavailable
+            urlString = item.href
+            ATLog(.debug, "📁 [Track Creation] Using href (no streaming URL available): \(item.href ?? "nil")")
+        }
+        
+        return TrackFactory.createTrack(
             from: manifest,
             title: item.title,
-            urlString: item.href,
+            urlString: urlString,
             audiobookID: self.audiobookID,
             index: index,
             duration: item.duration,
             token: token,
-            key: item.href
+            key: item.href  // 🔑 Always use original href as key for navigation
         )
     }
     
@@ -178,7 +192,12 @@ public class Tracks {
     
     public func track(forHref href: String) -> (any Track)? {
         return tracks.first(where: { track in
+            // First try to match by URL (for traditional cases)
             if (track.urls?.first?.absoluteString ?? "") == href {
+                return true
+            }
+            // 🚀 LCP Streaming: Also try to match by key (for streaming URLs)
+            if track.key == href {
                 return true
             }
             return false
