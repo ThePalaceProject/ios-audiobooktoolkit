@@ -44,6 +44,7 @@ class TrackFactory: TrackFactoryProtocol {
                 token: token
             )
         case .lcp:
+            // LCPTrack now handles both local files and HTTP URLs
             return try? LCPTrack(
                 manifest: manifest,
                 urlString: urlString,
@@ -138,10 +139,19 @@ public class Tracks {
     }
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        TrackFactory.createTrack(
+        // Pure Readium approach: Use original href from manifest
+        let urlString = item.href
+        
+        ATLog(.debug, "🔍 [Track Creation] Item \(index): href=\(item.href ?? "nil"), audiobookType=\(manifest.audiobookType)")
+        
+        if manifest.audiobookType == .lcp {
+            ATLog(.debug, "🎯 [Track Creation] Using pure Readium approach for LCP track")
+        }
+        
+        return TrackFactory.createTrack(
             from: manifest,
             title: item.title,
-            urlString: item.href,
+            urlString: urlString,
             audiobookID: self.audiobookID,
             index: index,
             duration: item.duration,

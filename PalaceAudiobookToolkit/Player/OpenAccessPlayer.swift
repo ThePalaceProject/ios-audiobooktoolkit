@@ -491,6 +491,31 @@ class OpenAccessPlayer: NSObject, Player {
         ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
     }
+    
+    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+        var items = [AVPlayerItem]()
+        for track in tracks {
+            guard let fileStatus = assetFileStatus(track.downloadTask) else {
+                continue
+            }
+            
+            switch fileStatus {
+            case .saved(let urls):
+                for url in urls {
+                    let playerItem = AVPlayerItem(url: url)
+                    playerItem.audioTimePitchAlgorithm = .timeDomain
+                    playerItem.trackIdentifier = track.key
+                    items.append(playerItem)
+                }
+            case .missing:
+                listenForDownloadCompletion(task: track.downloadTask)
+                continue
+            case .unknown:
+                continue
+            }
+        }
+        return items
+    }
 
 }
 
@@ -678,30 +703,5 @@ extension OpenAccessPlayer {
         } else {
             handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
         }
-    }
-    
-    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
-        var items = [AVPlayerItem]()
-        for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
-                listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
-            }
-        }
-        return items
     }
 }

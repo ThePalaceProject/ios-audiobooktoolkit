@@ -25,6 +25,13 @@ public enum DRMStatus: Int {
     ///   - resultUrl: URL to save decrypted file at.
     ///   - completion: decryptor callback with optional `Error`.
     func decrypt(url: URL, to resultUrl: URL, completion: @escaping (_ error: Error?) -> Void)
+    
+    /// Optional: Get streamable URL for a track path (for true streaming without local files)
+    /// - Parameters:
+    ///   - trackPath: internal track path from manifest (e.g., "track1.mp3")
+    ///   - completion: callback with streamable URL or error
+    /// - Note: Default implementation returns nil (no streaming support)
+    @objc optional func getStreamableURL(for trackPath: String, completion: @escaping (URL?, Error?) -> Void)
 }
 
 public struct AudiobookFactory {
@@ -70,6 +77,9 @@ open class Audiobook: NSObject {
     }
 
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?, token: String?) {
+        ATLog(.debug, "🎵 [Audiobook] Initializing audiobook with manifest type: \(manifest.audiobookType)")
+        ATLog(.debug, "🎵 [Audiobook] Manifest has \(manifest.readingOrder?.count ?? 0) reading order items")
+        
         self.uniqueId = bookIdentifier
         
         let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
@@ -108,6 +118,9 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
         switch type {
         case .lcp:
+            // Always use unified LCPPlayer - it handles both local and streaming automatically
+            ATLog(.debug, "🎵 [AudiobookFactory] Creating unified LCP player (supports both local and streaming)")
+            ATLog(.debug, "🎵 [AudiobookFactory] TableOfContents has \(toc.allTracks.count) tracks")
             return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
             return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)

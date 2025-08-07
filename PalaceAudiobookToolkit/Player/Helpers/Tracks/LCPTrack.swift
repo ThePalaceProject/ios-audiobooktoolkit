@@ -17,6 +17,11 @@ class LCPTrack: Track {
     var urls: [URL]?
     let mediaType: TrackMediaType
     
+    /// Streaming resource for this track (from Readium when available)
+    var streamingResource: URL?
+    
+
+    
     required init(
         manifest: Manifest,
         urlString: String?,
@@ -41,6 +46,22 @@ class LCPTrack: Track {
         self.duration = duration
         self.index = index
         self.mediaType = manifest.trackMediaType
+
         self.downloadTask = LCPDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
     }
+    
+    /// Set the streaming resource URL for this track
+    func setStreamingResource(_ url: URL?) {
+        self.streamingResource = url
+    }
+    
+    /// Check if this track has local files available
+    func hasLocalFiles() -> Bool {
+        guard let lcpTask = downloadTask as? LCPDownloadTask,
+              let decryptedUrls = lcpTask.decryptedUrls else {
+            return false
+        }
+        return decryptedUrls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
 }

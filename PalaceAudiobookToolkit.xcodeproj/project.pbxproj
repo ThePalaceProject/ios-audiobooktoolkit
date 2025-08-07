@@ -115,6 +115,10 @@
 		E5ECFA852BED6C430008670F /* FindawayDatabaseVerification.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA842BED6C430008670F /* FindawayDatabaseVerification.swift */; };
 		E5ECFA872BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */; };
 		E5ECFA992BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */; };
+		E5F9AD2F2E428FA00092AC59 /* ReadiumShared in Frameworks */ = {isa = PBXBuildFile; productRef = E5F9AD2E2E428FA00092AC59 /* ReadiumShared */; };
+		E5F9AD312E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F9AD302E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift */; };
+		E5F9AD332E428FD80092AC59 /* HTTPRangeRetriever.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F9AD322E428FD80092AC59 /* HTTPRangeRetriever.swift */; };
+		E5F9AD372E4290370092AC59 /* RangeResource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F9AD362E4290370092AC59 /* RangeResource.swift */; };
 		E67CA9A5215C0D320081A10B /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = E67CA9A4215C0D320081A10B /* Log.swift */; };
 		E71168B82AB453A800629DC7 /* Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168B72AB453A800629DC7 /* Reachability.swift */; };
 		E71168BC2AB4BEFC00629DC7 /* AudiobookPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71168BB2AB4BEFC00629DC7 /* AudiobookPlayer.swift */; };
@@ -256,6 +260,9 @@
 		E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayPlaybackNotificationHandler.swift; sourceTree = "<group>"; };
 		E5ECFA982BED6D1B0008670F /* FindawayDownloadNotificationHandler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayDownloadNotificationHandler.swift; sourceTree = "<group>"; };
 		E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = AudioEngine.xcframework; path = ../Carthage/Build/AudioEngine.xcframework; sourceTree = "<group>"; };
+		E5F9AD302E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPResourceLoaderDelegate.swift; sourceTree = "<group>"; };
+		E5F9AD322E428FD80092AC59 /* HTTPRangeRetriever.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPRangeRetriever.swift; sourceTree = "<group>"; };
+		E5F9AD362E4290370092AC59 /* RangeResource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RangeResource.swift; sourceTree = "<group>"; };
 		E67CA9A4215C0D320081A10B /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlaybackModel.swift; sourceTree = "<group>"; };
 		E71168B72AB453A800629DC7 /* Reachability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reachability.swift; sourceTree = "<group>"; };
@@ -279,6 +286,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E531FF072D0691D70003E2FA /* AudioEngine.xcframework in Frameworks */,
+				E5F9AD2F2E428FA00092AC59 /* ReadiumShared in Frameworks */,
 				E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */,
 				E785BA312B15323600A12EFA /* PalaceUIKit.framework in Frameworks */,
 				7BD759B820127E32004CE65F /* MediaPlayer.framework in Frameworks */,
@@ -374,6 +382,9 @@
 		7B7B3709202274C400030A1E /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				E5F9AD362E4290370092AC59 /* RangeResource.swift */,
+				E5F9AD322E428FD80092AC59 /* HTTPRangeRetriever.swift */,
+				E5F9AD302E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift */,
 				E5CC6E792BBB295F00C31ABD /* Player.swift */,
 				E5C8A84E2BCEC18D00F06F14 /* LCPPlayer.swift */,
 				E5ECFA7D2BED6C140008670F /* FindawayPlayer.swift */,
@@ -602,6 +613,7 @@
 			packageProductDependencies = (
 				E5A7C3A72943A8920083BE1F /* Transifex */,
 				E59FCE9929423E73004FD730 /* PureLayout */,
+				E5F9AD2E2E428FA00092AC59 /* ReadiumShared */,
 			);
 			productName = NYPLAudiobookToolkit;
 			productReference = 7B54418C200EA7C20047B6C6 /* PalaceAudiobookToolkit.framework */;
@@ -659,6 +671,7 @@
 			packageReferences = (
 				E56EE121293FCFBD00D0E915 /* XCRemoteSwiftPackageReference "PureLayout" */,
 				E5A7C3A62943A8920083BE1F /* XCRemoteSwiftPackageReference "transifex-swift" */,
+				E5F9AD2D2E428FA00092AC59 /* XCRemoteSwiftPackageReference "swift-toolkit" */,
 			);
 			productRefGroup = 7B54418D200EA7C20047B6C6 /* Products */;
 			projectDirPath = "";
@@ -778,6 +791,7 @@
 				7B5441E6200EA82C0047B6C6 /* AudiobookLifecycleManager.swift in Sources */,
 				7B5441E7200EA82C0047B6C6 /* AudiobookManager.swift in Sources */,
 				E5ECFA7E2BED6C150008670F /* FindawayPlayer.swift in Sources */,
+				E5F9AD372E4290370092AC59 /* RangeResource.swift in Sources */,
 				7BDD33B320470A7100CC8807 /* HumanReadablePercentage.swift in Sources */,
 				E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */,
 				E5ECFA802BED6C1D0008670F /* FindawayDownloadTask.swift in Sources */,
@@ -786,6 +800,7 @@
 				E5DE01AC2BA3E47A0063E68E /* Manifest.swift in Sources */,
 				E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */,
 				17576CAC248E89DE00E18B4C /* OverdriveDownloadTask.swift in Sources */,
+				E5F9AD332E428FD80092AC59 /* HTTPRangeRetriever.swift in Sources */,
 				E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */,
 				7BBF4DFC20506FF600700731 /* SleepTimer.swift in Sources */,
 				8C3F7112242BDDAF00E5C810 /* URLRequest+Curl.swift in Sources */,
@@ -818,6 +833,7 @@
 				E5C3820C2BDACB7E00049CF1 /* AVPlayer+Extensions.swift in Sources */,
 				E5DE01A82BA3E4580063E68E /* Track.swift in Sources */,
 				E5041F782BBF36B600AE363E /* MediaControlPublisher.swift in Sources */,
+				E5F9AD312E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift in Sources */,
 				E5C8A84F2BCEC18D00F06F14 /* LCPPlayer.swift in Sources */,
 				E79266972AB34315009901B7 /* AudiobookNavigationView.swift in Sources */,
 			);
@@ -1143,6 +1159,14 @@
 				version = 1.0.2;
 			};
 		};
+		E5F9AD2D2E428FA00092AC59 /* XCRemoteSwiftPackageReference "swift-toolkit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/readium/swift-toolkit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1155,6 +1179,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E5A7C3A62943A8920083BE1F /* XCRemoteSwiftPackageReference "transifex-swift" */;
 			productName = Transifex;
+		};
+		E5F9AD2E2E428FA00092AC59 /* ReadiumShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5F9AD2D2E428FA00092AC59 /* XCRemoteSwiftPackageReference "swift-toolkit" */;
+			productName = ReadiumShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
