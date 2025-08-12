@@ -77,9 +77,6 @@ open class Audiobook: NSObject {
     }
 
     public required init?(manifest: Manifest, bookIdentifier: String, decryptor: DRMDecryptor?, token: String?) {
-        ATLog(.debug, "🎵 [Audiobook] Initializing audiobook with manifest type: \(manifest.audiobookType)")
-        ATLog(.debug, "🎵 [Audiobook] Manifest has \(manifest.readingOrder?.count ?? 0) reading order items")
-        
         self.uniqueId = bookIdentifier
         
         let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
@@ -118,9 +115,15 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
         switch type {
         case .lcp:
-            // Always use unified LCPPlayer - it handles both local and streaming automatically
-            ATLog(.debug, "🎵 [AudiobookFactory] Creating unified LCP player (supports both local and streaming)")
-            ATLog(.debug, "🎵 [AudiobookFactory] TableOfContents has \(toc.allTracks.count) tracks")
+            if let streamingProvider = decryptor as? LCPStreamingProvider, streamingProvider.supportsStreaming() {
+                let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
+                
+                let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
+                if setupSuccess {
+                    return streamingPlayer
+                }
+            }
+            
             return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
             return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)

@@ -78,6 +78,8 @@
 		E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE01A12BA3E4420063E68E /* AudiobookTableOfContents.swift */; };
 		E56C00C62BC3912100A25A97 /* ChapterCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56C00C52BC3912100A25A97 /* ChapterCell.swift */; };
 		E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */; };
+		E57282542E4A8FC500CE3DB8 /* StreamingResourceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57282532E4A8FC500CE3DB8 /* StreamingResourceProvider.swift */; };
+		E57282552E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57282522E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift */; };
 		E57498C02BB1EED100BCD49C /* OpenAccessAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */; };
 		E57498C62BB31C9F00BCD49C /* Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57498C52BB31C9F00BCD49C /* Metadata.swift */; };
 		E5797E9C2BAA35F40017AB03 /* Audiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5797E9B2BAA35F40017AB03 /* Audiobook.swift */; };
@@ -223,6 +225,8 @@
 		E55E2FA329E73ACC0093F916 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
 		E56C00C52BC3912100A25A97 /* ChapterCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterCell.swift; sourceTree = "<group>"; };
 		E57105E52C2CB6D200F1F033 /* endOfTheWorld_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = endOfTheWorld_manifest.json; sourceTree = "<group>"; };
+		E57282522E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LCPStreamingPlayer.swift; sourceTree = "<group>"; };
+		E57282532E4A8FC500CE3DB8 /* StreamingResourceProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingResourceProvider.swift; sourceTree = "<group>"; };
 		E57498BF2BB1EED100BCD49C /* OpenAccessAudiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessAudiobook.swift; sourceTree = "<group>"; };
 		E57498C52BB31C9F00BCD49C /* Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metadata.swift; sourceTree = "<group>"; };
 		E5797E9B2BAA35F40017AB03 /* Audiobook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Audiobook.swift; sourceTree = "<group>"; };
@@ -383,6 +387,8 @@
 			isa = PBXGroup;
 			children = (
 				E5F9AD362E4290370092AC59 /* RangeResource.swift */,
+				E57282522E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift */,
+				E57282532E4A8FC500CE3DB8 /* StreamingResourceProvider.swift */,
 				E5F9AD322E428FD80092AC59 /* HTTPRangeRetriever.swift */,
 				E5F9AD302E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift */,
 				E5CC6E792BBB295F00C31ABD /* Player.swift */,
@@ -831,6 +837,8 @@
 				8CF57BDC2432788C0053C31E /* Data+BigEndian.swift in Sources */,
 				7BD8E4FA206EB49D008ED3F1 /* VoiceOverTimestamp.swift in Sources */,
 				E5C3820C2BDACB7E00049CF1 /* AVPlayer+Extensions.swift in Sources */,
+				E57282542E4A8FC500CE3DB8 /* StreamingResourceProvider.swift in Sources */,
+				E57282552E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift in Sources */,
 				E5DE01A82BA3E4580063E68E /* Track.swift in Sources */,
 				E5041F782BBF36B600AE363E /* MediaControlPublisher.swift in Sources */,
 				E5F9AD312E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift in Sources */,

@@ -458,7 +458,7 @@ extension AudiobookPlayerView {
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
             audiobook: audiobook,
-            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+                    networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks, decryptor: audiobook.player is LCPPlayer ? (audiobook.player as? LCPPlayer)?.decryptionDelegate : nil)
         )
         self.playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
     }

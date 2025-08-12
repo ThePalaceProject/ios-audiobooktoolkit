@@ -44,7 +44,6 @@ class TrackFactory: TrackFactoryProtocol {
                 token: token
             )
         case .lcp:
-            // LCPTrack now handles both local files and HTTP URLs
             return try? LCPTrack(
                 manifest: manifest,
                 urlString: urlString,
@@ -139,15 +138,8 @@ public class Tracks {
     }
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        // Pure Readium approach: Use original href from manifest
         let urlString = item.href
-        
-        ATLog(.debug, "🔍 [Track Creation] Item \(index): href=\(item.href ?? "nil"), audiobookType=\(manifest.audiobookType)")
-        
-        if manifest.audiobookType == .lcp {
-            ATLog(.debug, "🎯 [Track Creation] Using pure Readium approach for LCP track")
-        }
-        
+  
         return TrackFactory.createTrack(
             from: manifest,
             title: item.title,
@@ -187,12 +179,23 @@ public class Tracks {
     }
     
     public func track(forHref href: String) -> (any Track)? {
-        return tracks.first(where: { track in
-            if (track.urls?.first?.absoluteString ?? "") == href {
-                return true
-            }
-            return false
-        })
+        if let match = tracks.first(where: { $0.urls?.first?.absoluteString == href }) { return match }
+        if let match = tracks.first(where: { $0.key == href }) { return match }
+
+        let hrefURL = URL(string: href)
+        let hrefLast = hrefURL?.lastPathComponent
+        let hrefPath = hrefURL?.path
+        if let match = tracks.first(where: { track in
+            guard let url = track.urls?.first else { return false }
+            return url.lastPathComponent == hrefLast || url.path == hrefPath
+        }) { return match }
+
+        if let match = tracks.first(where: { track in
+            guard let urlStr = track.urls?.first?.absoluteString else { return false }
+            return urlStr.hasSuffix(href) || urlStr.contains(href)
+        }) { return match }
+
+        return nil
     }
     
     public func track(forKey key: String) -> (any Track)? {

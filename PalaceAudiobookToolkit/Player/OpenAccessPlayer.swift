@@ -469,7 +469,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    private func restorePlaybackRate() {
+    public func restorePlaybackRate() {
         avQueuePlayer.rate = PlaybackRate.convert(rate: playbackRate)
     }
 

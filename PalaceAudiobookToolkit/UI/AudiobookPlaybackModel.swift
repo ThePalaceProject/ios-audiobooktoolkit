@@ -39,7 +39,7 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     var duration: TimeInterval {
-        audiobookManager.currentDuration
+        audiobookManager.currentChapter?.duration ?? audiobookManager.currentDuration
     }
     
     var timeLeft: TimeInterval {

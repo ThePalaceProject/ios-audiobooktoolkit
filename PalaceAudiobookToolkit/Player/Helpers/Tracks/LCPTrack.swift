@@ -8,21 +8,17 @@
 
 import Foundation
 
-class LCPTrack: Track {
-    var key: String
-    var downloadTask: (any DownloadTask)?
-    var title: String?
-    var index: Int
-    var duration: TimeInterval
-    var urls: [URL]?
-    let mediaType: TrackMediaType
+public class LCPTrack: Track {
+    public  var key: String
+    public var downloadTask: (any DownloadTask)?
+    public var title: String?
+    public var index: Int
+    public var duration: TimeInterval
+    public var urls: [URL]?
+    public let mediaType: TrackMediaType
+    public var streamingResource: URL?
     
-    /// Streaming resource for this track (from Readium when available)
-    var streamingResource: URL?
-    
-
-    
-    required init(
+    public required init(
         manifest: Manifest,
         urlString: String?,
         audiobookID: String,
@@ -51,12 +47,12 @@ class LCPTrack: Track {
     }
     
     /// Set the streaming resource URL for this track
-    func setStreamingResource(_ url: URL?) {
+    public func setStreamingResource(_ url: URL?) {
         self.streamingResource = url
     }
     
     /// Check if this track has local files available
-    func hasLocalFiles() -> Bool {
+    public func hasLocalFiles() -> Bool {
         guard let lcpTask = downloadTask as? LCPDownloadTask,
               let decryptedUrls = lcpTask.decryptedUrls else {
             return false

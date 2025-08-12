@@ -39,7 +39,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         } else if let linksDictionary = manifest.linksDictionary {
             loadTocFromLinks(linksDictionary)
         }
-        
+                
         if manifest.audiobookType != .findaway && manifest.audiobookType != .overdrive {
             self.calculateDurations()
             self.calculateEndPositions()
@@ -51,16 +51,21 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
-        for tocItem in tocItems {
-            if let chapter = parseChapter(from: tocItem, tracks: tracks) {
-                toc.append(chapter)
-            }
-            tocItem.children?.forEach { childItem in
-                if let subChapter = parseChapter(from: childItem, tracks: tracks) {
-                    toc.append(subChapter)
+        let initialCount = toc.count
+        
+        func appendChaptersRecursively(from items: [TOCItem]) {
+            for (index, item) in items.enumerated() {
+                if let chapter = parseChapter(from: item, tracks: tracks) {
+                    toc.append(chapter)
+                }
+                
+                if let children = item.children, !children.isEmpty {
+                    appendChaptersRecursively(from: children)
                 }
             }
         }
+
+        appendChaptersRecursively(from: tocItems)
         prependForwardChapterIfNeeded()
     }
     
@@ -68,7 +73,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         guard let fullHref = tocItem.href else {
             return nil
         }
-        
+                
         let components = fullHref.components(separatedBy: "#")
         let trackHref = components.first
         
@@ -89,6 +94,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     
     
     private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
+        let initialCount = toc.count
+        
         readingOrder.forEach { item in
             var track: (any Track)? = nil
             var duration = 0.0
@@ -133,10 +140,11 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     private mutating func prependForwardChapterIfNeeded() {
-        if let firstEntry = toc.first,
-           firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
-            let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0.0, tracks: tracks)
-            toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
+        if let firstEntry = toc.first {
+            if firstEntry.position.timestamp != 0 || firstEntry.position.track.index != 0 {
+                let firstTrackPosition = TrackPosition(track: tracks[0], timestamp: 0.0, tracks: tracks)
+                toc.insert(Chapter(title: "Forward", position: firstTrackPosition), at: 0)
+            }
         }
     }
     

@@ -131,7 +131,7 @@ public struct Manifest: Codable {
     }
 
     public struct ReadingOrderItem: Codable {
-        let title: String?
+        public let title: String?
         let type: String
         let duration: Double
         let href: String?

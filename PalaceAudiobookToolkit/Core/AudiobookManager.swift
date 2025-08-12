@@ -212,11 +212,16 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
 
-        nowPlayingInfo[MPMediaItemPropertyTitle] = (try? tableOfContents.chapter(forPosition: currentTrackPosition).title) ?? currentTrackPosition.track.title
+        let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
+        let chapterTitle = chapter?.title ?? currentTrackPosition.track.title
+        let chapterDuration = chapter?.duration ?? currentTrackPosition.track.duration
+        let chapterElapsed = (try? tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition.timestamp
+
+        nowPlayingInfo[MPMediaItemPropertyTitle] = chapterTitle
         nowPlayingInfo[MPMediaItemPropertyArtist] = metadata.title
         nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = metadata.authors?.joined(separator: ", ")
-        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTrackPosition.timestamp
-        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = currentTrackPosition.track.duration
+        nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = chapterElapsed
+        nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = chapterDuration
 
         let playbackRate = PlaybackRate.convert(rate: audiobook.player.playbackRate)
         let isPlaying = audiobook.player.isPlaying
