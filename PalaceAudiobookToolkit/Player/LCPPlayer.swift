@@ -87,16 +87,16 @@ class LCPPlayer: OpenAccessPlayer {
             ATLog(.debug, "🎵 [LCPPlayer] 🧹 Cleared all observer tracking")
         }
     }
-    
+
     override var currentOffset: Double {
         guard let currentTrackPosition, let currentChapter else {
             return 0
         }
-        
+
         let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
         return offset
     }
-    
+
     init(tableOfContents: AudiobookTableOfContents, decryptor: DRMDecryptor?) {
         self.decryptionDelegate = decryptor
         super.init(tableOfContents: tableOfContents)
@@ -108,7 +108,6 @@ class LCPPlayer: OpenAccessPlayer {
     
     override func configurePlayer() {
         setupAudioSession()
-        // DEFER queue building until first play() call for fast startup
         addPlayerObservers()
     }
     
@@ -142,10 +141,10 @@ class LCPPlayer: OpenAccessPlayer {
             @unknown default:
                 break
             }
-        } else {
+            } else {
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
+            }
         }
-    }
     
     override public func play() {
         ATLog(.debug, "🎵 [LCPPlayer] play() called")
@@ -918,7 +917,7 @@ class LCPPlayer: OpenAccessPlayer {
         
         for (index, track) in tracks.enumerated() {
             let playerItem = createPlayerItem(for: track, index: index)
-            items.append(playerItem)
+                    items.append(playerItem)
         }
         
         ATLog(.debug, "🎵 [LCPPlayer] buildPlayerItems: Created \(items.count) items from \(tracks.count) tracks")
@@ -1000,8 +999,8 @@ class LCPPlayer: OpenAccessPlayer {
     /// Start resource loading for better future performance
     private func startResourceLoading(for track: any Track) {
         // Start background decryption if needed
-        if let lcpTask = track.downloadTask as? LCPDownloadTask,
-           let decryptedUrls = lcpTask.decryptedUrls {
+            if let lcpTask = track.downloadTask as? LCPDownloadTask,
+               let decryptedUrls = lcpTask.decryptedUrls {
             let missingFiles = decryptedUrls.filter { !FileManager.default.fileExists(atPath: $0.path) }
             if !missingFiles.isEmpty {
                 performLocalDecrypt(missingFiles, using: lcpTask) { _ in }
@@ -1097,10 +1096,10 @@ class LCPPlayer: OpenAccessPlayer {
         } else {
             // For other tracks, just update them in place
             self.updateSpecificTrackInQueue(track) {
-                DispatchQueue.main.async {
-                    completion()
-                }
+            DispatchQueue.main.async {
+                completion()
             }
+        }
         }
         //        }
     }
@@ -1118,7 +1117,7 @@ class LCPPlayer: OpenAccessPlayer {
             // Queue is good, just update this specific track if needed
             ATLog(.debug, "🎵 [LCPPlayer] Queue is adequate (\(currentItems.count) items), updating specific track only")
             updateSpecificTrackInQueue(track) {
-                DispatchQueue.main.async {
+            DispatchQueue.main.async {
                     completion()
                 }
             }
@@ -1240,25 +1239,25 @@ class LCPPlayer: OpenAccessPlayer {
         if avQueuePlayer.items().count > 1 {
             avQueuePlayer.advanceToNextItem()
             ATLog(.debug, "🎵 [LCPPlayer] ✅ Used built-in advance - no queue rebuild needed")
-        } else {
+            } else {
             // Only if queue is truly broken (shouldn't happen with stable queue)
             ATLog(.error, "🎵 [LCPPlayer] ⚠️ Queue unexpectedly small, this shouldn't happen with stable queue")
             handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
         }
     }
-    
+
     override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
         guard let currentTrackPosition,
               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) else {
             completion?(currentTrackPosition)
             return
         }
-        
+
         let chapterDuration = currentChapter.duration ?? 0.0
         let offset = value * chapterDuration
         var newPosition = currentTrackPosition
         newPosition.timestamp = offset
-        
+
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
             if success {
@@ -1270,10 +1269,10 @@ class LCPPlayer: OpenAccessPlayer {
             }
         }
     }
-    
+
     override public func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
         // At end-of-book, pause and emit event. Do not rebuild/reset to chapter 1.
-        avQueuePlayer.pause()
+                avQueuePlayer.pause()
         ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
         completion?(currentTrackPosition)
@@ -1295,25 +1294,25 @@ class LCPPlayer: OpenAccessPlayer {
         ATLog(.debug, "🎵 [LCPPlayer] Rebuilding queue for position - using full queue")
         rebuildFullQueue(completion: completion)
     }
-    
+
     override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
         guard let delegate = decryptionDelegate,
               let task = task as? LCPDownloadTask,
               let decryptedUrls = task.decryptedUrls else {
             return .unknown
         }
-        
+
         var savedUrls = [URL]()
         var missingUrls = [URL]()
-        
+
         let group = DispatchGroup()
-        
+
         for (index, decryptedUrl) in decryptedUrls.enumerated() {
             if FileManager.default.fileExists(atPath: decryptedUrl.path) {
                 savedUrls.append(decryptedUrl)
                 continue
             }
-            
+
             group.enter()
             decryptionQueue.async {
                 delegate.decrypt(url: task.urls[index], to: decryptedUrl) { error in
@@ -1328,12 +1327,12 @@ class LCPPlayer: OpenAccessPlayer {
                     group.leave()
                 }
             }
-            
+
             missingUrls.append(task.urls[index])
         }
-        
+
         group.wait()
-        
+
         return missingUrls.isEmpty ? .saved(savedUrls) : .missing(missingUrls)
     }
     

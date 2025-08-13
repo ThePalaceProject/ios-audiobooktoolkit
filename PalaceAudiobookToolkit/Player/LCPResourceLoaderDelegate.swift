@@ -5,11 +5,12 @@ import UniformTypeIdentifiers
 
 final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
-    var publication: Publication?
+    weak var provider: StreamingResourceProvider?
     private let httpRangeRetriever = HTTPRangeRetriever()
+    private var fullTrackCache = [String: Data]()
 
-    init(publication: Publication? = nil) {
-        self.publication = publication
+    init(provider: StreamingResourceProvider? = nil) {
+        self.provider = provider
         super.init()
     }
     
@@ -17,123 +18,54 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         _ resourceLoader: AVAssetResourceLoader,
         shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
     ) -> Bool {
-
-         guard
-             let pub = publication,
-             let url = loadingRequest.request.url,
-             url.scheme == "fake",
-             url.host == "lcp-streaming"
-         else {
-             loadingRequest.finishLoading(with: NSError(
-                 domain: "LCPResourceLoader",
-                 code: -1,
-                 userInfo: [NSLocalizedDescriptionKey: "Invalid URL or missing publication"]
-             ))
+        guard let url = loadingRequest.request.url,
+              url.scheme == "fake",
+              url.host == "lcp-streaming" else {
+            ATLog(.error, "🎵 ResourceLoader: Invalid URL: \(loadingRequest.request.url?.absoluteString ?? "nil")")
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid URL"]
+            ))
             return false
         }
         
-         let comps = url.pathComponents
-         let index = (comps.count >= 3 && comps[1] == "track") ? Int(comps[2]) ?? 0 : 0
-         guard (0..<pub.readingOrder.count).contains(index) else {
-             loadingRequest.finishLoading(with: NSError(
-                 domain: "LCPResourceLoader",
-                 code: 2,
-                 userInfo: [NSLocalizedDescriptionKey: "Track index out of range"]
-             ))
-             return false
-         }
+        ATLog(.debug, "🎵 ResourceLoader: Handling request for \(url.absoluteString)")
 
-        let link = pub.readingOrder[index]
-        let href = link.href
-
-        let resource = Self.resource(for: pub, href: href)
-        let absoluteHTTPURL: HTTPURL? = {
-            if let base = pub.linkWithRel(.self)?.href,
-               let baseURL = URL(string: base),
-               let resolved = URL(string: href, relativeTo: baseURL),
-               let http = HTTPURL(url: resolved) {
-                return http
-            }
-            if let direct = URL(string: href), let http = HTTPURL(url: direct) {
-                return http
-            }
-        return nil
-        }()
-
-         if resource is FailureResource {
-             loadingRequest.finishLoading(with: NSError(
-                 domain: "LCPResourceLoader",
-                 code: 3,
-                 userInfo: [NSLocalizedDescriptionKey: "FailureResource for href: \(href)"]
-             ))
-             return false
-         }
-
-        if let info = loadingRequest.contentInformationRequest {
-            info.contentType = Self.utiIdentifier(forHref: href, fallbackMime: link.mediaType?.string)
-            info.isByteRangeAccessSupported = true
-                
-        Task {
-                var setLength = false
-                if let res = resource {
-                    if let maybeLength = try? await res.estimatedLength().get(), let totalLength = maybeLength {
-                        DispatchQueue.main.async { info.contentLength = Int64(totalLength) }
-                        setLength = true
+        // Publication may not be ready at asset creation; wait briefly if needed.
+        if provider?.getPublication() == nil {
+            Task { [weak self] in
+                guard let self else { return }
+                let deadline = Date().addingTimeInterval(5)
+                while Date() < deadline {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    if let pub = self.provider?.getPublication() {
+                        await self.serve(loadingRequest: loadingRequest, with: pub)
+                        return
                     }
                 }
-                if !setLength, let httpURL = absoluteHTTPURL {
-                    httpRangeRetriever.getContentLength(for: httpURL) { result in
-                        if case .success(let length) = result {
-                            DispatchQueue.main.async { info.contentLength = Int64(length) }
-                        }
-                    }
-                }
-            }
-        }
-
-         guard let dataRequest = loadingRequest.dataRequest else {
-            loadingRequest.finishLoading()
-             return true
-         }
-
-        let start = UInt64(max(0, dataRequest.requestedOffset))
-         let count = UInt64(dataRequest.requestedLength)
-         let endExcl = start &+ count
-         let range: Range<UInt64> = start..<endExcl
-                
-        Task {
-            if let res = resource {
-                do {
-                    let data = try await res.read(range: range).get()
-                    DispatchQueue.main.async {
-                        dataRequest.respond(with: data)
-                        loadingRequest.finishLoading()
-                    }
-                    return
-                } catch {
-                    // fall through to HTTP fallback
-                }
-            }
-            if let httpURL = absoluteHTTPURL {
-                let byteRange = Int(start)..<Int(endExcl)
-                httpRangeRetriever.fetchRange(from: httpURL, range: byteRange) { result in
-                    switch result {
-                    case .success(let data):
-                        dataRequest.respond(with: data)
-                        loadingRequest.finishLoading()
-                    case .failure(let error):
-                        loadingRequest.finishLoading(with: error)
-                    }
-                }
-            } else {
                 loadingRequest.finishLoading(with: NSError(
-                    domain: "LCPResourceLoader", code: 4,
-                    userInfo: [NSLocalizedDescriptionKey: "No resource or URL available for streaming"]
+                    domain: "LCPResourceLoader",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Publication not available for streaming"]
                 ))
             }
+            return true
         }
 
-         return true
+        if let pub = provider?.getPublication() {
+            Task { [weak self] in
+                await self?.serve(loadingRequest: loadingRequest, with: pub)
+            }
+            return true
+        }
+
+        loadingRequest.finishLoading(with: NSError(
+            domain: "LCPResourceLoader",
+            code: -3,
+            userInfo: [NSLocalizedDescriptionKey: "Unknown streaming error"]
+        ))
+        return false
      }
 
     func resourceLoader(
@@ -146,6 +78,106 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
 // MARK: - Helpers
 private extension LCPResourceLoaderDelegate {
+    @MainActor
+    func serve(loadingRequest: AVAssetResourceLoadingRequest, with pub: Publication) async {
+        guard let url = loadingRequest.request.url else {
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Missing URL"]
+            ))
+            return
+        }
+
+        let comps = url.pathComponents
+        let index = (comps.count >= 3 && comps[1] == "track") ? Int(comps[2]) ?? 0 : 0
+        guard (0..<pub.readingOrder.count).contains(index) else {
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Track index out of range"]
+            ))
+            return
+        }
+
+        let link = pub.readingOrder[index]
+        let href = link.href.components(separatedBy: "#").first ?? link.href
+        let resource = Self.resource(for: pub, href: href)
+        let absoluteHTTPURL: HTTPURL? = {
+            if let base = pub.linkWithRel(.self)?.href,
+               let baseURL = URL(string: base),
+               let resolved = URL(string: href, relativeTo: baseURL),
+               let http = HTTPURL(url: resolved) {
+                return http
+            }
+            if let direct = URL(string: href), let http = HTTPURL(url: direct) {
+                return http
+            }
+            return nil
+        }()
+
+        if resource is FailureResource {
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "FailureResource for href: \(href)"]
+            ))
+            return
+        }
+
+        if let info = loadingRequest.contentInformationRequest {
+            info.contentType = Self.utiIdentifier(forHref: href, fallbackMime: link.mediaType?.string)
+            info.isByteRangeAccessSupported = false
+
+            Task {
+                if let res = resource,
+                   let maybeLength = try? await res.estimatedLength().get(),
+                   let totalLength = maybeLength {
+                    info.contentLength = Int64(totalLength)
+                }
+            }
+        }
+
+        guard let dataRequest = loadingRequest.dataRequest else {
+            loadingRequest.finishLoading()
+            return
+        }
+
+        let start = max(0, Int(dataRequest.requestedOffset))
+        let count = Int(dataRequest.requestedLength)
+        let endExcl = start + count
+
+        Task {
+            if let res = resource {
+                do {
+                    let blob: Data
+                    if let cached = self.fullTrackCache[href] {
+                        blob = cached
+                    } else {
+                        // Fetch entire track once without Range probing; cache for subsequent slices
+                        let all = try await res.read(range: nil).get()
+                        self.fullTrackCache[href] = all
+                        blob = all
+                    }
+
+                    let upper = min(endExcl, blob.count)
+                    let lower = min(max(0, start), upper)
+                    if lower < upper {
+                        let slice = blob.subdata(in: lower..<upper)
+                        dataRequest.respond(with: slice)
+                    }
+                    loadingRequest.finishLoading()
+                } catch {
+                    loadingRequest.finishLoading(with: error)
+                }
+                return
+            }
+
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "No decrypted resource available for streaming"]
+            ))
+        }
+    }
     static func resource(for publication: Publication, href: String) -> Resource? {
         if let res = publication.get(Link(href: href)), type(of: res) != FailureResource.self {
             return res

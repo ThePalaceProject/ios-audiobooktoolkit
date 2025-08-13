@@ -58,7 +58,56 @@ final class LCPDownloadTask: DownloadTask {
     }
     
     func assetFileStatus() -> AssetResult {
-        .saved(urls)
+        if let decrypted = decryptedUrls, !decrypted.isEmpty {
+            let fm = FileManager.default
+            // Check that files exist AND are valid audio files (not encrypted content)
+            let validFiles = decrypted.filter { url in
+                guard fm.fileExists(atPath: url.path) else { return false }
+                do {
+                    let attributes = try fm.attributesOfItem(atPath: url.path)
+                    let fileSize = attributes[.size] as? Int64 ?? 0
+                    
+                    // Require files to be reasonably sized
+                    guard fileSize > 10000 else { return false } // At least 10KB
+                    
+                    // Check if the file starts with valid audio headers
+                    let fileHandle = try FileHandle(forReadingFrom: url)
+                    defer { fileHandle.closeFile() }
+                    
+                    let headerData = fileHandle.readData(ofLength: 16)
+                    guard headerData.count >= 4 else { return false }
+                    
+                    // Check for common audio file signatures
+                    let header = headerData.prefix(4)
+                    
+                    // MP3: ID3 tag or MPEG audio frame
+                    if header.starts(with: Data([0x49, 0x44, 0x33])) || // ID3
+                       header.starts(with: Data([0xFF, 0xFB])) ||        // MPEG Layer 3
+                       header.starts(with: Data([0xFF, 0xFA])) ||        // MPEG Layer 3
+                       header.starts(with: Data([0xFF, 0xF3])) ||        // MPEG Layer 3
+                       header.starts(with: Data([0xFF, 0xF2])) {         // MPEG Layer 3
+                        return true
+                    }
+                    
+                    // M4A/AAC: ftyp header
+                    if headerData.count >= 8 {
+                        let ftypOffset = headerData.range(of: Data([0x66, 0x74, 0x79, 0x70]))
+                        if ftypOffset != nil {
+                            return true
+                        }
+                    }
+                    
+                    return false
+                } catch {
+                    return false
+                }
+            }
+            
+            if validFiles.count == decrypted.count {
+                return .saved(decrypted)
+            }
+        }
+        return .missing([])
     }
     
     /// Delete decrypted file

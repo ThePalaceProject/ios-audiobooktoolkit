@@ -539,9 +539,36 @@ extension OpenAccessPlayer {
             selector: #selector(handleAudioSessionRouteChange(_:)),
             name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
         )
-        
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowAirPlay])
-        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let session = AVAudioSession.sharedInstance()
+        let configure: () -> Void = {
+            do {
+                // Deactivate first to avoid property conflicts (-50)
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                // Minimal, highly compatible sequence: set category, then mode, then activate
+                try session.setCategory(.playback)
+                try session.setMode(.default)
+                try session.setActive(true)
+                ATLog(.debug, "🔊 AudioSession configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
+            } catch {
+                ATLog(.error, "🔊 AudioSession setup failed: \(error)")
+                // Fallback: minimal configuration
+                do {
+                    try session.setCategory(.playback)
+                    try session.setMode(.default)
+                    try session.setActive(true)
+                    ATLog(.debug, "🔊 AudioSession fallback configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
+                } catch {
+                    ATLog(.error, "🔊 AudioSession fallback failed: \(error)")
+                }
+            }
+        }
+
+        if Thread.isMainThread {
+            configure()
+        } else {
+            DispatchQueue.main.sync { configure() }
+        }
     }
     
     public func addPlayerObservers() {
@@ -685,23 +712,45 @@ extension OpenAccessPlayer {
     }
     
     @objc func playerItemDidReachEnd(_ notification: Notification) {
-        guard let currentTrack = currentTrackPosition?.track else {
-            return
-        }
-        
-        if let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) {
-            if let currentTrackPosition,
-               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
-                playbackStatePublisher.send(.completed(currentChapter))
-                
-                if avQueuePlayer.items().count > nextTrack.index + 1 {
+        guard let endedItem = notification.object as? AVPlayerItem,
+              let endedTrackKey = endedItem.trackIdentifier,
+              let endedTrack = tableOfContents.track(forKey: endedTrackKey)
+        else { return }
+
+        // Determine chapter at the exact end of the ended track
+        let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
+        let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+
+        // If the next track still belongs to the same chapter, just advance without firing chapter completion
+        if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
+            let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+
+            if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
+                let wasPlaying = avQueuePlayer.rate > 0
+                if avQueuePlayer.items().count > 1 {
                     avQueuePlayer.advanceToNextItem()
+                    if wasPlaying { avQueuePlayer.play(); self.restorePlaybackRate() }
                 } else {
-                    rebuildPlayerQueueAndNavigate(to: TrackPosition(track: nextTrack, timestamp: 0.0, tracks: currentTrackPosition.tracks))
+                    rebuildPlayerQueueAndNavigate(to: nextStart)
+                    if wasPlaying { avQueuePlayer.play(); self.restorePlaybackRate() }
                 }
+                return
             }
+        }
+
+        // We reached a chapter boundary (or no next track). Notify chapter completion if known
+        if let completedChapter = currentChapter {
+            playbackStatePublisher.send(.completed(completedChapter))
+        }
+
+        // Navigate to next chapter start if any; otherwise handle end of book
+        if let curChapter = currentChapter, let nextChapter = tableOfContents.nextChapter(after: curChapter) {
+            let nextPos = nextChapter.position
+            avQueuePlayer.pause()
+            rebuildPlayerQueueAndNavigate(to: nextPos)
         } else {
-            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
         }
     }
 }
