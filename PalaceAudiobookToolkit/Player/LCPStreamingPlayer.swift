@@ -13,12 +13,20 @@ import ObjectiveC
 /// LCP streaming player that uses custom lcp:// URLs with resource loader
 class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     
+    // MARK: - StreamingCapablePlayer conformance
+    public func setStreamingProvider(_ provider: StreamingResourceProvider) {
+        streamingProvider = provider
+        sharedResourceLoader = LCPResourceLoaderDelegate(provider: provider)
+    }
+    
     private weak var streamingProvider: StreamingResourceProvider?
     private let resourceLoaderQueue = DispatchQueue(label: "com.palace.lcp-streaming-loader", qos: .userInitiated)
     private static var resourceLoaderAssocKey: UInt8 = 0
     private let decryptionDelegate: DRMDecryptor?
     private var forceStreamingTrackKeys = Set<String>()
     private let compositionQueue = DispatchQueue(label: "com.palace.lcp.local-composition", qos: .userInitiated)
+    
+    private var sharedResourceLoader: LCPResourceLoaderDelegate?
     
     override var currentOffset: Double {
         guard let currentTrackPosition, let currentChapter else {
@@ -38,16 +46,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         fatalError("init(tableOfContents:) has not been implemented")
     }
     
-    /// Set the streaming provider for resource loading
-    func setStreamingProvider(_ provider: StreamingResourceProvider) {
-        self.streamingProvider = provider
-        if tableOfContents.tracks.first != nil { buildPlayerQueue() }
-    }
+
 
     override func configurePlayer() {
         setupAudioSession()
         avQueuePlayer.actionAtItemEnd = .none
-        avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        avQueuePlayer.automaticallyWaitsToMinimizeStalling = false
     }
     
     /// Build player items preferring local decrypted files, falling back to streaming
@@ -63,20 +67,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 if urls.count == 1 {
                     let asset = AVURLAsset(url: urls[0])
                     localItem = AVPlayerItem(asset: asset)
-                    ATLog(.debug, "🎵 Created LOCAL item for track \(index): \(urls[0])")
                 } else {
                     // Concatenate multiple decrypted parts into a single composition item
                     if let compositionItem = createConcatenatedItem(from: urls) {
                         localItem = compositionItem
-                        ATLog(.debug, "🎵 Created LOCAL COMPOSITION for track \(index) with \(urls.count) parts")
                     } else {
                         let item = createStreamingPlayerItem(for: track, index: index)
                         items.append(item)
-                        ATLog(.debug, "🎵 Fallback STREAMING item for track \(index): fake://lcp-streaming/track/\(index)")
                         continue
                     }
                 }
-                localItem.audioTimePitchAlgorithm = .spectral
+                localItem.audioTimePitchAlgorithm = .timeDomain
                 localItem.trackIdentifier = track.key
                 items.append(localItem)
                 safeAddObserver(to: localItem)
@@ -87,6 +88,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             }
         }
         
+        self.isLoaded = true
         return items
     }
 
@@ -98,10 +100,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         if !needsRebuild {
             if let targetIndex = avQueuePlayer.items().firstIndex(where: { $0.trackIdentifier == position.track.key }) {
                 let item = avQueuePlayer.items()[targetIndex]
-                // Treat file URL assets and composition assets as local
                 let isCurrentlyLocal: Bool = {
                     if let urlAsset = item.asset as? AVURLAsset { return urlAsset.url.isFileURL }
-                    // Non-URL assets (e.g. AVComposition from concatenated parts) are local
                     return !(item.asset is AVURLAsset)
                 }()
                 if let lcpTrack = position.track as? LCPTrack {
@@ -111,13 +111,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                     }
                 }
             } else {
-                // Target not present in current queue → rebuild
                 needsRebuild = true
             }
         }
 
         if !needsRebuild {
-            // Navigate within the existing queue
             var queueItems = avQueuePlayer.items()
             if let targetIndex = queueItems.firstIndex(where: { $0.trackIdentifier == position.track.key }) {
                 let currentIndex = queueItems.firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
@@ -128,7 +126,15 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
                 avQueuePlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
                     // Ensure session is active before resuming
-                    try? AVAudioSession.sharedInstance().setActive(true)
+                    do {
+                        let session = AVAudioSession.sharedInstance()
+                        try session.setActive(true)
+                        
+                        let route = session.currentRoute
+                    } catch {
+                        ATLog(.error, "🔊 [LCPStreamingPlayer] Failed to activate audio session: \(error)")
+                    }
+                    
                     self?.avQueuePlayer.play()
                     self?.restorePlaybackRate()
                     var startedPos = position
@@ -143,9 +149,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         let allTracks = tableOfContents.allTracks
         let newItems = buildPlayerItems(fromTracks: allTracks)
         avQueuePlayer.removeAllItems()
-        for (i, item) in newItems.enumerated() {
-            // Insert only a window to reduce simultaneous streaming starts
-            if i < 3 { avQueuePlayer.insert(item, after: nil) }
+        
+        // Find target track index for windowing
+        let targetTrackIndex = allTracks.firstIndex { $0.key == position.track.key } ?? 0
+        
+        // Add a window of items around the target track
+        let windowSize = 5
+        let startIndex = max(0, targetTrackIndex - 1)
+        let endIndex = min(newItems.count, targetTrackIndex + windowSize)
+        
+        for i in startIndex..<endIndex {
+            avQueuePlayer.insert(newItems[i], after: nil)
         }
         var queueItems = avQueuePlayer.items()
 
@@ -158,7 +172,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             let safeTs = safeTimestamp(for: position)
             let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
             avQueuePlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-                try? AVAudioSession.sharedInstance().setActive(true)
+                do {
+                    let session = AVAudioSession.sharedInstance()
+                    try session.setActive(true)
+                    ATLog(.debug, "🔊 [LCPStreamingPlayer] Audio route (fallback): \(session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", "))")
+                } catch {
+                    ATLog(.error, "🔊 [LCPStreamingPlayer] Failed to activate audio session (fallback): \(error)")
+                }
                 self?.avQueuePlayer.play()
                 self?.restorePlaybackRate()
                 var startedPos = position
@@ -167,7 +187,35 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 completion?(nil)
             }
         } else {
-            completion?(NSError(domain: "LCPStreamingPlayer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Target track not found in queue"]))
+            if targetTrackIndex < newItems.count {
+                avQueuePlayer.insert(newItems[targetTrackIndex], after: nil)
+                
+                queueItems = avQueuePlayer.items()
+                if let targetIndex = queueItems.firstIndex(where: { $0.trackIdentifier == position.track.key }) {
+                    for _ in 0..<targetIndex { avQueuePlayer.advanceToNextItem() }
+                    let safeTs = safeTimestamp(for: position)
+                    let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+                    avQueuePlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                        do {
+                            let session = AVAudioSession.sharedInstance()
+                            try session.setActive(true)
+                            ATLog(.debug, "🔊 [LCPStreamingPlayer] Audio route (fallback 2): \(session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ", "))")
+                        } catch {
+                            ATLog(.error, "🔊 [LCPStreamingPlayer] Failed to activate audio session (fallback 2): \(error)")
+                        }
+                        self?.avQueuePlayer.play()
+                        self?.restorePlaybackRate()
+                        var startedPos = position
+                        startedPos.timestamp = safeTs
+                        self?.playbackStatePublisher.send(.started(startedPos))
+                        completion?(nil)
+                    }
+                } else {
+                    completion?(NSError(domain: "LCPStreamingPlayer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Target track not found in queue"]))
+                }
+            } else {
+                completion?(NSError(domain: "LCPStreamingPlayer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Target track index out of bounds"]))
+            }
         }
     }
 
@@ -230,35 +278,40 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         return AVPlayerItem(asset: composition)
     }
     
-    /// Create player item with custom lcp:// URL and resource loader
     private func createStreamingPlayerItem(for track: any Track, index: Int) -> AVPlayerItem {
-        // Use fake scheme that AVFoundation will definitely pass to resource loader
-        let customUrl = URL(string: "fake://lcp-streaming/track/\(index)")!
+        guard let publication = streamingProvider?.getPublication(),
+              index < publication.readingOrder.count else {
+            let customUrl = URL(string: "fake://lcp-streaming/track/\(index)")!
+            let asset = AVURLAsset(url: customUrl, options: [:])
+            return AVPlayerItem(asset: asset)
+        }
         
-        // Create asset with options that force resource loading
-        let assetOptions: [String: Any] = [AVURLAssetPreferPreciseDurationAndTimingKey: false]
-        let asset = AVURLAsset(url: customUrl, options: assetOptions)
+        let readingOrderLink = publication.readingOrder[index]
+        let realHttpUrl: URL
         
-        // Set up resource loader delegate BEFORE creating player item
-        if let provider = streamingProvider {
-            let resourceLoader = LCPResourceLoaderDelegate(provider: provider)
-            
-            // CRITICAL: Store the resource loader to prevent deallocation AND set delegate immediately
-            objc_setAssociatedObject(asset, &Self.resourceLoaderAssocKey, resourceLoader, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-            asset.resourceLoader.setDelegate(resourceLoader, queue: resourceLoaderQueue)
-            
-            // Do not prefetch metadata for all items; let the current item trigger loading on demand
-        } else {
-            
+        if let absoluteHref = URL(string: readingOrderLink.href), absoluteHref.scheme != nil {
+            realHttpUrl = absoluteHref
+                } else {
+            let readiumLcpUrl = URL(string: "readium-lcp://track\(index)/\(readingOrderLink.href)")!
+            realHttpUrl = readiumLcpUrl
+        }
+        
+        let assetOptions: [String: Any] = [
+            AVURLAssetPreferPreciseDurationAndTimingKey: false
+        ]
+        let asset = AVURLAsset(url: realHttpUrl, options: assetOptions)
+        
+        if let sharedResourceLoader = sharedResourceLoader {
+            objc_setAssociatedObject(asset, &Self.resourceLoaderAssocKey, sharedResourceLoader, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            asset.resourceLoader.setDelegate(sharedResourceLoader, queue: resourceLoaderQueue)
         }
         
         let item = AVPlayerItem(asset: asset)
-        item.audioTimePitchAlgorithm = .spectral
+        item.audioTimePitchAlgorithm = .timeDomain
         item.trackIdentifier = track.key
         item.preferredForwardBufferDuration = 0.1
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
         
-        // Add KVO observer safely
         safeAddObserver(to: item)
         
         return item
@@ -306,16 +359,16 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
         
         DispatchQueue.main.async { [weak self] in
+            let itemURL = (item.asset as? AVURLAsset)?.url.absoluteString ?? "unknown"
+            
             switch item.status {
             case .readyToPlay:
-                break
-            case .failed:
-                if let err = item.error as NSError? {
-                    ATLog(.error, "Playback failed: \(err.domain) \(err.code) - \(err.localizedDescription)")
+                if let currentItem = self?.avQueuePlayer.currentItem, currentItem == item {
+                    let isPlaying = self?.avQueuePlayer.timeControlStatus == .playing
+                    let rate = self?.avQueuePlayer.rate ?? 0
                 }
-                // If this item failed, force streaming for this track key and rebuild
+            case .failed:
                 if let key = item.trackIdentifier {
-                    ATLog(.warn, "Forcing streaming for failed track key=\(key)")
                     self?.forceStreamingTrackKeys.insert(key)
                     self?.rebuildPlayerQueueAndNavigate(to: self?.currentTrackPosition)
                 }
@@ -330,7 +383,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     deinit {
         observerQueue.async { [observedItems] in
             // Observer cleanup happens automatically when items are deallocated
-            ATLog(.debug, "🎵 [LCPStreamingPlayer] Deinit with \(observedItems.count) observed items")
         }
     }
 }

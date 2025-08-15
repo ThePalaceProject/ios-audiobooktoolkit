@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import ReadiumShared
 
 public enum DRMStatus: Int {
     public typealias RawValue = Int
@@ -115,15 +116,20 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
         switch type {
         case .lcp:
-            if let streamingProvider = decryptor as? LCPStreamingProvider, streamingProvider.supportsStreaming() {
-                let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
-                
-                let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
-                if setupSuccess {
+            if let streamingProvider = decryptor as? LCPStreamingProvider {
+                if streamingProvider.supportsStreaming() {
+                    let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
+                    
+                    let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
                     return streamingPlayer
+                } else {
+                    ATLog(.debug, "🏭 [PlayerFactory] Streaming not supported, using regular LCPPlayer")
                 }
+            } else {
+                ATLog(.debug, "🏭 [PlayerFactory] Decryptor is not LCPStreamingProvider, using regular LCPPlayer")
             }
             
+            ATLog(.debug, "🏭 [PlayerFactory] Creating fallback LCPPlayer")
             return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
             return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)

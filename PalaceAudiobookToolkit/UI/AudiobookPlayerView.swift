@@ -48,6 +48,7 @@ struct AudiobookPlayerView: View {
                             .palaceFont(.body)
                             .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
+                    .multilineTextAlignment(.center)
                     
                     VStack(spacing: 5) {
                         if !isInBackground {
