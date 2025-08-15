@@ -117,20 +117,20 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         switch type {
         case .lcp:
             if let streamingProvider = decryptor as? LCPStreamingProvider {
+                let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
+                
                 if streamingProvider.supportsStreaming() {
-                    let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
-                    
                     let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
                     return streamingPlayer
                 } else {
-                    ATLog(.debug, "🏭 [PlayerFactory] Streaming not supported, using regular LCPPlayer")
+                    ATLog(.debug, "🏭 [PlayerFactory] Created LCPStreamingPlayer without streaming (local-only mode)")
                 }
+                
+                return streamingPlayer
             } else {
-                ATLog(.debug, "🏭 [PlayerFactory] Decryptor is not LCPStreamingProvider, using regular LCPPlayer")
+                return LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
             }
             
-            ATLog(.debug, "🏭 [PlayerFactory] Creating fallback LCPPlayer")
-            return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
         case .findaway:
             return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
         default:

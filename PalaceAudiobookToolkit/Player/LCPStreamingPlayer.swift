@@ -50,6 +50,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
     override func configurePlayer() {
         setupAudioSession()
+        buildPlayerQueue()
+        addPlayerObservers()
+        
         avQueuePlayer.actionAtItemEnd = .none
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = false
     }
@@ -361,6 +364,44 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 break
             }
         }
+    }
+    
+    // MARK: - Chapter Position Tracking for Multi-Track Chapters
+    
+    @objc override func playerItemDidReachEnd(_ notification: Notification) {
+        guard let endedItem = notification.object as? AVPlayerItem,
+              let endedTrackKey = endedItem.trackIdentifier,
+              let endedTrack = tableOfContents.track(forKey: endedTrackKey) else { 
+            return 
+        }
+        
+        
+        let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
+        let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+        
+        if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
+            let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+            
+            if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
+                let wasPlaying = avQueuePlayer.rate > 0
+                
+                if avQueuePlayer.items().count > 1 {
+                    avQueuePlayer.advanceToNextItem()
+                    if wasPlaying { 
+                        avQueuePlayer.play()
+                        restorePlaybackRate()
+                    }
+                    
+                    playbackStatePublisher.send(.started(nextStart))
+                } else {
+                    play(at: nextStart, completion: nil)
+                }
+                return
+            }
+        }
+        
+        super.playerItemDidReachEnd(notification)
     }
     
     deinit {
