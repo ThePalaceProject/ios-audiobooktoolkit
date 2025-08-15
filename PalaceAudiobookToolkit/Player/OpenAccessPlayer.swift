@@ -766,11 +766,9 @@ extension OpenAccessPlayer {
     }
     
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        // Safety bounds: don't seek past 95% of track duration to avoid AVPlayer edge cases
         let maxSafeTimestamp = position.track.duration * 0.95
         let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
         
-        // If seeking to the very end of the last track, handle as end-of-book
         if position.timestamp >= position.track.duration * 0.99 && 
            tableOfContents.tracks.nextTrack(position.track) == nil {
             handlePlaybackEnd(currentTrack: position.track, completion: completion)
@@ -828,11 +826,9 @@ extension OpenAccessPlayer {
               let endedTrack = tableOfContents.track(forKey: endedTrackKey)
         else { return }
 
-        // Determine chapter at the exact end of the ended track
         let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
         let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
 
-        // If the next track still belongs to the same chapter, just advance without firing chapter completion
         if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
             let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
             let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
@@ -850,12 +846,10 @@ extension OpenAccessPlayer {
             }
         }
 
-        // We reached a chapter boundary (or no next track). Notify chapter completion if known
         if let completedChapter = currentChapter {
             playbackStatePublisher.send(.completed(completedChapter))
         }
 
-        // Navigate to next chapter start if any; otherwise handle end of book
         if let curChapter = currentChapter, let nextChapter = tableOfContents.nextChapter(after: curChapter) {
             let nextPos = nextChapter.position
             avQueuePlayer.pause()
