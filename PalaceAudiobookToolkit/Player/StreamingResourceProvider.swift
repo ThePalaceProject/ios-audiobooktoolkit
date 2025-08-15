@@ -18,10 +18,5 @@ public protocol StreamingCapablePlayer: AnyObject {
 
 public protocol LCPStreamingProvider: DRMDecryptor, StreamingResourceProvider {
     func supportsStreaming() -> Bool
-    
     func setupStreamingFor(_ player: Any) -> Bool
-    
-    func getContainerURL() -> URL?
-    
-    func decrypt(data: Data) -> Data?
 }

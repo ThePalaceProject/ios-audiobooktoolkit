@@ -317,24 +317,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         return item
     }
 
-    private func maybeDecryptInBackground(originalHref: URL, destination: URL) {
-        guard let decryptor = decryptionDelegate else { return }
-        // Use file URL with path equal to manifest href for Readium lookup
-        let source = URL(fileURLWithPath: originalHref.path)
-        decryptor.decrypt(url: source, to: destination) { [weak self] _ in
-            guard let self else { return }
-            // If current queue contains a streaming item for this href, rebuild to use local
-            DispatchQueue.main.async {
-                let needsSwap = self.avQueuePlayer.items().contains { item in
-                    guard let key = item.trackIdentifier else { return false }
-                    return key == originalHref.absoluteString || key == originalHref.path
-                }
-                if needsSwap {
-                    self.rebuildPlayerQueueAndNavigate(to: self.currentTrackPosition)
-                }
-            }
-        }
-    }
+
     
     // Inherit all the KVO management from LCPPlayer
     private var observedItems = Set<ObjectIdentifier>()
