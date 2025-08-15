@@ -131,11 +131,11 @@ public struct Manifest: Codable {
     }
 
     public struct ReadingOrderItem: Codable {
-        let title: String?
+        public let title: String?
         let type: String
         let duration: Double
         let href: String?
-        let properties: Properties?
+        public let properties: Properties?
         
         public let findawayPart: Int?
         public let findawaySequence: Int?
@@ -144,6 +144,34 @@ public struct Manifest: Codable {
             case title, type, duration, href, properties
             case findawayPart = "findaway:part"
             case findawaySequence = "findaway:sequence"
+        }
+        
+        /// Create a copy with enhanced properties for streaming
+        func withStreamingUrl(_ streamingUrl: String) -> ReadingOrderItem {
+            let enhancedProperties = Properties(
+                encrypted: properties?.encrypted,
+                lcpStreamingUrl: streamingUrl
+            )
+            
+            return ReadingOrderItem(
+                title: title,
+                type: type,
+                duration: duration,
+                href: href,
+                properties: enhancedProperties,
+                findawayPart: findawayPart,
+                findawaySequence: findawaySequence
+            )
+        }
+        
+        private init(title: String?, type: String, duration: Double, href: String?, properties: Properties?, findawayPart: Int?, findawaySequence: Int?) {
+            self.title = title
+            self.type = type
+            self.duration = duration
+            self.href = href
+            self.properties = properties
+            self.findawayPart = findawayPart
+            self.findawaySequence = findawaySequence
         }
     }
     
@@ -239,6 +267,12 @@ public struct Manifest: Codable {
 
     public struct Properties: Codable {
         let encrypted: Encrypted?
+        public let lcpStreamingUrl: String?
+        
+        init(encrypted: Encrypted? = nil, lcpStreamingUrl: String? = nil) {
+            self.encrypted = encrypted
+            self.lcpStreamingUrl = lcpStreamingUrl
+        }
     }
     
     public struct Encrypted: Codable {
@@ -303,6 +337,55 @@ public extension Manifest {
         default:
             return nil
         }
+    }
+}
+
+// MARK: - LCP Streaming Enhancement
+
+extension Manifest {
+    /// Create an enhanced manifest with LCP streaming URLs
+   public func withStreamingUrls(publicationUrl: URL) -> Manifest {
+        guard let readingOrder = readingOrder else {
+            return self
+        }
+        
+        let enhancedReadingOrder = readingOrder.map { item in
+            guard let href = item.href else { return item }
+            
+            let streamingUrl = publicationUrl.appendingPathComponent(href)
+            return item.withStreamingUrl(streamingUrl.absoluteString)
+        }
+        
+        return Manifest(
+            context: context,
+            id: id,
+            reserveId: reserveId,
+            crossRefId: crossRefId,
+            metadata: metadata,
+            links: links,
+            linksDictionary: linksDictionary,
+            readingOrder: enhancedReadingOrder,
+            resources: resources,
+            toc: toc,
+            formatType: formatType,
+            spine: spine
+        )
+    }
+    
+    /// Private initializer for creating enhanced manifests
+    private init(context: [ManifestContext], id: String?, reserveId: String?, crossRefId: Int?, metadata: Metadata?, links: [Link]?, linksDictionary: LinksDictionary?, readingOrder: [ReadingOrderItem]?, resources: [Link]?, toc: [TOCItem]?, formatType: String?, spine: [SpineItem]?) {
+        self.context = context
+        self.id = id
+        self.reserveId = reserveId
+        self.crossRefId = crossRefId
+        self.metadata = metadata
+        self.links = links
+        self.linksDictionary = linksDictionary
+        self.readingOrder = readingOrder
+        self.resources = resources
+        self.toc = toc
+        self.formatType = formatType
+        self.spine = spine
     }
 }
 

@@ -8,16 +8,17 @@
 
 import Foundation
 
-class LCPTrack: Track {
-    var key: String
-    var downloadTask: (any DownloadTask)?
-    var title: String?
-    var index: Int
-    var duration: TimeInterval
-    var urls: [URL]?
-    let mediaType: TrackMediaType
+public class LCPTrack: Track {
+    public  var key: String
+    public var downloadTask: (any DownloadTask)?
+    public var title: String?
+    public var index: Int
+    public var duration: TimeInterval
+    public var urls: [URL]?
+    public let mediaType: TrackMediaType
+    public var streamingResource: URL?
     
-    required init(
+    public required init(
         manifest: Manifest,
         urlString: String?,
         audiobookID: String,
@@ -41,6 +42,22 @@ class LCPTrack: Track {
         self.duration = duration
         self.index = index
         self.mediaType = manifest.trackMediaType
+
         self.downloadTask = LCPDownloadTask(key: self.key, urls: urls, mediaType: mediaType)
     }
+    
+    /// Set the streaming resource URL for this track
+    public func setStreamingResource(_ url: URL?) {
+        self.streamingResource = url
+    }
+    
+    /// Check if this track has local files available
+    public func hasLocalFiles() -> Bool {
+        guard let lcpTask = downloadTask as? LCPDownloadTask,
+              let decryptedUrls = lcpTask.decryptedUrls else {
+            return false
+        }
+        return decryptedUrls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
 }

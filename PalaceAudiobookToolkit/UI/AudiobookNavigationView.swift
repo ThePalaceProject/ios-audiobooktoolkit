@@ -101,7 +101,7 @@ struct AudiobookNavigationView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .frame(height: 40)
-                .disabled(playback.downloadProgress(for: chapter) < 1.0)
+                .opacity(playback.downloadProgress(for: chapter) < 1.0 ? 0.85 : 1.0)
             }
         }
         .listStyle(.plain)
@@ -207,7 +207,7 @@ extension AudiobookNavigationView {
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
             audiobook: audiobook,
-            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+                networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks, decryptor: audiobook.player is LCPPlayer ? (audiobook.player as? LCPPlayer)?.decryptionDelegate : nil)
         )
         self.playback = AudiobookPlaybackModel(audiobookManager: audiobookManager)
         var bookmark = TrackPosition(track: audiobook.player.tableOfContents.tracks.first!, timestamp: 0.0, tracks: audiobook.player.tableOfContents.tracks)

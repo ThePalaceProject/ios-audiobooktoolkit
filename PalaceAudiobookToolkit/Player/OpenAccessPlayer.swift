@@ -321,6 +321,9 @@ class OpenAccessPlayer: NSObject, Player {
         to trackPosition: TrackPosition?,
         completion: ((Bool) -> Void)? = nil
     ) {
+        let wasPlaying = avQueuePlayer.rate > 0
+        avQueuePlayer.pause()
+        
         resetPlayerQueue()
         let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
         
@@ -338,7 +341,14 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         
-        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0, completion: completion)
+        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0) { [weak self] success in
+            if success && wasPlaying {
+                // Restore playback state after successful navigation
+                self?.avQueuePlayer.play()
+                self?.restorePlaybackRate()
+            }
+            completion?(success)
+        }
     }
     
     public func resetPlayerQueue() {
@@ -378,16 +388,82 @@ class OpenAccessPlayer: NSObject, Player {
     public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
         if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
             performSeek(to: position, completion: completion)
+        } else if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
+            navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
         } else {
-            if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
-                navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
+            if canInsertTrackIntoQueue(position.track) {
+                insertTrackAndNavigate(to: position, completion: completion)
             } else {
-                rebuildPlayerQueueAndNavigate(to: position) { success in
+                // Fall back to full rebuild only when necessary
+                rebuildPlayerQueueAndNavigate(to: position) { [weak self] success in
                     if success {
-                        self.performSeek(to: position, completion: completion)
+                        self?.performSeek(to: position, completion: completion)
                     } else {
                         completion?(nil)
                     }
+                }
+            }
+        }
+    }
+    
+    private func canInsertTrackIntoQueue(_ track: any Track) -> Bool {
+        let allTracks = tableOfContents.allTracks
+        let currentItems = avQueuePlayer.items()
+        
+        guard currentItems.count > 5,
+              let targetIndex = allTracks.firstIndex(where: { $0.key == track.key }) else {
+            return false
+        }
+        
+        let existingIndices = currentItems.compactMap { item in
+            allTracks.firstIndex { $0.key == item.trackIdentifier }
+        }.sorted()
+        
+        if let firstExisting = existingIndices.first,
+           let lastExisting = existingIndices.last {
+            return targetIndex >= max(0, firstExisting - 3) && 
+                   targetIndex <= min(allTracks.count - 1, lastExisting + 3)
+        }
+        
+        return false
+    }
+    
+    private func insertTrackAndNavigate(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        let allTracks = tableOfContents.allTracks
+        guard let targetIndex = allTracks.firstIndex(where: { $0.key == position.track.key }) else {
+            completion?(nil)
+            return
+        }
+        
+        let track = allTracks[targetIndex]
+        guard let newItem = createPlayerItem(from: track) else {
+            completion?(nil)
+            return
+        }
+        
+        let currentItems = avQueuePlayer.items()
+        var insertAfter: AVPlayerItem? = nil
+        
+        for (index, item) in currentItems.enumerated() {
+            if let trackIndex = allTracks.firstIndex(where: { $0.key == item.trackIdentifier }),
+               trackIndex < targetIndex {
+                insertAfter = item
+            } else {
+                break
+            }
+        }
+        
+        if avQueuePlayer.canInsert(newItem, after: insertAfter) {
+            avQueuePlayer.insert(newItem, after: insertAfter)
+            addEndObserver(for: newItem)
+            
+            navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
+        } else {
+            rebuildPlayerQueueAndNavigate(to: position) { [weak self] success in
+                if success {
+                    self?.performSeek(to: position, completion: completion)
+                } else {
+                    completion?(nil)
                 }
             }
         }
@@ -469,7 +545,7 @@ class OpenAccessPlayer: NSObject, Player {
         }
     }
 
-    private func restorePlaybackRate() {
+    public func restorePlaybackRate() {
         avQueuePlayer.rate = PlaybackRate.convert(rate: playbackRate)
     }
 
@@ -490,6 +566,50 @@ class OpenAccessPlayer: NSObject, Player {
 
         ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
         playbackStatePublisher.send(.bookCompleted)
+    }
+    
+    /// Create a single player item from a track
+    private func createPlayerItem(from track: any Track) -> AVPlayerItem? {
+        guard let fileStatus = assetFileStatus(track.downloadTask) else {
+            return nil
+        }
+        
+        switch fileStatus {
+        case .saved(let urls):
+            // Return the first available URL as a player item
+            guard let url = urls.first else { return nil }
+            let playerItem = AVPlayerItem(url: url)
+            playerItem.audioTimePitchAlgorithm = .timeDomain
+            playerItem.trackIdentifier = track.key
+            return playerItem
+        case .missing, .unknown:
+            return nil
+        }
+    }
+    
+    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+        var items = [AVPlayerItem]()
+        for track in tracks {
+            guard let fileStatus = assetFileStatus(track.downloadTask) else {
+                continue
+            }
+            
+            switch fileStatus {
+            case .saved(let urls):
+                for url in urls {
+                    let playerItem = AVPlayerItem(url: url)
+                    playerItem.audioTimePitchAlgorithm = .timeDomain
+                    playerItem.trackIdentifier = track.key
+                    items.append(playerItem)
+                }
+            case .missing:
+                listenForDownloadCompletion(task: track.downloadTask)
+                continue
+            case .unknown:
+                continue
+            }
+        }
+        return items
     }
 
 }
@@ -514,9 +634,36 @@ extension OpenAccessPlayer {
             selector: #selector(handleAudioSessionRouteChange(_:)),
             name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
         )
-        
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.allowBluetooth, .allowAirPlay])
-        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let session = AVAudioSession.sharedInstance()
+        let configure: () -> Void = {
+            do {
+                // Deactivate first to avoid property conflicts (-50)
+                try? session.setActive(false, options: .notifyOthersOnDeactivation)
+                // Minimal, highly compatible sequence: set category, then mode, then activate
+                try session.setCategory(.playback)
+                try session.setMode(.default)
+                try session.setActive(true)
+                ATLog(.debug, "🔊 AudioSession configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
+            } catch {
+                ATLog(.error, "🔊 AudioSession setup failed: \(error)")
+                // Fallback: minimal configuration
+                do {
+                    try session.setCategory(.playback)
+                    try session.setMode(.default)
+                    try session.setActive(true)
+                    ATLog(.debug, "🔊 AudioSession fallback configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
+                } catch {
+                    ATLog(.error, "🔊 AudioSession fallback failed: \(error)")
+                }
+            }
+        }
+
+        if Thread.isMainThread {
+            configure()
+        } else {
+            DispatchQueue.main.sync { configure() }
+        }
     }
     
     public func addPlayerObservers() {
@@ -619,9 +766,23 @@ extension OpenAccessPlayer {
     }
     
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        let maxSafeTimestamp = position.track.duration * 0.95
+        let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
+        
+        if position.timestamp >= position.track.duration * 0.99 && 
+           tableOfContents.tracks.nextTrack(position.track) == nil {
+            handlePlaybackEnd(currentTrack: position.track, completion: completion)
+            return
+        }
+        
+        let cmTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: cmTime) { success in
-            completion?(success ? position : nil)
+            if success {
+                let actualPosition = TrackPosition(track: position.track, timestamp: safeTimestamp, tracks: position.tracks)
+                completion?(actualPosition)
+            } else {
+                completion?(nil)
+            }
         }
     }
     
@@ -660,48 +821,41 @@ extension OpenAccessPlayer {
     }
     
     @objc func playerItemDidReachEnd(_ notification: Notification) {
-        guard let currentTrack = currentTrackPosition?.track else {
-            return
-        }
-        
-        if let nextTrack = tableOfContents.tracks.nextTrack(currentTrack) {
-            if let currentTrackPosition,
-               let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition) {
-                playbackStatePublisher.send(.completed(currentChapter))
-                
-                if avQueuePlayer.items().count > nextTrack.index + 1 {
+        guard let endedItem = notification.object as? AVPlayerItem,
+              let endedTrackKey = endedItem.trackIdentifier,
+              let endedTrack = tableOfContents.track(forKey: endedTrackKey)
+        else { return }
+
+        let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
+        let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+
+        if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
+            let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+
+            if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
+                let wasPlaying = avQueuePlayer.rate > 0
+                if avQueuePlayer.items().count > 1 {
                     avQueuePlayer.advanceToNextItem()
+                    if wasPlaying { avQueuePlayer.play(); self.restorePlaybackRate() }
                 } else {
-                    rebuildPlayerQueueAndNavigate(to: TrackPosition(track: nextTrack, timestamp: 0.0, tracks: currentTrackPosition.tracks))
+                    rebuildPlayerQueueAndNavigate(to: nextStart)
+                    if wasPlaying { avQueuePlayer.play(); self.restorePlaybackRate() }
                 }
+                return
             }
+        }
+
+        if let completedChapter = currentChapter {
+            playbackStatePublisher.send(.completed(completedChapter))
+        }
+
+        if let curChapter = currentChapter, let nextChapter = tableOfContents.nextChapter(after: curChapter) {
+            let nextPos = nextChapter.position
+            avQueuePlayer.pause()
+            rebuildPlayerQueueAndNavigate(to: nextPos)
         } else {
-            handlePlaybackEnd(currentTrack: currentTrack, completion: nil)
+            handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
         }
-    }
-    
-    public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
-        var items = [AVPlayerItem]()
-        for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
-                listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
-            }
-        }
-        return items
     }
 }

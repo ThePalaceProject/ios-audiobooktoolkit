@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import ReadiumShared
 
 public enum DRMStatus: Int {
     public typealias RawValue = Int
@@ -25,6 +26,13 @@ public enum DRMStatus: Int {
     ///   - resultUrl: URL to save decrypted file at.
     ///   - completion: decryptor callback with optional `Error`.
     func decrypt(url: URL, to resultUrl: URL, completion: @escaping (_ error: Error?) -> Void)
+    
+    /// Optional: Get streamable URL for a track path (for true streaming without local files)
+    /// - Parameters:
+    ///   - trackPath: internal track path from manifest (e.g., "track1.mp3")
+    ///   - completion: callback with streamable URL or error
+    /// - Note: Default implementation returns nil (no streaming support)
+    @objc optional func getStreamableURL(for trackPath: String, completion: @escaping (URL?, Error?) -> Void)
 }
 
 public struct AudiobookFactory {
@@ -108,7 +116,21 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
     func createPlayer(forType type: Manifest.AudiobookType, withTableOfContents toc: AudiobookTableOfContents, decryptor: DRMDecryptor?) -> Player {
         switch type {
         case .lcp:
-            return LCPPlayer(tableOfContents: toc, decryptor: decryptor)
+            if let streamingProvider = decryptor as? LCPStreamingProvider {
+                let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
+                
+                if streamingProvider.supportsStreaming() {
+                    let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
+                    return streamingPlayer
+                } else {
+                    ATLog(.debug, "🏭 [PlayerFactory] Created LCPStreamingPlayer without streaming (local-only mode)")
+                }
+                
+                return streamingPlayer
+            } else {
+                return LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
+            }
+            
         case .findaway:
             return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
         default:

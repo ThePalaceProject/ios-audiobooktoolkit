@@ -48,6 +48,7 @@ struct AudiobookPlayerView: View {
                             .palaceFont(.body)
                             .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
+                    .multilineTextAlignment(.center)
                     
                     VStack(spacing: 5) {
                         if !isInBackground {
@@ -458,7 +459,7 @@ extension AudiobookPlayerView {
         let audiobookManager = DefaultAudiobookManager(
             metadata: AudiobookMetadata(title: "Test book title", authors: ["Author One", "Author Two"]),
             audiobook: audiobook,
-            networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+                    networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks, decryptor: audiobook.player is LCPPlayer ? (audiobook.player as? LCPPlayer)?.decryptionDelegate : nil)
         )
         self.playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
     }

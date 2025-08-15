@@ -64,9 +64,11 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     private var downloadStatus: [String: DownloadTaskState] = [:]
     private let queue = DispatchQueue(label: "com.yourapp.progressDictionaryQueue", attributes: .concurrent)
     private var currentDownloadIndex: Int = 0
+    public let decryptor: DRMDecryptor?
     
-    public init(tracks: [any Track]) {
+    public init(tracks: [any Track], decryptor: DRMDecryptor? = nil) {
         self.tracks = tracks
+        self.decryptor = decryptor
         setupDownloadTasks()
     }
     
@@ -172,10 +174,53 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
         let track = tracks[index]
         currentDownloadIndex = index
         
+        if let lcpTask = track.downloadTask as? LCPDownloadTask, let decryptedUrls = lcpTask.decryptedUrls, let decryptor = decryptor {
+            startLCPDecryption(task: lcpTask, originalUrls: lcpTask.urls, decryptedUrls: decryptedUrls, decryptor: decryptor)
+            return
+        }
+
         if track.downloadTask?.downloadProgress ?? 0.0 < 1.0 {
             track.downloadTask?.fetch()
         } else {
             startNextDownload()
+        }
+    }
+
+    private func startLCPDecryption(task: LCPDownloadTask, originalUrls: [URL], decryptedUrls: [URL], decryptor: DRMDecryptor) {
+        let fileManager = FileManager.default
+        let total = decryptedUrls.count
+        var completed = 0
+
+        let missingPairs: [(URL, URL)] = zip(originalUrls, decryptedUrls).filter { (_, dst) in !fileManager.fileExists(atPath: dst.path) }
+        if missingPairs.isEmpty {
+
+            task.downloadProgress = 1.0
+            let track = tracks[currentDownloadIndex]
+            updateProgress(1.0, for: track)
+            downloadStatePublisher.send(.completed(track: track))
+            updateDownloadStatus(for: track, state: .completed)
+            startNextDownload()
+            return
+        }
+
+        for (src, dst) in missingPairs {
+            decryptor.decrypt(url: src, to: dst) { [weak self] error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.downloadStatePublisher.send(.error(track: self.tracks[self.currentDownloadIndex], error: error))
+                    self.updateDownloadStatus(for: self.tracks[self.currentDownloadIndex], state: .error(error))
+                } else {
+                    completed += 1
+                    let progress = Float(completed) / Float(total)
+                    task.downloadProgress = progress
+                    self.downloadStatePublisher.send(.progress(track: self.tracks[self.currentDownloadIndex], progress: progress))
+                    if completed == total {
+                        self.downloadStatePublisher.send(.completed(track: self.tracks[self.currentDownloadIndex]))
+                        self.updateDownloadStatus(for: self.tracks[self.currentDownloadIndex], state: .completed)
+                        self.startNextDownload()
+                    }
+                }
+            }
         }
     }
     
@@ -205,7 +250,6 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     public func cleanup() {
         cancellables.forEach { $0.cancel() }
         cancellables.removeAll()
-        // Cancel download tasks if they’re in progress
         tracks.forEach { $0.downloadTask?.cancel() }
     }
 }

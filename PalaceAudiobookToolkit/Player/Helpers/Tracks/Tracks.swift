@@ -138,10 +138,12 @@ public class Tracks {
     }
     
     private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
-        TrackFactory.createTrack(
+        let urlString = item.href
+  
+        return TrackFactory.createTrack(
             from: manifest,
             title: item.title,
-            urlString: item.href,
+            urlString: urlString,
             audiobookID: self.audiobookID,
             index: index,
             duration: item.duration,
@@ -177,12 +179,23 @@ public class Tracks {
     }
     
     public func track(forHref href: String) -> (any Track)? {
-        return tracks.first(where: { track in
-            if (track.urls?.first?.absoluteString ?? "") == href {
-                return true
-            }
-            return false
-        })
+        if let match = tracks.first(where: { $0.urls?.first?.absoluteString == href }) { return match }
+        if let match = tracks.first(where: { $0.key == href }) { return match }
+
+        let hrefURL = URL(string: href)
+        let hrefLast = hrefURL?.lastPathComponent
+        let hrefPath = hrefURL?.path
+        if let match = tracks.first(where: { track in
+            guard let url = track.urls?.first else { return false }
+            return url.lastPathComponent == hrefLast || url.path == hrefPath
+        }) { return match }
+
+        if let match = tracks.first(where: { track in
+            guard let urlStr = track.urls?.first?.absoluteString else { return false }
+            return urlStr.hasSuffix(href) || urlStr.contains(href)
+        }) { return match }
+
+        return nil
     }
     
     public func track(forKey key: String) -> (any Track)? {
