@@ -77,6 +77,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                     } else {
                         let item = createStreamingPlayerItem(for: track, index: index)
                         items.append(item)
+                        addEndObserver(for: item)
                         continue
                     }
                 }
@@ -87,6 +88,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             } else {
                 let item = createStreamingPlayerItem(for: track, index: index)
                 items.append(item)
+                addEndObserver(for: item)
                 ATLog(.debug, "🎵 Created STREAMING item for track \(index): fake://lcp-streaming/track/\(index)")
             }
         }
@@ -163,6 +165,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         
         for i in startIndex..<endIndex {
             avQueuePlayer.insert(newItems[i], after: nil)
+            addEndObserver(for: newItems[i])
         }
         var queueItems = avQueuePlayer.items()
 
@@ -170,6 +173,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             // Ensure items exist up to target before advancing
             while avQueuePlayer.items().count <= targetIndex, let next = newItems.dropFirst(avQueuePlayer.items().count).first {
                 avQueuePlayer.insert(next, after: nil)
+                addEndObserver(for: next)
             }
             for _ in 0..<targetIndex { avQueuePlayer.advanceToNextItem() }
             let safeTs = safeTimestamp(for: position)
@@ -192,6 +196,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         } else {
             if targetTrackIndex < newItems.count {
                 avQueuePlayer.insert(newItems[targetTrackIndex], after: nil)
+                addEndObserver(for: newItems[targetTrackIndex])
                 
                 queueItems = avQueuePlayer.items()
                 if let targetIndex = queueItems.firstIndex(where: { $0.trackIdentifier == position.track.key }) {
@@ -375,7 +380,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             return 
         }
         
-        
         let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
         let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
         
@@ -399,9 +403,23 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 }
                 return
             }
+        } else {
+            // No next track - this is end of book!
+            handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
+            return
         }
         
         super.playerItemDidReachEnd(notification)
+    }
+    
+    // MARK: - End of Book Handling
+    
+    override func handlePlaybackEnd(currentTrack: any Track, completion: ((TrackPosition?) -> Void)?) {
+        // End of audiobook reached - pause and emit book completed event
+        avQueuePlayer.pause()
+        ATLog(.debug, "🎵 [LCPStreamingPlayer] End of book reached. No more tracks.")
+        playbackStatePublisher.send(.bookCompleted)
+        completion?(currentTrackPosition)
     }
     
     deinit {

@@ -766,9 +766,25 @@ extension OpenAccessPlayer {
     }
     
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        let cmTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        // Safety bounds: don't seek past 95% of track duration to avoid AVPlayer edge cases
+        let maxSafeTimestamp = position.track.duration * 0.95
+        let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
+        
+        // If seeking to the very end of the last track, handle as end-of-book
+        if position.timestamp >= position.track.duration * 0.99 && 
+           tableOfContents.tracks.nextTrack(position.track) == nil {
+            handlePlaybackEnd(currentTrack: position.track, completion: completion)
+            return
+        }
+        
+        let cmTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: cmTime) { success in
-            completion?(success ? position : nil)
+            if success {
+                let actualPosition = TrackPosition(track: position.track, timestamp: safeTimestamp, tracks: position.tracks)
+                completion?(actualPosition)
+            } else {
+                completion?(nil)
+            }
         }
     }
     
