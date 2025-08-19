@@ -54,6 +54,7 @@ final class LCPDownloadTask: DownloadTask {
     }
     
     func fetch() {
+        // For LCP, we need to trigger the decryption process
         // This will be handled by DefaultAudiobookNetworkService.startLCPDecryption()
         // which calls the decryptor.decrypt() method for each file
         ATLog(.debug, "🎵 [LCPDownloadTask] Starting LCP decryption for \(key)")
