@@ -33,7 +33,7 @@ final class LCPDownloadTask: DownloadTask {
         self.urls = urls ?? []
         self.urlMediaType = mediaType
         self.decryptedUrls = self.urls.compactMap { decryptedFileURL(for:$0) }
-        self.statePublisher.send(.completed)
+        self.downloadProgress = 0.0
     }
 
     /// URL for decryption delegate to store decrypted file.
@@ -54,7 +54,10 @@ final class LCPDownloadTask: DownloadTask {
     }
     
     func fetch() {
-        // No need to download files.
+        // This will be handled by DefaultAudiobookNetworkService.startLCPDecryption()
+        // which calls the decryptor.decrypt() method for each file
+        ATLog(.debug, "🎵 [LCPDownloadTask] Starting LCP decryption for \(key)")
+        // The actual decryption is handled by the AudiobookNetworkService
     }
     
     func assetFileStatus() -> AssetResult {
