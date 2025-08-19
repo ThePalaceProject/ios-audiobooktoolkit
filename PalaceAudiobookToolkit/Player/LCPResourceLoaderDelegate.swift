@@ -40,39 +40,20 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
             return false
         }
         
-        if provider?.getPublication() == nil {
-            Task { [weak self] in
-                guard let self else { return }
-                let deadline = Date().addingTimeInterval(5)
-                while Date() < deadline {
-                    try? await Task.sleep(nanoseconds: 50_000_000)
-                    if let pub = self.provider?.getPublication() {
-                        await self.serve(loadingRequest: loadingRequest, with: pub)
-                        return
-                    }
-                }
-                loadingRequest.finishLoading(with: NSError(
-                    domain: "LCPResourceLoader",
-                    code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "Publication not available for streaming"]
-                ))
-            }
-            return true
+        guard let publication = provider?.getPublication() else {
+            ATLog(.debug, "🎵 ResourceLoader: Publication not available yet, failing fast")
+            loadingRequest.finishLoading(with: NSError(
+                domain: "LCPResourceLoader",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Publication not available for streaming"]
+            ))
+            return false
         }
         
-        if let pub = provider?.getPublication() {
-            Task { [weak self] in
-                await self?.serve(loadingRequest: loadingRequest, with: pub)
-            }
-            return true
+        Task { [weak self] in
+            await self?.serve(loadingRequest: loadingRequest, with: publication)
         }
-        
-        loadingRequest.finishLoading(with: NSError(
-            domain: "LCPResourceLoader",
-            code: -3,
-            userInfo: [NSLocalizedDescriptionKey: "Unknown streaming error"]
-        ))
-        return false
+        return true
     }
     
     func resourceLoader(
