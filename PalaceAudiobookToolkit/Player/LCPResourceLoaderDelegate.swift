@@ -8,6 +8,12 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     weak var provider: StreamingResourceProvider?
     private let httpRangeRetriever = HTTPRangeRetriever()
     private var fullTrackCache = [String: Data]()
+    private let maxConcurrentRequests = 4
+    private let requestTimeoutSeconds: TimeInterval = 30
+    private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
+    private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+    private var timeoutGuards: [ObjectIdentifier: Task<Void, Never>] = [:]
+    private let concurrencySemaphore = DispatchSemaphore(value: 4)
     
     init(provider: StreamingResourceProvider? = nil) {
         self.provider = provider
@@ -50,9 +56,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
             return false
         }
         
-        Task { [weak self] in
-            await self?.serve(loadingRequest: loadingRequest, with: publication)
-        }
+        startServing(loadingRequest: loadingRequest, with: publication)
         return true
     }
     
@@ -60,13 +64,70 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         _ resourceLoader: AVAssetResourceLoader,
         didCancel loadingRequest: AVAssetResourceLoadingRequest
     ) {
-        
+        let id = ObjectIdentifier(loadingRequest)
+        inflightQueue.sync {
+            if let task = inflightTasks[id] {
+                task.cancel()
+            }
+            if let guardTask = timeoutGuards[id] {
+                guardTask.cancel()
+            }
+        }
+        inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.inflightTasks.removeValue(forKey: id)
+            self?.timeoutGuards.removeValue(forKey: id)
+        }
     }
 }
 
 // MARK: - Helpers
 private extension LCPResourceLoaderDelegate {
-    @MainActor
+    func startServing(loadingRequest: AVAssetResourceLoadingRequest, with publication: Publication) {
+        let id = ObjectIdentifier(loadingRequest)
+        // Concurrency limiting
+        concurrencySemaphore.wait()
+        let serveTask = Task { [weak self, weak loadingRequest] in
+            defer { self?.concurrencySemaphore.signal() }
+            guard let self, let loadingRequest else { return }
+            await self.serve(loadingRequest: loadingRequest, with: publication)
+            inflightQueue.async(flags: .barrier) { [weak self] in
+                self?.inflightTasks.removeValue(forKey: id)
+                self?.timeoutGuards[id]?.cancel()
+                self?.timeoutGuards.removeValue(forKey: id)
+            }
+        }
+        inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.inflightTasks[id] = serveTask
+        }
+        // Timeout guard
+        let guardTask = Task { [weak self, weak loadingRequest] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64((self?.requestTimeoutSeconds ?? 30) * 1_000_000_000))
+            } catch { return }
+            guard let self, let loadingRequest else { return }
+            var stillInflight = false
+            inflightQueue.sync {
+                stillInflight = inflightTasks[id] != nil
+            }
+            if stillInflight {
+                inflightQueue.sync {
+                    inflightTasks[id]?.cancel()
+                }
+                loadingRequest.finishLoading(with: NSError(
+                    domain: "LCPResourceLoader",
+                    code: -1001,
+                    userInfo: [NSLocalizedDescriptionKey: "Streaming request timed out"]
+                ))
+                inflightQueue.async(flags: .barrier) { [weak self] in
+                    self?.inflightTasks.removeValue(forKey: id)
+                    self?.timeoutGuards.removeValue(forKey: id)
+                }
+            }
+        }
+        inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.timeoutGuards[id] = guardTask
+        }
+    }
     func serve(loadingRequest: AVAssetResourceLoadingRequest, with pub: Publication) async {
         guard let url = loadingRequest.request.url else {
             loadingRequest.finishLoading(with: NSError(
@@ -88,7 +149,7 @@ private extension LCPResourceLoaderDelegate {
                 href = pathComponents.first ?? ""
                 ATLog(.debug, "Using fallback track path: \(href)")
             }
-        } else {
+        } else if url.scheme == "fake" && url.host == "lcp-streaming" {
             let comps = url.pathComponents
             trackIndex = (comps.count >= 3 && comps[1] == "track") ? Int(comps[2]) ?? 0 : 0
             href = url.lastPathComponent
@@ -141,16 +202,8 @@ private extension LCPResourceLoaderDelegate {
             let contentType = Self.utiIdentifier(forHref: finalHref, fallbackMime: validLink.mediaType?.string)
             info.contentType = contentType
             info.isByteRangeAccessSupported = true
-            
-            Task {
-                if let res = resource,
-                   let maybeLength = try? await res.estimatedLength().get(),
-                   let totalLength = maybeLength {
-                    info.contentLength = Int64(totalLength)
-                    ATLog(.debug, "🎯 [LCPResourceLoader] Set content length: \(totalLength) bytes for track: \(finalHref)")
-                } else {
-                    ATLog(.error, "🎯 [LCPResourceLoader] ❌ Failed to get content length for track: \(finalHref)")
-                }
+            if let res = resource, let maybeLength = try? await res.estimatedLength().get(), let totalLength = maybeLength {
+                info.contentLength = Int64(totalLength)
             }
         }
         
@@ -163,7 +216,7 @@ private extension LCPResourceLoaderDelegate {
         let count = Int(dataRequest.requestedLength)
         let endExcl = start + count
         
-        Task {
+        Task.detached(priority: .userInitiated) {
             if let res = resource {
                 do {
                     let maxChunkSize = 512 * 1024
@@ -172,13 +225,9 @@ private extension LCPResourceLoaderDelegate {
                     let requestedRange: Range<UInt64> = UInt64(start)..<UInt64(actualEndExcl)
                     
                     let rawData = try await res.read(range: requestedRange).get()
-                    let hexPrefix = rawData.prefix(4).map { String(format: "%02x", $0) }.joined(separator: " ")
-                    let isValidAudio = rawData.starts(with: [0xFF, 0xFB]) || rawData.starts(with: [0xFF, 0xFA]) || rawData.starts(with: [0x49, 0x44, 0x33])
-                    
                     let data = rawData
                     
                     if !data.isEmpty {
-                        let hexPrefix = data.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
                         dataRequest.respond(with: data)
                     } else {
                         ATLog(.error, "🎯 [LCPResourceLoader] ❌ Empty data returned from Readium resource")

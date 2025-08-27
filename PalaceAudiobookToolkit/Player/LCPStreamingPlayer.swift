@@ -426,5 +426,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         observerQueue.async { [observedItems] in
             // Observer cleanup happens automatically when items are deallocated
         }
+        // Encourage cache cleanup between audiobook sessions
+        (sharedResourceLoader as? LCPResourceLoaderDelegate)?.provider = nil
     }
 }
