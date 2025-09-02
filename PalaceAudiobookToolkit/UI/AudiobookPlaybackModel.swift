@@ -25,6 +25,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     
     @Published var currentLocation: TrackPosition?
     private var pendingLocation: TrackPosition?
+    private var suppressSavesUntil: Date?
     var selectedLocation: TrackPosition? {
         didSet {
             guard let selectedLocation else { return }
@@ -98,6 +99,20 @@ public class AudiobookPlaybackModel: ObservableObject {
         setupBindings()
         subscribeToPublisher()
         self.audiobookManager.networkService.fetch()
+    }
+
+    // MARK: - Public helpers
+
+    // Sets the desired starting location and lets the model coordinate playback
+    public func jumpToInitialLocation(_ position: TrackPosition) {
+        // Seed UI immediately; player will move on next ticks
+        self.pendingLocation = position
+        self.currentLocation = position
+    }
+
+    // Suppress posting/saving positions until a given offset from now
+    public func beginSaveSuppression(for seconds: TimeInterval) {
+        suppressSavesUntil = Date().addingTimeInterval(seconds)
     }
     
     private func subscribeToPublisher() {
@@ -196,9 +211,9 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func saveLocation() {
-        if let currentLocation {
-            audiobookManager.saveLocation(currentLocation)
-        }
+        // Skip saves during suppression window
+        if let until = suppressSavesUntil, Date() < until { return }
+        if let currentLocation { audiobookManager.saveLocation(currentLocation) }
     }
 
     public func persistLocation() {
