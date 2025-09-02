@@ -33,6 +33,8 @@ public class AudiobookPlaybackModel: ObservableObject {
             } else {
                 pendingLocation = selectedLocation
             }
+            currentLocation = selectedLocation
+            saveLocation()
         }
     }
     
