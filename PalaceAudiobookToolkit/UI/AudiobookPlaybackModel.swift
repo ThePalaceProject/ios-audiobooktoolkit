@@ -24,10 +24,14 @@ public class AudiobookPlaybackModel: ObservableObject {
     private(set) var audiobookManager: AudiobookManager
     
     @Published var currentLocation: TrackPosition?
+    private var pendingLocation: TrackPosition?
     var selectedLocation: TrackPosition? {
         didSet {
-            if let selectedLocation {
+            guard let selectedLocation else { return }
+            if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
                 audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
+            } else {
+                pendingLocation = selectedLocation
             }
         }
     }
@@ -109,11 +113,19 @@ public class AudiobookPlaybackModel: ObservableObject {
                     guard let position else { return }
                     self.currentLocation = position
                     self.updateProgress()
+                    if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
+                        self.pendingLocation = nil
+                        self.audiobookManager.audiobook.player.play(at: target) { _ in }
+                    }
                     
                 case .playbackBegan(let position), .playbackCompleted(let position):
                     self.currentLocation = position
                     self.isWaitingForPlayer = false
                     self.updateProgress()
+                    if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
+                        self.pendingLocation = nil
+                        self.audiobookManager.audiobook.player.play(at: target) { _ in }
+                    }
                     
                 case .playbackUnloaded:
                     break
@@ -130,7 +142,17 @@ public class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        
+        audiobookManager.statePublisher
+            .compactMap { state -> TrackPosition? in
+                if case .positionUpdated(let pos) = state { return pos }
+                return nil
+            }
+            .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in
+                self?.saveLocation()
+            }
+            .store(in: &subscriptions)
+
         self.audiobookManager.fetchBookmarks { _ in }
     }
     
@@ -176,6 +198,11 @@ public class AudiobookPlaybackModel: ObservableObject {
             audiobookManager.saveLocation(currentLocation)
         }
     }
+
+    public func persistLocation() {
+        saveLocation()
+    }
+
     
     func skipBack() {
         guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
@@ -275,7 +302,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     
     // MARK: - Media Player
     
-    func updateCoverImage(_ image: UIImage?) {
+    public func updateCoverImage(_ image: UIImage?) {
         coverImage = image
         updateLockScreenCoverArtwork(image: image)
     }

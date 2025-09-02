@@ -22,6 +22,7 @@ public struct AudiobookPlayerView: View {
     @State private var showPlaybackSpeed = false
     @State private var showSleepTimer = false
     @State private var isInBackground = false
+    @State private var showTOC = false
     
     public init(model: AudiobookPlaybackModel) {
         self.playbackModel = model
@@ -111,7 +112,15 @@ public struct AudiobookPlayerView: View {
             ToolbarItem(placement: .navigationBarTrailing) { tocButton }
         }
         .navigationBarTitle(Text(""), displayMode: .inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .tabBar)
         .palaceFont(.body)
+        .onDisappear {
+            if !showTOC {
+                playbackModel.persistLocation()
+                playbackModel.stop()
+            }
+        }
     }
     
     private func setupBackgroundStateHandling() {
@@ -121,6 +130,7 @@ public struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = true
+            self.playbackModel.persistLocation()
         }
         
         NotificationCenter.default.addObserver(
@@ -129,6 +139,15 @@ public struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = false
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // Persist on termination as best-effort
+            self.playbackModel.persistLocation()
         }
     }
 
@@ -143,19 +162,28 @@ public struct AudiobookPlayerView: View {
     
     @ViewBuilder
     private var tocButton: some View {
-        NavigationLink {
-            AudiobookNavigationView(model: playbackModel)
-        } label: {
-            ToolkitImage(name: "table_of_contents", renderingMode: .template)
-                .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
-                .foregroundColor(.primary)
-                .foregroundColor(.black)
+        HStack {
+            NavigationLink(isActive: $showTOC) {
+                AudiobookNavigationView(model: playbackModel)
+            } label: {
+                EmptyView()
+            }
+            Button {
+                showTOC = true
+            } label: {
+                ToolkitImage(name: "table_of_contents", renderingMode: .template)
+                    .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
+                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
+            }
         }
     }
     
     @ViewBuilder
     private var backButton: some View {
         Button {
+            // Stop playback before dismissing
+            playbackModel.stop()
             presentationMode.wrappedValue.dismiss()
         } label: {
             HStack(spacing: 4) {
