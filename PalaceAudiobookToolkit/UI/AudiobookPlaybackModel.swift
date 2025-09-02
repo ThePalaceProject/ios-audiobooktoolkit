@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import MediaPlayer
 
-class AudiobookPlaybackModel: ObservableObject {
+public class AudiobookPlaybackModel: ObservableObject {
     @Published private var reachability = Reachability()
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
@@ -83,7 +83,7 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.networkService.tracks
     }
     
-    init(audiobookManager: AudiobookManager) {
+    public init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)

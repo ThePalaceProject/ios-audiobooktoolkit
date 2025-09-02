@@ -11,7 +11,7 @@ import MediaPlayer
 import AVKit
 import PalaceUIKit
 
-struct AudiobookPlayerView: View {
+public struct AudiobookPlayerView: View {
     
     @Environment(\.presentationMode) private var presentationMode
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -23,7 +23,7 @@ struct AudiobookPlayerView: View {
     @State private var showSleepTimer = false
     @State private var isInBackground = false
     
-    init(model: AudiobookPlaybackModel) {
+    public init(model: AudiobookPlaybackModel) {
         self.playbackModel = model
         setupBackgroundStateHandling()
     }
@@ -36,9 +36,8 @@ struct AudiobookPlayerView: View {
         playbackModel.stop()
     }
     
-    var body: some View {
-        NavigationView {
-            ZStack(alignment: .bottom) {
+    public var body: some View {
+        ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
@@ -106,12 +105,13 @@ struct AudiobookPlayerView: View {
                     LoadingView()
                 }
             }
-            .navigationBarTitle(Text(""), displayMode: .inline)
-            .navigationBarItems(trailing: tocButton)
-            .navigationBarItems(leading: backButton)
+        
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) { backButton }
+            ToolbarItem(placement: .navigationBarTrailing) { tocButton }
         }
+        .navigationBarTitle(Text(""), displayMode: .inline)
         .palaceFont(.body)
-        .navigationViewStyle(.stack)
     }
     
     private func setupBackgroundStateHandling() {
