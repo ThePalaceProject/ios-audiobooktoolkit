@@ -572,43 +572,34 @@ class OpenAccessPlayer: NSObject, Player {
     
     /// Create a single player item from a track
     private func createPlayerItem(from track: any Track) -> AVPlayerItem? {
-        guard let fileStatus = assetFileStatus(track.downloadTask) else {
-            return nil
+        if let fileStatus = assetFileStatus(track.downloadTask) {
+            switch fileStatus {
+            case .saved(let urls):
+                guard let url = urls.first else { return nil }
+                let playerItem = AVPlayerItem(url: url)
+                playerItem.audioTimePitchAlgorithm = .timeDomain
+                playerItem.trackIdentifier = track.key
+                return playerItem
+            case .missing, .unknown:
+                break
+            }
         }
-        
-        switch fileStatus {
-        case .saved(let urls):
-            // Return the first available URL as a player item
-            guard let url = urls.first else { return nil }
-            let playerItem = AVPlayerItem(url: url)
+        if let remote = track.urls?.first {
+            let playerItem = AVPlayerItem(url: remote)
             playerItem.audioTimePitchAlgorithm = .timeDomain
             playerItem.trackIdentifier = track.key
             return playerItem
-        case .missing, .unknown:
-            return nil
         }
+        return nil
     }
     
     public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
         var items = [AVPlayerItem]()
         for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
+            if let item = createPlayerItem(from: track) {
+                items.append(item)
+            } else {
                 listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
             }
         }
         return items
