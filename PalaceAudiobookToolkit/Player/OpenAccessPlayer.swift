@@ -131,6 +131,7 @@ class OpenAccessPlayer: NSObject, Player {
         case .readyToPlay:
             avQueuePlayer.play()
             restorePlaybackRate()
+            self.isLoaded = true
             playbackStatePublisher.send(.started(trackPosition))
         default:
             handlePlaybackError(.playerNotReady)
@@ -287,6 +288,7 @@ class OpenAccessPlayer: NSObject, Player {
                 if let firstTrack = tableOfContents.allTracks.first {
                     let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
                     play(at: firstTrackPosition, completion: nil)
+                    self.isLoaded = true
                 }
             } else {
                 rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
