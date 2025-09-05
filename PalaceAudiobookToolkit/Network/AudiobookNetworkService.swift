@@ -77,7 +77,6 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
     
     public func fetchUndownloadedTracks() {
-        // Scan ALL tracks and (re)start any that are missing/offloaded
         var startedAny = false
         for (index, track) in tracks.enumerated() {
             if track.downloadTask?.needsRetry ?? false {
@@ -86,7 +85,6 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
                 startedAny = true
             }
         }
-        // Fallback to existing behavior if none flagged as needsRetry
         if !startedAny {
             startNextUndownloadedTrack()
         }

@@ -679,21 +679,16 @@ extension OpenAccessPlayer {
         let session = AVAudioSession.sharedInstance()
         let configure: () -> Void = {
             do {
-                // Deactivate first to avoid property conflicts (-50)
                 try? session.setActive(false, options: .notifyOthersOnDeactivation)
-                // Minimal, highly compatible sequence: set category, then mode, then activate
                 try session.setCategory(.playback)
                 try session.setMode(.default)
                 try session.setActive(true)
-                ATLog(.debug, "🔊 AudioSession configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
             } catch {
                 ATLog(.error, "🔊 AudioSession setup failed: \(error)")
-                // Fallback: minimal configuration
                 do {
                     try session.setCategory(.playback)
                     try session.setMode(.default)
                     try session.setActive(true)
-                    ATLog(.debug, "🔊 AudioSession fallback configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
                 } catch {
                     ATLog(.error, "🔊 AudioSession fallback failed: \(error)")
                 }

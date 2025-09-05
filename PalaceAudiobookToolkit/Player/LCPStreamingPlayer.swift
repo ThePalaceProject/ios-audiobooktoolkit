@@ -225,7 +225,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
     }
 
-    // Override to avoid rebuilding the entire queue; build a window around the desired position
     public override func rebuildPlayerQueueAndNavigate(
         to trackPosition: TrackPosition?,
         completion: ((Bool) -> Void)? = nil
@@ -244,12 +243,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             return
         }
         
-        // Insert the target first to set currentItem predictably
         let targetTrack = allTracks[targetTrackIndex]
         let targetItem = buildPlayerItem(for: targetTrack, index: targetTrackIndex)
         avQueuePlayer.insert(targetItem, after: nil)
         addEndObserver(for: targetItem)
-        // Then neighbors
+
         let windowSize = 5
         let startIndex = max(0, targetTrackIndex - 1)
         let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
@@ -365,7 +363,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             }
         }
 
-        // Fallback to streaming for this specific index
         let item = createStreamingPlayerItem(for: track, index: index)
         return item
     }

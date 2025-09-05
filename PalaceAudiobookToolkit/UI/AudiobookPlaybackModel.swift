@@ -128,7 +128,6 @@ public class AudiobookPlaybackModel: ObservableObject {
                     self.overallDownloadProgress = overallProgress
                 case .positionUpdated(let position):
                     guard let position else { return }
-
                     self.currentLocation = position
                     self.updateProgress()
                     if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
