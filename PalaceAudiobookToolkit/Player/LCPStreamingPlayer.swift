@@ -109,6 +109,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 items.append(localItem)
                 safeAddObserver(to: localItem)
             } else {
+                // Missing local file (offloaded) → stream instead of failing
                 let item = createStreamingPlayerItem(for: track, index: index)
                 items.append(item)
                 addEndObserver(for: item)
@@ -184,12 +185,18 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         // Find target track index for windowing
         let targetTrackIndex = allTracks.firstIndex { $0.key == position.track.key } ?? 0
 
-        // Add a window of items around the target track, building lazily only for indices we need
+        // Add the target item FIRST so currentItem immediately reflects the intended chapter
+        if targetTrackIndex < allTracks.count {
+            let targetTrack = allTracks[targetTrackIndex]
+            let targetItem = buildPlayerItem(for: targetTrack, index: targetTrackIndex)
+            avQueuePlayer.insert(targetItem, after: nil)
+            addEndObserver(for: targetItem)
+        }
+        // Then add a window of neighboring items lazily
         let windowSize = 5
         let startIndex = max(0, targetTrackIndex - 1)
         let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-
-        for i in startIndex...endIndex {
+        for i in startIndex...endIndex where i != targetTrackIndex {
             let track = allTracks[i]
             let item = buildPlayerItem(for: track, index: i)
             avQueuePlayer.insert(item, after: nil)
@@ -238,11 +245,16 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             return
         }
         
+        // Insert the target first to set currentItem predictably
+        let targetTrack = allTracks[targetTrackIndex]
+        let targetItem = buildPlayerItem(for: targetTrack, index: targetTrackIndex)
+        avQueuePlayer.insert(targetItem, after: nil)
+        addEndObserver(for: targetItem)
+        // Then neighbors
         let windowSize = 5
         let startIndex = max(0, targetTrackIndex - 1)
         let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-        
-        for i in startIndex...endIndex {
+        for i in startIndex...endIndex where i != targetTrackIndex {
             let track = allTracks[i]
             let item = buildPlayerItem(for: track, index: i)
             avQueuePlayer.insert(item, after: nil)

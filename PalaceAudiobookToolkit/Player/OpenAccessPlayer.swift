@@ -159,6 +159,7 @@ class OpenAccessPlayer: NSObject, Player {
                 if self.avQueuePlayer.items().isEmpty {
                     self.buildPlayerQueue()
                 }
+                // Default to first track when no explicit position is set
                 if let position = self.currentTrackPosition ?? self.tableOfContents.allTracks.first.map({ TrackPosition(track: $0, timestamp: 0.0, tracks: self.tableOfContents.tracks) }) {
                     self.attemptToPlay(position)
                     self.avQueuePlayer.rate = PlaybackRate.convert(rate: self.playbackRate)
@@ -259,6 +260,13 @@ class OpenAccessPlayer: NSObject, Player {
                 }
                 
             case .missing:
+                // If local files are missing (offloaded), temporarily stream the remote URL
+                if let track = self.currentTrackPosition?.track, let streamingItem = self.createPlayerItem(from: track) {
+                    if self.avQueuePlayer.canInsert(streamingItem, after: nil) {
+                        self.avQueuePlayer.insert(streamingItem, after: nil)
+                    }
+                }
+                // And also kick off a re-download in the background
                 listenForDownloadCompletion()
                 
             default:
@@ -353,12 +361,12 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
         
-        guard let index = desiredIndex, index < playerItems.count else {
-            completion?(false)
-            return
-        }
+        // Default to first chapter if no explicit target position was provided
+        let targetIndex = desiredIndex ?? 0
+        guard targetIndex < playerItems.count else { completion?(false); return }
         
-        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0) { [weak self] success in
+        let targetTimestamp = trackPosition?.timestamp ?? 0.0
+        navigateToItem(at: targetIndex, with: targetTimestamp) { [weak self] success in
             if success && wasPlaying {
                 // Restore playback state after successful navigation
                 self?.avQueuePlayer.play()
