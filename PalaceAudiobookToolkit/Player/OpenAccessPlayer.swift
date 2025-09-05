@@ -259,6 +259,13 @@ class OpenAccessPlayer: NSObject, Player {
                 }
                 
             case .missing:
+                // If local files are missing (offloaded), temporarily stream the remote URL
+                if let track = self.currentTrackPosition?.track, let streamingItem = self.createPlayerItem(from: track) {
+                    if self.avQueuePlayer.canInsert(streamingItem, after: nil) {
+                        self.avQueuePlayer.insert(streamingItem, after: nil)
+                    }
+                }
+                // And also kick off a re-download in the background
                 listenForDownloadCompletion()
                 
             default:
@@ -353,12 +360,12 @@ class OpenAccessPlayer: NSObject, Player {
             }
         }
         
-        guard let index = desiredIndex, index < playerItems.count else {
-            completion?(false)
-            return
-        }
+        // Default to first chapter if no explicit target position was provided
+        let targetIndex = desiredIndex ?? 0
+        guard targetIndex < playerItems.count else { completion?(false); return }
         
-        navigateToItem(at: index, with: trackPosition?.timestamp ?? 0.0) { [weak self] success in
+        let targetTimestamp = trackPosition?.timestamp ?? 0.0
+        navigateToItem(at: targetIndex, with: targetTimestamp) { [weak self] success in
             if success && wasPlaying {
                 // Restore playback state after successful navigation
                 self?.avQueuePlayer.play()
@@ -672,21 +679,16 @@ extension OpenAccessPlayer {
         let session = AVAudioSession.sharedInstance()
         let configure: () -> Void = {
             do {
-                // Deactivate first to avoid property conflicts (-50)
                 try? session.setActive(false, options: .notifyOthersOnDeactivation)
-                // Minimal, highly compatible sequence: set category, then mode, then activate
                 try session.setCategory(.playback)
                 try session.setMode(.default)
                 try session.setActive(true)
-                ATLog(.debug, "🔊 AudioSession configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
             } catch {
                 ATLog(.error, "🔊 AudioSession setup failed: \(error)")
-                // Fallback: minimal configuration
                 do {
                     try session.setCategory(.playback)
                     try session.setMode(.default)
                     try session.setActive(true)
-                    ATLog(.debug, "🔊 AudioSession fallback configured: category=\(session.category.rawValue) mode=\(session.mode.rawValue)")
                 } catch {
                     ATLog(.error, "🔊 AudioSession fallback failed: \(error)")
                 }

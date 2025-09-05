@@ -77,7 +77,17 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
     
     public func fetchUndownloadedTracks() {
-        startNextUndownloadedTrack()
+        var startedAny = false
+        for (index, track) in tracks.enumerated() {
+            if track.downloadTask?.needsRetry ?? false {
+                currentDownloadIndex = index
+                track.downloadTask?.fetch()
+                startedAny = true
+            }
+        }
+        if !startedAny {
+            startNextUndownloadedTrack()
+        }
     }
     
     public func deleteAll() {

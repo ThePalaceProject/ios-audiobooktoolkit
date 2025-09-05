@@ -184,12 +184,18 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         // Find target track index for windowing
         let targetTrackIndex = allTracks.firstIndex { $0.key == position.track.key } ?? 0
 
-        // Add a window of items around the target track, building lazily only for indices we need
+        // Add the target item FIRST so currentItem immediately reflects the intended chapter
+        if targetTrackIndex < allTracks.count {
+            let targetTrack = allTracks[targetTrackIndex]
+            let targetItem = buildPlayerItem(for: targetTrack, index: targetTrackIndex)
+            avQueuePlayer.insert(targetItem, after: nil)
+            addEndObserver(for: targetItem)
+        }
+        // Then add a window of neighboring items lazily
         let windowSize = 5
         let startIndex = max(0, targetTrackIndex - 1)
         let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-
-        for i in startIndex...endIndex {
+        for i in startIndex...endIndex where i != targetTrackIndex {
             let track = allTracks[i]
             let item = buildPlayerItem(for: track, index: i)
             avQueuePlayer.insert(item, after: nil)
@@ -219,7 +225,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
     }
 
-    // Override to avoid rebuilding the entire queue; build a window around the desired position
     public override func rebuildPlayerQueueAndNavigate(
         to trackPosition: TrackPosition?,
         completion: ((Bool) -> Void)? = nil
@@ -238,11 +243,15 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             return
         }
         
+        let targetTrack = allTracks[targetTrackIndex]
+        let targetItem = buildPlayerItem(for: targetTrack, index: targetTrackIndex)
+        avQueuePlayer.insert(targetItem, after: nil)
+        addEndObserver(for: targetItem)
+
         let windowSize = 5
         let startIndex = max(0, targetTrackIndex - 1)
         let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-        
-        for i in startIndex...endIndex {
+        for i in startIndex...endIndex where i != targetTrackIndex {
             let track = allTracks[i]
             let item = buildPlayerItem(for: track, index: i)
             avQueuePlayer.insert(item, after: nil)
@@ -354,7 +363,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             }
         }
 
-        // Fallback to streaming for this specific index
         let item = createStreamingPlayerItem(for: track, index: index)
         return item
     }
