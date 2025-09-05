@@ -27,6 +27,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     private let compositionQueue = DispatchQueue(label: "com.palace.lcp.local-composition", qos: .userInitiated)
     
     private var sharedResourceLoader: LCPResourceLoaderDelegate?
+    private var isObservingTimeControlStatus = false
+    private var suppressAudibleUntilPlaying = false
+    private var lastStartedItemKey: String?
     
     override var currentOffset: Double {
         guard let currentTrackPosition, let currentChapter else {
@@ -54,10 +57,24 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         
         avQueuePlayer.actionAtItemEnd = .none
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        avQueuePlayer.isMuted = false
         isLoaded = false
     }
 
-    // Avoid pre-building the entire queue for streaming. We'll build lazily on play/seek.
+    override func addPlayerObservers() {
+        super.addPlayerObservers()
+        avQueuePlayer.addObserver(self, forKeyPath: "timeControlStatus", options: [.new], context: nil)
+        isObservingTimeControlStatus = true
+    }
+
+    override func removePlayerObservers() {
+        if isObservingTimeControlStatus {
+            avQueuePlayer.removeObserver(self, forKeyPath: "timeControlStatus")
+            isObservingTimeControlStatus = false
+        }
+        super.removePlayerObservers()
+    }
+
     override func buildPlayerQueue() {
         resetPlayerQueue()
         isLoaded = false
@@ -108,6 +125,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
         avQueuePlayer.pause()
         (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
+        isLoaded = false
+        suppressAudibleUntilPlaying = true
+        avQueuePlayer.isMuted = true
+        lastStartedItemKey = nil
         var needsRebuild = avQueuePlayer.items().isEmpty
 
         if !needsRebuild {
@@ -151,10 +172,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                     
                     self?.avQueuePlayer.play()
                     self?.restorePlaybackRate()
-                    var startedPos = position
-                    startedPos.timestamp = safeTs
-                    self?.playbackStatePublisher.send(.started(startedPos))
-                    self?.isLoaded = true
                     completion?(nil)
                 }
                 return
@@ -195,10 +212,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 }
                 self?.avQueuePlayer.play()
                 self?.restorePlaybackRate()
-                var startedPos = position
-                startedPos.timestamp = safeTs
-                self?.playbackStatePublisher.send(.started(startedPos))
-                self?.isLoaded = true
                 completion?(nil)
             }
         } else {
@@ -247,10 +260,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
                 guard let self else { completion?(false); return }
                 if wasPlaying {
+                    self.suppressAudibleUntilPlaying = true
+                    self.avQueuePlayer.isMuted = true
                     self.avQueuePlayer.play()
                     self.restorePlaybackRate()
                 }
-                self.isLoaded = true
                 success = true
                 completion?(true)
             }
@@ -398,6 +412,36 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
     
     public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if keyPath == "timeControlStatus", let player = object as? AVQueuePlayer {
+            DispatchQueue.main.async { [weak self] in
+                switch player.timeControlStatus {
+                case .playing:
+                    self?.isLoaded = true
+                    if let self = self {
+                        if self.suppressAudibleUntilPlaying {
+                            self.avQueuePlayer.isMuted = false
+                            self.suppressAudibleUntilPlaying = false
+                        }
+                        if let currentKey = self.avQueuePlayer.currentItem?.trackIdentifier, self.lastStartedItemKey != currentKey {
+                            self.lastStartedItemKey = currentKey
+                            if let pos = self.currentTrackPosition {
+                                self.playbackStatePublisher.send(.started(pos))
+                            }
+                        }
+                    }
+                case .waitingToPlayAtSpecifiedRate:
+                    self?.isLoaded = false
+                    if let self = self, !self.avQueuePlayer.isMuted {
+                        self.avQueuePlayer.isMuted = true
+                        self.suppressAudibleUntilPlaying = true
+                    }
+                default:
+                    break
+                }
+            }
+            return
+        }
+
         guard keyPath == "status",
               let item = object as? AVPlayerItem else {
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
@@ -410,9 +454,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             switch item.status {
             case .readyToPlay:
                 if let currentItem = self?.avQueuePlayer.currentItem, currentItem == item {
-                    let isPlaying = self?.avQueuePlayer.timeControlStatus == .playing
-                    let rate = self?.avQueuePlayer.rate ?? 0
-                    self?.isLoaded = true
+                    // Defer isLoaded to timeControlStatus changes to avoid premature hiding of loading view
                 }
             case .failed:
                 if let key = item.trackIdentifier {

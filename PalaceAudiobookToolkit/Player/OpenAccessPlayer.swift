@@ -619,6 +619,32 @@ class OpenAccessPlayer: NSObject, Player {
         }
         return items
     }
+    
+    public func addPlayerObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
+        )
+        
+        avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
+        avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+        isObservingPlayerStatus = true
+    }
+    
+    func removePlayerObservers() {
+        guard isObservingPlayerStatus else { return }
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
+        avQueuePlayer.removeObserver(self, forKeyPath: "status")
+        avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+        isObservingPlayerStatus = false
+    }
 
 }
 
@@ -672,32 +698,6 @@ extension OpenAccessPlayer {
         } else {
             DispatchQueue.main.sync { configure() }
         }
-    }
-    
-    public func addPlayerObservers() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioSessionInterruption(_:)),
-            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioSessionRouteChange(_:)),
-            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
-        )
-        
-        avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
-        avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
-        isObservingPlayerStatus = true
-    }
-    
-    func removePlayerObservers() {
-        guard isObservingPlayerStatus else { return }
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
-        avQueuePlayer.removeObserver(self, forKeyPath: "status")
-        avQueuePlayer.removeObserver(self, forKeyPath: "rate")
-        isObservingPlayerStatus = false
     }
     
     override func observeValue(
