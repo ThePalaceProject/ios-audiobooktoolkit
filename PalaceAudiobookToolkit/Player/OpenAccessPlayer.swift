@@ -159,7 +159,6 @@ class OpenAccessPlayer: NSObject, Player {
                 if self.avQueuePlayer.items().isEmpty {
                     self.buildPlayerQueue()
                 }
-                // Default to first track when no explicit position is set
                 if let position = self.currentTrackPosition ?? self.tableOfContents.allTracks.first.map({ TrackPosition(track: $0, timestamp: 0.0, tracks: self.tableOfContents.tracks) }) {
                     self.attemptToPlay(position)
                     self.avQueuePlayer.rate = PlaybackRate.convert(rate: self.playbackRate)

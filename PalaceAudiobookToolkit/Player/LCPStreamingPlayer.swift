@@ -109,7 +109,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 items.append(localItem)
                 safeAddObserver(to: localItem)
             } else {
-                // Missing local file (offloaded) → stream instead of failing
                 let item = createStreamingPlayerItem(for: track, index: index)
                 items.append(item)
                 addEndObserver(for: item)
