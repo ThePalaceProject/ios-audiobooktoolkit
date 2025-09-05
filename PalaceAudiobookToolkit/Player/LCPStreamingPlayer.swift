@@ -54,7 +54,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         
         avQueuePlayer.actionAtItemEnd = .none
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
-        isLoaded = true
+        isLoaded = false
     }
 
     // Avoid pre-building the entire queue for streaming. We'll build lazily on play/seek.
@@ -77,7 +77,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                     let asset = AVURLAsset(url: urls[0])
                     localItem = AVPlayerItem(asset: asset)
                 } else {
-                    // Concatenate multiple decrypted parts into a single composition item
+
                     if let compositionItem = createConcatenatedItem(from: urls) {
                         localItem = compositionItem
                     } else {
@@ -98,15 +98,14 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 ATLog(.debug, "🎵 Created STREAMING item for track \(index): fake://lcp-streaming/track/\(index)")
             }
         }
-        
-        self.isLoaded = true
+
         return items
     }
 
     // MARK: - Navigation aligned with LCPPlayer
 
     public override func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
-        // Immediately pause current playback and cancel any inflight streaming to prioritize the new target
+
         avQueuePlayer.pause()
         (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
         var needsRebuild = avQueuePlayer.items().isEmpty
@@ -413,6 +412,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 if let currentItem = self?.avQueuePlayer.currentItem, currentItem == item {
                     let isPlaying = self?.avQueuePlayer.timeControlStatus == .playing
                     let rate = self?.avQueuePlayer.rate ?? 0
+                    self?.isLoaded = true
                 }
             case .failed:
                 if let key = item.trackIdentifier {

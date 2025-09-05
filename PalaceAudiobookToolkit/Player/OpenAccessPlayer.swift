@@ -140,19 +140,34 @@ class OpenAccessPlayer: NSObject, Player {
     
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
-            self?.avQueuePlayer.play()
-            self?.restorePlaybackRate()
+            guard let self = self else { return }
+            self.avQueuePlayer.play()
+            self.restorePlaybackRate()
+            self.isLoaded = true
+            if let startedPos = trackPosition {
+                self.playbackStatePublisher.send(.started(startedPos))
+            } else {
+                self.playbackStatePublisher.send(.started(position))
+            }
             completion?(nil)
         }
     }
     
     func play() {
         debouncePlayPauseAction {
-            guard self.isLoaded, let currentTrackPosition = self.currentTrackPosition else {
-                self.handlePlaybackError(.drmExpired)
+            if !self.isLoaded || self.currentTrackPosition == nil {
+                if self.avQueuePlayer.items().isEmpty {
+                    self.buildPlayerQueue()
+                }
+                if let position = self.currentTrackPosition ?? self.tableOfContents.allTracks.first.map({ TrackPosition(track: $0, timestamp: 0.0, tracks: self.tableOfContents.tracks) }) {
+                    self.attemptToPlay(position)
+                    self.avQueuePlayer.rate = PlaybackRate.convert(rate: self.playbackRate)
+                }
                 return
             }
-            
+
+            guard let currentTrackPosition = self.currentTrackPosition else { return }
+
             if !self.isDrmOk {
                 self.handlePlaybackError(.drmExpired)
                 return
