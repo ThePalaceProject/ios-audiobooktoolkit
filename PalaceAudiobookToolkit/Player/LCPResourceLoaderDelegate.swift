@@ -8,16 +8,39 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     weak var provider: StreamingResourceProvider?
     private let httpRangeRetriever = HTTPRangeRetriever()
     private var fullTrackCache = [String: Data]()
-    private let maxConcurrentRequests = 4
-    private let requestTimeoutSeconds: TimeInterval = 30
+    private let maxConcurrentRequests = 2
+    private let requestTimeoutSeconds: TimeInterval = 10
     private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
     private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var timeoutGuards: [ObjectIdentifier: Task<Void, Never>] = [:]
-    private let concurrencySemaphore = DispatchSemaphore(value: 4)
+    private let concurrencySemaphore = DispatchSemaphore(value: 2)
     
     init(provider: StreamingResourceProvider? = nil) {
         self.provider = provider
         super.init()
+    }
+    
+    func cancelAllRequests() {
+        inflightQueue.sync {
+            inflightTasks.values.forEach { $0.cancel() }
+            timeoutGuards.values.forEach { $0.cancel() }
+        }
+        inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.inflightTasks.removeAll()
+            self?.timeoutGuards.removeAll()
+        }
+    }
+
+    func clearCaches() {
+        inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.fullTrackCache.removeAll()
+        }
+    }
+
+    func shutdown() {
+        cancelAllRequests()
+        clearCaches()
+        provider = nil
     }
     
     func resourceLoader(
@@ -46,8 +69,17 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
             return false
         }
         
-        guard let publication = provider?.getPublication() else {
-            ATLog(.debug, "🎵 ResourceLoader: Publication not available yet, failing fast")
+        // Wait briefly for the publication if not yet available to avoid immediate failure
+        var publication = provider?.getPublication()
+        if publication == nil {
+            let start = CFAbsoluteTimeGetCurrent()
+            while publication == nil && (CFAbsoluteTimeGetCurrent() - start) < 0.8 {
+                Thread.sleep(forTimeInterval: 0.02)
+                publication = provider?.getPublication()
+            }
+        }
+        guard let publication else {
+            ATLog(.debug, "🎵 ResourceLoader: Publication not available after brief wait")
             loadingRequest.finishLoading(with: NSError(
                 domain: "LCPResourceLoader",
                 code: -2,
@@ -213,40 +245,34 @@ private extension LCPResourceLoaderDelegate {
         }
         
         let start = max(0, Int(dataRequest.requestedOffset))
-        let count = Int(dataRequest.requestedLength)
+        var count = Int(dataRequest.requestedLength)
         let endExcl = start + count
         
         Task.detached(priority: .userInitiated) {
             if let res = resource {
                 do {
-                    let maxChunkSize = 512 * 1024
-                    let actualCount = min(count, maxChunkSize)
-                    let actualEndExcl = start + actualCount
-                    let requestedRange: Range<UInt64> = UInt64(start)..<UInt64(actualEndExcl)
-                    
-                    let rawData = try await res.read(range: requestedRange).get()
-                    let data = rawData
-                    
-                    if !data.isEmpty {
+                    let segmentSize = 128 * 1024
+                    var totalLength: Int? = nil
+                    if let length = try? await res.estimatedLength().get(), let l = length { totalLength = Int(l) }
+                    if count == 0 && dataRequest.requestsAllDataToEndOfResource {
+                        if let total = totalLength { count = max(0, total - start) } else { count = Int.max }
+                    }
+                    var bytesRemaining = count
+                    var currentStart = start
+                    while bytesRemaining > 0 {
+                        let thisCount = bytesRemaining == Int.max ? segmentSize : min(bytesRemaining, segmentSize)
+                        let endExcl = currentStart + thisCount
+                        let range: Range<UInt64> = UInt64(currentStart)..<UInt64(endExcl)
+                        let data = try await res.read(range: range).get()
+                        if data.isEmpty { break }
                         dataRequest.respond(with: data)
-                    } else {
-                        ATLog(.error, "🎯 [LCPResourceLoader] ❌ Empty data returned from Readium resource")
+                        if bytesRemaining != Int.max { bytesRemaining -= data.count }
+                        currentStart += data.count
+                        if data.count < thisCount { break }
                     }
                     loadingRequest.finishLoading()
                 } catch {
-
-                    do {
-                        let all = try await res.read(range: nil).get()
-                        let upper = min(endExcl, all.count)
-                        let lower = min(max(0, start), upper)
-                        if lower < upper {
-                            let slice = all.subdata(in: lower..<upper)
-                            dataRequest.respond(with: slice)
-                        }
-                        loadingRequest.finishLoading()
-                    } catch {
-                        loadingRequest.finishLoading(with: error)
-                    }
+                    loadingRequest.finishLoading(with: error)
                 }
                 return
             }
