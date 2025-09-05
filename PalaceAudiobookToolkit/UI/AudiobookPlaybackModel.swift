@@ -10,7 +10,7 @@ import SwiftUI
 import Combine
 import MediaPlayer
 
-class AudiobookPlaybackModel: ObservableObject {
+public class AudiobookPlaybackModel: ObservableObject {
     @Published private var reachability = Reachability()
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
@@ -24,11 +24,18 @@ class AudiobookPlaybackModel: ObservableObject {
     private(set) var audiobookManager: AudiobookManager
     
     @Published var currentLocation: TrackPosition?
+    private var pendingLocation: TrackPosition?
+    private var suppressSavesUntil: Date?
     var selectedLocation: TrackPosition? {
         didSet {
-            if let selectedLocation {
+            guard let selectedLocation else { return }
+            if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
                 audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
+            } else {
+                pendingLocation = selectedLocation
             }
+            currentLocation = selectedLocation
+            saveLocation()
         }
     }
     
@@ -83,7 +90,7 @@ class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.networkService.tracks
     }
     
-    init(audiobookManager: AudiobookManager) {
+    public init(audiobookManager: AudiobookManager) {
         self.audiobookManager = audiobookManager
         if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
@@ -92,6 +99,20 @@ class AudiobookPlaybackModel: ObservableObject {
         setupBindings()
         subscribeToPublisher()
         self.audiobookManager.networkService.fetch()
+    }
+
+    // MARK: - Public helpers
+
+    // Sets the desired starting location and lets the model coordinate playback
+    public func jumpToInitialLocation(_ position: TrackPosition) {
+        // Seed UI immediately; player will move on next ticks
+        self.pendingLocation = position
+        self.currentLocation = position
+    }
+
+    // Suppress posting/saving positions until a given offset from now
+    public func beginSaveSuppression(for seconds: TimeInterval) {
+        suppressSavesUntil = Date().addingTimeInterval(seconds)
     }
     
     private func subscribeToPublisher() {
@@ -109,11 +130,19 @@ class AudiobookPlaybackModel: ObservableObject {
                     guard let position else { return }
                     self.currentLocation = position
                     self.updateProgress()
+                    if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
+                        self.pendingLocation = nil
+                        self.audiobookManager.audiobook.player.play(at: target) { _ in }
+                    }
                     
                 case .playbackBegan(let position), .playbackCompleted(let position):
                     self.currentLocation = position
                     self.isWaitingForPlayer = false
                     self.updateProgress()
+                    if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
+                        self.pendingLocation = nil
+                        self.audiobookManager.audiobook.player.play(at: target) { _ in }
+                    }
                     
                 case .playbackUnloaded:
                     break
@@ -130,7 +159,17 @@ class AudiobookPlaybackModel: ObservableObject {
                 }
             }
             .store(in: &subscriptions)
-        
+        audiobookManager.statePublisher
+            .compactMap { state -> TrackPosition? in
+                if case .positionUpdated(let pos) = state { return pos }
+                return nil
+            }
+            .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] _ in
+                self?.saveLocation()
+            }
+            .store(in: &subscriptions)
+
         self.audiobookManager.fetchBookmarks { _ in }
     }
     
@@ -172,10 +211,15 @@ class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func saveLocation() {
-        if let currentLocation {
-            audiobookManager.saveLocation(currentLocation)
-        }
+        // Skip saves during suppression window
+        if let until = suppressSavesUntil, Date() < until { return }
+        if let currentLocation { audiobookManager.saveLocation(currentLocation) }
     }
+
+    public func persistLocation() {
+        saveLocation()
+    }
+
     
     func skipBack() {
         guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
@@ -275,7 +319,7 @@ class AudiobookPlaybackModel: ObservableObject {
     
     // MARK: - Media Player
     
-    func updateCoverImage(_ image: UIImage?) {
+    public func updateCoverImage(_ image: UIImage?) {
         coverImage = image
         updateLockScreenCoverArtwork(image: image)
     }

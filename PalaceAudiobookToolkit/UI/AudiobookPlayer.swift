@@ -58,7 +58,10 @@ public class AudiobookPlayer: UIViewController {
         super.viewWillDisappear(animated)
         navigationController?.setNavigationBarHidden(false, animated: false)
         playerViewController?.rootView.unload()
-        
+    }
+
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
         playerViewController?.willMove(toParent: nil)
         playerViewController?.view.removeFromSuperview()
         playerViewController?.removeFromParent()

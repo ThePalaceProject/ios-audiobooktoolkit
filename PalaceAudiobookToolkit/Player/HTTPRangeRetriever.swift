@@ -117,6 +117,11 @@ public class HTTPRangeRetriever {
     public func createResource(for url: AbsoluteURL) -> RangeResource {
         return RangeResource(sourceURL: url, httpClient: httpClient)
     }
+
+    /// Purge all cached ranges to free memory between audiobooks
+    public func purgeCache() {
+        cacheManager.clearAll()
+    }
 }
 
 /// Cache manager for HTTP range requests to avoid redundant network calls
@@ -160,6 +165,13 @@ private class RangeCacheManager {
             
             self.cache[url.string]?[range] = data
             self.currentCacheSize += data.count
+        }
+    }
+    
+    func clearAll() {
+        cacheQueue.async(flags: .barrier) {
+            self.cache.removeAll()
+            self.currentCacheSize = 0
         }
     }
     

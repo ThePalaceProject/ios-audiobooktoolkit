@@ -11,7 +11,7 @@ import MediaPlayer
 import AVKit
 import PalaceUIKit
 
-struct AudiobookPlayerView: View {
+public struct AudiobookPlayerView: View {
     
     @Environment(\.presentationMode) private var presentationMode
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -22,8 +22,9 @@ struct AudiobookPlayerView: View {
     @State private var showPlaybackSpeed = false
     @State private var showSleepTimer = false
     @State private var isInBackground = false
+    @State private var showTOC = false
     
-    init(model: AudiobookPlaybackModel) {
+    public init(model: AudiobookPlaybackModel) {
         self.playbackModel = model
         setupBackgroundStateHandling()
     }
@@ -36,9 +37,8 @@ struct AudiobookPlayerView: View {
         playbackModel.stop()
     }
     
-    var body: some View {
-        NavigationView {
-            ZStack(alignment: .bottom) {
+    public var body: some View {
+        ZStack(alignment: .bottom) {
                 VStack(spacing: 10) {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
@@ -106,12 +106,21 @@ struct AudiobookPlayerView: View {
                     LoadingView()
                 }
             }
-            .navigationBarTitle(Text(""), displayMode: .inline)
-            .navigationBarItems(trailing: tocButton)
-            .navigationBarItems(leading: backButton)
+        
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) { backButton }
+            ToolbarItem(placement: .navigationBarTrailing) { tocButton }
         }
+        .navigationBarTitle(Text(""), displayMode: .inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .tabBar)
         .palaceFont(.body)
-        .navigationViewStyle(.stack)
+        .onDisappear {
+            if !showTOC {
+                playbackModel.persistLocation()
+                playbackModel.stop()
+            }
+        }
     }
     
     private func setupBackgroundStateHandling() {
@@ -121,6 +130,7 @@ struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = true
+            self.playbackModel.persistLocation()
         }
         
         NotificationCenter.default.addObserver(
@@ -129,6 +139,15 @@ struct AudiobookPlayerView: View {
             queue: .main
         ) { _ in
             self.isInBackground = false
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // Persist on termination as best-effort
+            self.playbackModel.persistLocation()
         }
     }
 
@@ -143,19 +162,28 @@ struct AudiobookPlayerView: View {
     
     @ViewBuilder
     private var tocButton: some View {
-        NavigationLink {
-            AudiobookNavigationView(model: playbackModel)
-        } label: {
-            ToolkitImage(name: "table_of_contents", renderingMode: .template)
-                .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
-                .foregroundColor(.primary)
-                .foregroundColor(.black)
+        HStack {
+            NavigationLink(isActive: $showTOC) {
+                AudiobookNavigationView(model: playbackModel)
+            } label: {
+                EmptyView()
+            }
+            Button {
+                showTOC = true
+            } label: {
+                ToolkitImage(name: "table_of_contents", renderingMode: .template)
+                    .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
+                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
+            }
         }
     }
     
     @ViewBuilder
     private var backButton: some View {
         Button {
+            // Stop playback before dismissing
+            playbackModel.stop()
             presentationMode.wrappedValue.dismiss()
         } label: {
             HStack(spacing: 4) {

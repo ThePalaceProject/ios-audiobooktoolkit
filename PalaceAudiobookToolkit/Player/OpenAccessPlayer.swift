@@ -131,6 +131,7 @@ class OpenAccessPlayer: NSObject, Player {
         case .readyToPlay:
             avQueuePlayer.play()
             restorePlaybackRate()
+            self.isLoaded = true
             playbackStatePublisher.send(.started(trackPosition))
         default:
             handlePlaybackError(.playerNotReady)
@@ -139,19 +140,34 @@ class OpenAccessPlayer: NSObject, Player {
     
     func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
         seekTo(position: position) { [weak self] trackPosition in
-            self?.avQueuePlayer.play()
-            self?.restorePlaybackRate()
+            guard let self = self else { return }
+            self.avQueuePlayer.play()
+            self.restorePlaybackRate()
+            self.isLoaded = true
+            if let startedPos = trackPosition {
+                self.playbackStatePublisher.send(.started(startedPos))
+            } else {
+                self.playbackStatePublisher.send(.started(position))
+            }
             completion?(nil)
         }
     }
     
     func play() {
         debouncePlayPauseAction {
-            guard self.isLoaded, let currentTrackPosition = self.currentTrackPosition else {
-                self.handlePlaybackError(.drmExpired)
+            if !self.isLoaded || self.currentTrackPosition == nil {
+                if self.avQueuePlayer.items().isEmpty {
+                    self.buildPlayerQueue()
+                }
+                if let position = self.currentTrackPosition ?? self.tableOfContents.allTracks.first.map({ TrackPosition(track: $0, timestamp: 0.0, tracks: self.tableOfContents.tracks) }) {
+                    self.attemptToPlay(position)
+                    self.avQueuePlayer.rate = PlaybackRate.convert(rate: self.playbackRate)
+                }
                 return
             }
-            
+
+            guard let currentTrackPosition = self.currentTrackPosition else { return }
+
             if !self.isDrmOk {
                 self.handlePlaybackError(.drmExpired)
                 return
@@ -287,6 +303,7 @@ class OpenAccessPlayer: NSObject, Player {
                 if let firstTrack = tableOfContents.allTracks.first {
                     let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
                     play(at: firstTrackPosition, completion: nil)
+                    self.isLoaded = true
                 }
             } else {
                 rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
@@ -570,46 +587,63 @@ class OpenAccessPlayer: NSObject, Player {
     
     /// Create a single player item from a track
     private func createPlayerItem(from track: any Track) -> AVPlayerItem? {
-        guard let fileStatus = assetFileStatus(track.downloadTask) else {
-            return nil
+        if let fileStatus = assetFileStatus(track.downloadTask) {
+            switch fileStatus {
+            case .saved(let urls):
+                guard let url = urls.first else { return nil }
+                let playerItem = AVPlayerItem(url: url)
+                playerItem.audioTimePitchAlgorithm = .timeDomain
+                playerItem.trackIdentifier = track.key
+                return playerItem
+            case .missing, .unknown:
+                break
+            }
         }
-        
-        switch fileStatus {
-        case .saved(let urls):
-            // Return the first available URL as a player item
-            guard let url = urls.first else { return nil }
-            let playerItem = AVPlayerItem(url: url)
+        if let remote = track.urls?.first {
+            let playerItem = AVPlayerItem(url: remote)
             playerItem.audioTimePitchAlgorithm = .timeDomain
             playerItem.trackIdentifier = track.key
             return playerItem
-        case .missing, .unknown:
-            return nil
         }
+        return nil
     }
     
     public func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
         var items = [AVPlayerItem]()
         for track in tracks {
-            guard let fileStatus = assetFileStatus(track.downloadTask) else {
-                continue
-            }
-            
-            switch fileStatus {
-            case .saved(let urls):
-                for url in urls {
-                    let playerItem = AVPlayerItem(url: url)
-                    playerItem.audioTimePitchAlgorithm = .timeDomain
-                    playerItem.trackIdentifier = track.key
-                    items.append(playerItem)
-                }
-            case .missing:
+            if let item = createPlayerItem(from: track) {
+                items.append(item)
+            } else {
                 listenForDownloadCompletion(task: track.downloadTask)
-                continue
-            case .unknown:
-                continue
             }
         }
         return items
+    }
+    
+    public func addPlayerObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionInterruption(_:)),
+            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioSessionRouteChange(_:)),
+            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
+        )
+        
+        avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
+        avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+        isObservingPlayerStatus = true
+    }
+    
+    func removePlayerObservers() {
+        guard isObservingPlayerStatus else { return }
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
+        avQueuePlayer.removeObserver(self, forKeyPath: "status")
+        avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+        isObservingPlayerStatus = false
     }
 
 }
@@ -664,32 +698,6 @@ extension OpenAccessPlayer {
         } else {
             DispatchQueue.main.sync { configure() }
         }
-    }
-    
-    public func addPlayerObservers() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioSessionInterruption(_:)),
-            name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioSessionRouteChange(_:)),
-            name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
-        )
-        
-        avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
-        avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
-        isObservingPlayerStatus = true
-    }
-    
-    func removePlayerObservers() {
-        guard isObservingPlayerStatus else { return }
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
-        avQueuePlayer.removeObserver(self, forKeyPath: "status")
-        avQueuePlayer.removeObserver(self, forKeyPath: "rate")
-        isObservingPlayerStatus = false
     }
     
     override func observeValue(
