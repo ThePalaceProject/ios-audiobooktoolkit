@@ -56,19 +56,9 @@ public struct AudiobookPlayerView: View {
                                 .font(.caption)
                                 .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
                             
-                            AudiobookSlider(
-                                value: $playbackModel.playbackProgress,
-                                onDragChanged: { _ in
-                                    // Suppress background updates during drag
-                                    playbackModel.suppressBackgroundUpdates(true)
-                                },
-                                onDragEnded: { finalValue in
-                                    // Set target value immediately to prevent snap-back
-                                    playbackModel.setTargetProgress(finalValue)
-                                    // Perform seek
-                                    playbackModel.move(to: finalValue)
-                                }
-                            )
+                            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
+                                playbackModel.move(to: newValue)
+                            }
                             .padding(.horizontal)
                             .accessibilityLabel(Text("Playback slider value: \(playbackModel.playbackSliderValueDescription)"))
                         }
@@ -629,19 +619,55 @@ struct AudiobookSlider: View {
     private let trackHeight: CGFloat = 10
 }
 
-/// Legacy playback slider (kept for compatibility)
+/// Clean playback slider with essential functionality
 struct PlaybackSliderView: View {
     @Binding var value: Double
     @State private var tempValue: Double?
     var onChange: (_ value: Double) -> Void
     
     var body: some View {
-        AudiobookSlider(
-            value: $value,
-            onDragChanged: { _ in },
-            onDragEnded: onChange
-        )
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.gray)
+                    .frame(height: trackHeight)
+                
+                Rectangle()
+                    .fill(Color(.label))
+                    .frame(width: offsetX(in: geometry.size, for: tempValue ?? value), height: trackHeight)
+                
+                Capsule()
+                    .fill(Color.red)
+                    .frame(width: thumbWidth, height: thumbHeight)
+                    .offset(x: offsetX(in: geometry.size, for: tempValue ?? value))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { gesture in
+                                let newValue = max(0, min(1, Double(gesture.location.x / geometry.size.width)))
+                                tempValue = newValue
+                            }
+                            .onEnded { _ in
+                                if let finalValue = tempValue {
+                                    value = finalValue
+                                    onChange(finalValue)
+                                    tempValue = nil
+                                }
+                            }
+                    )
+                    .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
+            }
+        }
+        .frame(height: thumbHeight)
     }
+    
+    private func offsetX(in size: CGSize, for value: Double) -> CGFloat {
+        CGFloat(value) * (size.width - thumbWidth)
+    }
+    
+    // MARK: - View configuration
+    private let thumbWidth: CGFloat = 10
+    private let thumbHeight: CGFloat = 36
+    private let trackHeight: CGFloat = 10
 }
 
 struct ToolkitImage: View {

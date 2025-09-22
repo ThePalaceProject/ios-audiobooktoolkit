@@ -14,7 +14,6 @@ public class AudiobookPlaybackModel: ObservableObject {
     @Published private var reachability = Reachability()
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
-    @Published var targetProgress: Double = 0
     @Published var isDownloading = false
     @Published var overallDownloadProgress: Float = 0
     @Published var trackErrors: [String: Error] = [:]
@@ -31,23 +30,12 @@ public class AudiobookPlaybackModel: ObservableObject {
         didSet {
             guard let selectedLocation else { return }
             
-            // Clear any progress suppression for chapter navigation
-            suppressBackgroundProgressUpdates = false
-            suppressUpdates = false
-            suppressionWorkItem?.cancel()
-            
-            // Update current location immediately
-            currentLocation = selectedLocation
-            
-            // Recalculate progress for new chapter position
-            recalculateProgressForNewPosition(selectedLocation)
-            
             if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
                 audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
             } else {
                 pendingLocation = selectedLocation
             }
-            
+            currentLocation = selectedLocation
             saveLocation()
         }
     }
@@ -199,22 +187,11 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func updateProgress() {
-        // Skip updates if suppressed to prevent flicker
-        guard !suppressUpdates && !suppressBackgroundProgressUpdates else { return }
-        
         guard duration > 0 else {
             playbackProgress = 0
-            targetProgress = 0
             return
         }
-        
-        let newProgress = offset / duration
-        playbackProgress = newProgress
-        
-        // Only update target progress if we're not in a seeking operation
-        if !isWaitingForPlayer {
-            targetProgress = newProgress
-        }
+        playbackProgress = offset / duration
     }
     
     deinit {
@@ -274,129 +251,24 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     func move(to value: Double) {
-        // Prevent UI flicker by suppressing updates during seeking
         isWaitingForPlayer = true
+        defer { isWaitingForPlayer = false }
         
-        // Suppress progress updates briefly to prevent flicker
-        suppressProgressUpdates(for: 0.3)
-        
-        // Use enhanced seeking with smooth UI
-        Task { @MainActor in
-            do {
-                if let modernManager = audiobookManager as? DefaultAudiobookManager {
-                    modernManager.seekWithSlider(value: value) { [weak self] newPosition in
-                        DispatchQueue.main.async {
-                            guard let self = self else { return }
-                            
-                            // Update position smoothly without flicker
-                            self.currentLocation = newPosition
-                            self.debouncedSaveLocation()
-                            
-                            // Allow UI updates again after brief delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                self.isWaitingForPlayer = false
-                            }
-                        }
-                    }
-                } else {
-                    await self.legacyMove(to: value)
-                    self.isWaitingForPlayer = false
-                }
-            } catch {
-                await self.legacyMove(to: value)
-                self.isWaitingForPlayer = false
-            }
-        }
-    }
-    
-    // MARK: - UI Flicker Prevention
-    
-    @Published private var suppressUpdates: Bool = false
-    private var suppressBackgroundProgressUpdates: Bool = false
-    private var suppressionWorkItem: DispatchWorkItem?
-    
-    public func suppressBackgroundUpdates(_ suppress: Bool) {
-        suppressBackgroundProgressUpdates = suppress
-    }
-    
-    /// Set target progress immediately to prevent slider snap-back
-    public func setTargetProgress(_ progress: Double) {
-        // Set target progress for smooth UI transition
-        targetProgress = progress
-        playbackProgress = progress
-        
-        // Suppress background updates briefly to let seeking complete
-        suppressProgressUpdates(for: 1.0)
-    }
-    
-    private func suppressProgressUpdates(for duration: TimeInterval) {
-        suppressionWorkItem?.cancel()
-        suppressUpdates = true
-        
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.suppressUpdates = false
-        }
-        suppressionWorkItem = workItem
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
-    }
-    
-    // MARK: - Chapter Navigation Support
-    
-    /// Recalculates progress when navigating to a new chapter
-    private func recalculateProgressForNewPosition(_ position: TrackPosition) {
-        // When jumping to a new chapter via TOC, should start at beginning of chapter
-        // Calculate the actual progress within the new chapter
-        
+        // Use enhanced seeking with unified position calculations
         if let modernManager = audiobookManager as? DefaultAudiobookManager {
-            let chapterProgress = modernManager.calculateChapterProgress(for: position)
-            
-            ATLog(.info, "🧭 Chapter navigation: Position \(position.track.key)@\(position.timestamp)s → progress \(chapterProgress)")
-            
-            // Force immediate UI update on main thread
-            DispatchQueue.main.async { [weak self] in
-                self?.playbackProgress = chapterProgress
-                self?.targetProgress = chapterProgress
-                ATLog(.info, "🧭 UI updated: playbackProgress = \(chapterProgress)")
+            modernManager.seekWithSlider(value: value) { [weak self] adjustedLocation in
+                self?.currentLocation = adjustedLocation
+                self?.saveLocation()
             }
         } else {
-            // Legacy fallback: start of chapter for TOC navigation
-            DispatchQueue.main.async { [weak self] in
-                self?.playbackProgress = 0.0
-                self?.targetProgress = 0.0
-                ATLog(.info, "🧭 Legacy: Reset progress to 0.0")
-            }
-        }
-    }
-    
-    // MARK: - Performance Optimizations
-    
-    private func debouncedSaveLocation() {
-        // Cancel previous save timer
-        saveLocationWorkItem?.cancel()
-        
-        // Create new debounced save
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.saveLocation()
-        }
-        saveLocationWorkItem = workItem
-        
-        // Execute after delay to batch rapid seeks
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-    }
-    
-    private var saveLocationWorkItem: DispatchWorkItem?
-    
-    @MainActor
-    private func legacyMove(to value: Double) async {
-        await withCheckedContinuation { continuation in
+            // Legacy fallback
             self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
                 self?.currentLocation = adjustedLocation
                 self?.saveLocation()
-                continuation.resume()
             }
         }
     }
+    
     
     public func downloadProgress(for chapter: Chapter) -> Double {
         audiobookManager.downloadProgress(for: chapter)
