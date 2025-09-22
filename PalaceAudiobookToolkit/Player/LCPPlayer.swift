@@ -1392,9 +1392,9 @@ class LCPPlayer: OpenAccessPlayer {
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
             if success {
-                self.rebuildQueueForPosition(newPosition) {
-                    self.performSuperSeek(to: newPosition, completion: completion)
-                }
+                // For slider seeking, avoid queue rebuild to prevent loading flicker
+                // Use efficient navigation within existing queue
+                self.navigateToPositionWithoutRebuild(newPosition, completion: completion)
             } else {
                 completion?(nil)
             }
@@ -1424,6 +1424,27 @@ class LCPPlayer: OpenAccessPlayer {
         // For position-based rebuilds, use the full queue method for consistency
         ATLog(.debug, "🎵 [LCPPlayer] Rebuilding queue for position - using full queue")
         rebuildFullQueue(completion: completion)
+    }
+    
+    /// Navigate to position without rebuilding queue to prevent loading flicker
+    private func navigateToPositionWithoutRebuild(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        // Check if target track is in current queue
+        if let targetItem = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
+            // Navigate to existing item without rebuild
+            while avQueuePlayer.currentItem != targetItem && avQueuePlayer.currentItem != nil {
+                avQueuePlayer.advanceToNextItem()
+            }
+            
+            // Perform seek within track
+            performSuperSeek(to: position, completion: completion)
+            ATLog(.debug, "🎵 [LCPPlayer] ✅ Navigated without queue rebuild - no loading flicker")
+        } else {
+            // Track not in queue - need to rebuild
+            ATLog(.debug, "🎵 [LCPPlayer] Track not in queue, rebuilding necessary")
+            rebuildQueueForPosition(position) {
+                self.performSuperSeek(to: position, completion: completion)
+            }
+        }
     }
 
     override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
