@@ -227,12 +227,15 @@ public class AudiobookPlaybackModel: ObservableObject {
             return
         }
         
+        // Brief loading state for skip operations (acceptable UX)
         isWaitingForPlayer = true
-        defer { isWaitingForPlayer = false }
         
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
-            self?.currentLocation = adjustedLocation
-            self?.saveLocation()
+            DispatchQueue.main.async {
+                self?.currentLocation = adjustedLocation
+                self?.saveLocation()
+                self?.isWaitingForPlayer = false
+            }
         }
     }
     
@@ -241,18 +244,21 @@ public class AudiobookPlaybackModel: ObservableObject {
             return
         }
         
+        // Brief loading state for skip operations (acceptable UX)
         isWaitingForPlayer = true
-        defer { isWaitingForPlayer = false }
         
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
-            self?.currentLocation = adjustedLocation
-            self?.saveLocation()
+            DispatchQueue.main.async {
+                self?.currentLocation = adjustedLocation
+                self?.saveLocation()
+                self?.isWaitingForPlayer = false
+            }
         }
     }
     
     func move(to value: Double) {
-        isWaitingForPlayer = true
-        defer { isWaitingForPlayer = false }
+        // Don't show loading animation for seeking - it makes UI look glitchy
+        // isWaitingForPlayer = true // Removed to prevent loading animation
         
         // Use enhanced seeking with unified position calculations
         if let modernManager = audiobookManager as? DefaultAudiobookManager {
