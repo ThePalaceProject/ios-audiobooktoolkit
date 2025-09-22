@@ -14,6 +14,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     @Published private var reachability = Reachability()
     @Published var isWaitingForPlayer = false
     @Published var playbackProgress: Double = 0
+    @Published var targetProgress: Double = 0
     @Published var isDownloading = false
     @Published var overallDownloadProgress: Float = 0
     @Published var trackErrors: [String: Error] = [:]
@@ -186,11 +187,22 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     private func updateProgress() {
+        // Skip updates if suppressed to prevent flicker
+        guard !suppressUpdates && !suppressBackgroundProgressUpdates else { return }
+        
         guard duration > 0 else {
             playbackProgress = 0
+            targetProgress = 0
             return
         }
-        playbackProgress = offset / duration
+        
+        let newProgress = offset / duration
+        playbackProgress = newProgress
+        
+        // Only update target progress if we're not in a seeking operation
+        if !isWaitingForPlayer {
+            targetProgress = newProgress
+        }
     }
     
     deinit {
@@ -250,36 +262,71 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     func move(to value: Double) {
-        // Optimized seeking with debouncing for smooth performance
+        // Prevent UI flicker by suppressing updates during seeking
         isWaitingForPlayer = true
         
-        // Use modern seeking with optimized performance
+        // Suppress progress updates briefly to prevent flicker
+        suppressProgressUpdates(for: 0.3)
+        
+        // Use enhanced seeking with smooth UI
         Task { @MainActor in
             do {
                 if let modernManager = audiobookManager as? DefaultAudiobookManager {
                     modernManager.seekWithSlider(value: value) { [weak self] newPosition in
                         DispatchQueue.main.async {
                             guard let self = self else { return }
-                            self.currentLocation = newPosition
                             
-                            // Throttle location saves to reduce network requests
+                            // Update position smoothly without flicker
+                            self.currentLocation = newPosition
                             self.debouncedSaveLocation()
                             
-                            self.isWaitingForPlayer = false
-                            ATLog(.info, "Seeking completed successfully")
+                            // Allow UI updates again after brief delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                self.isWaitingForPlayer = false
+                            }
                         }
                     }
                 } else {
-                    // Legacy fallback
                     await self.legacyMove(to: value)
                     self.isWaitingForPlayer = false
                 }
             } catch {
-                ATLog(.error, "Seeking failed: \(error.localizedDescription)")
                 await self.legacyMove(to: value)
                 self.isWaitingForPlayer = false
             }
         }
+    }
+    
+    // MARK: - UI Flicker Prevention
+    
+    @Published private var suppressUpdates: Bool = false
+    private var suppressBackgroundProgressUpdates: Bool = false
+    private var suppressionWorkItem: DispatchWorkItem?
+    
+    public func suppressBackgroundUpdates(_ suppress: Bool) {
+        suppressBackgroundProgressUpdates = suppress
+    }
+    
+    /// Set target progress immediately to prevent slider snap-back
+    public func setTargetProgress(_ progress: Double) {
+        // Set target progress for smooth UI transition
+        targetProgress = progress
+        playbackProgress = progress
+        
+        // Suppress background updates briefly to let seeking complete
+        suppressProgressUpdates(for: 1.0)
+    }
+    
+    private func suppressProgressUpdates(for duration: TimeInterval) {
+        suppressionWorkItem?.cancel()
+        suppressUpdates = true
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.suppressUpdates = false
+        }
+        suppressionWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
     }
     
     // MARK: - Performance Optimizations

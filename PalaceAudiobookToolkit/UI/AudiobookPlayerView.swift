@@ -58,8 +58,14 @@ public struct AudiobookPlayerView: View {
                             
                             AudiobookSlider(
                                 value: $playbackModel.playbackProgress,
-                                onDragChanged: { _ in },
+                                onDragChanged: { _ in
+                                    // Suppress background updates during drag
+                                    playbackModel.suppressBackgroundUpdates(true)
+                                },
                                 onDragEnded: { finalValue in
+                                    // Set target value immediately to prevent snap-back
+                                    playbackModel.setTargetProgress(finalValue)
+                                    // Perform seek
                                     playbackModel.move(to: finalValue)
                                 }
                             )
@@ -532,6 +538,7 @@ struct AudiobookSlider: View {
     @State private var isDragging: Bool = false
     @State private var dragValue: Double = 0.0
     @State private var lastHapticValue: Double = -1.0
+    @State private var committedValue: Double = 0.0
     
     let onDragChanged: (Double) -> Void
     let onDragEnded: (Double) -> Void
@@ -544,19 +551,19 @@ struct AudiobookSlider: View {
                     .fill(.gray)
                     .frame(height: trackHeight)
                 
-                // Progress track with smooth animation
+                // Progress track with minimal animation
                 Rectangle()
                     .fill(Color(.label))
                     .frame(width: progressWidth(in: geometry.size), height: trackHeight)
-                    .animation(.easeOut(duration: isDragging ? 0.0 : 0.2), value: isDragging ? dragValue : value)
+                    .animation(.easeOut(duration: isDragging ? 0.0 : 0.1), value: isDragging ? dragValue : value)
                 
-                // Thumb with enhanced visual feedback
+                // Thumb with subtle visual feedback
                 Capsule()
                     .fill(Color.red)
                     .frame(width: thumbWidth, height: thumbHeight)
                     .offset(x: thumbOffset(in: geometry.size))
-                    .scaleEffect(isDragging ? 1.2 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+                    .scaleEffect(isDragging ? 1.05 : 1.0)
+                    .animation(.easeOut(duration: 0.1), value: isDragging)
                     .gesture(
                         DragGesture()
                             .onChanged { gesture in
@@ -569,20 +576,21 @@ struct AudiobookSlider: View {
                                     dragValue = newValue
                                 }
                                 
-                                // Throttled haptic feedback to prevent excessive vibration
-                                provideThrottledHapticFeedback(for: newValue)
+                                // Minimal haptic feedback for professional feel
+                                provideSubtleHapticFeedback(for: newValue)
                                 
                                 // Visual feedback only during drag
                                 onDragChanged(newValue)
                             }
                             .onEnded { _ in
                                 isDragging = false
+                                committedValue = dragValue
                                 
-                                // Final haptic feedback
-                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                // Subtle completion feedback
+                                let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
                                 
-                                // Only perform actual seeking on drag end
+                                // Perform seeking on drag end
                                 onDragEnded(dragValue)
                             }
                     )
@@ -595,19 +603,19 @@ struct AudiobookSlider: View {
     // MARK: - Helper Methods
     
     private func progressWidth(in size: CGSize) -> CGFloat {
-        let currentValue = isDragging ? dragValue : value
+        let currentValue = isDragging ? dragValue : (committedValue > 0 ? max(value, committedValue) : value)
         return CGFloat(currentValue) * size.width
     }
     
     private func thumbOffset(in size: CGSize) -> CGFloat {
-        let currentValue = isDragging ? dragValue : value
+        let currentValue = isDragging ? dragValue : (committedValue > 0 ? max(value, committedValue) : value)
         return CGFloat(currentValue) * (size.width - thumbWidth)
     }
     
-    private func provideThrottledHapticFeedback(for newValue: Double) {
-        // Only provide haptic feedback if value changed significantly
-        if abs(newValue - lastHapticValue) > 0.1 {
-            if abs(newValue - 0.0) < 0.05 || abs(newValue - 1.0) < 0.05 {
+    private func provideSubtleHapticFeedback(for newValue: Double) {
+        // Very subtle haptic feedback only at start/end boundaries
+        if abs(newValue - lastHapticValue) > 0.2 {
+            if abs(newValue - 0.0) < 0.02 || abs(newValue - 1.0) < 0.02 {
                 let impact = UIImpactFeedbackGenerator(style: .light)
                 impact.impactOccurred()
                 lastHapticValue = newValue
