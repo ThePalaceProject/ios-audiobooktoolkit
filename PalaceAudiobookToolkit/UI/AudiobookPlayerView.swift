@@ -619,10 +619,11 @@ struct AudiobookSlider: View {
     private let trackHeight: CGFloat = 10
 }
 
-/// Clean playback slider with essential functionality
+/// Clean playback slider with anti-flicker on release
 struct PlaybackSliderView: View {
     @Binding var value: Double
     @State private var tempValue: Double?
+    @State private var isCommitting: Bool = false
     var onChange: (_ value: Double) -> Void
     
     var body: some View {
@@ -634,12 +635,12 @@ struct PlaybackSliderView: View {
                 
                 Rectangle()
                     .fill(Color(.label))
-                    .frame(width: offsetX(in: geometry.size, for: tempValue ?? value), height: trackHeight)
+                    .frame(width: offsetX(in: geometry.size, for: displayValue), height: trackHeight)
                 
                 Capsule()
                     .fill(Color.red)
                     .frame(width: thumbWidth, height: thumbHeight)
-                    .offset(x: offsetX(in: geometry.size, for: tempValue ?? value))
+                    .offset(x: offsetX(in: geometry.size, for: displayValue))
                     .gesture(
                         DragGesture()
                             .onChanged { gesture in
@@ -648,9 +649,16 @@ struct PlaybackSliderView: View {
                             }
                             .onEnded { _ in
                                 if let finalValue = tempValue {
+                                    // Prevent flicker by keeping temp value until seek completes
+                                    isCommitting = true
                                     value = finalValue
                                     onChange(finalValue)
-                                    tempValue = nil
+                                    
+                                    // Clear temp value after brief delay to prevent flicker
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        tempValue = nil
+                                        isCommitting = false
+                                    }
                                 }
                             }
                     )
@@ -658,6 +666,14 @@ struct PlaybackSliderView: View {
             }
         }
         .frame(height: thumbHeight)
+    }
+    
+    // Use temp value during drag and briefly after release to prevent flicker
+    private var displayValue: Double {
+        if let tempValue = tempValue {
+            return tempValue
+        }
+        return value
     }
     
     private func offsetX(in size: CGSize, for value: Double) -> CGFloat {
