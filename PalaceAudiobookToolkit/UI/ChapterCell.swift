@@ -19,11 +19,11 @@ struct ChapterCell: View {
         } label: {
             HStack {
                 Text(chapter.title)
-                    .font(.body)
+                    .palaceFont(.body)
                 Spacer()
                 Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? chapter.position.track.duration).timecode)
                     .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
-                    .font(.body)
+                    .palaceFont(.body)
             }
         }
     }
