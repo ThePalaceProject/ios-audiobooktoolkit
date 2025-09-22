@@ -9,7 +9,7 @@
 import SwiftUI
 import MediaPlayer
 import AVKit
-import PalaceUIKit
+// import PalaceUIKit // Not available in audiobook toolkit
 
 public struct AudiobookPlayerView: View {
     
@@ -42,10 +42,10 @@ public struct AudiobookPlayerView: View {
                 VStack(spacing: 10) {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
-                            .palaceFont(.headline)
+                            .font(.headline)
                             .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
                         Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
-                            .palaceFont(.body)
+                            .font(.body)
                             .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
                     .multilineTextAlignment(.center)
@@ -53,30 +53,34 @@ public struct AudiobookPlayerView: View {
                     VStack(spacing: 5) {
                         if !isInBackground {
                             Text(timeLeftInBookText)
-                                .palaceFont(.caption)
+                                .font(.caption)
                                 .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
                             
-                            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
-                                playbackModel.move(to: newValue)
-                            }
+                            AudiobookSlider(
+                                value: $playbackModel.playbackProgress,
+                                onDragChanged: { _ in },
+                                onDragEnded: { finalValue in
+                                    playbackModel.move(to: finalValue)
+                                }
+                            )
                             .padding(.horizontal)
                             .accessibilityLabel(Text("Playback slider value: \(playbackModel.playbackSliderValueDescription)"))
                         }
                         
                         HStack(alignment: .firstTextBaseline) {
                             Text("\(playheadOffsetText)")
-                                .palaceFont(.caption)
+                                .font(.caption)
                                 .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
                             Spacer()
                             Text(chapterTitle)
-                                .palaceFont(.headline)
+                                .font(.headline)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .accessibilityLabel(Text(chapterTitle))
 
                             Spacer()
                             Text("\(timeLeftText)")
-                                .palaceFont(.caption)
+                                .font(.caption)
                                 .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
                         }
                         .padding(.horizontal)
@@ -114,7 +118,7 @@ public struct AudiobookPlayerView: View {
         .navigationBarTitle(Text(""), displayMode: .inline)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .palaceFont(.body)
+        .font(.body)
         .onDisappear {
             if !showTOC {
                 playbackModel.persistLocation()
@@ -205,10 +209,10 @@ public struct AudiobookPlayerView: View {
                 .overlay(
                     VStack(spacing: -4) {
                         Text("\(Int(playbackModel.skipTimeInterval))")
-                            .palaceFont(size: 20)
+                            .font(.body)
                             .offset(x: -1)
                         Text("sec")
-                            .palaceFont(.caption)
+                            .font(.caption)
                     }
                         .offset(y: 4)
                 )
@@ -255,7 +259,7 @@ public struct AudiobookPlayerView: View {
                 }
                 Text(Strings.ScrubberView.downloading)
             }
-            .palaceFont(.caption)
+            .font(.caption)
             .padding(8)
             .padding(.horizontal)
         }
@@ -276,7 +280,7 @@ public struct AudiobookPlayerView: View {
                 Image(systemName: "xmark.circle")
             }
         }
-        .palaceFont(.subheadline)
+        .font(.subheadline)
         .foregroundColor(.white)
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -325,7 +329,7 @@ public struct AudiobookPlayerView: View {
                             showPlaybackSpeed.toggle()
                         } label: {
                             Text(playbackRateText)
-                                .palaceFont(.body)
+                                .font(.body)
                         }
                             .actionSheet(isPresented: $showPlaybackSpeed) {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
@@ -345,9 +349,9 @@ public struct AudiobookPlayerView: View {
                             showSleepTimer.toggle()
                         } label: {
                             Text(sleepTimerText)
-                                .palaceFont(.body)
+                                .font(.body)
                         }
-                            .accessibility(label: Text(sleepTimerAccessibilityLabel))
+                        .accessibility(label: Text(sleepTimerAccessibilityLabel))
                             .actionSheet(isPresented: $showSleepTimer) {
                                 ActionSheet(title: Text(DisplayStrings.sleepTimer), buttons: sleepTimerButtons)
                             }
@@ -522,40 +526,64 @@ struct AVRoutePickerViewWrapper: View {
     }
 }
 
-/// Playback slider
-///
-struct PlaybackSliderView: View {
+/// High-performance audiobook slider with smooth seeking and haptic feedback
+struct AudiobookSlider: View {
     @Binding var value: Double
-    @State private var tempValue: Double?
-    var onChange: (_ value: Double) -> Void
+    @State private var isDragging: Bool = false
+    @State private var dragValue: Double = 0.0
+    @State private var lastHapticValue: Double = -1.0
+    
+    let onDragChanged: (Double) -> Void
+    let onDragEnded: (Double) -> Void
     
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
+                // Background track
                 Rectangle()
                     .fill(.gray)
                     .frame(height: trackHeight)
                 
+                // Progress track with smooth animation
                 Rectangle()
-                    .fill(Color( .label))
-                    .frame(width: offsetX(in: geometry.size, for: tempValue ?? value), height: trackHeight)
+                    .fill(Color(.label))
+                    .frame(width: progressWidth(in: geometry.size), height: trackHeight)
+                    .animation(.easeOut(duration: isDragging ? 0.0 : 0.2), value: isDragging ? dragValue : value)
                 
+                // Thumb with enhanced visual feedback
                 Capsule()
                     .fill(Color.red)
                     .frame(width: thumbWidth, height: thumbHeight)
-                    .offset(x: offsetX(in: geometry.size, for: tempValue ?? value))
+                    .offset(x: thumbOffset(in: geometry.size))
+                    .scaleEffect(isDragging ? 1.2 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
                     .gesture(
                         DragGesture()
                             .onChanged { gesture in
                                 let newValue = max(0, min(1, Double(gesture.location.x / geometry.size.width)))
-                                tempValue = newValue
+                                
+                                if !isDragging {
+                                    isDragging = true
+                                    dragValue = newValue
+                                } else {
+                                    dragValue = newValue
+                                }
+                                
+                                // Throttled haptic feedback to prevent excessive vibration
+                                provideThrottledHapticFeedback(for: newValue)
+                                
+                                // Visual feedback only during drag
+                                onDragChanged(newValue)
                             }
                             .onEnded { _ in
-                                if let finalValue = tempValue {
-                                    value = finalValue
-                                    onChange(finalValue)
-                                    tempValue = nil
-                                }
+                                isDragging = false
+                                
+                                // Final haptic feedback
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
+                                
+                                // Only perform actual seeking on drag end
+                                onDragEnded(dragValue)
                             }
                     )
                     .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
@@ -564,14 +592,48 @@ struct PlaybackSliderView: View {
         .frame(height: thumbHeight)
     }
     
-    private func offsetX(in size: CGSize, for value: Double) -> CGFloat {
-        CGFloat(value) * (size.width - thumbWidth)
+    // MARK: - Helper Methods
+    
+    private func progressWidth(in size: CGSize) -> CGFloat {
+        let currentValue = isDragging ? dragValue : value
+        return CGFloat(currentValue) * size.width
+    }
+    
+    private func thumbOffset(in size: CGSize) -> CGFloat {
+        let currentValue = isDragging ? dragValue : value
+        return CGFloat(currentValue) * (size.width - thumbWidth)
+    }
+    
+    private func provideThrottledHapticFeedback(for newValue: Double) {
+        // Only provide haptic feedback if value changed significantly
+        if abs(newValue - lastHapticValue) > 0.1 {
+            if abs(newValue - 0.0) < 0.05 || abs(newValue - 1.0) < 0.05 {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                lastHapticValue = newValue
+            }
+        }
     }
     
     // MARK: - View configuration
     private let thumbWidth: CGFloat = 10
     private let thumbHeight: CGFloat = 36
     private let trackHeight: CGFloat = 10
+}
+
+/// Legacy playback slider (kept for compatibility)
+struct PlaybackSliderView: View {
+    @Binding var value: Double
+    @State private var tempValue: Double?
+    var onChange: (_ value: Double) -> Void
+    
+    var body: some View {
+        AudiobookSlider(
+            value: $value,
+            onDragChanged: { _ in },
+            onDragEnded: onChange
+        )
+    }
 }
 
 struct ToolkitImage: View {

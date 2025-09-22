@@ -68,6 +68,8 @@
 		E5338AD12BEAB816002387E1 /* littleWomenDevotional_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */; };
 		E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
 		E53A1B792C3E443200F490CD /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
+		E5439CB52E7FB4DC00B2FB56 /* UnifiedPositionSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5439CB42E7FB4DC00B2FB56 /* UnifiedPositionSystem.swift */; };
+		E5439CB72E7FB51900B2FB56 /* UnifiedPositionSystemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5439CB62E7FB51900B2FB56 /* UnifiedPositionSystemTests.swift */; };
 		E549653327FBEAC400913BD6 /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E549653527FBEB5100913BD6 /* best_new_horror_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */; };
 		E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E55470132B7C1814003447B8 /* quicksilver_manifest.json */; };
@@ -216,6 +218,8 @@
 		E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManifestJSON.swift; sourceTree = "<group>"; };
 		E530532F29B69B91005E831F /* snowcrash_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = snowcrash_manifest.json; sourceTree = "<group>"; };
 		E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = littleWomenDevotional_manifest.json; sourceTree = "<group>"; };
+		E5439CB42E7FB4DC00B2FB56 /* UnifiedPositionSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPositionSystem.swift; sourceTree = "<group>"; };
+		E5439CB62E7FB51900B2FB56 /* UnifiedPositionSystemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPositionSystemTests.swift; sourceTree = "<group>"; };
 		E549653227FBEAC400913BD6 /* flatland_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = flatland_manifest.json; sourceTree = "<group>"; };
 		E549653427FBEB5100913BD6 /* best_new_horror_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = best_new_horror_manifest.json; sourceTree = "<group>"; };
 		E55470132B7C1814003447B8 /* quicksilver_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = quicksilver_manifest.json; sourceTree = "<group>"; };
@@ -359,6 +363,7 @@
 				8CD8A20E243E7A0D009DA4CC /* Data+BigEndianTest.swift */,
 				7B78545C204DEE9900F6589B /* DownloadTaskMock.swift */,
 				8C3CDB032422AB060020FC0B /* JSONUtilsTest.swift */,
+				E5439CB62E7FB51900B2FB56 /* UnifiedPositionSystemTests.swift */,
 				7BBF4DFF2050856400700731 /* PlayerMock.swift */,
 				7BBF4DFD2050850A00700731 /* SleepTimerTests.swift */,
 				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
@@ -386,6 +391,7 @@
 		7B7B3709202274C400030A1E /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				E5439CB42E7FB4DC00B2FB56 /* UnifiedPositionSystem.swift */,
 				E5F9AD362E4290370092AC59 /* RangeResource.swift */,
 				E57282522E4A8FC500CE3DB8 /* LCPStreamingPlayer.swift */,
 				E57282532E4A8FC500CE3DB8 /* StreamingResourceProvider.swift */,
@@ -833,6 +839,7 @@
 				8C218AE8242C4C8500C53F0A /* AVPlayer+Description.swift in Sources */,
 				E55E2FA429E73ACC0093F916 /* Date+Extensions.swift in Sources */,
 				E588DB3A2C477BE700144A73 /* LoadingView.swift in Sources */,
+				E5439CB52E7FB4DC00B2FB56 /* UnifiedPositionSystem.swift in Sources */,
 				E565D0082BC5DC5800DD20AA /* AudiobookTableOfContents.swift in Sources */,
 				8CF57BDC2432788C0053C31E /* Data+BigEndian.swift in Sources */,
 				7BD8E4FA206EB49D008ED3F1 /* VoiceOverTimestamp.swift in Sources */,
@@ -851,6 +858,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5439CB72E7FB51900B2FB56 /* UnifiedPositionSystemTests.swift in Sources */,
 				7BBF4E002050856400700731 /* PlayerMock.swift in Sources */,
 				7BBF4DFE2050850A00700731 /* SleepTimerTests.swift in Sources */,
 				7B78545B204DEE8500F6589B /* AudiobookNetworkServiceTest.swift in Sources */,

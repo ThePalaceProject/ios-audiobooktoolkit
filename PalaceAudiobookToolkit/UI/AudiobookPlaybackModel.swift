@@ -250,12 +250,64 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     func move(to value: Double) {
+        // Optimized seeking with debouncing for smooth performance
         isWaitingForPlayer = true
-        defer { isWaitingForPlayer = false }
         
-        self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
-            self?.currentLocation = adjustedLocation
+        // Use modern seeking with optimized performance
+        Task { @MainActor in
+            do {
+                if let modernManager = audiobookManager as? DefaultAudiobookManager {
+                    modernManager.seekWithSlider(value: value) { [weak self] newPosition in
+                        DispatchQueue.main.async {
+                            guard let self = self else { return }
+                            self.currentLocation = newPosition
+                            
+                            // Throttle location saves to reduce network requests
+                            self.debouncedSaveLocation()
+                            
+                            self.isWaitingForPlayer = false
+                            ATLog(.info, "Seeking completed successfully")
+                        }
+                    }
+                } else {
+                    // Legacy fallback
+                    await self.legacyMove(to: value)
+                    self.isWaitingForPlayer = false
+                }
+            } catch {
+                ATLog(.error, "Seeking failed: \(error.localizedDescription)")
+                await self.legacyMove(to: value)
+                self.isWaitingForPlayer = false
+            }
+        }
+    }
+    
+    // MARK: - Performance Optimizations
+    
+    private func debouncedSaveLocation() {
+        // Cancel previous save timer
+        saveLocationWorkItem?.cancel()
+        
+        // Create new debounced save
+        let workItem = DispatchWorkItem { [weak self] in
             self?.saveLocation()
+        }
+        saveLocationWorkItem = workItem
+        
+        // Execute after delay to batch rapid seeks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+    
+    private var saveLocationWorkItem: DispatchWorkItem?
+    
+    @MainActor
+    private func legacyMove(to value: Double) async {
+        await withCheckedContinuation { continuation in
+            self.audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
+                self?.currentLocation = adjustedLocation
+                self?.saveLocation()
+                continuation.resume()
+            }
         }
     }
     

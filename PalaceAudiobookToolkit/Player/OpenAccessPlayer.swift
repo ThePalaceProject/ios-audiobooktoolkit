@@ -32,7 +32,13 @@ class OpenAccessPlayer: NSObject, Player {
     var queuedTrackPosition: TrackPosition?
 
     var currentOffset: Double {
-        currentTrackPosition?.timestamp ?? 0.0
+        guard let currentTrackPosition, let currentChapter else {
+            return 0.0
+        }
+        
+        // CONSISTENCY FIX: Calculate chapter-relative offset like LCPPlayer
+        let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
+        return max(0.0, offset) // Ensure non-negative
     }
 
     var isDrmOk: Bool = true {
@@ -529,7 +535,33 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? currentChapter.position.track.duration)
+        let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
+        let chapterStartTimestamp = currentChapter.position.timestamp
+        
+        // CONSISTENCY FIX: Match LCPPlayer's approach for chapter-relative seeking
+        let offsetWithinChapter = value * chapterDuration
+        let absoluteTimestamp = chapterStartTimestamp + offsetWithinChapter
+        
+        // BOUNDARY VALIDATION: Ensure we don't seek beyond chapter boundaries
+        let maxTimestamp = chapterStartTimestamp + chapterDuration
+        let trackDuration = currentChapter.position.track.duration
+        let clampedTimestamp = min(absoluteTimestamp, min(maxTimestamp, trackDuration))
+        
+        let newPosition = TrackPosition(
+            track: currentChapter.position.track,
+            timestamp: clampedTimestamp,
+            tracks: currentTrackPosition.tracks
+        )
+        
+        // Use enhanced logging system
+        logSeek(
+            action: "SLIDER_DRAG",
+            from: currentTrackPosition,
+            to: newPosition,
+            sliderValue: value,
+            success: true
+        )
+        
         seekTo(position: newPosition, completion: completion)
     }
     
