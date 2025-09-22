@@ -9,7 +9,7 @@
 import SwiftUI
 import MediaPlayer
 import AVKit
-// import PalaceUIKit // Not available in audiobook toolkit
+import PalaceUIKit
 
 public struct AudiobookPlayerView: View {
     
@@ -42,10 +42,10 @@ public struct AudiobookPlayerView: View {
                 VStack(spacing: 10) {
                     VStack {
                         Text(playbackModel.audiobookManager.metadata.title ?? "")
-                            .font(.headline)
+                            .palaceFont(.headline)
                             .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
                         Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
-                            .font(.body)
+                            .palaceFont(.body)
                             .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
                     }
                     .multilineTextAlignment(.center)
@@ -53,7 +53,7 @@ public struct AudiobookPlayerView: View {
                     VStack(spacing: 5) {
                         if !isInBackground {
                             Text(timeLeftInBookText)
-                                .font(.caption)
+                                .palaceFont(.caption)
                                 .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
                             
                             PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
@@ -65,18 +65,18 @@ public struct AudiobookPlayerView: View {
                         
                         HStack(alignment: .firstTextBaseline) {
                             Text("\(playheadOffsetText)")
-                                .font(.caption)
+                                .palaceFont(.caption)
                                 .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
                             Spacer()
                             Text(chapterTitle)
-                                .font(.headline)
+                                .palaceFont(.headline)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .accessibilityLabel(Text(chapterTitle))
 
                             Spacer()
                             Text("\(timeLeftText)")
-                                .font(.caption)
+                                .palaceFont(.caption)
                                 .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
                         }
                         .padding(.horizontal)
@@ -205,10 +205,10 @@ public struct AudiobookPlayerView: View {
                 .overlay(
                     VStack(spacing: -4) {
                         Text("\(Int(playbackModel.skipTimeInterval))")
-                            .font(.body)
+                            .palaceFont(.body)
                             .offset(x: -1)
                         Text("sec")
-                            .font(.caption)
+                            .palaceFont(.caption)
                     }
                         .offset(y: 4)
                 )
@@ -276,7 +276,7 @@ public struct AudiobookPlayerView: View {
                 Image(systemName: "xmark.circle")
             }
         }
-        .font(.subheadline)
+        .palaceFont(.subheadline)
         .foregroundColor(.white)
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -345,7 +345,7 @@ public struct AudiobookPlayerView: View {
                             showSleepTimer.toggle()
                         } label: {
                             Text(sleepTimerText)
-                                .font(.body)
+                                .palaceFont(.body)
                         }
                         .accessibility(label: Text(sleepTimerAccessibilityLabel))
                             .actionSheet(isPresented: $showSleepTimer) {

@@ -7,7 +7,7 @@
 //
 
 import SwiftUI
-// import PalaceUIKit // Not available in audiobook toolkit
+import PalaceUIKit
 
 struct AudiobookNavigationView: View {
     typealias DisplayStrings = Strings.AudiobookTableOfContentsTableViewController
@@ -73,7 +73,7 @@ struct AudiobookNavigationView: View {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left")
                 Text("Back")
-                    .font(.body)
+                    .palaceFont(.body)
             }
         }
         .foregroundColor(Color(.label))
@@ -114,7 +114,7 @@ struct AudiobookNavigationView: View {
                 ScrollView {
                     VStack {
                         Text(NSLocalizedString("There are no bookmarks for this book.", comment: ""))
-                            .font(.body)
+                            .palaceFont(.body)
                             .padding(.top, 200)
                             .opacity(isLoading ? 0.0 : 1.0)
                     }
@@ -173,17 +173,17 @@ struct AudiobookNavigationView: View {
                 VStack(alignment: .leading) {
                     Text(title(for: position))
                         .lineLimit(1)
-                        .font(.body)
+                        .palaceFont(.body)
                     Text(DateFormatter.convertISO8601String(position.lastSavedTimeStamp) ?? "")
                         .lineLimit(1)
-                        .font(.subheadline)
+                        .palaceFont(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
                 Text(
                     DateFormatter.bookmarkTimeFormatter.string(from: Date(timeIntervalSinceReferenceDate: position.timestamp))
                 )
-                .font(.body)
+                .palaceFont(.body)
                 .foregroundColor(.secondary)
             }
             .contentShape(Rectangle())
