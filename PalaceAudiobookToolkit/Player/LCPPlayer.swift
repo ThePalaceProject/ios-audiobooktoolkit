@@ -416,44 +416,30 @@ class LCPPlayer: OpenAccessPlayer {
     
     /// Actively monitor queue integrity and restore missing items
     private func startQueueMonitoring() {
-        // Invalidate any existing timer
         queueMonitoringTimer?.invalidate()
         
-        queueMonitoringTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        let monitoringInterval: TimeInterval = self.isPlaying ? 5.0 : 15.0
+        
+        queueMonitoringTimer = Timer.scheduledTimer(withTimeInterval: monitoringInterval, repeats: true) { [weak self] timer in
             guard let self = self, self.queueBuiltSuccessfully else {
                 timer.invalidate()
                 return
             }
             
             let currentCount = self.avQueuePlayer.items().count
-            ATLog(.debug, "🎵 [LCPPlayer] Queue monitoring: \(currentCount) items")
-            
-            // Detect silent item removal (only restore if significant loss)
             let expectedCount = self.tableOfContents.allTracks.count
             let significantLoss = expectedCount - currentCount >= 5 // At least 5 items lost
             let timeSinceLastRestore = Date().timeIntervalSince(self.lastQueueRestoreTime)
-            let cooldownPeriod: TimeInterval = 10.0 // Wait 10 seconds between restorations
+            let cooldownPeriod: TimeInterval = 10.0
             
             if currentCount < expectedCount && significantLoss && !self.isNavigating && timeSinceLastRestore > cooldownPeriod {
                 let firstTrack = self.avQueuePlayer.items().first?.trackIdentifier ?? "nil"
                 let currentTrack = self.avQueuePlayer.currentItem?.trackIdentifier ?? "nil"
                 
-                ATLog(.error, "🎵 [LCPPlayer] 🚨 SILENT ITEM REMOVAL DETECTED! Queue: \(currentCount)/\(expectedCount) items")
-                ATLog(.error, "🎵 [LCPPlayer] First: \(firstTrack), Current: \(currentTrack)")
-                ATLog(.error, "🎵 [LCPPlayer] actionAtItemEnd: \(self.avQueuePlayer.actionAtItemEnd.rawValue)")
-                
-                // Log which tracks are missing (first few for diagnostics)
                 let presentTrackIds = self.avQueuePlayer.items().compactMap { $0.trackIdentifier }
                 let allTrackIds = self.tableOfContents.allTracks.map { $0.key }
                 let missingTrackIds = allTrackIds.filter { !presentTrackIds.contains($0) }
                 
-                ATLog(.error, "🎵 [LCPPlayer] Missing \(missingTrackIds.count) tracks:")
-                for (index, trackId) in missingTrackIds.prefix(5).enumerated() {
-                    ATLog(.error, "🎵 [LCPPlayer] Missing[\(index)]: \(trackId.prefix(8))...")
-                }
-                
-                // AUTO-RESTORE: Proactively rebuild to full count
-                ATLog(.debug, "🎵 [LCPPlayer] 🔧 AUTO-RESTORING queue to full \(expectedCount) items...")
                 self.lastQueueRestoreTime = Date()
                 self.proactivelyRestoreQueue()
             }
@@ -795,7 +781,6 @@ class LCPPlayer: OpenAccessPlayer {
                 avQueuePlayer.seek(to: currentTime)
             }
             
-            ATLog(.debug, "🎵 [LCPPlayer] ✅ Current item updated seamlessly")
         }
     }
     

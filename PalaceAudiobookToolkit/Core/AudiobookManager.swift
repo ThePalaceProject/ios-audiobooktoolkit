@@ -261,8 +261,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         setupNowPlayingInfoTimer()
         subscribeToMediaControlCommands()
         calculateOverallDownloadProgress()
+        setupAppStateObserver()
         
-        ATLog(.info, "AudiobookManager initialized with enhanced position system")
+        ATLog(.info, "AudiobookManager initialized with enhanced position system and energy optimizations")
     }
 
     public static func setLogHandler(_ handler: @escaping LogHandler) {
@@ -270,6 +271,23 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
 
     // MARK: - Setup Bindings
+
+    private func setupAppStateObserver() {
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                ATLog(.info, "⚡ App became active - restarting optimized timer")
+                self?.setupNowPlayingInfoTimer()
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                ATLog(.info, "⚡ App entered background - pausing timer for energy savings")
+                self?.timer?.cancel()
+                self?.timer = nil
+            }
+            .store(in: &cancellables)
+    }
 
     private func setupBindings() {
         networkService.downloadStatePublisher
@@ -305,13 +323,35 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         timer?.cancel()
         timer = nil
 
-        let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
+        // PERFORMANCE OPTIMIZATION: Reduce timer frequency and pause when backgrounded
+        let appState = UIApplication.shared.applicationState
+        let interval: TimeInterval
+        
+        switch appState {
+        case .active:
+            interval = 2.0  // Reduced from 1 second to 2 seconds (50% reduction)
+        case .inactive:
+            interval = 10.0 // Reduce frequency when inactive
+        case .background:
+            ATLog(.info, "⚡ Timer paused for background state - energy optimization")
+            return
+        @unknown default:
+            interval = 5.0
+        }
+
         playbackTrackerDelegate?.playbackStarted()
 
         timer = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
-            .map { [weak self] _ in self?.audiobook.player.currentTrackPosition }
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .compactMap { [weak self] _ -> TrackPosition? in
+
+                guard let self = self, self.audiobook.player.isPlaying else { return nil }
+                return self.audiobook.player.currentTrackPosition
+            }
+            .removeDuplicates { oldPosition, newPosition in
+                return abs(oldPosition.timestamp - newPosition.timestamp) < 0.5
+            }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] position in
                 guard let self = self else { return }

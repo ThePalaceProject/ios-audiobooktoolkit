@@ -201,7 +201,14 @@ public class AudiobookPlaybackModel: ObservableObject {
                 if case .positionUpdated(let pos) = state { return pos }
                 return nil
             }
-            .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
+            .throttle(for: .seconds(10), scheduler: RunLoop.main, latest: true) // PERFORMANCE: Increased from 5s to 10s to reduce save frequency
+            .filter { [weak self] position in
+                guard let self = self else { return false }
+                if let currentLocation = self.currentLocation {
+                    return abs(currentLocation.timestamp - position.timestamp) > 2.0 // Only save if >2s difference
+                }
+                return true
+            }
             .sink { [weak self] _ in
                 self?.saveLocation()
             }

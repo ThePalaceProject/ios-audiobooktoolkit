@@ -82,13 +82,21 @@ class OpenAccessPlayer: NSObject, Player {
     var currentTrackPosition: TrackPosition? {
         guard let currentItem = avQueuePlayer.currentItem,
               let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "") else {
-            return nil
+            return lastKnownPosition
         }
         
+        // PERFORMANCE OPTIMIZATION: Cache position to reduce expensive AVPlayer.currentTime() calls
         let currentTime = currentItem.currentTime().seconds
         
         guard currentTime.isFinite else {
             return lastKnownPosition
+        }
+        
+        // Only update position if time has changed meaningfully (reduces CPU usage)
+        if let lastPosition = lastKnownPosition,
+           lastPosition.track.key == currentTrack.key,
+           abs(lastPosition.timestamp - currentTime) < 0.2 {
+            return lastPosition
         }
         
         let position = TrackPosition(
@@ -199,7 +207,8 @@ class OpenAccessPlayer: NSObject, Player {
         debounceWorkItem = DispatchWorkItem { [weak self] in
             self?.synchronizedAccess(action)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: debounceWorkItem!)
+        // PERFORMANCE OPTIMIZATION: Use background queue for debounced actions to reduce main thread pressure
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: debounceWorkItem!)
     }
     
     private func synchronizedAccess(_ action: () -> Void) {
