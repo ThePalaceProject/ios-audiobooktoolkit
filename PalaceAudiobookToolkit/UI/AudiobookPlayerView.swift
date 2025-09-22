@@ -115,7 +115,7 @@ public struct AudiobookPlayerView: View {
         .navigationBarTitle(Text(""), displayMode: .inline)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .palaceFont(.body)
+        .font(.body)
         .onDisappear {
             if !showTOC {
                 playbackModel.persistLocation()
@@ -206,7 +206,7 @@ public struct AudiobookPlayerView: View {
                 .overlay(
                     VStack(spacing: -4) {
                         Text("\(Int(playbackModel.skipTimeInterval))")
-                            .palaceFont(size: 20)
+                            .palaceFont(.body)
                             .offset(x: -1)
                         Text("sec")
                             .palaceFont(.caption)
@@ -256,7 +256,7 @@ public struct AudiobookPlayerView: View {
                 }
                 Text(Strings.ScrubberView.downloading)
             }
-            .palaceFont(.caption)
+            .font(.caption)
             .padding(8)
             .padding(.horizontal)
         }
@@ -326,7 +326,7 @@ public struct AudiobookPlayerView: View {
                             showPlaybackSpeed.toggle()
                         } label: {
                             Text(playbackRateText)
-                                .palaceFont(.body)
+                                .font(.body)
                         }
                             .actionSheet(isPresented: $showPlaybackSpeed) {
                                 ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
@@ -348,7 +348,7 @@ public struct AudiobookPlayerView: View {
                             Text(sleepTimerText)
                                 .palaceFont(.body)
                         }
-                            .accessibility(label: Text(sleepTimerAccessibilityLabel))
+                        .accessibility(label: Text(sleepTimerAccessibilityLabel))
                             .actionSheet(isPresented: $showSleepTimer) {
                                 ActionSheet(title: Text(DisplayStrings.sleepTimer), buttons: sleepTimerButtons)
                             }
@@ -523,11 +523,108 @@ struct AVRoutePickerViewWrapper: View {
     }
 }
 
-/// Playback slider
-///
+/// High-performance audiobook slider with smooth seeking and haptic feedback
+struct AudiobookSlider: View {
+    @Binding var value: Double
+    @State private var isDragging: Bool = false
+    @State private var dragValue: Double = 0.0
+    @State private var lastHapticValue: Double = -1.0
+    @State private var committedValue: Double = 0.0
+    
+    let onDragChanged: (Double) -> Void
+    let onDragEnded: (Double) -> Void
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Background track
+                Rectangle()
+                    .fill(.gray)
+                    .frame(height: trackHeight)
+                
+                // Progress track with minimal animation
+                Rectangle()
+                    .fill(Color(.label))
+                    .frame(width: progressWidth(in: geometry.size), height: trackHeight)
+                    .animation(.easeOut(duration: isDragging ? 0.0 : 0.1), value: isDragging ? dragValue : value)
+                
+                // Thumb with subtle visual feedback
+                Capsule()
+                    .fill(Color.red)
+                    .frame(width: thumbWidth, height: thumbHeight)
+                    .offset(x: thumbOffset(in: geometry.size))
+                    .scaleEffect(isDragging ? 1.05 : 1.0)
+                    .animation(.easeOut(duration: 0.1), value: isDragging)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { gesture in
+                                let newValue = max(0, min(1, Double(gesture.location.x / geometry.size.width)))
+                                
+                                if !isDragging {
+                                    isDragging = true
+                                    dragValue = newValue
+                                } else {
+                                    dragValue = newValue
+                                }
+                                
+                                // Minimal haptic feedback for professional feel
+                                provideSubtleHapticFeedback(for: newValue)
+                                
+                                // Visual feedback only during drag
+                                onDragChanged(newValue)
+                            }
+                            .onEnded { _ in
+                                isDragging = false
+                                committedValue = dragValue
+                                
+                                // Subtle completion feedback
+                                let impact = UIImpactFeedbackGenerator(style: .light)
+                                impact.impactOccurred()
+                                
+                                // Perform seeking on drag end
+                                onDragEnded(dragValue)
+                            }
+                    )
+                    .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
+            }
+        }
+        .frame(height: thumbHeight)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func progressWidth(in size: CGSize) -> CGFloat {
+        let currentValue = isDragging ? dragValue : (committedValue > 0 ? max(value, committedValue) : value)
+        return CGFloat(currentValue) * size.width
+    }
+    
+    private func thumbOffset(in size: CGSize) -> CGFloat {
+        let currentValue = isDragging ? dragValue : (committedValue > 0 ? max(value, committedValue) : value)
+        return CGFloat(currentValue) * (size.width - thumbWidth)
+    }
+    
+    private func provideSubtleHapticFeedback(for newValue: Double) {
+        // Very subtle haptic feedback only at start/end boundaries
+        if abs(newValue - lastHapticValue) > 0.2 {
+            if abs(newValue - 0.0) < 0.02 || abs(newValue - 1.0) < 0.02 {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                lastHapticValue = newValue
+            }
+        }
+    }
+    
+    // MARK: - View configuration
+    private let thumbWidth: CGFloat = 10
+    private let thumbHeight: CGFloat = 36
+    private let trackHeight: CGFloat = 10
+}
+
+/// Clean playback slider with anti-flicker on release
 struct PlaybackSliderView: View {
     @Binding var value: Double
     @State private var tempValue: Double?
+    @State private var isCommitting: Bool = false
     var onChange: (_ value: Double) -> Void
     
     var body: some View {
@@ -538,13 +635,13 @@ struct PlaybackSliderView: View {
                     .frame(height: trackHeight)
                 
                 Rectangle()
-                    .fill(Color( .label))
-                    .frame(width: offsetX(in: geometry.size, for: tempValue ?? value), height: trackHeight)
+                    .fill(Color(.label))
+                    .frame(width: offsetX(in: geometry.size, for: displayValue), height: trackHeight)
                 
                 Capsule()
                     .fill(Color.red)
                     .frame(width: thumbWidth, height: thumbHeight)
-                    .offset(x: offsetX(in: geometry.size, for: tempValue ?? value))
+                    .offset(x: offsetX(in: geometry.size, for: displayValue))
                     .gesture(
                         DragGesture()
                             .onChanged { gesture in
@@ -553,9 +650,16 @@ struct PlaybackSliderView: View {
                             }
                             .onEnded { _ in
                                 if let finalValue = tempValue {
+                                    // Prevent flicker by keeping temp value until seek completes
+                                    isCommitting = true
                                     value = finalValue
                                     onChange(finalValue)
-                                    tempValue = nil
+                                    
+                                    // Clear temp value after brief delay to prevent flicker
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        tempValue = nil
+                                        isCommitting = false
+                                    }
                                 }
                             }
                     )
@@ -563,6 +667,14 @@ struct PlaybackSliderView: View {
             }
         }
         .frame(height: thumbHeight)
+    }
+    
+    // Use temp value during drag and briefly after release to prevent flicker
+    private var displayValue: Double {
+        if let tempValue = tempValue {
+            return tempValue
+        }
+        return value
     }
     
     private func offsetX(in size: CGSize, for value: Double) -> CGFloat {

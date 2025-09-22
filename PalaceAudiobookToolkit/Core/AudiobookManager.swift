@@ -83,6 +83,68 @@ public enum BookmarkError: Error {
 
 var sharedLogHandler: LogHandler?
 
+// MARK: - Position Calculator
+
+/// Handles precise position calculations for all audiobook types
+/// Supports multi-track chapters and complex timestamp structures
+public class AudiobookPositionCalculator {
+    
+    public init() {}
+    
+    public func currentChapterOffset(from trackPosition: TrackPosition, chapter: Chapter) -> TimeInterval {
+        do {
+            let offset = try trackPosition - chapter.position
+            return max(0.0, offset) // Ensure non-negative
+        } catch {
+            ATLog(.error, "Position calculation failed: \(error.localizedDescription)")
+            return 0.0
+        }
+    }
+    
+    public func chapterProgress(from trackPosition: TrackPosition, chapter: Chapter) -> Double {
+        let chapterDuration = chapter.duration ?? chapter.position.track.duration
+        guard chapterDuration > 0 else { return 0.0 }
+        
+        let chapterOffset = currentChapterOffset(from: trackPosition, chapter: chapter)
+        return min(1.0, max(0.0, chapterOffset / chapterDuration))
+    }
+    
+    public func validatePosition(_ position: TrackPosition, within chapter: Chapter) -> TrackPosition {
+        let chapterStart = chapter.position.timestamp
+        let chapterDuration = chapter.duration ?? chapter.position.track.duration
+        let chapterEnd = chapterStart + chapterDuration
+        let trackDuration = chapter.position.track.duration
+        
+        // Clamp within chapter and track boundaries
+        let clampedTimestamp = min(position.timestamp, min(chapterEnd, trackDuration))
+        let validTimestamp = max(chapterStart, clampedTimestamp)
+        
+        return TrackPosition(
+            track: chapter.position.track,
+            timestamp: validTimestamp,
+            tracks: position.tracks
+        )
+    }
+    
+    public func calculateSeekPosition(sliderValue: Double, currentChapter: Chapter) -> TrackPosition {
+        let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
+        let chapterStartTimestamp = currentChapter.position.timestamp
+        
+        // Calculate absolute position within track
+        let offsetWithinChapter = sliderValue * chapterDuration
+        let absoluteTimestamp = chapterStartTimestamp + offsetWithinChapter
+        
+        // Create position and validate boundaries
+        let proposedPosition = TrackPosition(
+            track: currentChapter.position.track,
+            timestamp: absoluteTimestamp,
+            tracks: currentChapter.position.tracks
+        )
+        
+        return validatePosition(proposedPosition, within: currentChapter)
+    }
+}
+
 public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     private var waitingForPlayer: Bool = false
     public var bookmarkDelegate: AudiobookBookmarkDelegate?
@@ -100,6 +162,61 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public var playbackCompletionHandler: (() -> ())?
 
     public static let skipTimeInterval: TimeInterval = 30
+    
+    // MARK: - Enhanced Position System
+    public let positionCalculator = AudiobookPositionCalculator()
+    
+    // MARK: - Enhanced Seeking Interface
+    
+    /// Enhanced seeking with precise multi-track chapter support
+    public func seekWithSlider(value: Double, completion: @escaping (TrackPosition?) -> Void) {
+        guard let currentChapter = currentChapter else {
+            completion(nil)
+            return
+        }
+        
+        // Calculate seek position with multi-track chapter support
+        let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
+        let chapterStartTimestamp = currentChapter.position.timestamp
+        let offsetWithinChapter = value * chapterDuration
+        
+        // Use TrackPosition arithmetic to handle multi-track chapters correctly
+        let basePosition = currentChapter.position
+        let targetPosition = basePosition + offsetWithinChapter
+        
+        // Log seeking operation for debugging if needed
+        #if DEBUG
+        AudiobookLog.seeking(
+            "SLIDER_SEEK",
+            from: audiobook.player.currentTrackPosition,
+            to: targetPosition,
+            sliderValue: value,
+            chapterTitle: currentChapter.title,
+            success: true
+        )
+        #endif
+        
+        if let openAccessPlayer = audiobook.player as? OpenAccessPlayer {
+            openAccessPlayer.seekTo(position: targetPosition) { adjustedPosition in
+                completion(adjustedPosition)
+            }
+        } else {
+            audiobook.player.play(at: targetPosition) { error in
+                completion(error == nil ? targetPosition : nil)
+            }
+        }
+    }
+    
+    /// Calculate chapter-relative progress for a given position
+    public func calculateChapterProgress(for position: TrackPosition) -> Double {
+        do {
+            let chapter = try audiobook.tableOfContents.chapter(forPosition: position)
+            return positionCalculator.chapterProgress(from: position, chapter: chapter)
+        } catch {
+            return 0.0
+        }
+    }
+    
 
     public var tableOfContents: AudiobookTableOfContents {
         audiobook.tableOfContents
@@ -139,6 +256,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     ) {
         self.metadata = metadata
         self.audiobook = audiobook
+        // Modern position calculations integrated
         self.networkService = networkService
         self.playbackTrackerDelegate = playbackTrackerDelegate
         self.mediaControlPublisher = MediaControlPublisher()
@@ -149,14 +267,33 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         setupNowPlayingInfoTimer()
         subscribeToMediaControlCommands()
         calculateOverallDownloadProgress()
+        setupAppStateObserver()
+        
+        ATLog(.info, "AudiobookManager initialized with enhanced position system and energy optimizations")
     }
-
 
     public static func setLogHandler(_ handler: @escaping LogHandler) {
         sharedLogHandler = handler
     }
 
     // MARK: - Setup Bindings
+
+    private func setupAppStateObserver() {
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                ATLog(.info, "⚡ App became active - restarting optimized timer")
+                self?.setupNowPlayingInfoTimer()
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                ATLog(.info, "⚡ App entered background - pausing timer for energy savings")
+                self?.timer?.cancel()
+                self?.timer = nil
+            }
+            .store(in: &cancellables)
+    }
 
     private func setupBindings() {
         networkService.downloadStatePublisher
@@ -192,13 +329,35 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         timer?.cancel()
         timer = nil
 
-        let interval: TimeInterval = UIApplication.shared.applicationState == .active ? 1 : 100
+        // PERFORMANCE OPTIMIZATION: Reduce timer frequency and pause when backgrounded
+        let appState = UIApplication.shared.applicationState
+        let interval: TimeInterval
+        
+        switch appState {
+        case .active:
+            interval = 2.0  // Reduced from 1 second to 2 seconds (50% reduction)
+        case .inactive:
+            interval = 10.0 // Reduce frequency when inactive
+        case .background:
+            ATLog(.info, "⚡ Timer paused for background state - energy optimization")
+            return
+        @unknown default:
+            interval = 5.0
+        }
+
         playbackTrackerDelegate?.playbackStarted()
 
         timer = Timer.publish(every: interval, on: .main, in: .common)
             .autoconnect()
-            .receive(on: DispatchQueue.global(qos: .userInitiated))
-            .map { [weak self] _ in self?.audiobook.player.currentTrackPosition }
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .compactMap { [weak self] _ -> TrackPosition? in
+
+                guard let self = self, self.audiobook.player.isPlaying else { return nil }
+                return self.audiobook.player.currentTrackPosition
+            }
+            .removeDuplicates { oldPosition, newPosition in
+                return abs(oldPosition.timestamp - newPosition.timestamp) < 0.5
+            }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] position in
                 guard let self = self else { return }

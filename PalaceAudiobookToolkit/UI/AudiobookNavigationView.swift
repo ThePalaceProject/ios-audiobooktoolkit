@@ -176,7 +176,7 @@ struct AudiobookNavigationView: View {
                         .palaceFont(.body)
                     Text(DateFormatter.convertISO8601String(position.lastSavedTimeStamp) ?? "")
                         .lineLimit(1)
-                        .palaceFont(.subheadline, weight: .regular)
+                        .palaceFont(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 Spacer()

@@ -192,25 +192,39 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     func chapter(forPosition position: TrackPosition) throws -> Chapter {
-        var lowerBound = 0
-        var upperBound = toc.count - 1
-
-        while lowerBound <= upperBound {
-            let middleIndex = (lowerBound + upperBound) / 2
-            let chapter = toc[middleIndex]
-
+        for (index, chapter) in toc.enumerated() {
+            let chapterStart = chapter.position
             let chapterDuration = chapter.duration ?? chapter.position.track.duration
-            let chapterEndPosition = chapter.endPosition ?? chapter.position + chapterDuration
-
-            if position >= chapter.position && position < chapterEndPosition {
-                return chapter
-            } else if position < chapter.position {
-                upperBound = middleIndex - 1
+            
+            // Calculate chapter end position for multi-track chapters
+            let chapterEndPosition: TrackPosition
+            if let endPos = chapter.endPosition {
+                chapterEndPosition = endPos
             } else {
-                lowerBound = middleIndex + 1
+                // Calculate end based on next chapter start for accurate boundaries
+                if index + 1 < toc.count {
+                    let nextChapter = toc[index + 1]
+                    chapterEndPosition = nextChapter.position
+                } else {
+                    // Last chapter - use track arithmetic
+                    chapterEndPosition = chapter.position + chapterDuration
+                }
+            }
+            
+            if position >= chapterStart && position < chapterEndPosition {
+                return chapter
             }
         }
-
+        
+        let closestChapter = toc.min { chapter1, chapter2 in
+            let dist1 = abs((try? position - chapter1.position) ?? Double.greatestFiniteMagnitude)
+            let dist2 = abs((try? position - chapter2.position) ?? Double.greatestFiniteMagnitude)
+            return dist1 < dist2
+        }
+        
+        if let closest = closestChapter {
+            return closest
+        }
         throw ChapterError.noChapterFoundForPosition
     }
     
@@ -291,3 +305,4 @@ public extension AudiobookTableOfContents {
         tracks.tracks
     }
 }
+

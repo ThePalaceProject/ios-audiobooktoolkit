@@ -307,14 +307,14 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // MARK: - Helpers
     private func safeTimestamp(for position: TrackPosition) -> TimeInterval {
         let duration = position.track.duration
-        let epsilon: TimeInterval = 0.5
+        
+        let epsilon: TimeInterval = 0.1
+        
         if position.timestamp >= duration {
             return max(0, duration - epsilon)
         }
-        if duration - position.timestamp < 0.25 {
-            return max(0, duration - epsilon)
-        }
-        return max(0, position.timestamp)
+        
+        return max(0, min(position.timestamp, duration - epsilon))
     }
     
     // Build a single AVPlayerItem by concatenating multiple local parts

@@ -32,7 +32,13 @@ class OpenAccessPlayer: NSObject, Player {
     var queuedTrackPosition: TrackPosition?
 
     var currentOffset: Double {
-        currentTrackPosition?.timestamp ?? 0.0
+        guard let currentTrackPosition, let currentChapter else {
+            return 0.0
+        }
+        
+        // CONSISTENCY FIX: Calculate chapter-relative offset like LCPPlayer
+        let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
+        return max(0.0, offset) // Ensure non-negative
     }
 
     var isDrmOk: Bool = true {
@@ -76,13 +82,20 @@ class OpenAccessPlayer: NSObject, Player {
     var currentTrackPosition: TrackPosition? {
         guard let currentItem = avQueuePlayer.currentItem,
               let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "") else {
-            return nil
+            return lastKnownPosition
         }
         
+        // PERFORMANCE OPTIMIZATION: Cache position to reduce expensive AVPlayer.currentTime() calls
         let currentTime = currentItem.currentTime().seconds
         
         guard currentTime.isFinite else {
             return lastKnownPosition
+        }
+        
+        if let lastPosition = lastKnownPosition,
+           lastPosition.track.key == currentTrack.key,
+           abs(lastPosition.timestamp - currentTime) < 0.5 { // Increased threshold to reduce updates
+            return lastPosition
         }
         
         let position = TrackPosition(
@@ -193,7 +206,8 @@ class OpenAccessPlayer: NSObject, Player {
         debounceWorkItem = DispatchWorkItem { [weak self] in
             self?.synchronizedAccess(action)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: debounceWorkItem!)
+        // PERFORMANCE OPTIMIZATION: Use background queue for debounced actions to reduce main thread pressure
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: debounceWorkItem!)
     }
     
     private func synchronizedAccess(_ action: () -> Void) {
@@ -309,7 +323,8 @@ class OpenAccessPlayer: NSObject, Player {
                 buildPlayerQueue()
                 if let firstTrack = tableOfContents.allTracks.first {
                     let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-                    play(at: firstTrackPosition, completion: nil)
+                    avQueuePlayer.pause()
+                    ATLog(.debug, "OpenAccessPlayer: Queue built, ready for playback at first track")
                     self.isLoaded = true
                 }
             } else {
@@ -338,6 +353,14 @@ class OpenAccessPlayer: NSObject, Player {
         }
         
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        
+        avQueuePlayer.pause()
+        if let firstItem = avQueuePlayer.items().first,
+           let firstTrack = tableOfContents.allTracks.first {
+            lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            ATLog(.debug, "OpenAccessPlayer: Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+        }
+        
         isLoaded = true
     }
     
@@ -529,7 +552,33 @@ class OpenAccessPlayer: NSObject, Player {
             return
         }
         
-        let newPosition = currentChapter.position + value * (currentChapter.duration ?? currentChapter.position.track.duration)
+        let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
+        let chapterStartTimestamp = currentChapter.position.timestamp
+        
+        // CONSISTENCY FIX: Match LCPPlayer's approach for chapter-relative seeking
+        let offsetWithinChapter = value * chapterDuration
+        let absoluteTimestamp = chapterStartTimestamp + offsetWithinChapter
+        
+        // BOUNDARY VALIDATION: Ensure we don't seek beyond chapter boundaries
+        let maxTimestamp = chapterStartTimestamp + chapterDuration
+        let trackDuration = currentChapter.position.track.duration
+        let clampedTimestamp = min(absoluteTimestamp, min(maxTimestamp, trackDuration))
+        
+        let newPosition = TrackPosition(
+            track: currentChapter.position.track,
+            timestamp: clampedTimestamp,
+            tracks: currentTrackPosition.tracks
+        )
+        
+        // Use enhanced logging system
+        logSeek(
+            action: "SLIDER_DRAG",
+            from: currentTrackPosition,
+            to: newPosition,
+            sliderValue: value,
+            success: true
+        )
+        
         seekTo(position: newPosition, completion: completion)
     }
     
@@ -776,10 +825,11 @@ extension OpenAccessPlayer {
     }
     
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        let maxSafeTimestamp = position.track.duration * 0.95
+        let epsilon: TimeInterval = 0.1
+        let maxSafeTimestamp = position.track.duration - epsilon
         let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
         
-        if position.timestamp >= position.track.duration * 0.99 && 
+        if position.timestamp >= (position.track.duration - epsilon) && 
            tableOfContents.tracks.nextTrack(position.track) == nil {
             handlePlaybackEnd(currentTrack: position.track, completion: completion)
             return

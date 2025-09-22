@@ -94,6 +94,8 @@ class LCPPlayer: OpenAccessPlayer {
         }
 
         let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
+        // Enhanced logging for offset calculation debugging
+        AudiobookLog.performance("currentOffset", value: offset, unit: "s")
         return offset
     }
 
@@ -365,14 +367,13 @@ class LCPPlayer: OpenAccessPlayer {
         ATLog(.debug, "🎵 [LCPPlayer] First 5 items: \(finalQueueItems.prefix(5).compactMap { $0.trackIdentifier })")
         ATLog(.debug, "🎵 [LCPPlayer] Target track '\(targetTrack.key)' in queue: \(finalQueueItems.contains { $0.trackIdentifier == targetTrack.key })")
         
-        // Seek to the requested timestamp (avoid exact end which can trigger immediate completion)
         let safeTimestamp: TimeInterval
+        let epsilon: TimeInterval = 0.1
+        
         if timestamp >= targetTrack.duration {
-            safeTimestamp = max(0, targetTrack.duration - 0.5)
-        } else if targetTrack.index == (tableOfContents.allTracks.count - 1) && (targetTrack.duration - timestamp) < 0.25 {
-            safeTimestamp = max(0, targetTrack.duration - 0.5)
+            safeTimestamp = max(0, targetTrack.duration - epsilon)
         } else {
-            safeTimestamp = max(0, timestamp)
+            safeTimestamp = max(0, min(timestamp, targetTrack.duration - epsilon))
         }
         let seekTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: seekTime) { success in
@@ -415,44 +416,30 @@ class LCPPlayer: OpenAccessPlayer {
     
     /// Actively monitor queue integrity and restore missing items
     private func startQueueMonitoring() {
-        // Invalidate any existing timer
         queueMonitoringTimer?.invalidate()
         
-        queueMonitoringTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+        let monitoringInterval: TimeInterval = self.isPlaying ? 5.0 : 15.0
+        
+        queueMonitoringTimer = Timer.scheduledTimer(withTimeInterval: monitoringInterval, repeats: true) { [weak self] timer in
             guard let self = self, self.queueBuiltSuccessfully else {
                 timer.invalidate()
                 return
             }
             
             let currentCount = self.avQueuePlayer.items().count
-            ATLog(.debug, "🎵 [LCPPlayer] Queue monitoring: \(currentCount) items")
-            
-            // Detect silent item removal (only restore if significant loss)
             let expectedCount = self.tableOfContents.allTracks.count
             let significantLoss = expectedCount - currentCount >= 5 // At least 5 items lost
             let timeSinceLastRestore = Date().timeIntervalSince(self.lastQueueRestoreTime)
-            let cooldownPeriod: TimeInterval = 10.0 // Wait 10 seconds between restorations
+            let cooldownPeriod: TimeInterval = 10.0
             
             if currentCount < expectedCount && significantLoss && !self.isNavigating && timeSinceLastRestore > cooldownPeriod {
                 let firstTrack = self.avQueuePlayer.items().first?.trackIdentifier ?? "nil"
                 let currentTrack = self.avQueuePlayer.currentItem?.trackIdentifier ?? "nil"
                 
-                ATLog(.error, "🎵 [LCPPlayer] 🚨 SILENT ITEM REMOVAL DETECTED! Queue: \(currentCount)/\(expectedCount) items")
-                ATLog(.error, "🎵 [LCPPlayer] First: \(firstTrack), Current: \(currentTrack)")
-                ATLog(.error, "🎵 [LCPPlayer] actionAtItemEnd: \(self.avQueuePlayer.actionAtItemEnd.rawValue)")
-                
-                // Log which tracks are missing (first few for diagnostics)
                 let presentTrackIds = self.avQueuePlayer.items().compactMap { $0.trackIdentifier }
                 let allTrackIds = self.tableOfContents.allTracks.map { $0.key }
                 let missingTrackIds = allTrackIds.filter { !presentTrackIds.contains($0) }
                 
-                ATLog(.error, "🎵 [LCPPlayer] Missing \(missingTrackIds.count) tracks:")
-                for (index, trackId) in missingTrackIds.prefix(5).enumerated() {
-                    ATLog(.error, "🎵 [LCPPlayer] Missing[\(index)]: \(trackId.prefix(8))...")
-                }
-                
-                // AUTO-RESTORE: Proactively rebuild to full count
-                ATLog(.debug, "🎵 [LCPPlayer] 🔧 AUTO-RESTORING queue to full \(expectedCount) items...")
                 self.lastQueueRestoreTime = Date()
                 self.proactivelyRestoreQueue()
             }
@@ -460,7 +447,16 @@ class LCPPlayer: OpenAccessPlayer {
     }
     
     /// Proactively restore missing queue items without disrupting current playback
+    /// PERFORMANCE FIX: Optimized to reduce UI blocking during debug
     private func proactivelyRestoreQueue() {
+        // Defer heavy queue operations to background thread to prevent UI lag
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.performQueueRestore()
+        }
+    }
+    
+    /// Perform the actual queue restoration on background thread
+    private func performQueueRestore() {
         let currentItems = avQueuePlayer.items()
         let allTracks = tableOfContents.allTracks
         
@@ -785,7 +781,6 @@ class LCPPlayer: OpenAccessPlayer {
                 avQueuePlayer.seek(to: currentTime)
             }
             
-            ATLog(.debug, "🎵 [LCPPlayer] ✅ Current item updated seamlessly")
         }
     }
     
@@ -798,23 +793,130 @@ class LCPPlayer: OpenAccessPlayer {
     
     
     /// Build the queue once with a stable foundation - no more constant rebuilds
+    /// PERFORMANCE FIX: Optimized to prevent UI blocking during queue building
     override public func buildPlayerQueue() {
-        ATLog(.debug, "🎵 [LCPPlayer] Building stable player queue once")
+        ATLog(.info, "🎵 [LCPPlayer] Building stable player queue once")
         
         // Only build the queue once successfully
         if queueBuiltSuccessfully {
-            ATLog(.debug, "🎵 [LCPPlayer] Queue already built successfully, skipping rebuild")
+            ATLog(.info, "🎵 [LCPPlayer] Queue already built successfully, skipping rebuild")
             return
         }
         
+        // PERFORMANCE FIX: Build queue on background thread for large audiobooks
+        let allTracks = tableOfContents.allTracks
+        if allTracks.count > 50 { // Large audiobook threshold
+            ATLog(.info, "🎵 [LCPPlayer] Large audiobook (\(allTracks.count) tracks) - building queue on background thread")
+            buildLargeAudiobookQueue(tracks: allTracks)
+            return
+        }
+        
+        // Small audiobooks can be built on main thread
+        buildSmallAudiobookQueue(tracks: allTracks)
+    }
+    
+    /// Build queue for large audiobooks (>= 50 tracks) on background thread
+    private func buildLargeAudiobookQueue(tracks: [any Track]) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            let playerItems = self.buildPlayerItems(fromTracks: tracks)
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                self.isNavigating = true
+                self.resetPlayerQueue()
+                self.trackToItemMapping.removeAll()
+                
+                ATLog(.info, "🎵 [LCPPlayer] Built \(playerItems.count) player items from \(tracks.count) tracks on background thread")
+                
+                if playerItems.isEmpty {
+                    ATLog(.error, "🎵 [LCPPlayer] ❌ No player items created!")
+                    self.isLoaded = false
+                    self.isNavigating = false
+                    return
+                }
+                
+                if let firstTrack = tracks.first {
+                    self.lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: self.tableOfContents.tracks)
+                    ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+                }
+                
+                // Insert items in batches to prevent UI blocking
+                self.insertPlayerItemsInBatches(playerItems)
+            }
+        }
+    }
+    
+    /// Insert player items in batches to prevent UI blocking
+    private func insertPlayerItemsInBatches(_ playerItems: [AVPlayerItem]) {
+        let batchSize = 10 // Insert 10 items at a time
+        var currentIndex = 0
+        
+        func insertNextBatch() {
+            let endIndex = min(currentIndex + batchSize, playerItems.count)
+            let batch = Array(playerItems[currentIndex..<endIndex])
+            
+            for (index, item) in batch.enumerated() {
+                let globalIndex = currentIndex + index
+                if avQueuePlayer.canInsert(item, after: nil) {
+                    avQueuePlayer.insert(item, after: nil)
+                    addEndObserver(for: item)
+                } else {
+                    ATLog(.error, "🎵 [LCPPlayer] ❌ Cannot insert item \(globalIndex) during batch insert")
+                }
+            }
+            
+            currentIndex = endIndex
+            
+            if currentIndex < playerItems.count {
+                // Schedule next batch on next run loop to prevent blocking
+                DispatchQueue.main.async {
+                    insertNextBatch()
+                }
+            } else {
+                // Completed inserting all items
+                self.finishQueueBuild()
+            }
+        }
+        
+        insertNextBatch()
+    }
+    
+    /// Finish queue building process
+    private func finishQueueBuild() {
+        // Build mapping based on items that were ACTUALLY inserted
+        let insertedItems = avQueuePlayer.items()
+        for item in insertedItems {
+            if let trackId = item.trackIdentifier {
+                trackToItemMapping[trackId] = [item]
+            }
+        }
+        
+        ATLog(.info, "🎵 [LCPPlayer] ✅ Queue built successfully with \(insertedItems.count) items, mapping: \(trackToItemMapping.count)")
+        
+        isLoaded = true
+        queueBuiltSuccessfully = true
+        isNavigating = false
+        
+        // delegate?.playerDidUpdatePlaybackState(self) // Delegate not available in this context
+    }
+    
+    /// Build queue for small audiobooks (< 50 tracks) on main thread
+    private func buildSmallAudiobookQueue(tracks: [any Track]) {
         isNavigating = true
         resetPlayerQueue()
         trackToItemMapping.removeAll()
         
-        let allTracks = tableOfContents.allTracks
-        let playerItems = buildPlayerItems(fromTracks: allTracks)
+        if let firstTrack = tracks.first {
+            lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+        }
         
-        ATLog(.debug, "🎵 [LCPPlayer] Built \(playerItems.count) player items from \(allTracks.count) tracks")
+        let playerItems = buildPlayerItems(fromTracks: tracks)
+        
+        ATLog(.info, "🎵 [LCPPlayer] Built \(playerItems.count) player items from \(tracks.count) tracks")
         
         if playerItems.isEmpty {
             ATLog(.error, "🎵 [LCPPlayer] ❌ No player items created!")
@@ -1254,16 +1356,39 @@ class LCPPlayer: OpenAccessPlayer {
         }
 
         let chapterDuration = currentChapter.duration ?? 0.0
-        let offset = value * chapterDuration
-        var newPosition = currentTrackPosition
-        newPosition.timestamp = offset
+        let chapterStartTimestamp = currentChapter.position.timestamp
+        
+        // CRITICAL FIX: Calculate offset from chapter start, not track start
+        let offsetWithinChapter = value * chapterDuration
+        let absoluteTimestamp = chapterStartTimestamp + offsetWithinChapter
+        
+        // BOUNDARY VALIDATION: Ensure we don't seek beyond chapter boundaries
+        let maxTimestamp = chapterStartTimestamp + chapterDuration
+        let trackDuration = currentChapter.position.track.duration
+        let clampedTimestamp = min(absoluteTimestamp, min(maxTimestamp, trackDuration))
+        
+        // Create new position with correct timestamp relative to chapter start
+        let newPosition = TrackPosition(
+            track: currentChapter.position.track,
+            timestamp: clampedTimestamp,
+            tracks: currentTrackPosition.tracks
+        )
+        
+        // Use enhanced logging system
+        logSeek(
+            action: "SLIDER_DRAG",
+            from: currentTrackPosition,
+            to: newPosition,
+            sliderValue: value,
+            success: true
+        )
 
         decryptTrackIfNeeded(track: newPosition.track) { [weak self] success in
             guard let self = self else { return }
             if success {
-                self.rebuildQueueForPosition(newPosition) {
-                    self.performSuperSeek(to: newPosition, completion: completion)
-                }
+                // For slider seeking, avoid queue rebuild to prevent loading flicker
+                // Use efficient navigation within existing queue
+                self.navigateToPositionWithoutRebuild(newPosition, completion: completion)
             } else {
                 completion?(nil)
             }
@@ -1293,6 +1418,27 @@ class LCPPlayer: OpenAccessPlayer {
         // For position-based rebuilds, use the full queue method for consistency
         ATLog(.debug, "🎵 [LCPPlayer] Rebuilding queue for position - using full queue")
         rebuildFullQueue(completion: completion)
+    }
+    
+    /// Navigate to position without rebuilding queue to prevent loading flicker
+    private func navigateToPositionWithoutRebuild(_ position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+        // Check if target track is in current queue
+        if let targetItem = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
+            // Navigate to existing item without rebuild
+            while avQueuePlayer.currentItem != targetItem && avQueuePlayer.currentItem != nil {
+                avQueuePlayer.advanceToNextItem()
+            }
+            
+            // Perform seek within track
+            performSuperSeek(to: position, completion: completion)
+            ATLog(.debug, "🎵 [LCPPlayer] ✅ Navigated without queue rebuild - no loading flicker")
+        } else {
+            // Track not in queue - need to rebuild
+            ATLog(.debug, "🎵 [LCPPlayer] Track not in queue, rebuilding necessary")
+            rebuildQueueForPosition(position) {
+                self.performSuperSeek(to: position, completion: completion)
+            }
+        }
     }
 
     override func assetFileStatus(_ task: DownloadTask?) -> AssetResult? {
