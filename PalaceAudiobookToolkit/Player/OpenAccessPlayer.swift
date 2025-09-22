@@ -344,6 +344,14 @@ class OpenAccessPlayer: NSObject, Player {
         }
         
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
+        
+        // Ensure currentTrackPosition starts with first track to prevent random starting chapters
+        if let firstItem = avQueuePlayer.items().first,
+           let firstTrack = tableOfContents.allTracks.first {
+            lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            ATLog(.debug, "OpenAccessPlayer: Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+        }
+        
         isLoaded = true
     }
     
@@ -808,10 +816,11 @@ extension OpenAccessPlayer {
     }
     
     public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-        let maxSafeTimestamp = position.track.duration * 0.95
+        let epsilon: TimeInterval = 0.1
+        let maxSafeTimestamp = position.track.duration - epsilon
         let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
         
-        if position.timestamp >= position.track.duration * 0.99 && 
+        if position.timestamp >= (position.track.duration - epsilon) && 
            tableOfContents.tracks.nextTrack(position.track) == nil {
             handlePlaybackEnd(currentTrack: position.track, completion: completion)
             return

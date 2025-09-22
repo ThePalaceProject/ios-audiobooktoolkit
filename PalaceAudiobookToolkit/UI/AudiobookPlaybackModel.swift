@@ -102,6 +102,40 @@ public class AudiobookPlaybackModel: ObservableObject {
         self.audiobookManager.networkService.fetch()
     }
 
+    // MARK: - Position Validation
+    
+    /// Validates position updates to prevent random starting chapters during initialization
+    private func validatePositionUpdate(_ position: TrackPosition) -> TrackPosition {
+        guard currentLocation != nil else {
+            return validateFirstPositionUpdate(position)
+        }
+        
+        return position
+    }
+    
+    /// Validates the very first position update to ensure proper starting location
+    private func validateFirstPositionUpdate(_ position: TrackPosition) -> TrackPosition {
+        let tracks = audiobookManager.audiobook.tableOfContents.tracks
+        
+        let totalDuration = tracks.tracks.reduce(0) { $0 + $1.duration }
+        let positionDuration = position.durationToSelf()
+        let percentageThrough = totalDuration > 0 ? positionDuration / totalDuration : 0
+        
+        if percentageThrough < 0.02 && position.track.index > 3 {
+            ATLog(.info, "Detected corrupted first position update (track \(position.track.index), \(percentageThrough * 100)% through) - correcting to first track")
+            
+            guard let firstTrack = tracks.first else {
+                ATLog(.error, "No first track available for first position validation fallback")
+                return position
+            }
+            
+            return TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tracks)
+        }
+        
+        // Position looks reasonable, use it
+        return position
+    }
+
     // MARK: - Public helpers
 
     // Sets the desired starting location and lets the model coordinate playback
@@ -129,7 +163,9 @@ public class AudiobookPlaybackModel: ObservableObject {
                     self.overallDownloadProgress = overallProgress
                 case .positionUpdated(let position):
                     guard let position else { return }
-                    self.currentLocation = position
+                    
+                    let validatedPosition = self.validatePositionUpdate(position)
+                    self.currentLocation = validatedPosition
                     self.updateProgress()
                     if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
                         self.pendingLocation = nil
@@ -232,9 +268,21 @@ public class AudiobookPlaybackModel: ObservableObject {
         
         audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
             DispatchQueue.main.async {
-                self?.currentLocation = adjustedLocation
-                self?.saveLocation()
-                self?.isWaitingForPlayer = false
+                guard let self = self else { return }
+                
+                if let adjustedLocation = adjustedLocation {
+                    self.currentLocation = adjustedLocation
+                    self.saveLocation()
+                } else {
+                    if let currentLocation = self.currentLocation {
+                        let fallbackPosition = currentLocation + (-self.skipTimeInterval)
+                        self.currentLocation = fallbackPosition
+                        self.saveLocation()
+                        ATLog(.debug, "Skip back used fallback position calculation")
+                    }
+                }
+                
+                self.isWaitingForPlayer = false
             }
         }
     }
@@ -249,9 +297,21 @@ public class AudiobookPlaybackModel: ObservableObject {
         
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
             DispatchQueue.main.async {
-                self?.currentLocation = adjustedLocation
-                self?.saveLocation()
-                self?.isWaitingForPlayer = false
+                guard let self = self else { return }
+                
+                if let adjustedLocation = adjustedLocation {
+                    self.currentLocation = adjustedLocation
+                    self.saveLocation()
+                } else {
+                    if let currentLocation = self.currentLocation {
+                        let fallbackPosition = currentLocation + self.skipTimeInterval
+                        self.currentLocation = fallbackPosition
+                        self.saveLocation()
+                        ATLog(.debug, "Skip forward used fallback position calculation")
+                    }
+                }
+                
+                self.isWaitingForPlayer = false
             }
         }
     }

@@ -367,14 +367,13 @@ class LCPPlayer: OpenAccessPlayer {
         ATLog(.debug, "🎵 [LCPPlayer] First 5 items: \(finalQueueItems.prefix(5).compactMap { $0.trackIdentifier })")
         ATLog(.debug, "🎵 [LCPPlayer] Target track '\(targetTrack.key)' in queue: \(finalQueueItems.contains { $0.trackIdentifier == targetTrack.key })")
         
-        // Seek to the requested timestamp (avoid exact end which can trigger immediate completion)
         let safeTimestamp: TimeInterval
+        let epsilon: TimeInterval = 0.1
+        
         if timestamp >= targetTrack.duration {
-            safeTimestamp = max(0, targetTrack.duration - 0.5)
-        } else if targetTrack.index == (tableOfContents.allTracks.count - 1) && (targetTrack.duration - timestamp) < 0.25 {
-            safeTimestamp = max(0, targetTrack.duration - 0.5)
+            safeTimestamp = max(0, targetTrack.duration - epsilon)
         } else {
-            safeTimestamp = max(0, timestamp)
+            safeTimestamp = max(0, min(timestamp, targetTrack.duration - epsilon))
         }
         let seekTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         avQueuePlayer.seek(to: seekTime) { success in
@@ -854,6 +853,12 @@ class LCPPlayer: OpenAccessPlayer {
                     return
                 }
                 
+                // Set initial position to first track before inserting items to prevent flashing
+                if let firstTrack = tracks.first {
+                    self.lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: self.tableOfContents.tracks)
+                    ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+                }
+                
                 // Insert items in batches to prevent UI blocking
                 self.insertPlayerItemsInBatches(playerItems)
             }
@@ -919,6 +924,12 @@ class LCPPlayer: OpenAccessPlayer {
         isNavigating = true
         resetPlayerQueue()
         trackToItemMapping.removeAll()
+        
+        // Set initial position to first track before building queue to prevent flashing
+        if let firstTrack = tracks.first {
+            lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+            ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
+        }
         
         let playerItems = buildPlayerItems(fromTracks: tracks)
         
