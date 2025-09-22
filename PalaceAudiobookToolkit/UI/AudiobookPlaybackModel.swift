@@ -31,6 +31,11 @@ public class AudiobookPlaybackModel: ObservableObject {
         didSet {
             guard let selectedLocation else { return }
             
+            // Clear any progress suppression for chapter navigation
+            suppressBackgroundProgressUpdates = false
+            suppressUpdates = false
+            suppressionWorkItem?.cancel()
+            
             // Update current location immediately
             currentLocation = selectedLocation
             
@@ -340,19 +345,27 @@ public class AudiobookPlaybackModel: ObservableObject {
     
     /// Recalculates progress when navigating to a new chapter
     private func recalculateProgressForNewPosition(_ position: TrackPosition) {
-        // When jumping to a new chapter, calculate progress within that chapter
+        // When jumping to a new chapter via TOC, should start at beginning of chapter
+        // Calculate the actual progress within the new chapter
+        
         if let modernManager = audiobookManager as? DefaultAudiobookManager {
             let chapterProgress = modernManager.calculateChapterProgress(for: position)
             
-            // Update UI immediately to prevent slider jumping
-            playbackProgress = chapterProgress
-            targetProgress = chapterProgress
+            ATLog(.info, "🧭 Chapter navigation: Position \(position.track.key)@\(position.timestamp)s → progress \(chapterProgress)")
             
-            ATLog(.info, "Chapter navigation: Updated progress to \(chapterProgress)")
+            // Force immediate UI update on main thread
+            DispatchQueue.main.async { [weak self] in
+                self?.playbackProgress = chapterProgress
+                self?.targetProgress = chapterProgress
+                ATLog(.info, "🧭 UI updated: playbackProgress = \(chapterProgress)")
+            }
         } else {
-            // Legacy fallback: assume start of chapter for TOC navigation
-            playbackProgress = 0.0
-            targetProgress = 0.0
+            // Legacy fallback: start of chapter for TOC navigation
+            DispatchQueue.main.async { [weak self] in
+                self?.playbackProgress = 0.0
+                self?.targetProgress = 0.0
+                ATLog(.info, "🧭 Legacy: Reset progress to 0.0")
+            }
         }
     }
     
