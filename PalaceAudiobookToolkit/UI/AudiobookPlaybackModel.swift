@@ -19,6 +19,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     @Published var trackErrors: [String: Error] = [:]
     @Published var coverImage: UIImage?
     @Published var toastMessage: String = ""
+    @Published private var _isPlaying: Bool = false
     
     private var subscriptions: Set<AnyCancellable> = []
     private(set) var audiobookManager: AudiobookManager
@@ -84,7 +85,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     var isPlaying: Bool {
-        audiobookManager.audiobook.player.isPlaying
+        _isPlaying
     }
     
     var tracks: [any Track] {
@@ -97,8 +98,11 @@ public class AudiobookPlaybackModel: ObservableObject {
             self.currentLocation = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: audiobookManager.audiobook.tableOfContents.tracks)
         }
         
+        _isPlaying = audiobookManager.audiobook.player.isPlaying
+        
         setupBindings()
         subscribeToPublisher()
+        setupReactivePlaybackStateMonitoring()
         self.audiobookManager.networkService.fetch()
     }
 
@@ -172,9 +176,20 @@ public class AudiobookPlaybackModel: ObservableObject {
                         self.audiobookManager.audiobook.player.play(at: target) { _ in }
                     }
                     
-                case .playbackBegan(let position), .playbackCompleted(let position):
+                case .playbackBegan(let position):
                     self.currentLocation = position
                     self.isWaitingForPlayer = false
+                    self._isPlaying = true
+                    self.updateProgress()
+                    if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
+                        self.pendingLocation = nil
+                        self.audiobookManager.audiobook.player.play(at: target) { _ in }
+                    }
+                    
+                case .playbackCompleted(let position):
+                    self.currentLocation = position
+                    self.isWaitingForPlayer = false
+                    self._isPlaying = false
                     self.updateProgress()
                     if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
                         self.pendingLocation = nil
@@ -182,9 +197,11 @@ public class AudiobookPlaybackModel: ObservableObject {
                     }
                     
                 case .playbackUnloaded:
+                    self._isPlaying = false
                     break
                 case .playbackFailed(let position):
                     self.isWaitingForPlayer = false
+                    self._isPlaying = false
                     if let position = position {
                         ATLog(.debug, "Playback error at position: \(position.timestamp)")
                     } else {
@@ -217,6 +234,19 @@ public class AudiobookPlaybackModel: ObservableObject {
         self.audiobookManager.fetchBookmarks { _ in }
     }
     
+    private func setupReactivePlaybackStateMonitoring() {
+        Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let currentPlayingState = self.audiobookManager.audiobook.player.isPlaying
+                if self._isPlaying != currentPlayingState {
+                    self._isPlaying = currentPlayingState
+                }
+            }
+            .store(in: &subscriptions)
+    }
+    
     private func setupBindings() {
         self.reachability.startMonitoring()
         self.reachability.$isConnected
@@ -244,11 +274,19 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
     
     func playPause() {
-        isPlaying ? audiobookManager.pause() : audiobookManager.play()
+        let wasPlaying = isPlaying
+        if wasPlaying {
+            audiobookManager.pause()
+            _isPlaying = false
+        } else {
+            audiobookManager.play()
+            _isPlaying = true
+        }
         saveLocation()
     }
     
     func stop() {
+        _isPlaying = false
         saveLocation()
         audiobookManager.unload()
         subscriptions.removeAll()

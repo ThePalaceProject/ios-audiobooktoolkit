@@ -196,8 +196,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         )
         #endif
         
-        audiobook.player.play(at: targetPosition) { error in
-            completion(error == nil ? targetPosition : nil)
+        if let openAccessPlayer = audiobook.player as? OpenAccessPlayer {
+            openAccessPlayer.seekTo(position: targetPosition) { adjustedPosition in
+                completion(adjustedPosition)
+            }
+        } else {
+            audiobook.player.play(at: targetPosition) { error in
+                completion(error == nil ? targetPosition : nil)
+            }
         }
     }
     

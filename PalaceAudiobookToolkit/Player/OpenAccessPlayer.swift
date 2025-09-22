@@ -92,10 +92,9 @@ class OpenAccessPlayer: NSObject, Player {
             return lastKnownPosition
         }
         
-        // Only update position if time has changed meaningfully (reduces CPU usage)
         if let lastPosition = lastKnownPosition,
            lastPosition.track.key == currentTrack.key,
-           abs(lastPosition.timestamp - currentTime) < 0.2 {
+           abs(lastPosition.timestamp - currentTime) < 0.5 { // Increased threshold to reduce updates
             return lastPosition
         }
         
@@ -324,7 +323,8 @@ class OpenAccessPlayer: NSObject, Player {
                 buildPlayerQueue()
                 if let firstTrack = tableOfContents.allTracks.first {
                     let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-                    play(at: firstTrackPosition, completion: nil)
+                    avQueuePlayer.pause()
+                    ATLog(.debug, "OpenAccessPlayer: Queue built, ready for playback at first track")
                     self.isLoaded = true
                 }
             } else {
@@ -354,7 +354,7 @@ class OpenAccessPlayer: NSObject, Player {
         
         avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
         
-        // Ensure currentTrackPosition starts with first track to prevent random starting chapters
+        avQueuePlayer.pause()
         if let firstItem = avQueuePlayer.items().first,
            let firstTrack = tableOfContents.allTracks.first {
             lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)

@@ -838,7 +838,6 @@ class LCPPlayer: OpenAccessPlayer {
                     return
                 }
                 
-                // Set initial position to first track before inserting items to prevent flashing
                 if let firstTrack = tracks.first {
                     self.lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: self.tableOfContents.tracks)
                     ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")
@@ -910,7 +909,6 @@ class LCPPlayer: OpenAccessPlayer {
         resetPlayerQueue()
         trackToItemMapping.removeAll()
         
-        // Set initial position to first track before building queue to prevent flashing
         if let firstTrack = tracks.first {
             lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
             ATLog(.debug, "🎵 [LCPPlayer] Set initial position to first track: \(firstTrack.title ?? firstTrack.key)")

@@ -128,7 +128,7 @@ public class HTTPRangeRetriever {
 private class RangeCacheManager {
     private var cache: [String: [Range<Int>: Data]] = [:]
     private let cacheQueue = DispatchQueue(label: "com.palace.range-cache", attributes: .concurrent)
-    private let maxCacheSize = 50 * 1024 * 1024 // 50MB max cache
+    private let maxCacheSize = 25 * 1024 * 1024 // 25MB max cache (reduced from 50MB)
     private var currentCacheSize = 0
     
     func getCachedRange(for url: AbsoluteURL, range: Range<Int>) -> Data? {
