@@ -164,7 +164,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public static let skipTimeInterval: TimeInterval = 30
     
     // MARK: - Enhanced Position System
-    private let positionCalculator = AudiobookPositionCalculator()
+    public let positionCalculator = AudiobookPositionCalculator()
     
     // MARK: - Enhanced Seeking Interface
     
@@ -198,6 +198,16 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         
         audiobook.player.play(at: targetPosition) { error in
             completion(error == nil ? targetPosition : nil)
+        }
+    }
+    
+    /// Calculate chapter-relative progress for a given position
+    public func calculateChapterProgress(for position: TrackPosition) -> Double {
+        do {
+            let chapter = try audiobook.tableOfContents.chapter(forPosition: position)
+            return positionCalculator.chapterProgress(from: position, chapter: chapter)
+        } catch {
+            return 0.0
         }
     }
     

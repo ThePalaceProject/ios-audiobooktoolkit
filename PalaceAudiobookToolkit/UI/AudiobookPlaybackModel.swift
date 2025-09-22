@@ -30,12 +30,19 @@ public class AudiobookPlaybackModel: ObservableObject {
     var selectedLocation: TrackPosition? {
         didSet {
             guard let selectedLocation else { return }
+            
+            // Update current location immediately
+            currentLocation = selectedLocation
+            
+            // Recalculate progress for new chapter position
+            recalculateProgressForNewPosition(selectedLocation)
+            
             if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
                 audiobookManager.audiobook.player.play(at: selectedLocation) { _ in }
             } else {
                 pendingLocation = selectedLocation
             }
-            currentLocation = selectedLocation
+            
             saveLocation()
         }
     }
@@ -327,6 +334,26 @@ public class AudiobookPlaybackModel: ObservableObject {
         suppressionWorkItem = workItem
         
         DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
+    }
+    
+    // MARK: - Chapter Navigation Support
+    
+    /// Recalculates progress when navigating to a new chapter
+    private func recalculateProgressForNewPosition(_ position: TrackPosition) {
+        // When jumping to a new chapter, calculate progress within that chapter
+        if let modernManager = audiobookManager as? DefaultAudiobookManager {
+            let chapterProgress = modernManager.calculateChapterProgress(for: position)
+            
+            // Update UI immediately to prevent slider jumping
+            playbackProgress = chapterProgress
+            targetProgress = chapterProgress
+            
+            ATLog(.info, "Chapter navigation: Updated progress to \(chapterProgress)")
+        } else {
+            // Legacy fallback: assume start of chapter for TOC navigation
+            playbackProgress = 0.0
+            targetProgress = 0.0
+        }
     }
     
     // MARK: - Performance Optimizations
