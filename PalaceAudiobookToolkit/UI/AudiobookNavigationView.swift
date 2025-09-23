@@ -94,17 +94,30 @@ struct AudiobookNavigationView: View {
     
     @ViewBuilder
     private var chaptersList: some View {
-        List {
-            ForEach(playback.audiobookManager.audiobook.tableOfContents.toc) { chapter in
-                ChapterCell(chapter: chapter) {
-                    playback.selectedLocation = chapter.position
-                    presentationMode.wrappedValue.dismiss()
+        ScrollViewReader { proxy in
+            List {
+                ForEach(playback.audiobookManager.audiobook.tableOfContents.toc) { chapter in
+                    ChapterCell(chapter: chapter, isCurrentChapter: isCurrentChapter(chapter)) {
+                        playback.selectedLocation = chapter.position
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .frame(height: 40)
+                    .opacity(playback.downloadProgress(for: chapter) < 1.0 ? 0.85 : 1.0)
+                    .id(chapter.id)
                 }
-                .frame(height: 40)
-                .opacity(playback.downloadProgress(for: chapter) < 1.0 ? 0.85 : 1.0)
+            }
+            .listStyle(.plain)
+            .onAppear {
+                scrollToCurrentChapter(with: proxy)
+            }
+            .onChange(of: selectedSection) { newSection in
+                if newSection == .toc {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToCurrentChapter(with: proxy)
+                    }
+                }
             }
         }
-        .listStyle(.plain)
     }
     
     @ViewBuilder
@@ -157,6 +170,32 @@ struct AudiobookNavigationView: View {
         playback.audiobookManager.fetchBookmarks { bookmarks in
             self.bookmarks = bookmarks
             self.isLoading = false
+        }
+    }
+    
+    private func isCurrentChapter(_ chapter: Chapter) -> Bool {
+        guard let currentLocation = playback.currentLocation else { return false }
+        
+        do {
+            let currentChapter = try playback.audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation)
+            return currentChapter.id == chapter.id
+        } catch {
+            return false
+        }
+    }
+    
+    private func scrollToCurrentChapter(with proxy: ScrollViewProxy) {
+        guard let currentLocation = playback.currentLocation else { return }
+        
+        do {
+            let currentChapter = try playback.audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(currentChapter.id, anchor: .center)
+                }
+            }
+        } catch {
+            print("Could not find current chapter for TOC scrolling")
         }
     }
     

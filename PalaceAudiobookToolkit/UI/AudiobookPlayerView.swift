@@ -163,20 +163,22 @@ public struct AudiobookPlayerView: View {
     
     @ViewBuilder
     private var tocButton: some View {
-        HStack {
-            NavigationLink(isActive: $showTOC) {
-                AudiobookNavigationView(model: playbackModel)
-            } label: {
-                EmptyView()
-            }
-            Button {
-                showTOC = true
-            } label: {
-                ToolkitImage(name: "table_of_contents", renderingMode: .template)
-                    .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
-                    .foregroundColor(.primary)
-                    .foregroundColor(.black)
-            }
+        NavigationLink {
+            AudiobookNavigationView(model: playbackModel)
+                .onAppear {
+                    showTOC = true
+                }
+                .onDisappear {
+                    showTOC = false
+                }
+        } label: {
+            ToolkitImage(name: "table_of_contents", renderingMode: .template)
+                .foregroundColor(.primary)
+                .frame(width: 24, height: 24)
+                .padding(.all, 8)
+                .background(Color.clear)
+                .contentShape(Rectangle())
+                .accessibility(label: Text(Strings.Accessibility.tableOfContentsButton))
         }
     }
     
