@@ -93,9 +93,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
     
     
-    private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
-        let initialCount = toc.count
-        
+    private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {        
         readingOrder.forEach { item in
             var track: (any Track)? = nil
             var duration = 0.0
@@ -196,17 +194,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
             let chapterStart = chapter.position
             let chapterDuration = chapter.duration ?? chapter.position.track.duration
             
-            // Calculate chapter end position for multi-track chapters
             let chapterEndPosition: TrackPosition
             if let endPos = chapter.endPosition {
                 chapterEndPosition = endPos
             } else {
-                // Calculate end based on next chapter start for accurate boundaries
                 if index + 1 < toc.count {
                     let nextChapter = toc[index + 1]
                     chapterEndPosition = nextChapter.position
                 } else {
-                    // Last chapter - use track arithmetic
                     chapterEndPosition = chapter.position + chapterDuration
                 }
             }

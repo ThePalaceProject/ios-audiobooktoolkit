@@ -11,6 +11,7 @@ import Combine
 
 struct ChapterCell: View {
     var chapter: Chapter
+    var isCurrentChapter: Bool = false
     var action: () -> Void
     
     var body: some View {
@@ -20,11 +21,23 @@ struct ChapterCell: View {
             HStack {
                 Text(chapter.title)
                     .palaceFont(.body)
+                    .foregroundColor(isCurrentChapter ? .accentColor : .primary)
+                    .fontWeight(isCurrentChapter ? .semibold : .regular)
                 Spacer()
                 Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? chapter.position.track.duration).timecode)
                     .accessibility(label: Text(HumanReadableTimestamp(timeInterval: chapter.duration ?? 0.0).accessibleDescription))
                     .palaceFont(.body)
+                    .foregroundColor(isCurrentChapter ? .accentColor : .secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isCurrentChapter ? Color.accentColor.opacity(0.1) : Color.clear)
+            )
         }
+        .buttonStyle(.plain)
     }
 }
