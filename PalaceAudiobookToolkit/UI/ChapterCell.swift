@@ -29,12 +29,15 @@ struct ChapterCell: View {
                     .palaceFont(.body)
                     .foregroundColor(isCurrentChapter ? .accentColor : .secondary)
             }
-            .padding(.vertical, 2)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isCurrentChapter ? Color.accentColor.opacity(0.1) : Color.clear)
-            )
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isCurrentChapter ? Color.accentColor.opacity(0.1) : Color.clear)
+        )
     }
 }
