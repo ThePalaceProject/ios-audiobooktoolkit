@@ -329,20 +329,19 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         timer?.cancel()
         timer = nil
 
-        // PERFORMANCE OPTIMIZATION: Reduce timer frequency and pause when backgrounded
+        // PERFORMANCE OPTIMIZATION: Reduce timer frequency but keep running for lock screen updates
         let appState = UIApplication.shared.applicationState
         let interval: TimeInterval
         
         switch appState {
         case .active:
-            interval = 2.0  // Reduced from 1 second to 2 seconds (50% reduction)
+            interval = 1.0  // Keep responsive for UI
         case .inactive:
-            interval = 10.0 // Reduce frequency when inactive
+            interval = 2.0  // Moderate frequency when inactive
         case .background:
-            ATLog(.info, "⚡ Timer paused for background state - energy optimization")
-            return
+            interval = 3.0  // Reduced frequency but still update lock screen
         @unknown default:
-            interval = 5.0
+            interval = 2.0
         }
 
         playbackTrackerDelegate?.playbackStarted()

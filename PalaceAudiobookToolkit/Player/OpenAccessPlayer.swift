@@ -36,7 +36,6 @@ class OpenAccessPlayer: NSObject, Player {
             return 0.0
         }
         
-        // CONSISTENCY FIX: Calculate chapter-relative offset like LCPPlayer
         let offset = (try? currentTrackPosition - currentChapter.position) ?? 0.0
         return max(0.0, offset) // Ensure non-negative
     }
@@ -555,7 +554,6 @@ class OpenAccessPlayer: NSObject, Player {
         let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
         let chapterStartTimestamp = currentChapter.position.timestamp
         
-        // CONSISTENCY FIX: Match LCPPlayer's approach for chapter-relative seeking
         let offsetWithinChapter = value * chapterDuration
         let absoluteTimestamp = chapterStartTimestamp + offsetWithinChapter
         

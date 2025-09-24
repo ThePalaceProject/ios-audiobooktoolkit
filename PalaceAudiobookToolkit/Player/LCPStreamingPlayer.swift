@@ -23,6 +23,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     private let resourceLoaderQueue = DispatchQueue(label: "com.palace.lcp-streaming-loader", qos: .userInitiated)
     private static var resourceLoaderAssocKey: UInt8 = 0
     private let decryptionDelegate: DRMDecryptor?
+    
+    public var decryptor: DRMDecryptor? {
+        return decryptionDelegate
+    }
     private var forceStreamingTrackKeys = Set<String>()
     private let compositionQueue = DispatchQueue(label: "com.palace.lcp.local-composition", qos: .userInitiated)
     
