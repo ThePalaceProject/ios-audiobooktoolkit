@@ -133,6 +133,15 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         suppressAudibleUntilPlaying = true
         avQueuePlayer.isMuted = true
         lastStartedItemKey = nil
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+            if let self = self, !self.isLoaded {
+                ATLog(.error, "🎵 [LCPStreamingPlayer] Timeout: Setting isLoaded = true after 10 seconds to prevent infinite loading")
+                self.isLoaded = true
+                self.suppressAudibleUntilPlaying = false
+                self.avQueuePlayer.isMuted = false
+            }
+        }
         var needsRebuild = avQueuePlayer.items().isEmpty
 
         if !needsRebuild {
@@ -163,19 +172,33 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 let safeTs = safeTimestamp(for: position)
                 let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
                 let tolerance = CMTime(seconds: 0.15, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-                avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
+                avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] success in
+                    guard let self = self else { return }
+                    
+                    if !success {
+                        ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed, but continuing with playback")
+                    }
+                    
                     // Ensure session is active before resuming
                     do {
                         let session = AVAudioSession.sharedInstance()
                         try session.setActive(true)
-                        
-                        let route = session.currentRoute
                     } catch {
                         ATLog(.error, "🔊 [LCPStreamingPlayer] Failed to activate audio session: \(error)")
                     }
                     
-                    self?.avQueuePlayer.play()
-                    self?.restorePlaybackRate()
+                    self.avQueuePlayer.play()
+                    self.restorePlaybackRate()
+                    
+                    // Set isLoaded immediately for seek-within-queue scenarios
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                        if let self = self, !self.isLoaded {
+                            self.isLoaded = true
+                            self.suppressAudibleUntilPlaying = false 
+                            self.avQueuePlayer.isMuted = false
+                        }
+                    }
+                    
                     completion?(nil)
                 }
                 return
@@ -212,7 +235,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             let safeTs = safeTimestamp(for: position)
             let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
             let tolerance = CMTime(seconds: 0.15, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
+            avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] success in
+                guard let self = self else { return }
+                
+                if !success {
+                    ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed in queue rebuild, but continuing with playback")
+                }
+                
                 do {
                     let session = AVAudioSession.sharedInstance()
                     try session.setActive(true)
@@ -220,8 +249,18 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 } catch {
                     ATLog(.error, "🔊 [LCPStreamingPlayer] Failed to activate audio session (lazy window): \(error)")
                 }
-                self?.avQueuePlayer.play()
-                self?.restorePlaybackRate()
+                
+                self.avQueuePlayer.play()
+                self.restorePlaybackRate()
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    if let self = self, !self.isLoaded {
+                        self.isLoaded = true
+                        self.suppressAudibleUntilPlaying = false
+                        self.avQueuePlayer.isMuted = false
+                    }
+                }
+                
                 completion?(nil)
             }
         } else {

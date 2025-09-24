@@ -53,6 +53,7 @@ public class AudiobookPlaybackModel: ObservableObject {
             }
             currentLocation = selectedLocation
             saveLocation()
+            notifyHomeScreenOfPositionUpdate()
         }
     }
     
@@ -278,6 +279,14 @@ public class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.pause()
     }
     
+    private func notifyHomeScreenOfPositionUpdate() {
+        guard let currentLocation = currentLocation else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.audiobookManager.updateNowPlayingInfo(currentLocation)
+        }
+    }
+    
     func stop() {
         _isPlaying = false
         saveLocation()
@@ -309,11 +318,13 @@ public class AudiobookPlaybackModel: ObservableObject {
                 if let adjustedLocation = adjustedLocation {
                     self.currentLocation = adjustedLocation
                     self.saveLocation()
+                    self.notifyHomeScreenOfPositionUpdate()
                 } else {
                     if let currentLocation = self.currentLocation {
                         let fallbackPosition = currentLocation + (-self.skipTimeInterval)
                         self.currentLocation = fallbackPosition
                         self.saveLocation()
+                        self.notifyHomeScreenOfPositionUpdate()
                         ATLog(.debug, "Skip back used fallback position calculation")
                     }
                 }
@@ -330,7 +341,6 @@ public class AudiobookPlaybackModel: ObservableObject {
             return
         }
         
-        // Brief loading state for skip operations (acceptable UX)
         isWaitingForPlayer = true
         
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
@@ -340,11 +350,13 @@ public class AudiobookPlaybackModel: ObservableObject {
                 if let adjustedLocation = adjustedLocation {
                     self.currentLocation = adjustedLocation
                     self.saveLocation()
+                    self.notifyHomeScreenOfPositionUpdate()
                 } else {
                     if let currentLocation = self.currentLocation {
                         let fallbackPosition = currentLocation + self.skipTimeInterval
                         self.currentLocation = fallbackPosition
                         self.saveLocation()
+                        self.notifyHomeScreenOfPositionUpdate()
                         ATLog(.debug, "Skip forward used fallback position calculation")
                     }
                 }

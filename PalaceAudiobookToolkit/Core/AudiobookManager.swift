@@ -48,6 +48,8 @@ public protocol AudiobookManager {
     var currentDuration: Double { get }
     var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
+    
+    func updateNowPlayingInfo(_ position: TrackPosition?)
 
     static func setLogHandler(_ handler: @escaping LogHandler)
 
@@ -329,19 +331,19 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         timer?.cancel()
         timer = nil
 
-        // PERFORMANCE OPTIMIZATION: Reduce timer frequency but keep running for lock screen updates
         let appState = UIApplication.shared.applicationState
         let interval: TimeInterval
         
         switch appState {
         case .active:
-            interval = 1.0  // Keep responsive for UI
+            interval = 2.0  // Reduced from 1 second to 2 seconds (50% reduction)
         case .inactive:
-            interval = 2.0  // Moderate frequency when inactive
+            interval = 10.0 // Reduce frequency when inactive
         case .background:
-            interval = 3.0  // Reduced frequency but still update lock screen
+            interval = 15.0 // Keep running but very infrequently for lock screen sync
+            ATLog(.info, "⚡ Timer running at 15s intervals for background lock screen updates")
         @unknown default:
-            interval = 2.0
+            interval = 5.0
         }
 
         playbackTrackerDelegate?.playbackStarted()
@@ -365,9 +367,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
     }
 
-    private func updateNowPlayingInfo(_ position: TrackPosition?) {
-        guard let currentTrackPosition = position else { return }
+    public func updateNowPlayingInfo(_ position: TrackPosition?) {
+        guard let currentTrackPosition = position else { 
+            ATLog(.debug, "🔒 [AudiobookManager] updateNowPlayingInfo called with nil position")
+            return 
+        }
 
+        ATLog(.debug, "🔒 [AudiobookManager] Updating lock screen for position: \(currentTrackPosition.timestamp)")
+        
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
 
         let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
@@ -386,6 +393,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
 
+        ATLog(.debug, "🔒 [AudiobookManager] Setting lock screen: '\(chapterTitle ?? "Unknown")' elapsed: \(chapterElapsed)s / \(chapterDuration)s")
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
 
@@ -547,9 +555,21 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 case .playPause:
                     self.audiobook.player.isPlaying == true ? self.audiobook.player.pause() : self.audiobook.player.play()
                 case .skipForward:
-                    self.audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval, completion: nil)
+                    self.audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
+                        if let newPosition = newPosition {
+                            DispatchQueue.main.async {
+                                self?.updateNowPlayingInfo(newPosition)
+                            }
+                        }
+                    }
                 case .skipBackward:
-                    self.audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval, completion: nil)
+                    self.audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
+                        if let newPosition = newPosition {
+                            DispatchQueue.main.async {
+                                self?.updateNowPlayingInfo(newPosition)
+                            }
+                        }
+                    }
                 case .changePlaybackRate(let rate):
                     if let playbackRate = PlaybackRate(rawValue: Int(rate * 100)) {
                         self.audiobook.player.playbackRate = playbackRate
