@@ -53,13 +53,23 @@ public class AudiobookPlaybackModel: ObservableObject {
             }
             currentLocation = selectedLocation
             saveLocation()
+            notifyHomeScreenOfPositionUpdate()
         }
     }
     
     let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
     
     var offset: TimeInterval {
-        audiobookManager.currentOffset
+        if let currentLocation = currentLocation,
+           let currentChapter = audiobookManager.currentChapter {
+            do {
+                let chapterOffset = try currentLocation - currentChapter.position
+                return max(0.0, chapterOffset)
+            } catch {
+                return audiobookManager.currentOffset
+            }
+        }
+        return audiobookManager.currentOffset
     }
     
     var duration: TimeInterval {
@@ -121,38 +131,6 @@ public class AudiobookPlaybackModel: ObservableObject {
         self.audiobookManager.networkService.fetch()
     }
 
-    // MARK: - Position Validation
-    
-    /// Validates position updates to prevent random starting chapters during initialization
-    private func validatePositionUpdate(_ position: TrackPosition) -> TrackPosition {
-        guard currentLocation != nil else {
-            return validateFirstPositionUpdate(position)
-        }
-        
-        return position
-    }
-    
-    /// Validates the very first position update to ensure proper starting location
-    private func validateFirstPositionUpdate(_ position: TrackPosition) -> TrackPosition {
-        let tracks = audiobookManager.audiobook.tableOfContents.tracks
-        
-        let totalDuration = tracks.tracks.reduce(0) { $0 + $1.duration }
-        let positionDuration = position.durationToSelf()
-        let percentageThrough = totalDuration > 0 ? positionDuration / totalDuration : 0
-        
-        if percentageThrough < 0.02 && position.track.index > 3 {
-            ATLog(.info, "Detected corrupted first position update (track \(position.track.index), \(percentageThrough * 100)% through) - correcting to first track")
-            
-            guard let firstTrack = tracks.first else {
-                ATLog(.error, "No first track available for first position validation fallback")
-                return position
-            }
-            
-            return TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tracks)
-        }
-        
-        return position
-    }
 
     // MARK: - Public helpers
 
@@ -179,8 +157,7 @@ public class AudiobookPlaybackModel: ObservableObject {
                 case .positionUpdated(let position):
                     guard let position else { return }
                     
-                    let validatedPosition = self.validatePositionUpdate(position)
-                    self.currentLocation = validatedPosition
+                    self.currentLocation = position
                     self.updateProgress()
                     if let target = self.pendingLocation, self.audiobookManager.audiobook.player.isLoaded {
                         self.pendingLocation = nil
@@ -302,6 +279,14 @@ public class AudiobookPlaybackModel: ObservableObject {
         audiobookManager.pause()
     }
     
+    private func notifyHomeScreenOfPositionUpdate() {
+        guard let currentLocation = currentLocation else { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.audiobookManager.updateNowPlayingInfo(currentLocation)
+        }
+    }
+    
     func stop() {
         _isPlaying = false
         saveLocation()
@@ -333,15 +318,19 @@ public class AudiobookPlaybackModel: ObservableObject {
                 if let adjustedLocation = adjustedLocation {
                     self.currentLocation = adjustedLocation
                     self.saveLocation()
+                    self.notifyHomeScreenOfPositionUpdate()
                 } else {
                     if let currentLocation = self.currentLocation {
                         let fallbackPosition = currentLocation + (-self.skipTimeInterval)
                         self.currentLocation = fallbackPosition
                         self.saveLocation()
+                        self.notifyHomeScreenOfPositionUpdate()
                         ATLog(.debug, "Skip back used fallback position calculation")
                     }
                 }
                 
+                // Force UI progress update immediately after skip
+                self.updateProgress()
                 self.isWaitingForPlayer = false
             }
         }
@@ -352,7 +341,6 @@ public class AudiobookPlaybackModel: ObservableObject {
             return
         }
         
-        // Brief loading state for skip operations (acceptable UX)
         isWaitingForPlayer = true
         
         audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
@@ -362,15 +350,19 @@ public class AudiobookPlaybackModel: ObservableObject {
                 if let adjustedLocation = adjustedLocation {
                     self.currentLocation = adjustedLocation
                     self.saveLocation()
+                    self.notifyHomeScreenOfPositionUpdate()
                 } else {
                     if let currentLocation = self.currentLocation {
                         let fallbackPosition = currentLocation + self.skipTimeInterval
                         self.currentLocation = fallbackPosition
                         self.saveLocation()
+                        self.notifyHomeScreenOfPositionUpdate()
                         ATLog(.debug, "Skip forward used fallback position calculation")
                     }
                 }
                 
+                // Force UI progress update immediately after skip
+                self.updateProgress()
                 self.isWaitingForPlayer = false
             }
         }

@@ -48,6 +48,8 @@ public protocol AudiobookManager {
     var currentDuration: Double { get }
     var totalDuration: Double { get }
     var currentChapter: Chapter? { get }
+    
+    func updateNowPlayingInfo(_ position: TrackPosition?)
 
     static func setLogHandler(_ handler: @escaping LogHandler)
 
@@ -329,7 +331,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         timer?.cancel()
         timer = nil
 
-        // PERFORMANCE OPTIMIZATION: Reduce timer frequency and pause when backgrounded
         let appState = UIApplication.shared.applicationState
         let interval: TimeInterval
         
@@ -339,8 +340,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         case .inactive:
             interval = 10.0 // Reduce frequency when inactive
         case .background:
-            ATLog(.info, "⚡ Timer paused for background state - energy optimization")
-            return
+            interval = 15.0 // Keep running but very infrequently for lock screen sync
+            ATLog(.info, "⚡ Timer running at 15s intervals for background lock screen updates")
         @unknown default:
             interval = 5.0
         }
@@ -366,9 +367,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
     }
 
-    private func updateNowPlayingInfo(_ position: TrackPosition?) {
-        guard let currentTrackPosition = position else { return }
+    public func updateNowPlayingInfo(_ position: TrackPosition?) {
+        guard let currentTrackPosition = position else { 
+            ATLog(.debug, "🔒 [AudiobookManager] updateNowPlayingInfo called with nil position")
+            return 
+        }
 
+        ATLog(.debug, "🔒 [AudiobookManager] Updating lock screen for position: \(currentTrackPosition.timestamp)")
+        
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
 
         let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
@@ -387,6 +393,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
 
+        ATLog(.debug, "🔒 [AudiobookManager] Setting lock screen: '\(chapterTitle ?? "Unknown")' elapsed: \(chapterElapsed)s / \(chapterDuration)s")
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
 
@@ -548,9 +555,21 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
                 case .playPause:
                     self.audiobook.player.isPlaying == true ? self.audiobook.player.pause() : self.audiobook.player.play()
                 case .skipForward:
-                    self.audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval, completion: nil)
+                    self.audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
+                        if let newPosition = newPosition {
+                            DispatchQueue.main.async {
+                                self?.updateNowPlayingInfo(newPosition)
+                            }
+                        }
+                    }
                 case .skipBackward:
-                    self.audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval, completion: nil)
+                    self.audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
+                        if let newPosition = newPosition {
+                            DispatchQueue.main.async {
+                                self?.updateNowPlayingInfo(newPosition)
+                            }
+                        }
+                    }
                 case .changePlaybackRate(let rate):
                     if let playbackRate = PlaybackRate(rawValue: Int(rate * 100)) {
                         self.audiobook.player.playbackRate = playbackRate
