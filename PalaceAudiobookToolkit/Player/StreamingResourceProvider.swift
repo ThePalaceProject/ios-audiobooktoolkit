@@ -13,6 +13,7 @@ public protocol StreamingResourceProvider: AnyObject {
 }
 
 public protocol StreamingCapablePlayer: AnyObject {
+    func publicationDidLoad()
     func setStreamingProvider(_ provider: StreamingResourceProvider)
 }
 

@@ -8,12 +8,12 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     weak var provider: StreamingResourceProvider?
     private let httpRangeRetriever = HTTPRangeRetriever()
     private var fullTrackCache = [String: Data]()
-    private let maxConcurrentRequests = 2
-    private let requestTimeoutSeconds: TimeInterval = 10
+    private let maxConcurrentRequests = 8
+    private let requestTimeoutSeconds: TimeInterval = 30
     private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
     private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var timeoutGuards: [ObjectIdentifier: Task<Void, Never>] = [:]
-    private let concurrencySemaphore = DispatchSemaphore(value: 2)
+    private let concurrencySemaphore = DispatchSemaphore(value: 8)
     
     init(provider: StreamingResourceProvider? = nil) {
         self.provider = provider

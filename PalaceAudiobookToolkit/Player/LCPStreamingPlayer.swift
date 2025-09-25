@@ -134,12 +134,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         avQueuePlayer.isMuted = true
         lastStartedItemKey = nil
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self] in
             if let self = self, !self.isLoaded {
-                ATLog(.error, "🎵 [LCPStreamingPlayer] Timeout: Setting isLoaded = true after 10 seconds to prevent infinite loading")
-                self.isLoaded = true
-                self.suppressAudibleUntilPlaying = false
-                self.avQueuePlayer.isMuted = false
+                ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
+                if self.streamingProvider?.getPublication() != nil || !self.avQueuePlayer.items().isEmpty {
+                    ATLog(.info, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
+                    self.isLoaded = true
+                    self.suppressAudibleUntilPlaying = false
+                    self.avQueuePlayer.isMuted = false
+                } else {
+                    ATLog(.error, "🎵 [LCPStreamingPlayer] Critical timeout: No publication or items available")
+                }
             }
         }
         var needsRebuild = avQueuePlayer.items().isEmpty
@@ -569,6 +574,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         ATLog(.debug, "🎵 [LCPStreamingPlayer] End of book reached. No more tracks.")
         playbackStatePublisher.send(.bookCompleted)
         completion?(currentTrackPosition)
+    }
+    
+    func publicationDidLoad() {
+        ATLog(.info, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
+        if !isLoaded && avQueuePlayer.items().isEmpty {
+            buildPlayerQueue()
+        }
     }
     
     deinit {

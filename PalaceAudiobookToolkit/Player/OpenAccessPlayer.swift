@@ -335,19 +335,55 @@ class OpenAccessPlayer: NSObject, Player {
     public func buildPlayerQueue() {
         resetPlayerQueue()
         
-        let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
-        if playerItems.isEmpty {
-            isLoaded = false
-            return
+        let allTracks = tableOfContents.allTracks
+        let isOverdrive = tableOfContents.manifest.audiobookType == .overdrive
+        
+        let tracksToLoad: [any Track]
+        if isOverdrive {
+            tracksToLoad = allTracks
+            ATLog(.debug, "OpenAccessPlayer: Building full queue for Overdrive - \(allTracks.count) tracks")
+        } else {
+            let windowSize = 5 // Load only 5 tracks at a time for faster initialization
+            
+            var currentIndex = 0
+            if let position = lastKnownPosition {
+                currentIndex = allTracks.firstIndex { $0.key == position.track.key } ?? position.track.index
+            }
+            
+            let startIndex = max(0, currentIndex - 1)
+            let endIndex = min(allTracks.count - 1, currentIndex + windowSize - 1)
+            tracksToLoad = Array(allTracks[startIndex...endIndex])
+            
+            ATLog(.debug, "OpenAccessPlayer: Building queue window - tracks \(startIndex) to \(endIndex) of \(allTracks.count)")
         }
         
-        for item in playerItems {
-            if avQueuePlayer.canInsert(item, after: nil) {
-                avQueuePlayer.insert(item, after: nil)
-                addEndObserver(for: item)
+        let playerItems = buildPlayerItems(fromTracks: tracksToLoad)
+        if playerItems.isEmpty {
+            if let firstTrack = allTracks.first {
+                let firstItems = buildPlayerItems(fromTracks: [firstTrack])
+                if firstItems.isEmpty {
+                    isLoaded = false
+                    return
+                }
+                for item in firstItems {
+                    if avQueuePlayer.canInsert(item, after: nil) {
+                        avQueuePlayer.insert(item, after: nil)
+                        addEndObserver(for: item)
+                    }
+                }
             } else {
-                isLoaded = avQueuePlayer.items().count > 0
+                isLoaded = false
                 return
+            }
+        } else {
+            for item in playerItems {
+                if avQueuePlayer.canInsert(item, after: nil) {
+                    avQueuePlayer.insert(item, after: nil)
+                    addEndObserver(for: item)
+                } else {
+                    isLoaded = avQueuePlayer.items().count > 0
+                    return
+                }
             }
         }
         
