@@ -28,7 +28,9 @@ class OverdriveTrack: Track {
     
     var duration: TimeInterval {
         get {
-            requestDurationUpdate()
+            if _duration <= 0 {
+                requestDurationUpdate()
+            }
             return _duration
         }
     }
@@ -52,6 +54,9 @@ class OverdriveTrack: Track {
         self.title = title
         self.index = index
         self.mediaType = manifest.trackMediaType
+        
+        self._duration = duration > 0 ? duration : 0
+        
         self.downloadTask = OverdriveDownloadTask(key: self.key, url: url, mediaType: mediaType, bookID: audiobookID)
 
         downloadTask?.statePublisher
