@@ -556,6 +556,20 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                     play(at: nextStart, completion: nil)
                 }
                 return
+            } else {
+                ATLog(.debug, "🔄 [LCPStreamingPlayer] Chapter changed on track end - updating lock screen")
+                
+                let wasPlaying = avQueuePlayer.rate > 0
+                if avQueuePlayer.items().count > 1 {
+                    avQueuePlayer.advanceToNextItem()
+                    if wasPlaying { 
+                        avQueuePlayer.play()
+                        restorePlaybackRate()
+                    }
+                }
+                
+                // Trigger position update for lock screen refresh
+                playbackStatePublisher.send(.started(nextStart))
             }
         } else {
             // No next track - this is end of book!

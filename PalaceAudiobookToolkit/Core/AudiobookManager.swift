@@ -247,6 +247,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     public var needsDownloadRetry: Bool = false
 
     private(set) public var timer: Cancellable?
+    private var lastKnownChapter: Chapter?
+    
+    private var chapterMonitorTimer: Cancellable?
+    
 
     // MARK: - Initialization
 
@@ -267,9 +271,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         setupBindings()
         subscribeToPlayer()
         setupNowPlayingInfoTimer()
+        setupChapterMonitorTimer()
         subscribeToMediaControlCommands()
         calculateOverallDownloadProgress()
         setupAppStateObserver()
+        
+        if let currentPosition = audiobook.player.currentTrackPosition {
+            lastKnownChapter = try? tableOfContents.chapter(forPosition: currentPosition)
+        }
         
         ATLog(.info, "AudiobookManager initialized with enhanced position system and energy optimizations")
     }
@@ -362,9 +371,61 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] position in
                 guard let self = self else { return }
+                
+                if let currentChapter = try? self.tableOfContents.chapter(forPosition: position) {
+                    if self.lastKnownChapter?.title != currentChapter.title {
+                        self.lastKnownChapter = currentChapter
+                        ATLog(.debug, "🔄 Chapter changed - updating lock screen")
+                    }
+                }
+                
                 self.statePublisher.send(.positionUpdated(position))
                 self.updateNowPlayingInfo(position)
             }
+    }
+
+    private func setupChapterMonitorTimer() {
+        chapterMonitorTimer?.cancel()
+        chapterMonitorTimer = nil
+        
+        chapterMonitorTimer = Timer.publish(every: 1.0, on: .main, in: .common) // Check every second
+            .autoconnect()
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
+            .compactMap { [weak self] _ -> TrackPosition? in
+                guard let self = self, 
+                      self.audiobook.player.isPlaying,
+                      let position = self.audiobook.player.currentTrackPosition else { 
+                    return nil 
+                }
+                return position
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] position in
+                guard let self = self else { return }
+                self.checkForChapterChange(at: position)
+            }
+    }
+
+    private func checkForChapterChange(at position: TrackPosition) {
+        let hasChanged = hasChapterChanged(from: lastKnownChapter, to: position)
+        if hasChanged {
+            ATLog(.info, "🔄 [AudiobookManager] Chapter boundary crossed - immediate lock screen update")
+            updateNowPlayingInfo(position)
+            lastKnownChapter = try? tableOfContents.chapter(forPosition: position)
+        }
+    }
+    
+    private func hasChapterChanged(from lastChapter: Chapter?, to position: TrackPosition) -> Bool {
+        guard let currentChapter = try? tableOfContents.chapter(forPosition: position) else {
+            return false
+        }
+        
+        guard let lastChapter = lastChapter else {
+            return true
+        }
+        
+        return lastChapter.title != currentChapter.title || 
+               lastChapter.position.track.key != currentChapter.position.track.key
     }
 
     public func updateNowPlayingInfo(_ position: TrackPosition?) {
@@ -520,6 +581,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         waitingForPlayer = false
         statePublisher.send(.playbackBegan(trackPosition))
         playbackTrackerDelegate?.playbackStarted()
+        
+        updateNowPlayingInfo(trackPosition)
     }
 
     private func handlePlaybackStopped(_ trackPosition: TrackPosition) {
@@ -583,6 +646,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
         timer?.cancel()
         timer = nil
+        chapterMonitorTimer?.cancel()
+        chapterMonitorTimer = nil
         cancellables.removeAll()
     }
 }
