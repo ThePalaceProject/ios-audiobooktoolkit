@@ -52,7 +52,7 @@ public class HTTPRangeRetriever {
           url: httpURL,
           method: .get,
           headers: [
-            "Range": "bytes=\(range.lowerBound)-\(range.upperBound - 1)",
+            "Range": "bytes=\(range.lowerBound)-\(range.upperBound - 1)"
           ]
         )
 

@@ -10,7 +10,7 @@ final class OverdriveDownloadTask: DownloadTask {
 
   var needsRetry: Bool {
     switch assetFileStatus() {
-    case .missing(_), .unknown:
+    case .missing, .unknown:
       true
     case .saved:
       false

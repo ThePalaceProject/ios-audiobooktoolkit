@@ -262,7 +262,7 @@ private extension LCPResourceLoaderDelegate {
       if let res = resource {
         do {
           let segmentSize = 128 * 1024
-          var totalLength: Int? = nil
+          var totalLength: Int?
           if let length = try? await res.estimatedLength().get(), let l = length {
             totalLength = Int(l)
           }

@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 private let allowableRootAtomTypes: [String] = [
-  "ftyp", "moov", "mdat", "stts", "stsc", "stsz", "meta", "free", "skip", "wide",
+  "ftyp", "moov", "mdat", "stts", "stsc", "stsz", "meta", "free", "skip", "wide"
 ]
 
 private let qtAtomSizeTypeSkipOffset = 8

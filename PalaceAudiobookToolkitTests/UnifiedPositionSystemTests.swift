@@ -224,7 +224,7 @@ final class UnifiedPositionSystemTests: XCTestCase {
   private func createTestTracks() -> [any Track] {
     [
       MockTrack(key: "track1", duration: 5400, index: 0),
-      MockTrack(key: "track2", duration: 3600, index: 1),
+      MockTrack(key: "track2", duration: 3600, index: 1)
     ]
   }
 

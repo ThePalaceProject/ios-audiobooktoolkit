@@ -98,7 +98,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
   private mutating func loadTocFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
     readingOrder.forEach { item in
-      var track: (any Track)? = nil
+      var track: (any Track)?
       var duration = 0.0
 
       if let href = item.href {

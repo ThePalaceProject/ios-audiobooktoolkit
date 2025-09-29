@@ -53,7 +53,7 @@ public extension DateFormatter {
       11: "yyyy-MM-ddZ",
       16: "yyyy-MM-ddZZZZZ",
       19: "yyyy-MM-dd'T'HH:mm:ss",
-      25: "yyyy-MM-dd'T'HH:mm:ssZZZZZ",
+      25: "yyyy-MM-dd'T'HH:mm:ssZZZZZ"
     ]
     let defaultFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
 

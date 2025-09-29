@@ -10,10 +10,6 @@ import AVFoundation
 import Combine
 import Foundation
 
-import AVFoundation
-import Combine
-import Foundation
-
 class OverdriveTrack: Track {
   var key: String = ""
   var downloadTask: (any DownloadTask)?
@@ -79,7 +75,7 @@ class OverdriveTrack: Track {
 
     let asset = AVURLAsset(url: localURL)
     asset.loadValuesAsynchronously(forKeys: ["duration"]) {
-      var error: NSError? = nil
+      var error: NSError?
       let status = asset.statusOfValue(forKey: "duration", error: &error)
       if status == .loaded {
         let duration = CMTimeGetSeconds(asset.duration)

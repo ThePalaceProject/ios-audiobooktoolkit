@@ -61,7 +61,7 @@ public class RangeResource: Resource {
     var byteBuffer = Data()
 
     do {
-      let _ = try await httpClient
+      _ = try await httpClient
         .stream(request: req, consume: { chunk, _ in
           byteBuffer.append(chunk)
           return .success(())

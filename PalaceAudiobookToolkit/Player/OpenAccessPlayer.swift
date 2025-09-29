@@ -434,7 +434,7 @@ class OpenAccessPlayer: NSObject, Player {
     resetPlayerQueue()
     let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
 
-    var desiredIndex: Int? = nil
+    var desiredIndex: Int?
     for (index, item) in playerItems.enumerated() {
       avQueuePlayer.insert(item, after: nil)
       addEndObserver(for: item)
@@ -553,7 +553,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     let currentItems = avQueuePlayer.items()
-    var insertAfter: AVPlayerItem? = nil
+    var insertAfter: AVPlayerItem?
 
     for (index, item) in currentItems.enumerated() {
       if let trackIndex = allTracks.firstIndex(where: { $0.key == item.trackIdentifier }),

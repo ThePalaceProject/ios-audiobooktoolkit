@@ -17,12 +17,12 @@ private let obj1: [String: Any?] = [
     -123,
     -123.123,
     [
-      "nestedObjInArrayKey": "Blah",
-    ],
+      "nestedObjInArrayKey": "Blah"
+    ]
   ],
   "objKey": [
-    "nestedStringKey": "Hello World!",
-  ],
+    "nestedStringKey": "Hello World!"
+  ]
 ]
 
 // MARK: - JSONUtilsTest

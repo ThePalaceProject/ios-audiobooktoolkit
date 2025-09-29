@@ -66,7 +66,7 @@ class TableOfContentsTests: XCTestCase {
       .bestNewHorror: "Chapter 1",
       .quickSilver: "Invocation",
       .snowcrash: "Opening Credits",
-      .theSystemOfTheWorld: "Chapter 1",
+      .theSystemOfTheWorld: "Chapter 1"
     ]
 
     for (manifestJSON, expectedTitle) in expectedFirstChapterTitles {

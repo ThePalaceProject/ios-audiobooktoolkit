@@ -21,7 +21,7 @@ final class OpenAccessDownloadTask: DownloadTask {
   var key: String
   var needsRetry: Bool {
     switch assetFileStatus() {
-    case .missing(_), .unknown:
+    case .missing, .unknown:
       true
     case .saved:
       false

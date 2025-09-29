@@ -511,7 +511,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   @discardableResult
   public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
-    var result: Result<Void, Error>? = nil
+    var result: Result<Void, Error>?
 
     bookmarkDelegate?.saveListeningPosition(at: location) { serverId in
       if let _ = serverId {

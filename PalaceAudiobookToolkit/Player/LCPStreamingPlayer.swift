@@ -452,7 +452,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }()
 
     let assetOptions: [String: Any] = [
-      AVURLAssetPreferPreciseDurationAndTimingKey: false,
+      AVURLAssetPreferPreciseDurationAndTimingKey: false
     ]
     let asset = AVURLAsset(url: assetURL, options: assetOptions)
 

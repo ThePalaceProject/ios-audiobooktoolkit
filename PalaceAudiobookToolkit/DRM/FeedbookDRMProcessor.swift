@@ -3,7 +3,7 @@ import Foundation
 
 private let jwtHeaderObj = [
   "alg": "HS256",
-  "typ": "JWT",
+  "typ": "JWT"
 ]
 
 // MARK: - FeedbookDRMProcessor
@@ -99,7 +99,7 @@ class FeedbookDRMProcessor {
 
       let publicSecKeyProperties = [
         kSecAttrKeyType: kSecAttrKeyTypeRSA,
-        kSecAttrKeyClass: kSecAttrKeyClassPublic,
+        kSecAttrKeyClass: kSecAttrKeyClassPublic
       ]
 
       guard let publicSecKey = SecKeyCreateWithData(
@@ -259,7 +259,7 @@ class FeedbookDRMProcessor {
     let query: [String: Any] = [
       kSecClass as String: kSecClassKey,
       kSecAttrApplicationTag as String: tagData,
-      kSecReturnData as String: true,
+      kSecReturnData as String: true
     ]
     var item: AnyObject?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -289,7 +289,7 @@ class FeedbookDRMProcessor {
       kSecClass as String: kSecClassKey,
       kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
       kSecAttrApplicationTag as String: tagData,
-      kSecReturnData as String: true,
+      kSecReturnData as String: true
     ]
     var item: AnyObject?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -313,7 +313,7 @@ class FeedbookDRMProcessor {
     let claimsObj = [
       "iss": "https://librarysimplified.org/products/SimplyE",
       "sub": resourceUri,
-      "jti": UUID().uuidString,
+      "jti": UUID().uuidString
     ]
 
     // JWT doesn't explicitly require canonicalization but it makes testing/confirmation easier

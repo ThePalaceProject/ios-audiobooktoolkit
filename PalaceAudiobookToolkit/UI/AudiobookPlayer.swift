@@ -30,7 +30,7 @@ public class AudiobookPlayer: UIViewController {
       playerViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
       playerViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       playerViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      playerViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      playerViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
     ])
     playerViewController.didMove(toParent: self)
     hidesBottomBarWhenPushed = true
