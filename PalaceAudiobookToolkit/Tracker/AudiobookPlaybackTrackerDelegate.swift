@@ -15,8 +15,8 @@ import Foundation
 ///  - `playbackStopped()` when playbook is stopeed, e.g., when the player switches between chapters, the user paused the playback, etc.
 @objc
 public protocol AudiobookPlaybackTrackerDelegate {
-    /// Audiobook player stated playing a track.
-    func playbackStarted()
-    /// Audiobook player paused or stopped playing a track..
-    func playbackStopped()
+  /// Audiobook player stated playing a track.
+  func playbackStarted()
+  /// Audiobook player paused or stopped playing a track..
+  func playbackStopped()
 }

@@ -8,28 +8,33 @@
 
 import UIKit
 
+// MARK: - FindawayDatabaseVerificationDelegate
+
 @objc protocol FindawayDatabaseVerificationDelegate: class {
-    func findawayDatabaseVerificationDidUpdate(_ findawayDatabaseVerification: FindawayDatabaseVerification)
+  func findawayDatabaseVerificationDidUpdate(_ findawayDatabaseVerification: FindawayDatabaseVerification)
 }
 
+// MARK: - FindawayDatabaseVerification
+
 @objc class FindawayDatabaseVerification: NSObject {
-    static let shared = FindawayDatabaseVerification()
+  static let shared = FindawayDatabaseVerification()
 
-    var verified = false {
-        didSet {
-            self.delegates.allObjects.forEach { (delegate) in
-                delegate.findawayDatabaseVerificationDidUpdate(self)
-            }
-        }
+  var verified = false {
+    didSet {
+      delegates.allObjects.forEach { delegate in
+        delegate.findawayDatabaseVerificationDidUpdate(self)
+      }
     }
-    
-    private var delegates = NSHashTable<FindawayDatabaseVerificationDelegate>(options: [NSPointerFunctions.Options.weakMemory])
+  }
 
-    func registerDelegate(_ delegate: FindawayDatabaseVerificationDelegate) {
-        self.delegates.add(delegate)
-    }
-    
-    func removeDelegate(_ delegate: FindawayDatabaseVerificationDelegate) {
-        self.delegates.remove(delegate)
-    }
+  private var delegates =
+    NSHashTable<FindawayDatabaseVerificationDelegate>(options: [NSPointerFunctions.Options.weakMemory])
+
+  func registerDelegate(_ delegate: FindawayDatabaseVerificationDelegate) {
+    delegates.add(delegate)
+  }
+
+  func removeDelegate(_ delegate: FindawayDatabaseVerificationDelegate) {
+    delegates.remove(delegate)
+  }
 }

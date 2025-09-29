@@ -9,19 +9,19 @@
 import SwiftUI
 
 struct LoadingView: View {
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.5)
-                .edgesIgnoringSafeArea(.all)
-            
-            VStack {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(2)
-                Text(Strings.Generic.loading)
-                    .foregroundColor(.white)
-                    .padding(.top, 8)
-            }
-        }
+  var body: some View {
+    ZStack {
+      Color.black.opacity(0.5)
+        .edgesIgnoringSafeArea(.all)
+
+      VStack {
+        ProgressView()
+          .progressViewStyle(CircularProgressViewStyle())
+          .scaleEffect(2)
+        Text(Strings.Generic.loading)
+          .foregroundColor(.white)
+          .padding(.top, 8)
+      }
     }
+  }
 }

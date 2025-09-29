@@ -9,7 +9,7 @@
 import UIKit
 
 extension Bundle {
-    static func audiobookToolkit() -> Bundle? {
-        return Bundle(identifier: "PalaceAudiobooksToolkit.PalaceAudiobookToolkit")
-    }
+  static func audiobookToolkit() -> Bundle? {
+    Bundle(identifier: "PalaceAudiobooksToolkit.PalaceAudiobookToolkit")
+  }
 }

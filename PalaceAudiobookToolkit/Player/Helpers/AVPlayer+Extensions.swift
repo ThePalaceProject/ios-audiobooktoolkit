@@ -6,18 +6,18 @@
 //  Copyright © 2024 The Palace Project. All rights reserved.
 //
 
-import ObjectiveC
 import AVFoundation
+import ObjectiveC
 
 private var trackKey: UInt8 = 0
 
 extension AVPlayerItem {
-    var trackIdentifier: String? {
-        get {
-            return objc_getAssociatedObject(self, &trackKey) as? String
-        }
-        set {
-            objc_setAssociatedObject(self, &trackKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
+  var trackIdentifier: String? {
+    get {
+      objc_getAssociatedObject(self, &trackKey) as? String
     }
+    set {
+      objc_setAssociatedObject(self, &trackKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+  }
 }
