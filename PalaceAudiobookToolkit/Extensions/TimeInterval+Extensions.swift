@@ -8,12 +8,12 @@
 
 import Foundation
 
-extension TimeInterval {
-    public var seconds: Int {
-        Int(self.rounded())
-    }
+public extension TimeInterval {
+  var seconds: Int {
+    Int(rounded())
+  }
 
-    public var milliseconds: Int {
-        seconds * 1000
-    }
+  var milliseconds: Int {
+    seconds * 1000
+  }
 }

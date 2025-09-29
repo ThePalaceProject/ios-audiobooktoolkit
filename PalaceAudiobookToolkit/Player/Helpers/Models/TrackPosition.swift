@@ -8,105 +8,112 @@
 
 import Foundation
 
+// MARK: - TrackPositionError
+
 public enum TrackPositionError: Error, Equatable {
-    case outOfBounds
-    case tracksOutOfOrder
-    case differentTracks
-    case calculationError(String)
+  case outOfBounds
+  case tracksOutOfOrder
+  case differentTracks
+  case calculationError(String)
 }
+
+// MARK: - TrackPosition
 
 public struct TrackPosition: Equatable, Comparable {
-    public var track: any Track
-    public var timestamp: Double
-    public var tracks: Tracks
-    public var lastSavedTimeStamp: String = ""
-    public var annotationId: String = ""
+  public var track: any Track
+  public var timestamp: Double
+  public var tracks: Tracks
+  public var lastSavedTimeStamp: String = ""
+  public var annotationId: String = ""
 
-    public init(track: any Track, timestamp: Double, tracks: Tracks) {
-        self.track = track
-        self.timestamp = timestamp
-        self.tracks = tracks
-    }
-    
-    public static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
-        if lhs.track.id == rhs.track.id {
-            return lhs.timestamp - rhs.timestamp
-        }
+  public init(track: any Track, timestamp: Double, tracks: Tracks) {
+    self.track = track
+    self.timestamp = timestamp
+    self.tracks = tracks
+  }
 
-        guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == lhs.track.id }),
-              let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == rhs.track.id }) else {
-            throw TrackPositionError.differentTracks
-        }
-
-        var diff = 0.0
-
-        if lhsTrackIndex > rhsTrackIndex {
-            diff += rhs.track.duration - rhs.timestamp
-
-            for index in (rhsTrackIndex + 1)..<lhsTrackIndex {
-                diff += lhs.tracks[index].duration
-            }
-
-            diff += lhs.timestamp
-        } else {
-            diff -= lhs.timestamp
-
-            for index in (lhsTrackIndex + 1)..<rhsTrackIndex {
-                diff -= lhs.tracks[index].duration
-            }
-
-            diff -= rhs.track.duration - rhs.timestamp
-
-            return -diff
-        }
-
-        return diff
+  public static func - (lhs: TrackPosition, rhs: TrackPosition) throws -> Double {
+    if lhs.track.id == rhs.track.id {
+      return lhs.timestamp - rhs.timestamp
     }
 
-    public static func + (lhs: TrackPosition, other: Double) -> TrackPosition {
-        var newTimestamp = lhs.timestamp + other
-        var currentTrack = lhs.track
-
-        while newTimestamp < 0 {
-            guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
-                return TrackPosition(track: currentTrack, timestamp: 0, tracks: lhs.tracks)
-            }
-            currentTrack = prevTrack
-            newTimestamp += currentTrack.duration
-        }
-
-        var remainingTimeInCurrentTrack = currentTrack.duration
-        while newTimestamp >= remainingTimeInCurrentTrack {
-            newTimestamp -= remainingTimeInCurrentTrack
-            guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
-                return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
-            }
-            currentTrack = nextTrack
-            remainingTimeInCurrentTrack = currentTrack.duration
-        }
-
-        return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
+    guard let lhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == lhs.track.id }),
+          let rhsTrackIndex = lhs.tracks.tracks.firstIndex(where: { $0.id == rhs.track.id })
+    else {
+      throw TrackPositionError.differentTracks
     }
 
-    public static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        if lhs.track.id == rhs.track.id {
-            return lhs.timestamp < rhs.timestamp
-        }
-        return lhs.track.index < rhs.track.index
+    var diff = 0.0
+
+    if lhsTrackIndex > rhsTrackIndex {
+      diff += rhs.track.duration - rhs.timestamp
+
+      for index in (rhsTrackIndex + 1)..<lhsTrackIndex {
+        diff += lhs.tracks[index].duration
+      }
+
+      diff += lhs.timestamp
+    } else {
+      diff -= lhs.timestamp
+
+      for index in (lhsTrackIndex + 1)..<rhsTrackIndex {
+        diff -= lhs.tracks[index].duration
+      }
+
+      diff -= rhs.track.duration - rhs.timestamp
+
+      return -diff
     }
 
-    public static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
-        lhs.track.id == rhs.track.id && abs(lhs.timestamp - rhs.timestamp) < 0.1
+    return diff
+  }
+
+  public static func + (lhs: TrackPosition, other: Double) -> TrackPosition {
+    var newTimestamp = lhs.timestamp + other
+    var currentTrack = lhs.track
+
+    while newTimestamp < 0 {
+      guard let prevTrack = lhs.tracks.previousTrack(currentTrack) else {
+        return TrackPosition(track: currentTrack, timestamp: 0, tracks: lhs.tracks)
+      }
+      currentTrack = prevTrack
+      newTimestamp += currentTrack.duration
     }
+
+    var remainingTimeInCurrentTrack = currentTrack.duration
+    while newTimestamp >= remainingTimeInCurrentTrack {
+      newTimestamp -= remainingTimeInCurrentTrack
+      guard let nextTrack = lhs.tracks.nextTrack(currentTrack) else {
+        return TrackPosition(track: currentTrack, timestamp: currentTrack.duration, tracks: lhs.tracks)
+      }
+      currentTrack = nextTrack
+      remainingTimeInCurrentTrack = currentTrack.duration
+    }
+
+    return TrackPosition(track: currentTrack, timestamp: newTimestamp, tracks: lhs.tracks)
+  }
+
+  public static func < (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
+    if lhs.track.id == rhs.track.id {
+      return lhs.timestamp < rhs.timestamp
+    }
+    return lhs.track.index < rhs.track.index
+  }
+
+  public static func == (lhs: TrackPosition, rhs: TrackPosition) -> Bool {
+    lhs.track.id == rhs.track.id && abs(lhs.timestamp - rhs.timestamp) < 0.1
+  }
 }
 
+// MARK: CustomStringConvertible
+
 extension TrackPosition: CustomStringConvertible {
-    public var description: String {
-        let trackDesc = track.description
-        return "Track: \(trackDesc) (Timestamp: \(timestamp)"
-    }
-    
-    public func durationToSelf() -> TimeInterval {
-        tracks.duration(to: self)
-    }
+  public var description: String {
+    let trackDesc = track.description
+    return "Track: \(trackDesc) (Timestamp: \(timestamp)"
+  }
+
+  public func durationToSelf() -> TimeInterval {
+    tracks.duration(to: self)
+  }
 }

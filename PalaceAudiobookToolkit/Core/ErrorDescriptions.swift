@@ -1,101 +1,105 @@
 let OpenAccessPlayerErrorDomain = "org.nypl.labs.NYPLAudiobookToolkit.OpenAccessPlayer"
 let OverdrivePlayerErrorDomain = "org.nypl.labs.NYPLAudiobookToolkit.OverdrivePlayer"
 
+// MARK: - OpenAccessPlayerError
+
 enum OpenAccessPlayerError: Int {
-    case unknown = 0
-    case downloadNotFinished
-    case playerNotReady
-    case connectionLost
-    case drmExpired
-    
-    func errorTitle() -> String {
-        switch self {
-        case .downloadNotFinished:
-            return "Please Wait"
-        case .connectionLost:
-            return "Connection Lost"
-        case .drmExpired:
-            return "DRM Protection"
-        default:
-            return "A Problem Has Occurred"
-        }
+  case unknown = 0
+  case downloadNotFinished
+  case playerNotReady
+  case connectionLost
+  case drmExpired
+
+  func errorTitle() -> String {
+    switch self {
+    case .downloadNotFinished:
+      "Please Wait"
+    case .connectionLost:
+      "Connection Lost"
+    case .drmExpired:
+      "DRM Protection"
+    default:
+      "A Problem Has Occurred"
     }
-    
-    func errorDescription() -> String {
-        switch self {
-        case .unknown:
-            return """
-            An unknown error has occurred. Please leave the book, and try again.
-            If the problem persists, go to Settings and sign out.
-            """
-        case .downloadNotFinished:
-            return """
-            This chapter has not finished downloading. Please wait and try again.
-            """
-        case .playerNotReady:
-            return """
-            A problem has occurred. Please leave the book and try again.
-            """
-        case .connectionLost:
-            return """
-            The internet connection was lost during the download.
-             Wait until you are back online, leave the book and try again.
-            """
-        case .drmExpired:
-            return """
-            DRM Permissions for this Audiobook have expired. Please leave the book, and try again.
-            If the problem persists, go to Settings and sign out.
-            """
-        }
+  }
+
+  func errorDescription() -> String {
+    switch self {
+    case .unknown:
+      """
+      An unknown error has occurred. Please leave the book, and try again.
+      If the problem persists, go to Settings and sign out.
+      """
+    case .downloadNotFinished:
+      """
+      This chapter has not finished downloading. Please wait and try again.
+      """
+    case .playerNotReady:
+      """
+      A problem has occurred. Please leave the book and try again.
+      """
+    case .connectionLost:
+      """
+      The internet connection was lost during the download.
+       Wait until you are back online, leave the book and try again.
+      """
+    case .drmExpired:
+      """
+      DRM Permissions for this Audiobook have expired. Please leave the book, and try again.
+      If the problem persists, go to Settings and sign out.
+      """
     }
+  }
 }
 
+// MARK: - OverdrivePlayerError
+
 enum OverdrivePlayerError: Int {
-    // Cases 0 - 3 have to match with OpenAccessPlayerError
-    // since they are thrown in OpenAccessPlayer, parent class of OverdrivePlayer
-    case unknown = 0
-    case downloadNotFinished
-    case playerNotReady
-    case connectionLost
-    case downloadExpired
-    
-    func errorTitle() -> String {
-        switch self {
-        case .downloadNotFinished:
-            return "Please Wait"
-        case .connectionLost:
-            return "Connection Lost"
-        case .downloadExpired:
-            return "Download Expired"
-        default:
-            return "A Problem Has Occurred"
-        }
+  // Cases 0 - 3 have to match with OpenAccessPlayerError
+  // since they are thrown in OpenAccessPlayer, parent class of OverdrivePlayer
+  case unknown = 0
+  case downloadNotFinished
+  case playerNotReady
+  case connectionLost
+  case downloadExpired
+
+  func errorTitle() -> String {
+    switch self {
+    case .downloadNotFinished:
+      "Please Wait"
+    case .connectionLost:
+      "Connection Lost"
+    case .downloadExpired:
+      "Download Expired"
+    default:
+      "A Problem Has Occurred"
     }
-    
-    func errorDescription() -> String {
-        switch self {
-        case .unknown:
-            return """
-            An unknown error has occurred. Please leave the book, and try again.
-            If the problem persists, go to Settings and sign out.
-            """
-        case .downloadNotFinished:
-            return """
-            This chapter has not finished downloading. Please wait and try again.
-            """
-        case .playerNotReady:
-            return """
-            A problem has occurred. Please leave the book and try again.
-            """
-        case .connectionLost:
-            return """
-            The internet connection was lost during the download.
-             Wait until you are back online, leave the book and try again.
-            """
-        case .downloadExpired:
-            return """
-            The download URLs for this Audiobook have expired. Please leave the book, and try again.
-            """
-        }
+  }
+
+  func errorDescription() -> String {
+    switch self {
+    case .unknown:
+      """
+      An unknown error has occurred. Please leave the book, and try again.
+      If the problem persists, go to Settings and sign out.
+      """
+    case .downloadNotFinished:
+      """
+      This chapter has not finished downloading. Please wait and try again.
+      """
+    case .playerNotReady:
+      """
+      A problem has occurred. Please leave the book and try again.
+      """
+    case .connectionLost:
+      """
+      The internet connection was lost during the download.
+       Wait until you are back online, leave the book and try again.
+      """
+    case .downloadExpired:
+      """
+      The download URLs for this Audiobook have expired. Please leave the book, and try again.
+      """
     }
+  }
 }

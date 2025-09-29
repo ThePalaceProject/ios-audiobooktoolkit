@@ -9,12 +9,12 @@
 import UIKit
 
 class HumanReadablePercentage {
-    lazy var value = { () -> String in
-        return "\(Int(self.percentage * 100))"
-    }()
+  lazy var value = { () -> String in
+    return "\(Int(self.percentage * 100))"
+  }()
 
-    private let percentage: Float
-    public init(percentage: Float) {
-        self.percentage = percentage
-    }
+  private let percentage: Float
+  public init(percentage: Float) {
+    self.percentage = percentage
+  }
 }

@@ -10,61 +10,91 @@ import UIKit
 
 /// Utility class to turn a time interval into a human readable string or timecode.
 class HumanReadableTimestamp {
-    lazy var timecode: String = {
-        guard self.timeInterval.isFinite else {
-            return "--"
-        }
-        
-        let interval = Int(self.timeInterval)
-        let seconds = interval % 60
-        let minutes = (interval / 60) % 60
-        let hours = (interval / 3600)
-        let formatStringWithoutHours = NSLocalizedString("%02d:%02d", bundle: Bundle.audiobookToolkit()!, value: "%02d:%02d", comment: "Minutes and seconds")
-        var timeString = String(format: formatStringWithoutHours, minutes, seconds)
-        if hours > 0 {
-            let formatStringWithHours = NSLocalizedString("%02d:%02d:%02d", bundle: Bundle.audiobookToolkit()!, value: "%02d:%02d:%02d", comment: "Minutes, seconds and hours")
-            timeString = String(format: formatStringWithHours, hours, minutes, seconds)
-        }
-        return timeString
-    }()
-
-    lazy var stringDescription: String = {
-        guard self.timeInterval.isFinite else {
-            return "--"
-        }
-        
-        let interval = Int(self.timeInterval)
-        let minutes = (interval / 60) % 60
-        let hours = (interval / 3600)
-        let formatStringWithoutHours = NSLocalizedString("%02dmin", bundle: Bundle.audiobookToolkit()!, value: "%02dmin", comment: "The number of minutes")
-        var timeString = String(format: formatStringWithoutHours, minutes)
-        if hours > 0 {
-            let formatStringWithHours = NSLocalizedString("%02d hr %02 dmin", bundle: Bundle.audiobookToolkit()!, value: "%02d hr %02d min", comment: "The number of hours and minutes")
-            timeString = String(format: formatStringWithHours, hours, minutes)
-        }
-        return timeString
-    }()
-
-    lazy var accessibleDescription: String = {
-        guard self.timeInterval.isFinite else {
-            return "--"
-        }
-        
-        let interval = Int(self.timeInterval)
-        let seconds = interval % 60
-        let minutes = (interval / 60) % 60
-        let hours = (interval / 3600)
-        let formatStringWithoutHours = NSLocalizedString("%d minutes and %d seconds", bundle: Bundle.audiobookToolkit()!, value: "%d minutes and %d seconds", comment: "The number of minutes and seconds")
-        var timeString = String(format: formatStringWithoutHours, minutes, seconds)
-        if hours > 0 {
-            let formatStringWithHours = NSLocalizedString("%d hours, %d minutes and %d seconds", bundle: Bundle.audiobookToolkit()!, value: "%d hours, %d minutes and %d seconds", comment: "The number of hours minutes and seconds")
-            timeString = String(format: formatStringWithHours, hours, minutes, seconds)
-        }
-        return timeString
-    }()
-
-    private let timeInterval: TimeInterval
-    init(timeInterval: TimeInterval) {
-        self.timeInterval = timeInterval
+  lazy var timecode: String = {
+    guard self.timeInterval.isFinite else {
+      return "--"
     }
+
+    let interval = Int(self.timeInterval)
+    let seconds = interval % 60
+    let minutes = (interval / 60) % 60
+    let hours = (interval / 3600)
+    let formatStringWithoutHours = NSLocalizedString(
+      "%02d:%02d",
+      bundle: Bundle.audiobookToolkit()!,
+      value: "%02d:%02d",
+      comment: "Minutes and seconds"
+    )
+    var timeString = String(format: formatStringWithoutHours, minutes, seconds)
+    if hours > 0 {
+      let formatStringWithHours = NSLocalizedString(
+        "%02d:%02d:%02d",
+        bundle: Bundle.audiobookToolkit()!,
+        value: "%02d:%02d:%02d",
+        comment: "Minutes, seconds and hours"
+      )
+      timeString = String(format: formatStringWithHours, hours, minutes, seconds)
+    }
+    return timeString
+  }()
+
+  lazy var stringDescription: String = {
+    guard self.timeInterval.isFinite else {
+      return "--"
+    }
+
+    let interval = Int(self.timeInterval)
+    let minutes = (interval / 60) % 60
+    let hours = (interval / 3600)
+    let formatStringWithoutHours = NSLocalizedString(
+      "%02dmin",
+      bundle: Bundle.audiobookToolkit()!,
+      value: "%02dmin",
+      comment: "The number of minutes"
+    )
+    var timeString = String(format: formatStringWithoutHours, minutes)
+    if hours > 0 {
+      let formatStringWithHours = NSLocalizedString(
+        "%02d hr %02 dmin",
+        bundle: Bundle.audiobookToolkit()!,
+        value: "%02d hr %02d min",
+        comment: "The number of hours and minutes"
+      )
+      timeString = String(format: formatStringWithHours, hours, minutes)
+    }
+    return timeString
+  }()
+
+  lazy var accessibleDescription: String = {
+    guard self.timeInterval.isFinite else {
+      return "--"
+    }
+
+    let interval = Int(self.timeInterval)
+    let seconds = interval % 60
+    let minutes = (interval / 60) % 60
+    let hours = (interval / 3600)
+    let formatStringWithoutHours = NSLocalizedString(
+      "%d minutes and %d seconds",
+      bundle: Bundle.audiobookToolkit()!,
+      value: "%d minutes and %d seconds",
+      comment: "The number of minutes and seconds"
+    )
+    var timeString = String(format: formatStringWithoutHours, minutes, seconds)
+    if hours > 0 {
+      let formatStringWithHours = NSLocalizedString(
+        "%d hours, %d minutes and %d seconds",
+        bundle: Bundle.audiobookToolkit()!,
+        value: "%d hours, %d minutes and %d seconds",
+        comment: "The number of hours minutes and seconds"
+      )
+      timeString = String(format: formatStringWithHours, hours, minutes, seconds)
+    }
+    return timeString
+  }()
+
+  private let timeInterval: TimeInterval
+  init(timeInterval: TimeInterval) {
+    self.timeInterval = timeInterval
+  }
 }

@@ -6,148 +6,149 @@
 //  Copyright © 2018 Dean Silfen. All rights reserved.
 //
 
+import Combine
 import XCTest
 @testable import PalaceAudiobookToolkit
-import Combine
+
+// MARK: - AudiobookNetworkServiceTest
 
 class AudiobookNetworkServiceTest: XCTestCase {
-    
-    var cancellables: Set<AnyCancellable>!
-    
-    override func setUp() {
-        super.setUp()
-        cancellables = []
+  var cancellables: Set<AnyCancellable>!
+
+  override func setUp() {
+    super.setUp()
+    cancellables = []
+  }
+
+  override func tearDown() {
+    cancellables = nil
+    super.tearDown()
+  }
+
+  func testDownloadProgressWithEmptyTracks() {
+    let service = DefaultAudiobookNetworkService(tracks: [])
+    let expectation = XCTestExpectation(description: "Expect no download state updates")
+
+    service.downloadStatePublisher
+      .sink(receiveValue: { _ in
+        XCTFail("Should not receive any download state updates")
+      })
+      .store(in: &cancellables)
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+      expectation.fulfill()
     }
-    
-    override func tearDown() {
-        cancellables = nil
-        super.tearDown()
-    }
-    
-    func testDownloadProgressWithEmptyTracks() {
-        let service = DefaultAudiobookNetworkService(tracks: [])
-        let expectation = XCTestExpectation(description: "Expect no download state updates")
-        
-        service.downloadStatePublisher
-            .sink(receiveValue: { state in
-                XCTFail("Should not receive any download state updates")
-            })
-            .store(in: &cancellables)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+
+    wait(for: [expectation], timeout: 2)
+  }
+
+  func testDownloadProgressWithTwoTracks() {
+    // Prepare
+    let track1 = TrackMock(progress: 0.50, key: "track1")
+    let track2 = TrackMock(progress: 0.25, key: "track2")
+
+    let service = DefaultAudiobookNetworkService(tracks: [track1, track2])
+    let expectation = XCTestExpectation(description: "Expect correct overall download progress")
+
+    // This will collect all progress updates
+    var receivedProgress: [Float] = []
+
+    // Observe changes
+    service.downloadStatePublisher
+      .sink(receiveValue: { state in
+        switch state {
+        case let .overallProgress(progress):
+          receivedProgress.append(progress)
+          if receivedProgress.contains(0.375) {
             expectation.fulfill()
+          }
+        default:
+          break
         }
-        
-        wait(for: [expectation], timeout: 2)
+      })
+      .store(in: &cancellables)
+
+    // Simulate fetch sequentially
+    DispatchQueue.global().async {
+      track1.simulateProgressUpdate(0.50)
+      track2.simulateProgressUpdate(0.25)
     }
-    
-    func testDownloadProgressWithTwoTracks() {
-        // Prepare
-        let track1 = TrackMock(progress: 0.50, key: "track1")
-        let track2 = TrackMock(progress: 0.25, key: "track2")
-        
-        let service = DefaultAudiobookNetworkService(tracks: [track1, track2])
-        let expectation = XCTestExpectation(description: "Expect correct overall download progress")
-        
-        // This will collect all progress updates
-        var receivedProgress: [Float] = []
-        
-        // Observe changes
-        service.downloadStatePublisher
-            .sink(receiveValue: { state in
-                switch state {
-                case .overallProgress(let progress):
-                    receivedProgress.append(progress)
-                    if receivedProgress.contains(0.375) {
-                        expectation.fulfill()
-                    }
-                default:
-                    break
-                }
-            })
-            .store(in: &self.cancellables)
-        
-        // Simulate fetch sequentially
-        DispatchQueue.global().async {
-            track1.simulateProgressUpdate(0.50)
-            track2.simulateProgressUpdate(0.25)
-        }
-        
-        // Wait for the results
-        wait(for: [expectation], timeout: 5)
-    }
+
+    // Wait for the results
+    wait(for: [expectation], timeout: 5)
+  }
 }
 
-
 extension AudiobookNetworkServiceTest {
-    class TrackMock: Track {
-        var key: String
-        var downloadTask: DownloadTask?
-        var title: String?
-        var index: Int = 0
-        var duration: TimeInterval = 0
-        var partNumber: Int?
-        var chapterNumber: Int?
-        var urls: [URL]?
-        
-        required convenience init(
-            manifest: PalaceAudiobookToolkit.Manifest,
-            urlString: String?,
-            audiobookID: String,
-            title: String?,
-            duration: Double,
-            index: Int,
-            token: String?,
-            key: String?
-        ) throws {
-            self.init(progress: 0.0, key: title ?? "")
-        }
-        
-        init(progress: Float, key: String) {
-            self.key = key
-            self.downloadTask = DownloadTaskMock(progress: progress, key: key, fetchClosure: nil)
-        }
-        
-        func simulateProgressUpdate(_ progress: Float) {
-            (downloadTask as? DownloadTaskMock)?.simulateProgress(progress)
-        }
-    }
-    
-    class DownloadTaskMock: DownloadTask {
-        var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
-        var downloadProgress: Float
-        var key: String
-        var fetchClosure: ((DownloadTaskMock) -> Void)?
-        var needsRetry: Bool = false
+  class TrackMock: Track {
+    var key: String
+    var downloadTask: DownloadTask?
+    var title: String?
+    var index: Int = 0
+    var duration: TimeInterval = 0
+    var partNumber: Int?
+    var chapterNumber: Int?
+    var urls: [URL]?
 
-        init(progress: Float, key: String, fetchClosure: ((DownloadTaskMock) -> Void)?) {
-            self.downloadProgress = progress
-            self.key = key
-            self.fetchClosure = fetchClosure
-        }
-        
-        func fetch() {
-            fetchClosure?(self)
-        }
-        
-        func delete() {
-            statePublisher.send(.deleted)
-        }
-        
-        func simulateProgress(_ progress: Float) {
-            statePublisher.send(.progress(progress))
-        }
-
-        func assetFileStatus() -> PalaceAudiobookToolkit.AssetResult {
-            return PalaceAudiobookToolkit.AssetResult.saved([])
-        }
+    required convenience init(
+      manifest _: PalaceAudiobookToolkit.Manifest,
+      urlString _: String?,
+      audiobookID _: String,
+      title: String?,
+      duration _: Double,
+      index _: Int,
+      token _: String?,
+      key _: String?
+    ) throws {
+      self.init(progress: 0.0, key: title ?? "")
     }
+
+    init(progress: Float, key: String) {
+      self.key = key
+      downloadTask = DownloadTaskMock(progress: progress, key: key, fetchClosure: nil)
+    }
+
+    func simulateProgressUpdate(_ progress: Float) {
+      (downloadTask as? DownloadTaskMock)?.simulateProgress(progress)
+    }
+  }
+
+  class DownloadTaskMock: DownloadTask {
+    var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+    var downloadProgress: Float
+    var key: String
+    var fetchClosure: ((DownloadTaskMock) -> Void)?
+    var needsRetry: Bool = false
+
+    init(progress: Float, key: String, fetchClosure: ((DownloadTaskMock) -> Void)?) {
+      downloadProgress = progress
+      self.key = key
+      self.fetchClosure = fetchClosure
+    }
+
+    func fetch() {
+      fetchClosure?(self)
+    }
+
+    func delete() {
+      statePublisher.send(.deleted)
+    }
+
+    func simulateProgress(_ progress: Float) {
+      statePublisher.send(.progress(progress))
+    }
+
+    func assetFileStatus() -> PalaceAudiobookToolkit.AssetResult {
+      PalaceAudiobookToolkit.AssetResult.saved([])
+    }
+  }
 }
 
 extension Manifest {
-    static var mockManifest: Manifest {
-        try! Manifest.from(jsonFileName: ManifestJSON.flatland.rawValue, bundle: Bundle(for: AudiobookNetworkServiceTest.self))
-    }
+  static var mockManifest: Manifest {
+    try! Manifest.from(
+      jsonFileName: ManifestJSON.flatland.rawValue,
+      bundle: Bundle(for: AudiobookNetworkServiceTest.self)
+    )
+  }
 }
-
-

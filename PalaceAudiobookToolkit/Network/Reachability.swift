@@ -6,66 +6,65 @@
 //  Copyright © 2023 The Palace Project. All rights reserved.
 //
 
-import SwiftUI
 import Network
+import SwiftUI
 import SystemConfiguration
 
 class Reachability: ObservableObject {
-    
-    @Published var isConnected: Bool = false
-    
-    private let connectionMonitor = NWPathMonitor()
-    // Status update retries
-    private let maxRetries = 30
-    private var retriesCounter = 0
-    
-    func startMonitoring() {
-        connectionMonitor.pathUpdateHandler = { [weak self] path in
-            // This seems to be the most reliable way to determine the connectin status
-            // path.status remains .unsatisfied during off/on testing
-            self?.retriesCounter = 0
-            self?.updateStatus()
-        }
-        let queue = DispatchQueue(label: "NetworkMonitor")
-        connectionMonitor.start(queue: queue)
+  @Published var isConnected: Bool = false
+
+  private let connectionMonitor = NWPathMonitor()
+  // Status update retries
+  private let maxRetries = 30
+  private var retriesCounter = 0
+
+  func startMonitoring() {
+    connectionMonitor.pathUpdateHandler = { [weak self] _ in
+      // This seems to be the most reliable way to determine the connectin status
+      // path.status remains .unsatisfied during off/on testing
+      self?.retriesCounter = 0
+      self?.updateStatus()
     }
-    
-    func stopMonitoring() {
-        connectionMonitor.cancel()
+    let queue = DispatchQueue(label: "NetworkMonitor")
+    connectionMonitor.start(queue: queue)
+  }
+
+  func stopMonitoring() {
+    connectionMonitor.cancel()
+  }
+
+  func updateStatus() {
+    guard retriesCounter < maxRetries else {
+      return
     }
-    
-    func updateStatus() {
-        guard retriesCounter < maxRetries else {
-            return
-        }
-        retriesCounter += 1
-        let newStatus = isConnectedToNetwork()
-        if isConnected != newStatus {
-            isConnected = newStatus
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.updateStatus()
-            }
-        }
+    retriesCounter += 1
+    let newStatus = isConnectedToNetwork()
+    if isConnected != newStatus {
+      isConnected = newStatus
+    } else {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        self?.updateStatus()
+      }
     }
-    
-    func isConnectedToNetwork() -> Bool {
-        var zeroAddress = sockaddr_in()
-        zeroAddress.sin_len = UInt8(MemoryLayout.size(ofValue: zeroAddress))
-        zeroAddress.sin_family = sa_family_t(AF_INET)
-        
-        let defaultRouteReachability = withUnsafePointer(to: &zeroAddress) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {zeroSockAddress in
-                SCNetworkReachabilityCreateWithAddress(nil, zeroSockAddress)
-            }
-        }
-        
-        var flags = SCNetworkReachabilityFlags()
-        if !SCNetworkReachabilityGetFlags(defaultRouteReachability!, &flags) {
-            return false
-        }
-        let isReachable = (flags.rawValue & UInt32(kSCNetworkFlagsReachable)) != 0
-        let needsConnection = (flags.rawValue & UInt32(kSCNetworkFlagsConnectionRequired)) != 0
-        return (isReachable && !needsConnection)
+  }
+
+  func isConnectedToNetwork() -> Bool {
+    var zeroAddress = sockaddr_in()
+    zeroAddress.sin_len = UInt8(MemoryLayout.size(ofValue: zeroAddress))
+    zeroAddress.sin_family = sa_family_t(AF_INET)
+
+    let defaultRouteReachability = withUnsafePointer(to: &zeroAddress) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { zeroSockAddress in
+        SCNetworkReachabilityCreateWithAddress(nil, zeroSockAddress)
+      }
     }
+
+    var flags = SCNetworkReachabilityFlags()
+    if !SCNetworkReachabilityGetFlags(defaultRouteReachability!, &flags) {
+      return false
+    }
+    let isReachable = (flags.rawValue & UInt32(kSCNetworkFlagsReachable)) != 0
+    let needsConnection = (flags.rawValue & UInt32(kSCNetworkFlagsConnectionRequired)) != 0
+    return isReachable && !needsConnection
+  }
 }
