@@ -82,6 +82,7 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   var currentTrackPosition: TrackPosition? {
+    // Return queued position if seeking is in progress
     if let queuedPosition = queuedTrackPosition {
       return queuedPosition
     }
@@ -168,74 +169,18 @@ class OpenAccessPlayer: NSObject, Player {
   func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
     queuedTrackPosition = position
     
-    // Check if we can seek within existing queue (avoids stop-start behavior)
-    if !avQueuePlayer.items().isEmpty,
-       let targetIndex = avQueuePlayer.items().firstIndex(where: { $0.trackIdentifier == position.track.key })
-    {
-      // Target track is already in queue - just seek without rebuilding
-      let currentIndex = avQueuePlayer.items().firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
-      
-      if targetIndex != currentIndex {
-        if targetIndex > currentIndex {
-          for _ in currentIndex..<targetIndex {
-            avQueuePlayer.advanceToNextItem()
-          }
-        } else {
-          // Need to rebuild if going backwards
-          performFullSeekAndPlay(position: position, completion: completion)
-          return
-        }
-      }
-      
-      // Seek to position within current item
-      let seekTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-      avQueuePlayer.seek(to: seekTime) { [weak self] success in
-        guard let self = self else { return }
-        
-        queuedTrackPosition = nil
-        if success {
-          avQueuePlayer.play()
-          restorePlaybackRate()
-          isLoaded = true
-          playbackStatePublisher.send(.started(position))
-          completion?(nil)
-        } else {
-          ATLog(.error, "OpenAccessPlayer: Seek failed but continuing")
-          avQueuePlayer.play()
-          restorePlaybackRate()
-          isLoaded = true
-          playbackStatePublisher.send(.started(position))
-          completion?(nil)
-        }
-      }
-    } else {
-      // Queue empty or target not in queue - do full seek with queue rebuild
-      performFullSeekAndPlay(position: position, completion: completion)
-    }
-  }
-  
-  private func performFullSeekAndPlay(position: TrackPosition, completion: ((Error?) -> Void)?) {
     seekTo(position: position) { [weak self] trackPosition in
       guard let self = self else { return }
       
       if trackPosition == nil {
-        ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), attempting fallback playback")
-        queuedTrackPosition = nil
-        if !avQueuePlayer.items().isEmpty {
-          avQueuePlayer.play()
-          restorePlaybackRate()
-          isLoaded = true
-          playbackStatePublisher.send(.started(position))
-          completion?(nil)
-        } else {
-          let error = NSError(
-            domain: OpenAccessPlayerErrorDomain,
-            code: OpenAccessPlayerError.unknown.rawValue,
-            userInfo: [NSLocalizedDescriptionKey: "Failed to load audio track - queue is empty"]
-          )
-          playbackStatePublisher.send(.failed(position, error))
-          completion?(error)
-        }
+        ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), not starting playback")
+        let error = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.unknown.rawValue,
+          userInfo: [NSLocalizedDescriptionKey: "Failed to load audio track"]
+        )
+        playbackStatePublisher.send(.failed(position, error))
+        completion?(error)
         return
       }
       
@@ -860,6 +805,7 @@ class OpenAccessPlayer: NSObject, Player {
       }
     }
     if let remote = track.urls?.first {
+      // Use AVURLAsset with Authorization header for BiblioBoard/Blackstone streaming
       let asset: AVURLAsset
       if let token = bearerToken {
         let headers = ["Authorization": "Bearer \(token)"]
