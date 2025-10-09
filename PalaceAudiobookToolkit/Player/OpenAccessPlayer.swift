@@ -176,7 +176,7 @@ class OpenAccessPlayer: NSObject, Player {
         ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), not starting playback")
         let error = NSError(
           domain: OpenAccessPlayerErrorDomain,
-          code: OpenAccessPlayerError.fetchFailed.rawValue,
+          code: OpenAccessPlayerError.unknown.rawValue,
           userInfo: [NSLocalizedDescriptionKey: "Failed to load audio track"]
         )
         playbackStatePublisher.send(.failed(position, error))
