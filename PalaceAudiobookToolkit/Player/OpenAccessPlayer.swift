@@ -82,6 +82,11 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   var currentTrackPosition: TrackPosition? {
+    // Return queued position if seeking is in progress
+    if let queuedPosition = queuedTrackPosition {
+      return queuedPosition
+    }
+    
     guard let currentItem = avQueuePlayer.currentItem,
           let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "")
     else {
@@ -114,6 +119,7 @@ class OpenAccessPlayer: NSObject, Player {
   private var cancellables = Set<AnyCancellable>()
   public var lastKnownPosition: TrackPosition?
   private var isObservingPlayerStatus = false
+  private var bearerToken: String?
 
   private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
     didSet {
@@ -128,7 +134,12 @@ class OpenAccessPlayer: NSObject, Player {
   required init(tableOfContents: AudiobookTableOfContents) {
     self.tableOfContents = tableOfContents
     avQueuePlayer = AVQueuePlayer()
+    bearerToken = tableOfContents.tracks.token
     super.init()
+    
+    if let firstTrack = tableOfContents.allTracks.first {
+      lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+    }
     configurePlayer()
     addPlayerObservers()
   }
@@ -156,10 +167,24 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+    queuedTrackPosition = position
+    
     seekTo(position: position) { [weak self] trackPosition in
-      guard let self = self else {
+      guard let self = self else { return }
+      
+      if trackPosition == nil {
+        ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), not starting playback")
+        let error = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.fetchFailed.rawValue,
+          userInfo: [NSLocalizedDescriptionKey: "Failed to load audio track"]
+        )
+        playbackStatePublisher.send(.failed(position, error))
+        completion?(error)
         return
       }
+      
+      queuedTrackPosition = nil
       avQueuePlayer.play()
       restorePlaybackRate()
       isLoaded = true
@@ -595,17 +620,62 @@ class OpenAccessPlayer: NSObject, Player {
       return
     }
 
+    // Wait for item to be ready before seeking
+    if currentItem.status == .readyToPlay {
+      performSeekOnItem(currentItem, to: timestamp, shouldPlay: shouldPlay, completion: completion)
+    } else {
+      waitForItemReady(currentItem, timeout: 10.0) { [weak self] ready in
+        if ready {
+          self?.performSeekOnItem(currentItem, to: timestamp, shouldPlay: shouldPlay, completion: completion)
+        } else {
+          ATLog(.error, "OpenAccessPlayer: Item failed to become ready")
+          completion?(false)
+        }
+      }
+    }
+  }
+  
+  private func performSeekOnItem(_ item: AVPlayerItem, to timestamp: TimeInterval, shouldPlay: Bool, completion: ((Bool) -> Void)?) {
     let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-    currentItem.seek(to: seekTime) { success in
+    item.seek(to: seekTime) { success in
       if success {
         if shouldPlay {
           self.avQueuePlayer.play()
         }
-
         self.restorePlaybackRate()
         completion?(true)
       } else {
         completion?(false)
+      }
+    }
+  }
+  
+  private func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
+    if item.status == .failed {
+      ATLog(.error, "OpenAccessPlayer: Item already failed - \(item.error?.localizedDescription ?? "unknown")")
+      completion(false)
+      return
+    }
+    
+    let timeoutWorkItem = DispatchWorkItem {
+      ATLog(.warn, "OpenAccessPlayer: Item ready timeout after \(timeout)s")
+      completion(false)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
+    
+    var observation: NSKeyValueObservation?
+    observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
+      guard let self = self else { return }
+      
+      if observedItem.status == .readyToPlay {
+        timeoutWorkItem.cancel()
+        observation?.invalidate()
+        completion(true)
+      } else if observedItem.status == .failed {
+        ATLog(.error, "OpenAccessPlayer: Item load failed - \(observedItem.error?.localizedDescription ?? "unknown")")
+        timeoutWorkItem.cancel()
+        observation?.invalidate()
+        completion(false)
       }
     }
   }
@@ -727,7 +797,17 @@ class OpenAccessPlayer: NSObject, Player {
       }
     }
     if let remote = track.urls?.first {
-      let playerItem = AVPlayerItem(url: remote)
+      // Use AVURLAsset with Authorization header for BiblioBoard/Blackstone streaming
+      let asset: AVURLAsset
+      if let token = bearerToken {
+        let headers = ["Authorization": "Bearer \(token)"]
+        let options = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+        asset = AVURLAsset(url: remote, options: options)
+      } else {
+        asset = AVURLAsset(url: remote)
+      }
+      
+      let playerItem = AVPlayerItem(asset: asset)
       playerItem.audioTimePitchAlgorithm = .timeDomain
       playerItem.trackIdentifier = track.key
       return playerItem
