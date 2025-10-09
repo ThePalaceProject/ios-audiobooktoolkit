@@ -583,8 +583,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         if avQueuePlayer.items().count > 1 {
           avQueuePlayer.advanceToNextItem()
           if wasPlaying {
-            avQueuePlayer.play()
-            restorePlaybackRate()
+            // Ensure item is ready before resuming playback
+            if let currentItem = avQueuePlayer.currentItem, currentItem.status == .readyToPlay {
+              avQueuePlayer.play()
+              restorePlaybackRate()
+            } else {
+              // Item not ready yet, wait briefly for it to load
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.avQueuePlayer.play()
+                self?.restorePlaybackRate()
+              }
+            }
           }
 
           playbackStatePublisher.send(.started(nextStart))
@@ -599,12 +608,20 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         if avQueuePlayer.items().count > 1 {
           avQueuePlayer.advanceToNextItem()
           if wasPlaying {
-            avQueuePlayer.play()
-            restorePlaybackRate()
+            // Ensure item is ready before resuming playback
+            if let currentItem = avQueuePlayer.currentItem, currentItem.status == .readyToPlay {
+              avQueuePlayer.play()
+              restorePlaybackRate()
+            } else {
+              // Item not ready yet, wait briefly for it to load
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.avQueuePlayer.play()
+                self?.restorePlaybackRate()
+              }
+            }
           }
         }
 
-        // Trigger position update for lock screen refresh
         playbackStatePublisher.send(.started(nextStart))
       }
     } else {

@@ -114,6 +114,7 @@ class OpenAccessPlayer: NSObject, Player {
   private var cancellables = Set<AnyCancellable>()
   public var lastKnownPosition: TrackPosition?
   private var isObservingPlayerStatus = false
+  private var bearerToken: String?
 
   private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
     didSet {
@@ -128,6 +129,7 @@ class OpenAccessPlayer: NSObject, Player {
   required init(tableOfContents: AudiobookTableOfContents) {
     self.tableOfContents = tableOfContents
     avQueuePlayer = AVQueuePlayer()
+    bearerToken = tableOfContents.tracks.token
     super.init()
     configurePlayer()
     addPlayerObservers()
@@ -727,7 +729,16 @@ class OpenAccessPlayer: NSObject, Player {
       }
     }
     if let remote = track.urls?.first {
-      let playerItem = AVPlayerItem(url: remote)
+      let asset: AVURLAsset
+      if let token = bearerToken {
+        let headers = ["Authorization": "Bearer \(token)"]
+        let options = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+        asset = AVURLAsset(url: remote, options: options)
+      } else {
+        asset = AVURLAsset(url: remote)
+      }
+      
+      let playerItem = AVPlayerItem(asset: asset)
       playerItem.audioTimePitchAlgorithm = .timeDomain
       playerItem.trackIdentifier = track.key
       return playerItem

@@ -91,7 +91,7 @@ public class Tracks {
   public var tracks: [any Track] = []
   public var totalDuration: Double { tracks.reduce(0) { $0 + $1.duration } }
 
-  private var token: String?
+  public var token: String?
 
   init(manifest: Manifest, audiobookID: String, token: String?) {
     self.manifest = manifest
