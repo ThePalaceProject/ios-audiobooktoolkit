@@ -82,6 +82,10 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   var currentTrackPosition: TrackPosition? {
+    if let queuedPosition = queuedTrackPosition {
+      return queuedPosition
+    }
+    
     guard let currentItem = avQueuePlayer.currentItem,
           let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "")
     else {
@@ -131,6 +135,10 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer = AVQueuePlayer()
     bearerToken = tableOfContents.tracks.token
     super.init()
+    
+    if let firstTrack = tableOfContents.allTracks.first {
+      lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+    }
     configurePlayer()
     addPlayerObservers()
   }
@@ -158,10 +166,80 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+    queuedTrackPosition = position
+    
+    // Check if we can seek within existing queue (avoids stop-start behavior)
+    if !avQueuePlayer.items().isEmpty,
+       let targetIndex = avQueuePlayer.items().firstIndex(where: { $0.trackIdentifier == position.track.key })
+    {
+      // Target track is already in queue - just seek without rebuilding
+      let currentIndex = avQueuePlayer.items().firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
+      
+      if targetIndex != currentIndex {
+        if targetIndex > currentIndex {
+          for _ in currentIndex..<targetIndex {
+            avQueuePlayer.advanceToNextItem()
+          }
+        } else {
+          // Need to rebuild if going backwards
+          performFullSeekAndPlay(position: position, completion: completion)
+          return
+        }
+      }
+      
+      // Seek to position within current item
+      let seekTime = CMTime(seconds: position.timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+      avQueuePlayer.seek(to: seekTime) { [weak self] success in
+        guard let self = self else { return }
+        
+        queuedTrackPosition = nil
+        if success {
+          avQueuePlayer.play()
+          restorePlaybackRate()
+          isLoaded = true
+          playbackStatePublisher.send(.started(position))
+          completion?(nil)
+        } else {
+          ATLog(.error, "OpenAccessPlayer: Seek failed but continuing")
+          avQueuePlayer.play()
+          restorePlaybackRate()
+          isLoaded = true
+          playbackStatePublisher.send(.started(position))
+          completion?(nil)
+        }
+      }
+    } else {
+      // Queue empty or target not in queue - do full seek with queue rebuild
+      performFullSeekAndPlay(position: position, completion: completion)
+    }
+  }
+  
+  private func performFullSeekAndPlay(position: TrackPosition, completion: ((Error?) -> Void)?) {
     seekTo(position: position) { [weak self] trackPosition in
-      guard let self = self else {
+      guard let self = self else { return }
+      
+      if trackPosition == nil {
+        ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), attempting fallback playback")
+        queuedTrackPosition = nil
+        if !avQueuePlayer.items().isEmpty {
+          avQueuePlayer.play()
+          restorePlaybackRate()
+          isLoaded = true
+          playbackStatePublisher.send(.started(position))
+          completion?(nil)
+        } else {
+          let error = NSError(
+            domain: OpenAccessPlayerErrorDomain,
+            code: OpenAccessPlayerError.unknown.rawValue,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to load audio track - queue is empty"]
+          )
+          playbackStatePublisher.send(.failed(position, error))
+          completion?(error)
+        }
         return
       }
+      
+      queuedTrackPosition = nil
       avQueuePlayer.play()
       restorePlaybackRate()
       isLoaded = true
@@ -436,6 +514,12 @@ class OpenAccessPlayer: NSObject, Player {
     resetPlayerQueue()
     let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
 
+    guard !playerItems.isEmpty else {
+      ATLog(.error, "OpenAccessPlayer: Failed to build player items for queue rebuild")
+      completion?(false)
+      return
+    }
+
     var desiredIndex: Int?
     for (index, item) in playerItems.enumerated() {
       avQueuePlayer.insert(item, after: nil)
@@ -448,7 +532,9 @@ class OpenAccessPlayer: NSObject, Player {
     // Default to first chapter if no explicit target position was provided
     let targetIndex = desiredIndex ?? 0
     guard targetIndex < playerItems.count else {
-      completion?(false); return
+      ATLog(.error, "OpenAccessPlayer: Target index \(targetIndex) out of bounds (\(playerItems.count) items)")
+      completion?(false)
+      return
     }
 
     let targetTimestamp = trackPosition?.timestamp ?? 0.0
@@ -597,17 +683,62 @@ class OpenAccessPlayer: NSObject, Player {
       return
     }
 
+    // Wait for item to be ready before seeking
+    if currentItem.status == .readyToPlay {
+      performSeekOnItem(currentItem, to: timestamp, shouldPlay: shouldPlay, completion: completion)
+    } else {
+      waitForItemReady(currentItem, timeout: 10.0) { [weak self] ready in
+        if ready {
+          self?.performSeekOnItem(currentItem, to: timestamp, shouldPlay: shouldPlay, completion: completion)
+        } else {
+          ATLog(.error, "OpenAccessPlayer: Item failed to become ready")
+          completion?(false)
+        }
+      }
+    }
+  }
+  
+  private func performSeekOnItem(_ item: AVPlayerItem, to timestamp: TimeInterval, shouldPlay: Bool, completion: ((Bool) -> Void)?) {
     let seekTime = CMTime(seconds: timestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-    currentItem.seek(to: seekTime) { success in
+    item.seek(to: seekTime) { success in
       if success {
         if shouldPlay {
           self.avQueuePlayer.play()
         }
-
         self.restorePlaybackRate()
         completion?(true)
       } else {
         completion?(false)
+      }
+    }
+  }
+  
+  private func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
+    if item.status == .failed {
+      ATLog(.error, "OpenAccessPlayer: Item already failed - \(item.error?.localizedDescription ?? "unknown")")
+      completion(false)
+      return
+    }
+    
+    let timeoutWorkItem = DispatchWorkItem {
+      ATLog(.warn, "OpenAccessPlayer: Item ready timeout after \(timeout)s")
+      completion(false)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
+    
+    var observation: NSKeyValueObservation?
+    observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
+      guard let self = self else { return }
+      
+      if observedItem.status == .readyToPlay {
+        timeoutWorkItem.cancel()
+        observation?.invalidate()
+        completion(true)
+      } else if observedItem.status == .failed {
+        ATLog(.error, "OpenAccessPlayer: Item load failed - \(observedItem.error?.localizedDescription ?? "unknown")")
+        timeoutWorkItem.cancel()
+        observation?.invalidate()
+        completion(false)
       }
     }
   }

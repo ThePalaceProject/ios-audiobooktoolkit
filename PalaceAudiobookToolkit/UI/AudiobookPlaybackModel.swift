@@ -24,7 +24,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   private var subscriptions: Set<AnyCancellable> = []
   private(set) var audiobookManager: AudiobookManager
 
-  @Published var currentLocation: TrackPosition?
+  @Published public var currentLocation: TrackPosition?
   private var pendingLocation: TrackPosition?
   private var suppressSavesUntil: Date?
   private var isNavigating = false
