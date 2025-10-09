@@ -459,6 +459,12 @@ class OpenAccessPlayer: NSObject, Player {
     resetPlayerQueue()
     let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
 
+    guard !playerItems.isEmpty else {
+      ATLog(.error, "OpenAccessPlayer: Failed to build player items for queue rebuild")
+      completion?(false)
+      return
+    }
+
     var desiredIndex: Int?
     for (index, item) in playerItems.enumerated() {
       avQueuePlayer.insert(item, after: nil)
@@ -471,7 +477,9 @@ class OpenAccessPlayer: NSObject, Player {
     // Default to first chapter if no explicit target position was provided
     let targetIndex = desiredIndex ?? 0
     guard targetIndex < playerItems.count else {
-      completion?(false); return
+      ATLog(.error, "OpenAccessPlayer: Target index \(targetIndex) out of bounds (\(playerItems.count) items)")
+      completion?(false)
+      return
     }
 
     let targetTimestamp = trackPosition?.timestamp ?? 0.0
