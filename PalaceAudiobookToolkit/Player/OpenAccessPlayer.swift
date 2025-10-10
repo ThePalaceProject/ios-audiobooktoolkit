@@ -770,22 +770,30 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   public func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
-    defer {
-      if let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first {
-        let endPosition = TrackPosition(
-          track: firstTrack,
-          timestamp: 0.0,
-          tracks: currentTrackPosition.tracks
-        )
-
-        avQueuePlayer.pause()
-        rebuildPlayerQueueAndNavigate(to: endPosition)
-        completion?(endPosition)
-      }
+    ATLog(.debug, "OpenAccessPlayer: End of book reached. Pausing and resetting to beginning.")
+    
+    guard let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first else {
+      completion?(nil)
+      return
     }
-
-    ATLog(.debug, "End of book reached. No more tracks to absorb the remaining time.")
+    
+    let beginningPosition = TrackPosition(
+      track: firstTrack,
+      timestamp: 0.0,
+      tracks: currentTrackPosition.tracks
+    )
+    
     playbackStatePublisher.send(.bookCompleted)
+    
+    lastKnownPosition = beginningPosition
+    
+    DispatchQueue.main.async { [weak self] in
+      self?.playbackStatePublisher.send(.stopped(beginningPosition))
+    }
+    
+    avQueuePlayer.pause()
+    
+    completion?(beginningPosition)
   }
 
   /// Create a single player item from a track

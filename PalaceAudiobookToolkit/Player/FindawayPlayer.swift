@@ -634,6 +634,30 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
   func audioEngineAudiobookCompleted(_: FindawayPlaybackNotificationHandler, for audiobookID: String) {
     if self.audiobookID == audiobookID {
       ATLog(.debug, "Findaway Audiobook did complete: \(audiobookID)")
+      
+      guard let firstTrack = tableOfContents.tracks.first else {
+        return
+      }
+      
+      let beginningPosition = TrackPosition(
+        track: firstTrack,
+        timestamp: 0.0,
+        tracks: tableOfContents.tracks
+      )
+      
+      playbackStatePublisher.send(.bookCompleted)
+      
+      DispatchQueue.main.async { [weak self] in
+        self?.playbackStatePublisher.send(.started(beginningPosition))
+      }
+              
+      queue.async { [weak self] in
+        guard let self else { return }
+        
+        shouldPauseWhenPlaybackResumes = true
+        queuedPlayerState = .paused(beginningPosition)
+        loadAndRequestPlayback(beginningPosition)
+      }
     } else {
       ATLog(
         .error,

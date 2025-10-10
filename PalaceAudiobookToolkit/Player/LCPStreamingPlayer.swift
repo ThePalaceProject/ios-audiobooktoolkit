@@ -600,9 +600,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         } else {
           play(at: nextStart, completion: nil)
         }
-        return
+        return // Same chapter - no completion event needed
       } else {
         ATLog(.debug, "🔄 [LCPStreamingPlayer] Chapter changed on track end - updating lock screen")
+
+        if let completedChapter = currentChapter {
+          playbackStatePublisher.send(.completed(completedChapter))
+        }
 
         let wasPlaying = avQueuePlayer.rate > 0
         if avQueuePlayer.items().count > 1 {
@@ -623,6 +627,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
 
         playbackStatePublisher.send(.started(nextStart))
+        return // Don't call super - we've handled everything
       }
     } else {
       // No next track - this is end of book!
@@ -630,17 +635,46 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       return
     }
 
-    super.playerItemDidReachEnd(notification)
   }
 
   // MARK: - End of Book Handling
 
   override func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
-    // End of audiobook reached - pause and emit book completed event
-    avQueuePlayer.pause()
-    ATLog(.debug, "🎵 [LCPStreamingPlayer] End of book reached. No more tracks.")
+    ATLog(.debug, "🎵 [LCPStreamingPlayer] End of book reached. Pausing and resetting to beginning.")
+    
+    // 1. Publish book completed event
     playbackStatePublisher.send(.bookCompleted)
-    completion?(currentTrackPosition)
+    
+    guard let firstTrack = tableOfContents.tracks.first else {
+      completion?(nil)
+      return
+    }
+    
+    // Create position at the beginning (first track, timestamp 0)
+    let beginningPosition = TrackPosition(
+      track: firstTrack,
+      timestamp: 0.0,
+      tracks: tableOfContents.tracks
+    )
+    
+    // 2. Seek to the beginning position
+    seekTo(position: beginningPosition) { [weak self] finalPosition in
+      guard let self = self else {
+        completion?(nil)
+        return
+      }
+      
+      // 3. Pause at the beginning
+      self.avQueuePlayer.pause()
+      self.lastKnownPosition = beginningPosition
+      
+      // 4. Trigger player view update
+      DispatchQueue.main.async {
+        self.playbackStatePublisher.send(.stopped(beginningPosition))
+      }
+      
+      completion?(finalPosition)
+    }
   }
 
   func publicationDidLoad() {
