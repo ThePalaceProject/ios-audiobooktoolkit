@@ -451,10 +451,15 @@ class OpenAccessPlayer: NSObject, Player {
 
   public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
+    shouldResumePlayback: Bool = true,
     completion: ((Bool) -> Void)? = nil
   ) {
     let wasPlaying = avQueuePlayer.rate > 0
     avQueuePlayer.pause()
+    
+    if let trackPosition = trackPosition {
+      lastKnownPosition = trackPosition
+    }
 
     resetPlayerQueue()
     let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
@@ -484,7 +489,7 @@ class OpenAccessPlayer: NSObject, Player {
 
     let targetTimestamp = trackPosition?.timestamp ?? 0.0
     navigateToItem(at: targetIndex, with: targetTimestamp) { [weak self] success in
-      if success && wasPlaying {
+      if success && wasPlaying && shouldResumePlayback {
         // Restore playback state after successful navigation
         self?.avQueuePlayer.play()
         self?.restorePlaybackRate()
@@ -537,7 +542,7 @@ class OpenAccessPlayer: NSObject, Player {
         insertTrackAndNavigate(to: position, completion: completion)
       } else {
         // Fall back to full rebuild only when necessary
-        rebuildPlayerQueueAndNavigate(to: position) { [weak self] success in
+        rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { [weak self] success in
           if success {
             self?.performSeek(to: position, completion: completion)
           } else {
@@ -604,7 +609,7 @@ class OpenAccessPlayer: NSObject, Player {
 
       navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
     } else {
-      rebuildPlayerQueueAndNavigate(to: position) { [weak self] success in
+      rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { [weak self] success in
         if success {
           self?.performSeek(to: position, completion: completion)
         } else {
@@ -742,7 +747,7 @@ class OpenAccessPlayer: NSObject, Player {
       let currentIndex = items.firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
 
       if index < currentIndex {
-        rebuildPlayerQueueAndNavigate(to: position) { _ in
+        rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { _ in
           completion?(position)
         }
       } else {
@@ -1010,9 +1015,21 @@ extension OpenAccessPlayer {
       return
     }
 
+    let shouldPlay = avQueuePlayer.rate > 0
+    avQueuePlayer.pause()
+
     let cmTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-    avQueuePlayer.seek(to: cmTime) { success in
+    avQueuePlayer.seek(to: cmTime) { [weak self] success in
+      guard let self = self else {
+        completion?(nil)
+        return
+      }
+      
       if success {
+        if shouldPlay {
+          self.avQueuePlayer.play()
+        }
+        self.restorePlaybackRate()
         let actualPosition = TrackPosition(track: position.track, timestamp: safeTimestamp, tracks: position.tracks)
         completion?(actualPosition)
       } else {
@@ -1080,7 +1097,7 @@ extension OpenAccessPlayer {
             avQueuePlayer.play(); restorePlaybackRate()
           }
         } else {
-          rebuildPlayerQueueAndNavigate(to: nextStart)
+          rebuildPlayerQueueAndNavigate(to: nextStart, shouldResumePlayback: false)
           if wasPlaying {
             avQueuePlayer.play(); restorePlaybackRate()
           }
@@ -1094,9 +1111,8 @@ extension OpenAccessPlayer {
     }
 
     if let curChapter = currentChapter, let nextChapter = tableOfContents.nextChapter(after: curChapter) {
-      let nextPos = nextChapter.position
-      avQueuePlayer.pause()
-      rebuildPlayerQueueAndNavigate(to: nextPos)
+      // Use play(at:) for chapter boundaries to ensure proper state management
+      play(at: nextChapter.position, completion: nil)
     } else {
       handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
     }
