@@ -215,9 +215,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         completion(adjustedPosition)
       }
     } else {
-      audiobook.player.play(at: targetPosition) { error in
-        completion(error == nil ? targetPosition : nil)
-      }
+        audiobook.player.play(at: targetPosition) { error in
+            completion(error == nil ? targetPosition : nil)
+        }
     }
   }
 

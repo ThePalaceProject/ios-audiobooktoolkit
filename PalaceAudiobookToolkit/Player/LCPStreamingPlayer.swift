@@ -35,6 +35,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   private var isObservingTimeControlStatus = false
   private var suppressAudibleUntilPlaying = false
   private var lastStartedItemKey: String?
+  private var isSeekingWithinSameTrack = false
 
   override var currentOffset: Double {
     guard let currentTrackPosition, let currentChapter else {
@@ -123,28 +124,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   // MARK: - Navigation aligned with LCPPlayer
-
-  override public func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
-    avQueuePlayer.pause()
-    (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
-    isLoaded = false
-    suppressAudibleUntilPlaying = true
-    avQueuePlayer.isMuted = true
-    lastStartedItemKey = nil
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self] in
-      if let self = self, !self.isLoaded {
-        ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
-        if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
-          ATLog(.info, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
-          isLoaded = true
-          suppressAudibleUntilPlaying = false
-          avQueuePlayer.isMuted = false
-        } else {
-          ATLog(.error, "🎵 [LCPStreamingPlayer] Critical timeout: No publication or items available")
+  
+  override public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    let isSameTrackSeek = avQueuePlayer.currentItem?.trackIdentifier == position.track.key
+    
+    if isSameTrackSeek {
+      isSeekingWithinSameTrack = true
+    }
+    
+    super.seekTo(position: position) { [weak self] resultPosition in
+      // Clear flag once seek completes
+      if isSameTrackSeek {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+          self?.isSeekingWithinSameTrack = false
         }
       }
+      completion?(resultPosition)
     }
+  }
+
+  override public func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
     var needsRebuild = avQueuePlayer.items().isEmpty
 
     if !needsRebuild {
@@ -164,6 +163,44 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
       } else {
         needsRebuild = true
+      }
+    }
+
+    let isSeekWithinSameTrack: Bool = {
+      if needsRebuild { return false }
+      if let currentItem = avQueuePlayer.currentItem,
+         currentItem.trackIdentifier == position.track.key {
+        return true
+      }
+      return false
+    }()
+    
+    // Set flag BEFORE pausing to prevent race condition with observer
+    isSeekingWithinSameTrack = isSeekWithinSameTrack
+    
+    // Now safe to pause
+    avQueuePlayer.pause()
+    (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
+    
+    // Only show loading state for heavy operations (rebuilds or track changes)
+    if !isSeekWithinSameTrack {
+      isLoaded = false
+      suppressAudibleUntilPlaying = true
+      avQueuePlayer.isMuted = true
+      lastStartedItemKey = nil
+      
+      DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self] in
+        if let self = self, !self.isLoaded {
+          ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
+          if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
+            ATLog(.info, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
+            isLoaded = true
+            suppressAudibleUntilPlaying = false
+            avQueuePlayer.isMuted = false
+          } else {
+            ATLog(.error, "🎵 [LCPStreamingPlayer] Critical timeout: No publication or items available")
+          }
+        }
       }
     }
 
@@ -197,12 +234,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           avQueuePlayer.play()
           restorePlaybackRate()
 
-          // Set isLoaded immediately for seek-within-queue scenarios
-          DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            if let self = self, !self.isLoaded {
-              isLoaded = true
-              suppressAudibleUntilPlaying = false
-              avQueuePlayer.isMuted = false
+          if !isSeekWithinSameTrack {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+              if let self = self, !self.isLoaded {
+                isLoaded = true
+                suppressAudibleUntilPlaying = false
+                avQueuePlayer.isMuted = false
+              }
+            }
+          } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+              self?.isSeekingWithinSameTrack = false
             }
           }
 
@@ -212,6 +254,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       }
     }
 
+    // Clear seek flag before rebuilding queue
+    isSeekingWithinSameTrack = false
+    
     let allTracks = tableOfContents.allTracks
     avQueuePlayer.removeAllItems()
 
@@ -505,26 +550,33 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   ) {
     if keyPath == "timeControlStatus", let player = object as? AVQueuePlayer {
       DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        
         switch player.timeControlStatus {
         case .playing:
-          self?.isLoaded = true
-          if let self = self {
-            if suppressAudibleUntilPlaying {
-              avQueuePlayer.isMuted = false
-              suppressAudibleUntilPlaying = false
+          self.isLoaded = true
+          if suppressAudibleUntilPlaying {
+            avQueuePlayer.isMuted = false
+            suppressAudibleUntilPlaying = false
+          }
+          if let currentKey = avQueuePlayer.currentItem?.trackIdentifier, lastStartedItemKey != currentKey {
+            lastStartedItemKey = currentKey
+            if let pos = currentTrackPosition {
+              playbackStatePublisher.send(.started(pos))
             }
-            if let currentKey = avQueuePlayer.currentItem?.trackIdentifier, lastStartedItemKey != currentKey {
-              lastStartedItemKey = currentKey
-              if let pos = currentTrackPosition {
-                playbackStatePublisher.send(.started(pos))
-              }
+          }
+          if isSeekingWithinSameTrack {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+              self?.isSeekingWithinSameTrack = false
             }
           }
         case .waitingToPlayAtSpecifiedRate:
-          self?.isLoaded = false
-          if let self = self, !self.avQueuePlayer.isMuted {
-            avQueuePlayer.isMuted = true
-            suppressAudibleUntilPlaying = true
+          if !isSeekingWithinSameTrack {
+            self.isLoaded = false
+            if !self.avQueuePlayer.isMuted {
+              avQueuePlayer.isMuted = true
+              suppressAudibleUntilPlaying = true
+            }
           }
         default:
           break
