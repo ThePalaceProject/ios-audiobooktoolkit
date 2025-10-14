@@ -616,6 +616,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     playbackTrackerDelegate?.playbackStarted()
 
     updateNowPlayingInfo(trackPosition)
+    lastKnownChapter = try? tableOfContents.chapter(forPosition: trackPosition)
   }
 
   private func handlePlaybackStopped(_ trackPosition: TrackPosition) {
@@ -631,7 +632,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   private func handlePlaybackCompleted(_ chapter: Chapter) {
     waitingForPlayer = false
-    statePublisher.send(.playbackStopped(chapter.position))
+    statePublisher.send(.playbackCompleted(chapter.position))
   }
 
   private func handlePlayerUnloaded() {

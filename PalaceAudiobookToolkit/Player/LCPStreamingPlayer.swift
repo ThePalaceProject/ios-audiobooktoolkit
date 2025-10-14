@@ -286,6 +286,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   override public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
+    shouldResumePlayback: Bool = true,
     completion: ((Bool) -> Void)? = nil
   ) {
     guard let position = trackPosition else {
@@ -331,7 +332,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         guard let self else {
           completion?(false); return
         }
-        if wasPlaying {
+        if wasPlaying && shouldResumePlayback {
           suppressAudibleUntilPlaying = true
           avQueuePlayer.isMuted = true
           avQueuePlayer.play()
@@ -581,14 +582,14 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         let wasPlaying = avQueuePlayer.rate > 0
 
         if avQueuePlayer.items().count > 1 {
+          lastKnownPosition = nextStart
+          
           avQueuePlayer.advanceToNextItem()
           if wasPlaying {
-            // Ensure item is ready before resuming playback
             if let currentItem = avQueuePlayer.currentItem, currentItem.status == .readyToPlay {
               avQueuePlayer.play()
               restorePlaybackRate()
             } else {
-              // Item not ready yet, wait briefly for it to load
               DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.avQueuePlayer.play()
                 self?.restorePlaybackRate()
@@ -600,34 +601,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         } else {
           play(at: nextStart, completion: nil)
         }
-        return // Same chapter - no completion event needed
+        return
       } else {
-        ATLog(.debug, "🔄 [LCPStreamingPlayer] Chapter changed on track end - updating lock screen")
-
-        if let completedChapter = currentChapter {
-          playbackStatePublisher.send(.completed(completedChapter))
-        }
-
-        let wasPlaying = avQueuePlayer.rate > 0
-        if avQueuePlayer.items().count > 1 {
-          avQueuePlayer.advanceToNextItem()
-          if wasPlaying {
-            // Ensure item is ready before resuming playback
-            if let currentItem = avQueuePlayer.currentItem, currentItem.status == .readyToPlay {
-              avQueuePlayer.play()
-              restorePlaybackRate()
-            } else {
-              // Item not ready yet, wait briefly for it to load
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.avQueuePlayer.play()
-                self?.restorePlaybackRate()
-              }
-            }
-          }
-        }
-
-        playbackStatePublisher.send(.started(nextStart))
-        return // Don't call super - we've handled everything
+        super.playerItemDidReachEnd(notification)
+        return
       }
     } else {
       // No next track - this is end of book!
