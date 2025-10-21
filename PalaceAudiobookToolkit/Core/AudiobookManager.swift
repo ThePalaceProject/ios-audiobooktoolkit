@@ -651,6 +651,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           return
         }
         switch command {
+        case .play:
+          audiobook.player.play()
+        case .pause:
+          audiobook.player.pause()
         case .playPause:
           audiobook.player.isPlaying == true ? audiobook.player.pause() : audiobook.player.play()
         case .skipForward:

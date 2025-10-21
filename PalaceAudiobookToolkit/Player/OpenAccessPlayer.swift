@@ -901,19 +901,14 @@ extension OpenAccessPlayer {
     let session = AVAudioSession.sharedInstance()
     let configure: () -> Void = {
       do {
-        try? session.setActive(false, options: .notifyOthersOnDeactivation)
-        try session.setCategory(.playback)
-        try session.setMode(.default)
-        try session.setActive(true)
+        if session.category != .playback || session.mode != .spokenAudio {
+          try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
+        }
+        if !session.isOtherAudioPlaying {
+          try session.setActive(true, options: [])
+        }
       } catch {
         ATLog(.error, "🔊 AudioSession setup failed: \(error)")
-        do {
-          try session.setCategory(.playback)
-          try session.setMode(.default)
-          try session.setActive(true)
-        } catch {
-          ATLog(.error, "🔊 AudioSession fallback failed: \(error)")
-        }
       }
     }
 

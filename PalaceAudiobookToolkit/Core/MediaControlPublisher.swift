@@ -12,6 +12,8 @@ import MediaPlayer
 // MARK: - MediaControlCommand
 
 enum MediaControlCommand {
+  case play
+  case pause
   case playPause
   case skipForward
   case skipBackward
@@ -39,12 +41,12 @@ class MediaControlPublisher {
     commandCenter.changePlaybackRateCommand.isEnabled = true
 
     commandCenter.playCommand.addTarget { [unowned self] _ in
-      commandPublisher.send(.playPause)
+      commandPublisher.send(.play)
       return .success
     }
 
     commandCenter.pauseCommand.addTarget { [unowned self] _ in
-      commandPublisher.send(.playPause)
+      commandPublisher.send(.pause)
       return .success
     }
 
