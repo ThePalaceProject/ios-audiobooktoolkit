@@ -487,12 +487,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     let assetURL: URL = {
       if let publication = streamingProvider?.getPublication(), index < publication.readingOrder.count {
         let readingOrderLink = publication.readingOrder[index]
-        if let absoluteHref = URL(string: readingOrderLink.href), absoluteHref.scheme != nil {
-          return absoluteHref
-        } else {
-          return URL(string: "readium-lcp://track\(index)/\(readingOrderLink.href)")!
-        }
+        let customURL = URL(string: "readium-lcp://track\(index)/\(readingOrderLink.href)")!
+        ATLog(.debug, "🎵 Creating streaming item \(index) with custom URL: \(customURL.absoluteString)")
+        return customURL
       } else {
+        ATLog(.debug, "🎵 Creating streaming item \(index) with fallback URL (no publication)")
         return URL(string: "fake://lcp-streaming/track/\(index)")!
       }
     }()
@@ -510,6 +509,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         .OBJC_ASSOCIATION_RETAIN_NONATOMIC
       )
       asset.resourceLoader.setDelegate(sharedResourceLoader, queue: resourceLoaderQueue)
+      ATLog(.debug, "🎵 Resource loader delegate set for track \(index)")
+    } else {
+      ATLog(.error, "🎵 ERROR: No resource loader available for track \(index)!")
     }
 
     let item = AVPlayerItem(asset: asset)

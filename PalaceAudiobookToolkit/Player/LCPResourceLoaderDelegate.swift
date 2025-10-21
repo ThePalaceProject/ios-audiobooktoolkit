@@ -266,6 +266,8 @@ private extension LCPResourceLoaderDelegate {
           if let length = try? await res.estimatedLength().get(), let l = length {
             totalLength = Int(l)
           }
+          ATLog(.debug, "🎵 ResourceLoader: Starting data request for range \(start)..., total length: \(totalLength?.description ?? "unknown")")
+          
           if count == 0 && dataRequest.requestsAllDataToEndOfResource {
             if let total = totalLength {
               count = max(0, total - start)
@@ -275,6 +277,7 @@ private extension LCPResourceLoaderDelegate {
           }
           var bytesRemaining = count
           var currentStart = start
+          var totalBytesRead = 0
           while bytesRemaining > 0 {
             let thisCount = bytesRemaining == Int.max ? segmentSize : min(bytesRemaining, segmentSize)
             let endExcl = currentStart + thisCount
@@ -284,6 +287,7 @@ private extension LCPResourceLoaderDelegate {
               break
             }
             dataRequest.respond(with: data)
+            totalBytesRead += data.count
             if bytesRemaining != Int.max {
               bytesRemaining -= data.count
             }
@@ -292,13 +296,16 @@ private extension LCPResourceLoaderDelegate {
               break
             }
           }
+          ATLog(.debug, "🎵 ResourceLoader: Successfully loaded \(totalBytesRead) bytes (decrypted)")
           loadingRequest.finishLoading()
         } catch {
+          ATLog(.error, "🎵 ResourceLoader: ERROR loading data: \(error)")
           loadingRequest.finishLoading(with: error)
         }
         return
       }
 
+      ATLog(.error, "🎵 ResourceLoader: No resource available for streaming")
       loadingRequest.finishLoading(with: NSError(
         domain: "LCPResourceLoader", code: 4,
         userInfo: [NSLocalizedDescriptionKey: "No resource available for streaming"]
