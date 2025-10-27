@@ -302,16 +302,46 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private func setupAppStateObserver() {
     NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
       .sink { [weak self] _ in
-        ATLog(.info, "⚡ App became active - restarting optimized timer")
-        self?.setupNowPlayingInfoTimer()
+        guard let self = self else { return }
+        ATLog(.info, "⚡ App became active - restarting optimized timer and updating position")
+        
+        // Immediately capture and update current position for UI sync
+        if let currentPosition = audiobook.player.currentTrackPosition {
+          statePublisher.send(.positionUpdated(currentPosition))
+          updateNowPlayingInfo(currentPosition)
+          ATLog(.debug, "🔒 Immediately updated position on foreground: \(currentPosition.timestamp)")
+        }
+        
+        setupNowPlayingInfoTimer()
+      }
+      .store(in: &cancellables)
+
+    NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+      .sink { [weak self] _ in
+        guard let self = self else { return }
+        ATLog(.info, "⚡ App will resign active - saving current position")
+        
+        // Save position immediately before app goes to background
+        if let currentPosition = audiobook.player.currentTrackPosition {
+          saveLocation(currentPosition)
+          ATLog(.debug, "🔒 Saved position on resign active: \(currentPosition.timestamp)")
+        }
       }
       .store(in: &cancellables)
 
     NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
       .sink { [weak self] _ in
+        guard let self = self else { return }
         ATLog(.info, "⚡ App entered background - pausing timer for energy savings")
-        self?.timer?.cancel()
-        self?.timer = nil
+        
+        // Final position save when entering background
+        if let currentPosition = audiobook.player.currentTrackPosition {
+          saveLocation(currentPosition)
+          ATLog(.debug, "🔒 Final position save on background: \(currentPosition.timestamp)")
+        }
+        
+        timer?.cancel()
+        timer = nil
       }
       .store(in: &cancellables)
   }
@@ -623,6 +653,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     waitingForPlayer = false
     statePublisher.send(.playbackStopped(trackPosition))
     playbackTrackerDelegate?.playbackStopped()
+    
+    // Save position when playback stops
+    saveLocation(trackPosition)
+    ATLog(.debug, "🔒 Saved position on playback stopped: \(trackPosition.timestamp)")
   }
 
   private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error _: Error?) {
@@ -633,6 +667,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private func handlePlaybackCompleted(_ chapter: Chapter) {
     waitingForPlayer = false
     statePublisher.send(.playbackCompleted(chapter.position))
+    
+    // Save position when chapter/track completes
+    saveLocation(chapter.position)
+    ATLog(.debug, "🔒 Saved position on playback completed: \(chapter.position.timestamp)")
   }
 
   private func handlePlayerUnloaded() {
@@ -653,15 +691,38 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         switch command {
         case .play:
           audiobook.player.play()
+          if let currentPosition = audiobook.player.currentTrackPosition {
+            saveLocation(currentPosition)
+            ATLog(.debug, "🔒 Saved position after lock screen play: \(currentPosition.timestamp)")
+          }
         case .pause:
+          if let currentPosition = audiobook.player.currentTrackPosition {
+            saveLocation(currentPosition)
+            ATLog(.debug, "🔒 Saved position before lock screen pause: \(currentPosition.timestamp)")
+          }
           audiobook.player.pause()
         case .playPause:
-          audiobook.player.isPlaying == true ? audiobook.player.pause() : audiobook.player.play()
+          let wasPlaying = audiobook.player.isPlaying
+          if wasPlaying {
+            if let currentPosition = audiobook.player.currentTrackPosition {
+              saveLocation(currentPosition)
+              ATLog(.debug, "🔒 Saved position before lock screen playPause (was playing): \(currentPosition.timestamp)")
+            }
+            audiobook.player.pause()
+          } else {
+            audiobook.player.play()
+            if let currentPosition = audiobook.player.currentTrackPosition {
+              saveLocation(currentPosition)
+              ATLog(.debug, "🔒 Saved position after lock screen playPause (was paused): \(currentPosition.timestamp)")
+            }
+          }
         case .skipForward:
           audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
             if let newPosition = newPosition {
               DispatchQueue.main.async {
+                self?.saveLocation(newPosition)
                 self?.updateNowPlayingInfo(newPosition)
+                ATLog(.debug, "🔒 Saved position after lock screen skip forward: \(newPosition.timestamp)")
               }
             }
           }
@@ -669,7 +730,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
             if let newPosition = newPosition {
               DispatchQueue.main.async {
+                self?.saveLocation(newPosition)
                 self?.updateNowPlayingInfo(newPosition)
+                ATLog(.debug, "🔒 Saved position after lock screen skip backward: \(newPosition.timestamp)")
               }
             }
           }
