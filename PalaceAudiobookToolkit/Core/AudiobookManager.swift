@@ -33,6 +33,8 @@ public protocol AudiobookBookmarkDelegate {
   func saveBookmark(at location: TrackPosition, completion: ((_ location: TrackPosition?) -> Void)?)
   func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
   func fetchBookmarks(for tracks: Tracks, toc: [Chapter], completion: @escaping ([TrackPosition]) -> Void)
+  
+  func flushPendingOperations()
 }
 
 // MARK: - AudiobookManager

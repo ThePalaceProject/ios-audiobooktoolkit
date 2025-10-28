@@ -120,6 +120,7 @@ public struct AudiobookPlayerView: View {
     .onDisappear {
       if !showTOC {
         playbackModel.persistLocation()
+        playbackModel.flushPendingBookmarkOperations()
         playbackModel.stop()
       }
     }
@@ -133,6 +134,7 @@ public struct AudiobookPlayerView: View {
     ) { _ in
       isInBackground = true
       playbackModel.persistLocation()
+      playbackModel.flushPendingBookmarkOperations()
     }
 
     NotificationCenter.default.addObserver(
@@ -150,6 +152,7 @@ public struct AudiobookPlayerView: View {
     ) { _ in
       // Persist on termination as best-effort
       playbackModel.persistLocation()
+      playbackModel.flushPendingBookmarkOperations()
     }
   }
 

@@ -574,10 +574,27 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           }
         case .waitingToPlayAtSpecifiedRate:
           if !isSeekingWithinSameTrack {
-            self.isLoaded = false
-            if !self.avQueuePlayer.isMuted {
-              avQueuePlayer.isMuted = true
-              suppressAudibleUntilPlaying = true
+            if isLoaded {
+              self.isLoaded = false
+              if !self.avQueuePlayer.isMuted {
+                avQueuePlayer.isMuted = true
+                suppressAudibleUntilPlaying = true
+              }
+              
+              DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                guard let self = self else { return }
+                if !self.isLoaded {
+                  ATLog(.warn, "🎵 [LCPStreamingPlayer] Loading timeout reached - forcing player visible to prevent black screen")
+                  self.isLoaded = true
+                  self.suppressAudibleUntilPlaying = false
+                  self.avQueuePlayer.isMuted = false
+                  
+                  if self.avQueuePlayer.timeControlStatus != .playing {
+                    ATLog(.warn, "🎵 [LCPStreamingPlayer] Player stuck - attempting recovery")
+                    self.avQueuePlayer.play()
+                  }
+                }
+              }
             }
           }
         default:

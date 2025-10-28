@@ -325,6 +325,10 @@ public class AudiobookPlaybackModel: ObservableObject {
   public func persistLocation() {
     saveLocation()
   }
+  
+  public func flushPendingBookmarkOperations() {
+    audiobookManager.bookmarkDelegate?.flushPendingOperations()
+  }
 
   func skipBack() {
     guard !isWaitingForPlayer || audiobookManager.audiobook.player.queuesEvents else {
