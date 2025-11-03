@@ -290,7 +290,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       lastKnownChapter = try? tableOfContents.chapter(forPosition: currentPosition)
     }
 
-    ATLog(.info, "AudiobookManager initialized with enhanced position system and energy optimizations")
+    ATLog(.debug, "AudiobookManager initialized with enhanced position system and energy optimizations")
   }
 
   public static func setLogHandler(_ handler: @escaping LogHandler) {
@@ -303,7 +303,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.info, "⚡ App became active - restarting optimized timer and updating position")
+        ATLog(.debug, "⚡ App became active - restarting optimized timer and updating position")
         
         // Immediately capture and update current position for UI sync
         if let currentPosition = audiobook.player.currentTrackPosition {
@@ -319,7 +319,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.info, "⚡ App will resign active - saving current position")
+        ATLog(.debug, "⚡ App will resign active - saving current position")
         
         // Save position immediately before app goes to background
         if let currentPosition = audiobook.player.currentTrackPosition {
@@ -332,7 +332,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.info, "⚡ App entered background - pausing timer for energy savings")
+        ATLog(.debug, "⚡ App entered background - pausing timer for energy savings")
         
         // Final position save when entering background
         if let currentPosition = audiobook.player.currentTrackPosition {
@@ -392,7 +392,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       interval = 10.0 // Reduce frequency when inactive
     case .background:
       interval = 15.0 // Keep running but very infrequently for lock screen sync
-      ATLog(.info, "⚡ Timer running at 15s intervals for background lock screen updates")
+      ATLog(.debug, "⚡ Timer running at 15s intervals for background lock screen updates")
     @unknown default:
       interval = 5.0
     }
@@ -457,7 +457,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private func checkForChapterChange(at position: TrackPosition) {
     let hasChanged = hasChapterChanged(from: lastKnownChapter, to: position)
     if hasChanged {
-      ATLog(.info, "🔄 [AudiobookManager] Chapter boundary crossed - immediate lock screen update")
+      ATLog(.debug, "🔄 [AudiobookManager] Chapter boundary crossed - immediate lock screen update")
       updateNowPlayingInfo(position)
       lastKnownChapter = try? tableOfContents.chapter(forPosition: position)
     }

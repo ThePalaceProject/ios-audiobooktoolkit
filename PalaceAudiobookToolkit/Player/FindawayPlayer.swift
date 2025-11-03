@@ -352,7 +352,7 @@ final class FindawayPlayer: NSObject, Player {
   }
 
   func play(at position: TrackPosition, completion: ((Error?) -> Void)? = nil) {
-    ATLog(.info, "🎮 [FindawayPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
+    ATLog(.debug, "🎮 [FindawayPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
     queue.async { [weak self] in
       guard let self = self else {
         ATLog(.error, "🎮 [FindawayPlayer] play(at:) - self deallocated")
@@ -364,14 +364,14 @@ final class FindawayPlayer: NSObject, Player {
         return
       }
       
-      ATLog(.info, "🎮 [FindawayPlayer] play(at:) - Creating manipulation, readyForPlayback=\(readyForPlayback)")
+      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Creating manipulation, readyForPlayback=\(readyForPlayback)")
       
       // Set queued state directly to prevent race conditions with initial position
       let manipulation = createManipulation(position)
       pendingStartPosition = position
       queuedPlayerState = .play(manipulation)
       
-      ATLog(.info, "🎮 [FindawayPlayer] play(at:) - Set queuedPlayerState to .play, will call playWithCurrentState")
+      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Set queuedPlayerState to .play, will call playWithCurrentState")
       
       if readyForPlayback {
         playWithCurrentState()
@@ -380,12 +380,12 @@ final class FindawayPlayer: NSObject, Player {
       }
       
       completion?(nil)
-      ATLog(.info, "🎮 [FindawayPlayer] play(at:) - Completion called")
+      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Completion called")
     }
   }
 
   func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
-    ATLog(.info, "🎚️ [FindawayPlayer] move(to: \(value)) SLIDER SEEK CALLED")
+    ATLog(.debug, "🎚️ [FindawayPlayer] move(to: \(value)) SLIDER SEEK CALLED")
     guard let currentTrackPosition = currentTrackPosition else {
       ATLog(.warn, "🎚️ [FindawayPlayer] move(to:) - No current track position")
       completion?(nil)
@@ -501,16 +501,16 @@ final class FindawayPlayer: NSObject, Player {
   /// If moving the playhead stays in the same file, then the update is instant and we are still
   /// ready to get a new request.
   private func playWithCurrentState() {
-    ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState CALLED - queuedPlayerState=\(queuedPlayerState)")
+    ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState CALLED - queuedPlayerState=\(queuedPlayerState)")
     
     func isSameTrackSeek(_ positionBeforeNavigation: TrackPosition?, _ destinationPosition: TrackPosition) -> Bool {
       guard let previous = positionBeforeNavigation else { 
-        ATLog(.info, "🎮 [FindawayPlayer] isSameTrackSeek: NO (no previous position)")
+        ATLog(.debug, "🎮 [FindawayPlayer] isSameTrackSeek: NO (no previous position)")
         return false 
       }
       // Check if we're seeking within the same track (cheap operation)
       let result = bookIsLoaded && isPlaying && previous.track.key == destinationPosition.track.key
-      ATLog(.info, "🎮 [FindawayPlayer] isSameTrackSeek: \(result) (bookIsLoaded=\(bookIsLoaded), isPlaying=\(isPlaying), sameTracks=\(previous.track.key == destinationPosition.track.key))")
+      ATLog(.debug, "🎮 [FindawayPlayer] isSameTrackSeek: \(result) (bookIsLoaded=\(bookIsLoaded), isPlaying=\(isPlaying), sameTracks=\(previous.track.key == destinationPosition.track.key))")
       return result
     }
 
@@ -566,18 +566,18 @@ final class FindawayPlayer: NSObject, Player {
 
     switch queuedPlayerState {
     case .none:
-      ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .none - no action")
+      ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .none - no action")
       break
     case .queued((_, _)):
-      ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .queued - no action")
+      ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .queued - no action")
       break
     case let .paused(position) where !bookIsLoaded:
-      ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .paused (not loaded) - will load and play")
+      ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .paused (not loaded) - will load and play")
       setAndQueueEngineManipulation { [weak self] in
         self?.loadAndRequestPlayback(position)
       }
     case .paused:
-      ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .paused (loaded) - will resume")
+      ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .paused (loaded) - will resume")
       setAndQueueEngineManipulation {
         self.audioEngine?.playbackEngine?.resume()
       }
@@ -587,7 +587,7 @@ final class FindawayPlayer: NSObject, Player {
       let epsilon: Double = 0.1
       let maxSafe = max(0.0, position.track.duration - epsilon)
       let safeTimestamp = min(max(0.0, position.timestamp), maxSafe)
-      ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .play (same track seek) - setting currentOffset to \(safeTimestamp)")
+      ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .play (same track seek) - setting currentOffset to \(safeTimestamp)")
 
       // Update engine offset directly (cheap) and preserve play/pause state
       if let engine = audioEngine?.playbackEngine {
@@ -616,16 +616,16 @@ final class FindawayPlayer: NSObject, Player {
     case let .play((previous, position)):
       // Different track or initial load - need full playback with debounce
       if let prev = previous {
-        ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .play (different track) - will debounce load. From: \(prev.track.key)@\(prev.timestamp) To: \(position.track.key)@\(position.timestamp)")
+        ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .play (different track) - will debounce load. From: \(prev.track.key)@\(prev.timestamp) To: \(position.track.key)@\(position.timestamp)")
       } else {
-        ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState: case .play (initial load) - will debounce load. To: \(position.track.key)@\(position.timestamp)")
+        ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .play (initial load) - will debounce load. To: \(position.track.key)@\(position.timestamp)")
       }
       setAndQueueEngineManipulation { [weak self] in
         self?.loadAndRequestPlayback(position)
       }
     }
     
-    ATLog(.info, "🎮 [FindawayPlayer] playWithCurrentState COMPLETED")
+    ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState COMPLETED")
   }
 
   private func loadAndRequestPlayback(_ position: TrackPosition) {
@@ -634,8 +634,8 @@ final class FindawayPlayer: NSObject, Player {
       return
     }
 
-    ATLog(.info, "🎮 [FindawayPlayer] 🚨 loadAndRequestPlayback - CALLING SDK play() - audiobookID=\(audiobookID), part=\(track.partNumber ?? 0), chapter=\(track.chapterNumber ?? 0), offset=\(UInt(position.timestamp))")
-    ATLog(.info, "🎮 [FindawayPlayer] 🚨 This will trigger FULL UNLOAD/RELOAD cycle in Findaway SDK")
+    ATLog(.debug, "🎮 [FindawayPlayer] 🚨 loadAndRequestPlayback - CALLING SDK play() - audiobookID=\(audiobookID), part=\(track.partNumber ?? 0), chapter=\(track.chapterNumber ?? 0), offset=\(UInt(position.timestamp))")
+    ATLog(.debug, "🎮 [FindawayPlayer] 🚨 This will trigger FULL UNLOAD/RELOAD cycle in Findaway SDK")
     
     audioEngine?.playbackEngine?.play(
       forAudiobookID: audiobookID,
@@ -646,7 +646,7 @@ final class FindawayPlayer: NSObject, Player {
       licenseID: licenseID
     )
     
-    ATLog(.info, "🎮 [FindawayPlayer] loadAndRequestPlayback - SDK play() call completed")
+    ATLog(.debug, "🎮 [FindawayPlayer] loadAndRequestPlayback - SDK play() call completed")
   }
 
   private func dispatchDeadline() -> DispatchTime {

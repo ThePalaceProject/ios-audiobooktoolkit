@@ -193,7 +193,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         if let self = self, !self.isLoaded {
           ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
           if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
-            ATLog(.info, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
+            ATLog(.debug, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
             isLoaded = true
             suppressAudibleUntilPlaying = false
             avQueuePlayer.isMuted = false
@@ -709,7 +709,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   func publicationDidLoad() {
-    ATLog(.info, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
+    ATLog(.debug, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
     if !isLoaded && avQueuePlayer.items().isEmpty {
       buildPlayerQueue()
     }

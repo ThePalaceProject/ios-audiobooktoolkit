@@ -55,7 +55,19 @@ public extension Manifest {
       type = try container.decodeIfPresent(String.self, forKey: .type)
       identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
       title = try container.decodeIfPresent(String.self, forKey: .title)
-      subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+      
+      // Handle subtitle as either String or localized dictionary {"und": "value"}
+      if let subtitleString = try? container.decodeIfPresent(String.self, forKey: .subtitle) {
+        subtitle = subtitleString
+      } else if let subtitleDict = try? container.decode([String: String].self, forKey: .subtitle) {
+        // Extract value from localized dictionary (prefer "en", fall back to "und" or any value)
+        let extractedValue = subtitleDict["en"] ?? subtitleDict["und"] ?? subtitleDict.values.first
+        subtitle = extractedValue
+        ATLog(.debug, "  ℹ️ Decoded subtitle from localized dictionary: \(subtitleDict) → '\(extractedValue ?? "nil")'")
+      } else {
+        subtitle = nil
+      }
+      
       published = try container.decodeIfPresent(Date.self, forKey: .published)
       duration = try container.decodeIfPresent(Double.self, forKey: .duration)
       drmInformation = try container.decodeIfPresent(DRMType.self, forKey: .encrypted)
