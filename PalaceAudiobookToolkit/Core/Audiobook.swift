@@ -138,7 +138,7 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         let streamingPlayer = LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
 
         if streamingProvider.supportsStreaming() {
-          let setupSuccess = streamingProvider.setupStreamingFor(streamingPlayer)
+          _ = streamingProvider.setupStreamingFor(streamingPlayer)
           return streamingPlayer
         } else {
           ATLog(.debug, "🏭 [PlayerFactory] Created LCPStreamingPlayer without streaming (local-only mode)")

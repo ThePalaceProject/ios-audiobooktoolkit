@@ -366,8 +366,7 @@ class OpenAccessPlayer: NSObject, Player {
         rebuildPlayerQueueAndNavigate(to: currentTrackPosition)
       } else if currentTrackPosition == nil || tableOfContents.allTracks.first?.id == track.id {
         buildPlayerQueue()
-        if let firstTrack = tableOfContents.allTracks.first {
-          let firstTrackPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
+        if tableOfContents.allTracks.first != nil {
           avQueuePlayer.pause()
           ATLog(.debug, "OpenAccessPlayer: Queue built, ready for playback at first track")
           isLoaded = true
@@ -439,7 +438,7 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.automaticallyWaitsToMinimizeStalling = true
 
     avQueuePlayer.pause()
-    if let firstItem = avQueuePlayer.items().first,
+    if !avQueuePlayer.items().isEmpty,
        let firstTrack = tableOfContents.allTracks.first
     {
       lastKnownPosition = TrackPosition(track: firstTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
@@ -593,7 +592,7 @@ class OpenAccessPlayer: NSObject, Player {
     let currentItems = avQueuePlayer.items()
     var insertAfter: AVPlayerItem?
 
-    for (index, item) in currentItems.enumerated() {
+    for item in currentItems {
       if let trackIndex = allTracks.firstIndex(where: { $0.key == item.trackIdentifier }),
          trackIndex < targetIndex
       {
@@ -678,7 +677,7 @@ class OpenAccessPlayer: NSObject, Player {
     
     var observation: NSKeyValueObservation?
     observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
-      guard let self = self else { return }
+      guard self != nil else { return }
       
       if observedItem.status == .readyToPlay {
         timeoutWorkItem.cancel()
@@ -902,7 +901,7 @@ extension OpenAccessPlayer {
     let configure: () -> Void = {
       do {
         if session.category != .playback || session.mode != .spokenAudio {
-          try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetooth, .allowAirPlay])
+          try session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP, .allowAirPlay])
         }
         if !session.isOtherAudioPlaying {
           try session.setActive(true, options: [])

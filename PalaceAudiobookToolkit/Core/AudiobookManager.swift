@@ -191,7 +191,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     // Calculate seek position with multi-track chapter support
     let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
-    let chapterStartTimestamp = currentChapter.position.timestamp
     let offsetWithinChapter = value * chapterDuration
 
     // Use TrackPosition arithmetic to handle multi-track chapters correctly

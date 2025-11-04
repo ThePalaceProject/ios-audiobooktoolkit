@@ -592,8 +592,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
 
     DispatchQueue.main.async { [weak self] in
-      let itemURL = (item.asset as? AVURLAsset)?.url.absoluteString ?? "unknown"
-
       switch item.status {
       case .readyToPlay:
         if let currentItem = self?.avQueuePlayer.currentItem, currentItem == item {
