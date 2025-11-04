@@ -318,17 +318,139 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
       XCTAssertNil(manifestLink.width, "Expected width to be nil in link at index \(index)")
     }
   }
-}
-
-func testFalseNegative() {
-  // Simulate a false negative case
-  let jsonData = Data()
-  let decoder = Manifest.customDecoder()
-  do {
-    _ = try decoder.decode(Manifest.self, from: jsonData)
-    XCTFail("False negative test succeeded unexpectedly")
-  } catch {
-    // This is the expected behavior
-    XCTAssert(true)
+  
+  // MARK: - Subtitle Variations Tests
+  
+  func testSubtitleAsString() {
+    // Test subtitle as plain string (standard format)
+    let json = """
+    {
+      "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+      "metadata": {
+        "title": "Test Book",
+        "subtitle": "A regular subtitle string",
+        "@type": "http://schema.org/Audiobook",
+        "identifier": "test-123",
+        "duration": 100
+      },
+      "readingOrder": []
+    }
+    """
+    
+    guard let data = json.data(using: .utf8) else {
+      XCTFail("Failed to create test data")
+      return
+    }
+    
+    do {
+      let manifest = try Manifest.customDecoder().decode(Manifest.self, from: data)
+      XCTAssertEqual(manifest.metadata?.subtitle, "A regular subtitle string")
+      print("✅ Subtitle as string decoded correctly")
+    } catch {
+      XCTFail("Failed to decode manifest with string subtitle: \(error)")
+    }
+  }
+  
+  func testSubtitleAsLocalizedDictionary() {
+    // Test subtitle as localized dictionary (Palace Marketplace format)
+    let json = """
+    {
+      "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+      "metadata": {
+        "title": "Dracula",
+        "subtitle": {"und": ""},
+        "@type": "http://schema.org/Audiobook",
+        "identifier": "urn:isbn:9781603932660",
+        "duration": 55706
+      },
+      "readingOrder": []
+    }
+    """
+    
+    guard let data = json.data(using: .utf8) else {
+      XCTFail("Failed to create test data")
+      return
+    }
+    
+    do {
+      let manifest = try Manifest.customDecoder().decode(Manifest.self, from: data)
+      XCTAssertEqual(manifest.metadata?.subtitle, "")
+      print("✅ Subtitle as localized dictionary (empty) decoded correctly")
+    } catch {
+      XCTFail("Failed to decode manifest with dictionary subtitle: \(error)")
+    }
+  }
+  
+  func testSubtitleWithMultipleLocalizations() {
+    // Test subtitle with multiple language values
+    let json = """
+    {
+      "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+      "metadata": {
+        "title": "Test Book",
+        "subtitle": {"en": "English Subtitle", "fr": "Sous-titre français", "und": "Default Subtitle"},
+        "@type": "http://schema.org/Audiobook",
+        "identifier": "test-456",
+        "duration": 200
+      },
+      "readingOrder": []
+    }
+    """
+    
+    guard let data = json.data(using: .utf8) else {
+      XCTFail("Failed to create test data")
+      return
+    }
+    
+    do {
+      let manifest = try Manifest.customDecoder().decode(Manifest.self, from: data)
+      // Should prefer "en" over "und"
+      XCTAssertEqual(manifest.metadata?.subtitle, "English Subtitle")
+      print("✅ Subtitle with multiple localizations decoded correctly (preferred 'en')")
+    } catch {
+      XCTFail("Failed to decode manifest with multilingual subtitle: \(error)")
+    }
+  }
+  
+  func testSubtitleMissing() {
+    // Test manifest without subtitle (should be nil)
+    let json = """
+    {
+      "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+      "metadata": {
+        "title": "Test Book",
+        "@type": "http://schema.org/Audiobook",
+        "identifier": "test-789",
+        "duration": 300
+      },
+      "readingOrder": []
+    }
+    """
+    
+    guard let data = json.data(using: .utf8) else {
+      XCTFail("Failed to create test data")
+      return
+    }
+    
+    do {
+      let manifest = try Manifest.customDecoder().decode(Manifest.self, from: data)
+      XCTAssertNil(manifest.metadata?.subtitle)
+      print("✅ Missing subtitle handled correctly (nil)")
+    } catch {
+      XCTFail("Failed to decode manifest without subtitle: \(error)")
+    }
+  }
+  
+  func testFalseNegative() {
+    // Simulate a false negative case
+    let jsonData = Data()
+    let decoder = Manifest.customDecoder()
+    do {
+      _ = try decoder.decode(Manifest.self, from: jsonData)
+      XCTFail("False negative test succeeded unexpectedly")
+    } catch {
+      // This is the expected behavior
+      XCTAssert(true)
+    }
   }
 }

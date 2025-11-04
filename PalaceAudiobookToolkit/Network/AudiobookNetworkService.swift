@@ -281,7 +281,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     cancellables.forEach { $0.cancel() }
     cancellables.removeAll()
     tracks.forEach { track in
-      if let lcpTask = track.downloadTask as? LCPDownloadTask {
+      if track.downloadTask is LCPDownloadTask {
         ATLog(.debug, "🎵 [NetworkService] Keeping LCP download task running for track: \(track.key)")
       } else {
         track.downloadTask?.cancel()

@@ -130,7 +130,7 @@ public class ReactivePlayerStateManager: ObservableObject {
     self.positionCalculator = positionCalculator
     setupReactiveBindings()
 
-    ATLog(.info, "ReactivePlayerStateManager initialized")
+    ATLog(.debug, "ReactivePlayerStateManager initialized")
   }
 
   // MARK: - State Update Methods
@@ -145,7 +145,7 @@ public class ReactivePlayerStateManager: ObservableObject {
         currentChapter = chapter
         currentChapterTitle = chapter.title
 
-        ATLog(.info, "Chapter changed: \(oldChapter?.title ?? "nil") → \(chapter.title)")
+        ATLog(.debug, "Chapter changed: \(oldChapter?.title ?? "nil") → \(chapter.title)")
         stateUpdatePublisher.send(.chapterChanged(chapter))
       }
     }

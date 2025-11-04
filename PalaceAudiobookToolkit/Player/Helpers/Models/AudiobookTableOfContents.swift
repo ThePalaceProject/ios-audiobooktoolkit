@@ -55,10 +55,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   }
 
   private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
-    let initialCount = toc.count
-
     func appendChaptersRecursively(from items: [TOCItem]) {
-      for (index, item) in items.enumerated() {
+      for item in items {
         if let chapter = parseChapter(from: item, tracks: tracks) {
           toc.append(chapter)
         }

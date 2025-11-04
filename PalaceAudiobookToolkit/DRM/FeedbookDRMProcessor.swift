@@ -16,7 +16,7 @@ class FeedbookDRMProcessor {
   // @return true if the DRM processing was successful; false otherwise
   class func processManifest(_ manifest: [String: Any], drmData: inout [String: Any]) -> Bool {
     guard var metadata = manifest["metadata"] as? [String: Any] else {
-      ATLog(.info, "[FeedbookDRMProcessor] no metadata in manifest")
+      ATLog(.debug, "[FeedbookDRMProcessor] no metadata in manifest")
       return true
     }
 

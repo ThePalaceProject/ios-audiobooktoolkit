@@ -1,0 +1,71 @@
+{
+  "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+  "metadata": {
+    "description": "Test manifest for Palace Marketplace audiobooks with localized subtitle",
+    "modified": "2024-09-25T23:32:53+0000",
+    "subtitle": {
+      "und": ""
+    },
+    "author": [
+      {
+        "name": "Bram Stoker"
+      }
+    ],
+    "published": "2012-02-20T00:00:00+0000",
+    "@type": "http://schema.org/Audiobook",
+    "identifier": "urn:isbn:9781603932660",
+    "publisher": [
+      {
+        "name": "Audible"
+      }
+    ],
+    "title": "Dracula [Audible Edition]",
+    "language": ["en"],
+    "duration": 1000,
+    "readingProgression": "ltr"
+  },
+  "readingOrder": [
+    {
+      "title": "Chapter 1",
+      "href": "chapter1.mp3",
+      "duration": 500,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "templated": false,
+      "bitrate": 128,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "Chapter 2",
+      "href": "chapter2.mp3",
+      "duration": 500,
+      "properties": {
+        "encrypted": {
+          "scheme": "http://readium.org/2014/01/lcp",
+          "algorithm": "http://www.w3.org/2001/04/xmlenc#aes256-cbc"
+        }
+      },
+      "templated": false,
+      "bitrate": 128,
+      "type": "audio/mpeg"
+    }
+  ],
+  "toc": [
+    {
+      "title": "Chapter 1",
+      "href": "chapter1.mp3#t=0",
+      "templated": false
+    },
+    {
+      "title": "Chapter 2",
+      "href": "chapter2.mp3#t=0",
+      "templated": false
+    }
+  ],
+  "id": "urn:isbn:9781603932660"
+}
+

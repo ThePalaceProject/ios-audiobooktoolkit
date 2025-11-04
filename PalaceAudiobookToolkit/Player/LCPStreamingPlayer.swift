@@ -193,7 +193,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         if let self = self, !self.isLoaded {
           ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
           if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
-            ATLog(.info, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
+            ATLog(.debug, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
             isLoaded = true
             suppressAudibleUntilPlaying = false
             avQueuePlayer.isMuted = false
@@ -205,7 +205,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
 
     if !needsRebuild {
-      var queueItems = avQueuePlayer.items()
+      let queueItems = avQueuePlayer.items()
       if let targetIndex = queueItems.firstIndex(where: { $0.trackIdentifier == position.track.key }) {
         let currentIndex = queueItems.firstIndex(where: { $0 == avQueuePlayer.currentItem }) ?? 0
         if targetIndex > currentIndex {
@@ -281,7 +281,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       addEndObserver(for: item)
     }
 
-    var queueItems = avQueuePlayer.items()
+    let queueItems = avQueuePlayer.items()
     if let targetQueueIndex = queueItems.firstIndex(where: { $0.trackIdentifier == position.track.key }) {
       for _ in 0..<targetQueueIndex { avQueuePlayer.advanceToNextItem() }
       let safeTs = safeTimestamp(for: position)
@@ -369,8 +369,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
     let tolerance = CMTime(seconds: 0.15, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
 
-    var success = false
-
     if let targetQueueIndex = avQueuePlayer.items().firstIndex(where: { $0.trackIdentifier == position.track.key }) {
       for _ in 0..<targetQueueIndex { avQueuePlayer.advanceToNextItem() }
       avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
@@ -383,7 +381,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           avQueuePlayer.play()
           restorePlaybackRate()
         }
-        success = true
         completion?(true)
       }
     } else {
@@ -595,8 +592,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
 
     DispatchQueue.main.async { [weak self] in
-      let itemURL = (item.asset as? AVURLAsset)?.url.absoluteString ?? "unknown"
-
       switch item.status {
       case .readyToPlay:
         if let currentItem = self?.avQueuePlayer.currentItem, currentItem == item {
@@ -709,7 +704,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   func publicationDidLoad() {
-    ATLog(.info, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
+    ATLog(.debug, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
     if !isLoaded && avQueuePlayer.items().isEmpty {
       buildPlayerQueue()
     }
