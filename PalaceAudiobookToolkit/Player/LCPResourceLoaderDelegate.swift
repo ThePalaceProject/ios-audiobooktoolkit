@@ -145,11 +145,11 @@ private extension LCPResourceLoaderDelegate {
       }
       var stillInflight = false
       inflightQueue.sync {
-        stillInflight = inflightTasks[id] != nil
+        stillInflight = self.inflightTasks[id] != nil
       }
       if stillInflight {
         inflightQueue.sync {
-          inflightTasks[id]?.cancel()
+          self.inflightTasks[id]?.cancel()
         }
         loadingRequest.finishLoading(with: NSError(
           domain: "LCPResourceLoader",
@@ -217,19 +217,6 @@ private extension LCPResourceLoaderDelegate {
 
     let finalHref = validLink.href.components(separatedBy: "#").first ?? validLink.href
     let resource = Self.resource(for: pub, href: finalHref)
-    let absoluteHTTPURL: HTTPURL? = {
-      if let base = pub.linkWithRel(.self)?.href,
-         let baseURL = URL(string: base),
-         let resolved = URL(string: finalHref, relativeTo: baseURL),
-         let http = HTTPURL(url: resolved)
-      {
-        return http
-      }
-      if let direct = URL(string: finalHref), let http = HTTPURL(url: direct) {
-        return http
-      }
-      return nil
-    }()
 
     if resource is FailureResource {
       loadingRequest.finishLoading(with: NSError(
@@ -256,7 +243,6 @@ private extension LCPResourceLoaderDelegate {
 
     let start = max(0, Int(dataRequest.requestedOffset))
     var count = Int(dataRequest.requestedLength)
-    let endExcl = start + count
 
     Task.detached(priority: .userInitiated) {
       if let res = resource {
