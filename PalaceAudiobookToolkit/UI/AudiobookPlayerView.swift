@@ -24,10 +24,17 @@ public struct AudiobookPlayerView: View {
   @State private var showSleepTimer = false
   @State private var isInBackground = false
   @State private var showTOC = false
+  @State private var screenSize: CGSize = UIScreen.main.bounds.size
 
   public init(model: AudiobookPlaybackModel) {
     playbackModel = model
     setupBackgroundStateHandling()
+  }
+  
+  private var isLandscape: Bool {
+    let isIPhone = UIDevice.current.userInterfaceIdiom == .phone
+    let isLandscapeOrientation = screenSize.width > screenSize.height
+    return isIPhone && isLandscapeOrientation
   }
 
   public func updateImage(_ image: UIImage) {
@@ -40,66 +47,10 @@ public struct AudiobookPlayerView: View {
 
   public var body: some View {
     ZStack(alignment: .bottom) {
-      VStack(spacing: 10) {
-        VStack {
-          Text(playbackModel.audiobookManager.metadata.title ?? "")
-            .palaceFont(.headline)
-            .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
-          Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
-            .palaceFont(.body)
-            .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
-        }
-        .padding(.top)
-        .multilineTextAlignment(.center)
-
-        VStack(spacing: 5) {
-          if !isInBackground {
-            Text(timeLeftInBookText)
-              .palaceFont(.caption)
-              .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
-
-            PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
-              playbackModel.move(to: newValue)
-            }
-            .padding(.horizontal)
-            .accessibilityLabel(Text("Playback slider value: \(playbackModel.playbackSliderValueDescription)"))
-          }
-
-          HStack(alignment: .firstTextBaseline) {
-            Text("\(playheadOffsetText)")
-              .palaceFont(.caption)
-              .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
-            Spacer()
-            Text(chapterTitle)
-              .palaceFont(.headline)
-              .multilineTextAlignment(.center)
-              .lineLimit(2)
-              .accessibilityLabel(Text(chapterTitle))
-
-            Spacer()
-            Text("\(timeLeftText)")
-              .palaceFont(.caption)
-              .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
-          }
-          .padding(.horizontal)
-        }
-
-        Spacer()
-
-        ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
-          .padding(.horizontal)
-          .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
-
-        if !isInBackground {
-          downloadProgressView(value: playbackModel.overallDownloadProgress)
-        }
-
-        Spacer()
-
-        playbackControlsView
-          .padding(.bottom)
-
-        controlPanelView
+      if isLandscape {
+        landscapeLayout
+      } else {
+        portraitLayout
       }
 
       bookmarkAddedToastView
@@ -108,7 +59,20 @@ public struct AudiobookPlayerView: View {
         LoadingView()
       }
     }
-
+    .background(
+      GeometryReader { geometry in
+        Color.clear
+          .onAppear {
+            screenSize = geometry.size
+          }
+          .onChange(of: geometry.size) { newSize in
+            screenSize = newSize
+          }
+      }
+    )
+    .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+      screenSize = UIScreen.main.bounds.size
+    }
     .toolbar {
       ToolbarItem(placement: .navigationBarLeading) { backButton }
       ToolbarItem(placement: .navigationBarTrailing) { tocButton }
@@ -123,6 +87,116 @@ public struct AudiobookPlayerView: View {
         playbackModel.stop()
       }
     }
+  }
+  
+  // MARK: - Portrait Layout
+  
+  @ViewBuilder
+  private var portraitLayout: some View {
+    VStack(spacing: 10) {
+      headerView
+      playbackInfoView
+      Spacer()
+      coverImageView
+      if !isInBackground {
+        downloadProgressView(value: playbackModel.overallDownloadProgress)
+      }
+      Spacer()
+      playbackControlsView
+        .padding(.bottom)
+      controlPanelView
+    }
+  }
+  
+  // MARK: - Landscape Layout
+  
+  @ViewBuilder
+  private var landscapeLayout: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 20) {
+        VStack(spacing: 5) {
+          coverImageView
+            .frame(maxHeight: .infinity)
+          if !isInBackground {
+            downloadProgressView(value: playbackModel.overallDownloadProgress)
+          }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.leading, 20)
+        
+        VStack(spacing: 8) {
+          headerView
+          playbackInfoView
+          Spacer()
+          playbackControlsView
+            .padding(.bottom, 10)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.trailing, 20)
+      }
+      .padding(.top, 10)
+      
+      controlPanelView
+    }
+  }
+  
+  // MARK: - View Components
+  
+  @ViewBuilder
+  private var headerView: some View {
+    VStack {
+      Text(playbackModel.audiobookManager.metadata.title ?? "")
+        .palaceFont(.headline)
+        .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
+      Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
+        .palaceFont(.body)
+        .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
+    }
+    .padding(.top, isLandscape ? 5 : nil)
+    .multilineTextAlignment(.center)
+  }
+  
+  @ViewBuilder
+  private var playbackInfoView: some View {
+    VStack(spacing: 5) {
+      if !isInBackground {
+        Text(timeLeftInBookText)
+          .palaceFont(.caption)
+          .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
+
+        PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
+          playbackModel.move(to: newValue)
+        }
+        .padding(.horizontal)
+        .accessibilityLabel(Text("Playback slider value: \(playbackModel.playbackSliderValueDescription)"))
+      }
+
+      HStack(alignment: .firstTextBaseline) {
+        Text("\(playheadOffsetText)")
+          .palaceFont(.caption)
+          .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
+        Spacer()
+        Text(chapterTitle)
+          .palaceFont(.headline)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+          .accessibilityLabel(Text(chapterTitle))
+
+        Spacer()
+        Text("\(timeLeftText)")
+          .palaceFont(.caption)
+          .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
+      }
+      .padding(.horizontal)
+    }
+  }
+  
+  @ViewBuilder
+  private var coverImageView: some View {
+    ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
+      .padding(.horizontal, isLandscape ? 0 : nil)
+      .padding(.vertical, isLandscape ? 15 : 0)
+      .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
   }
 
   private func setupBackgroundStateHandling() {
@@ -207,8 +281,8 @@ public struct AudiobookPlayerView: View {
     accessibilityString: String,
     action: @escaping () -> Void
   ) -> some View {
-    // Button size: 66 compact, 96 regular
-    let size: CGFloat = horizontalSizeClass == .compact ? 66 : 96
+    // Button size: 50 landscape, 66 compact, 96 regular
+    let size: CGFloat = isLandscape ? 50 : (horizontalSizeClass == .compact ? 66 : 96)
     Button(action: action) {
       ToolkitImage(name: imageName, renderingMode: .template)
         .overlay(
@@ -229,8 +303,8 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private func playButton(isPlaying: Bool, textLabel _: String, action: @escaping () -> Void) -> some View {
-    // Button size: 56 compact, 80 regular
-    let size: CGFloat = horizontalSizeClass == .compact ? 56 : 80
+    // Button size: 44 landscape, 56 compact, 80 regular
+    let size: CGFloat = isLandscape ? 44 : (horizontalSizeClass == .compact ? 56 : 80)
     Button(action: action) {
       ZStack {
         ToolkitImage(name: "pause", renderingMode: .template)
@@ -239,7 +313,7 @@ public struct AudiobookPlayerView: View {
         ToolkitImage(name: "play", renderingMode: .template)
           .opacity(isPlaying ? 0 : 1)
           .frame(width: size, height: size)
-          .offset(x: 7) // makes the button visually centered
+          .offset(x: isLandscape ? 5 : 7) // makes the button visually centered
       }
     }
     .foregroundColor(.primary)
@@ -302,7 +376,7 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private var playbackControlsView: some View {
-    HStack(spacing: 40) {
+    HStack(spacing: isLandscape ? 25 : 40) {
       skipButton(
         "skip_back",
         textLabel: "skip back",
@@ -321,7 +395,7 @@ public struct AudiobookPlayerView: View {
         action: playbackModel.skipForward
       )
     }
-    .frame(height: 66)
+    .frame(height: isLandscape ? 50 : 66)
   }
 
   @ViewBuilder
@@ -376,9 +450,10 @@ public struct AudiobookPlayerView: View {
             .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
           )
       }
-      .frame(minHeight: 40)
+      .frame(minHeight: isLandscape ? 32 : 40)
       .foregroundColor(.white)
-      .padding()
+      .padding(.horizontal)
+      .padding(.vertical, isLandscape ? 6 : nil)
     }
     .background(
       Rectangle()
