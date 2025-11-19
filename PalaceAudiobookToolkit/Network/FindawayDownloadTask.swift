@@ -134,7 +134,7 @@ final class FindawayDownloadTask: DownloadTask {
   }
 
   public func fetch() {
-    queue.sync {
+    queue.async(flags: .barrier) {
       self.attemptFetch()
     }
   }
@@ -202,7 +202,7 @@ final class FindawayDownloadTask: DownloadTask {
   }
 
   public func delete() {
-    queue.sync {
+    queue.async(flags: .barrier) {
       FAEAudioEngine.shared()?.downloadEngine?.delete(
         forAudiobookID: self.downloadRequest.audiobookID,
         partNumber: self.downloadRequest.partNumber,
@@ -224,7 +224,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     _: FindawayDownloadNotificationHandler,
     didPauseDownloadFor chapterDescription: FAEChapterDescription
   ) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       guard self.isTaskFor(chapterDescription) else {
         return
       }
@@ -236,7 +236,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     _: FindawayDownloadNotificationHandler,
     didSucceedDownloadFor chapterDescription: FAEChapterDescription
   ) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       guard self.isTaskFor(chapterDescription) else {
         return
       }
@@ -250,7 +250,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     _: FindawayDownloadNotificationHandler,
     didStartDownloadFor chapterDescription: FAEChapterDescription
   ) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       guard self.isTaskFor(chapterDescription) else {
         return
       }
@@ -267,7 +267,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     didReceive error: NSError,
     for downloadRequestID: String
   ) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       if self.downloadRequest.requestIdentifier == downloadRequestID {
         self.pollAgainForPercentageAt = nil
         self.statePublisher.send(.error(error))
@@ -279,7 +279,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
     _: FindawayDownloadNotificationHandler,
     didDeleteAudiobookFor chapterDescription: FAEChapterDescription
   ) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       if self.isTaskFor(chapterDescription) {
         self.statePublisher.send(.deleted)
         self.downloadRequest = FAEDownloadRequest(
@@ -307,7 +307,7 @@ extension FindawayDownloadTask: FindawayDownloadNotificationHandlerDelegate {
 
 extension FindawayDownloadTask: FindawayDatabaseVerificationDelegate {
   func findawayDatabaseVerificationDidUpdate(_ findawayDatabaseVerification: FindawayDatabaseVerification) {
-    queue.sync {
+    queue.async(flags: .barrier) {
       self.readyToDownload = findawayDatabaseVerification.verified
     }
   }
