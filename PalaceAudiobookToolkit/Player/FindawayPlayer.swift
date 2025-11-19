@@ -633,11 +633,24 @@ final class FindawayPlayer: NSObject, Player {
       ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - track is not FindawayTrack")
       return
     }
+    
+    guard let playbackEngine = audioEngine?.playbackEngine else {
+      ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - playback engine is nil")
+      return
+    }
+    
+    guard !audiobookID.isEmpty, !sessionKey.isEmpty, !licenseID.isEmpty else {
+      ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - missing required credentials")
+      ATLog(.error, "  audiobookID: \(audiobookID.isEmpty ? "EMPTY" : "present")")
+      ATLog(.error, "  sessionKey: \(sessionKey.isEmpty ? "EMPTY" : "present")")
+      ATLog(.error, "  licenseID: \(licenseID.isEmpty ? "EMPTY" : "present")")
+      return
+    }
 
     ATLog(.debug, "🎮 [FindawayPlayer] 🚨 loadAndRequestPlayback - CALLING SDK play() - audiobookID=\(audiobookID), part=\(track.partNumber ?? 0), chapter=\(track.chapterNumber ?? 0), offset=\(UInt(position.timestamp))")
     ATLog(.debug, "🎮 [FindawayPlayer] 🚨 This will trigger FULL UNLOAD/RELOAD cycle in Findaway SDK")
     
-    audioEngine?.playbackEngine?.play(
+    playbackEngine.play(
       forAudiobookID: audiobookID,
       partNumber: UInt(track.partNumber ?? 0),
       chapterNumber: UInt(track.chapterNumber ?? 0),
@@ -754,9 +767,27 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
   ) {
     sliderSeekPosition = nil
     
+    ATLog(.error, "🚨 [FindawayPlayer] Playback failed for chapter - part: \(chapter.partNumber), chapter: \(chapter.chapterNumber)")
+    if let error = error {
+      ATLog(.error, "  Error: \(error.localizedDescription)")
+      ATLog(.error, "  Domain: \(error.domain), Code: \(error.code)")
+      ATLog(.error, "  UserInfo: \(error.userInfo)")
+    }
+    
     guard let locationOfError = self.chapter(for: chapter)?.position else {
+      ATLog(.error, "  Unable to determine chapter position for error")
+      // Still send failure event even if we can't determine position
+      DispatchQueue.main.async {
+        let errorToSend = error ?? NSError(
+          domain: "com.palace.findaway",
+          code: -1,
+          userInfo: [NSLocalizedDescriptionKey: "Findaway playback failed for unknown chapter"]
+        )
+        self.playbackStatePublisher.send(.failed(nil, errorToSend))
+      }
       return
     }
+    
     DispatchQueue.main.async {
       self.playbackStatePublisher.send(.failed(locationOfError, error))
     }

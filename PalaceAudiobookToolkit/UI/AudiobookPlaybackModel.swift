@@ -203,10 +203,16 @@ public class AudiobookPlaybackModel: ObservableObject {
           isWaitingForPlayer = false
           _isPlaying = false
           if let position = position {
-            ATLog(.debug, "Playback error at position: \(position.timestamp)")
+            ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback error at position: \(position.timestamp)")
+            ATLog(.error, "  Track: \(position.track.title ?? "unknown")")
+            ATLog(.error, "  This may indicate corrupted file or decryption issues")
           } else {
-            ATLog(.error, "Playback failed but position is nil.")
+            ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback failed but position is nil - possibly SDK crash")
           }
+          
+          // Show error to user
+          let errorMessage = "There was a problem playing this audiobook. It may be corrupted. Try re-downloading it."
+          ATLog(.error, "  Showing error to user: \(errorMessage)")
 
         default:
           break
