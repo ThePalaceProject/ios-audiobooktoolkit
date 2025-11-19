@@ -226,7 +226,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         }
         return nil
       }
-      .throttle(for: .seconds(10), scheduler: RunLoop.main, latest: true)
+      .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
       .filter { [weak self] position in
         guard let self = self else {
           return false

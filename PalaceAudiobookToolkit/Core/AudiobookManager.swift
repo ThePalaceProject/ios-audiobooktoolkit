@@ -33,6 +33,9 @@ public protocol AudiobookBookmarkDelegate {
   func saveBookmark(at location: TrackPosition, completion: ((_ location: TrackPosition?) -> Void)?)
   func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
   func fetchBookmarks(for tracks: Tracks, toc: [Chapter], completion: @escaping ([TrackPosition]) -> Void)
+  
+  func flushPendingOperations()
+  func saveListeningPositionSync(at position: TrackPosition)
 }
 
 // MARK: - AudiobookManager
@@ -341,6 +344,19 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         
         timer?.cancel()
         timer = nil
+      }
+      .store(in: &cancellables)
+    
+    NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)
+      .sink { [weak self] _ in
+        guard let self = self else { return }
+        ATLog(.debug, "🚨 App will terminate - performing SYNCHRONOUS position save")
+        
+        if let currentPosition = audiobook.player.currentTrackPosition {
+          bookmarkDelegate?.flushPendingOperations()
+          bookmarkDelegate?.saveListeningPositionSync(at: currentPosition)
+          ATLog(.debug, "🔒 CRITICAL: Saved position on app termination: \(currentPosition.timestamp)")
+        }
       }
       .store(in: &cancellables)
   }
