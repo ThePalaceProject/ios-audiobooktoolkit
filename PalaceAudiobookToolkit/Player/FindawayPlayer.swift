@@ -199,9 +199,9 @@ final class FindawayPlayer: NSObject, Player {
 
     set(newRate) {
       UserDefaults.standard.setValue(PlaybackRate.convert(rate: newRate), forKey: audioPlaybackRateIdentifierKey)
-      queue.sync {
+      queue.async(flags: .barrier) {
         ATLog(.debug, "FindawayPlayer: Setting playback rate to \(PlaybackRate.convert(rate: newRate))")
-        audioEngine?.playbackEngine?.currentRate = PlaybackRate.convert(rate: newRate)
+        self.audioEngine?.playbackEngine?.currentRate = PlaybackRate.convert(rate: newRate)
       }
     }
   }
@@ -749,7 +749,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
         self?.playbackStatePublisher.send(.stopped(currentTrackPosition))
       }
 
-      queue.sync {
+      queue.async(flags: .barrier) {
         switch self.queuedPlayerState {
         case .none:
           self.queuedPlayerState = .paused(currentTrackPosition)
