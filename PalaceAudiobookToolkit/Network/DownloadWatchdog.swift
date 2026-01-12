@@ -2,7 +2,6 @@
 //  DownloadWatchdog.swift
 //  PalaceAudiobookToolkit
 //
-//  Created for Audiobook Reliability Fix
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
 
@@ -74,10 +73,25 @@ public final class DownloadWatchdog {
   public let eventPublisher = PassthroughSubject<WatchdogEvent, Never>()
   
   private var monitoredDownloads: [String: MonitoredDownload] = [:]
-  private var checkTimer: Timer?
+  private var monitoringTask: Task<Void, Never>?
+  private var retryTasks: [String: Task<Void, Never>] = [:]
   private var cancellables = Set<AnyCancellable>()
   private let queue = DispatchQueue(label: "com.palace.downloadWatchdog", attributes: .concurrent)
-  private var isRunning = false
+  private let runningLock = NSLock()
+  private var _isRunning = false
+  
+  private var isRunning: Bool {
+    get {
+      runningLock.lock()
+      defer { runningLock.unlock() }
+      return _isRunning
+    }
+    set {
+      runningLock.lock()
+      defer { runningLock.unlock() }
+      _isRunning = newValue
+    }
+  }
   
   // MARK: - Initialization
   
@@ -91,22 +105,38 @@ public final class DownloadWatchdog {
   
   // MARK: - Public API
   
-  /// Starts monitoring downloads.
+  /// Starts monitoring downloads using AsyncStream for periodic checks.
   public func start() {
     guard !isRunning else { return }
     isRunning = true
     
     ATLog(.info, "DownloadWatchdog: Starting with stallTimeout=\(configuration.stallTimeout)s, maxRetries=\(configuration.maxRetries)")
     
-    // Start periodic check timer
-    DispatchQueue.main.async { [weak self] in
+    // Start periodic check using AsyncStream
+    monitoringTask = Task { [weak self] in
       guard let self = self else { return }
-      self.checkTimer?.invalidate()
-      self.checkTimer = Timer.scheduledTimer(
-        withTimeInterval: self.configuration.checkInterval,
-        repeats: true
-      ) { [weak self] _ in
-        self?.checkForStalledDownloads()
+      
+      for await _ in Self.timerStream(interval: self.configuration.checkInterval) {
+        guard self.isRunning else { break }
+        self.checkForStalledDownloads()
+      }
+    }
+  }
+  
+  /// Creates an AsyncStream that emits at regular intervals.
+  private static func timerStream(interval: TimeInterval) -> AsyncStream<Date> {
+    AsyncStream { continuation in
+      let task = Task {
+        while !Task.isCancelled {
+          try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+          guard !Task.isCancelled else { break }
+          continuation.yield(Date())
+        }
+        continuation.finish()
+      }
+      
+      continuation.onTermination = { _ in
+        task.cancel()
       }
     }
   }
@@ -114,14 +144,19 @@ public final class DownloadWatchdog {
   /// Stops monitoring downloads.
   public func stop() {
     isRunning = false
+    monitoringTask?.cancel()
+    monitoringTask = nil
     
-    DispatchQueue.main.async { [weak self] in
-      self?.checkTimer?.invalidate()
-      self?.checkTimer = nil
+    // Cancel all pending retry tasks
+    queue.sync {
+      for (_, task) in retryTasks {
+        task.cancel()
+      }
     }
     
     queue.async(flags: .barrier) { [weak self] in
       self?.monitoredDownloads.removeAll()
+      self?.retryTasks.removeAll()
       self?.cancellables.removeAll()
     }
     
@@ -293,8 +328,34 @@ public final class DownloadWatchdog {
   }
   
   private func scheduleRetry(forTrackKey trackKey: String) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + configuration.retryDelay) { [weak self] in
-      self?.retryDownload(trackKey: trackKey)
+    // Cancel any existing retry task for this track
+    queue.async(flags: .barrier) { [weak self] in
+      self?.retryTasks[trackKey]?.cancel()
+    }
+    
+    let task = Task { [weak self] in
+      guard let self = self else { return }
+      
+      do {
+        try await Task.sleep(nanoseconds: UInt64(self.configuration.retryDelay * 1_000_000_000))
+      } catch {
+        // Task was cancelled
+        return
+      }
+      
+      guard self.isRunning, !Task.isCancelled else { return }
+      
+      // Clean up the tracked task
+      self.queue.async(flags: .barrier) {
+        self.retryTasks.removeValue(forKey: trackKey)
+      }
+      
+      self.retryDownload(trackKey: trackKey)
+    }
+    
+    // Track the task so it can be cancelled
+    queue.async(flags: .barrier) { [weak self] in
+      self?.retryTasks[trackKey] = task
     }
   }
 }

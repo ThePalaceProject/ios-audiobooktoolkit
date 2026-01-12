@@ -2,7 +2,6 @@
 //  OpenAccessBackgroundListener.swift
 //  PalaceAudiobookToolkit
 //
-//  Created for Audiobook Reliability Fix
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
 
