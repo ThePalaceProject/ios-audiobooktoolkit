@@ -48,11 +48,6 @@
 		E50121752BB498BE0049730D /* animalFarm_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E50121732BB493670049730D /* animalFarm_manifest.json */; };
 		E503256D27FE8EFA00317F68 /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E503256C27FE8EFA00317F68 /* Array+Extensions.swift */; };
 		E5041F782BBF36B600AE363E /* MediaControlPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5041F772BBF36B600AE363E /* MediaControlPublisher.swift */; };
-		F0AB00012E8E500100000001 /* OpenAccessBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */; };
-		F0AB00012E8E500100000003 /* OverdriveBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */; };
-		F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */; };
-		F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000008 /* DownloadWatchdog.swift */; };
-		F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */; };
 		E51919DB2B50924000C08E86 /* URLRequest+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */; };
 		E523126C286E3C5A007D1DB5 /* TimeInterval+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */; };
 		E52C1C422C00437F00D8F30B /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
@@ -143,6 +138,11 @@
 		E7F9BAC22A8E6B72001697DE /* Data+hexString.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */; };
 		E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */; };
 		E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */; };
+		F0AB00012E8E500100000001 /* OpenAccessBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */; };
+		F0AB00012E8E500100000003 /* OverdriveBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */; };
+		F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */; };
+		F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000008 /* DownloadWatchdog.swift */; };
+		F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -216,11 +216,6 @@
 		E50121732BB493670049730D /* animalFarm_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = animalFarm_manifest.json; sourceTree = "<group>"; };
 		E503256C27FE8EFA00317F68 /* Array+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Extensions.swift"; sourceTree = "<group>"; };
 		E5041F772BBF36B600AE363E /* MediaControlPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaControlPublisher.swift; sourceTree = "<group>"; };
-		F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessBackgroundListener.swift; sourceTree = "<group>"; };
-		F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverdriveBackgroundListener.swift; sourceTree = "<group>"; };
-		F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookSessionManager.swift; sourceTree = "<group>"; };
-		F0AB00012E8E500100000008 /* DownloadWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadWatchdog.swift; sourceTree = "<group>"; };
-		F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadPersistenceStore.swift; sourceTree = "<group>"; };
 		E5158C5C2935B6FA0007ABDB /* PureLayout.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = PureLayout.xcframework; path = "/Users/mauricework/PalaceProject/ios-core/ios-drm-audioengine/../Carthage/Build/PureLayout.xcframework"; sourceTree = "<absolute>"; };
 		E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Extensions.swift"; sourceTree = "<group>"; };
 		E523126B286E3C5A007D1DB5 /* TimeInterval+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimeInterval+Extensions.swift"; sourceTree = "<group>"; };
@@ -294,6 +289,11 @@
 		E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+hexString.swift"; sourceTree = "<group>"; };
 		E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+sha256Test.swift"; sourceTree = "<group>"; };
 		E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicConstants.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessBackgroundListener.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverdriveBackgroundListener.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookSessionManager.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000008 /* DownloadWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadWatchdog.swift; sourceTree = "<group>"; };
+		F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadPersistenceStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
