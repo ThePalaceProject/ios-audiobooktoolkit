@@ -90,8 +90,7 @@ class OpenAccessPlayer: NSObject, Player {
     guard let currentItem = avQueuePlayer.currentItem,
           let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "")
     else {
-      // POSITION STATE FIX: Validate lastKnownPosition before returning
-      // If the position refers to a track that no longer exists, reset to beginning
+      // Validate position refers to a valid track before returning
       if let lastPos = lastKnownPosition {
         if tableOfContents.track(forKey: lastPos.track.key) != nil {
           return lastPos
@@ -108,8 +107,7 @@ class OpenAccessPlayer: NSObject, Player {
     let currentTime = currentItem.currentTime().seconds
 
     guard currentTime.isFinite else {
-      // POSITION STATE FIX: Don't return stale position if current time is invalid
-      ATLog(.debug, "OpenAccessPlayer: currentTime is not finite, checking lastKnownPosition validity")
+      ATLog(.debug, "OpenAccessPlayer: currentTime is not finite, validating lastKnownPosition")
       return validateAndReturnLastKnownPosition()
     }
 
@@ -206,14 +204,10 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   private func handlePlaybackError(_ error: OpenAccessPlayerError) {
-    // POSITION STATE FIX: Clear stale position on error to prevent wrong track display
-    // This prevents the "Track 35 instead of Track 1" issue reported by users
     ATLog(.error, "OpenAccessPlayer: Playback error occurred: \(error), clearing position state")
     
-    // Preserve position for error reporting, then clear
+    // Preserve position for error reporting, then clear stale state
     let errorPosition = currentTrackPosition
-    
-    // Clear any potentially stale state
     clearQueuedPosition()
     
     playbackStatePublisher.send(.failed(errorPosition, NSError(domain: errorDomain, code: error.rawValue)))

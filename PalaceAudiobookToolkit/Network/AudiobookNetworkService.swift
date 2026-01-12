@@ -287,15 +287,10 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     ATLog(.debug, "🎵 [NetworkService] Cleaned up subscriptions, downloads continue in background")
   }
   
-  /// Legacy cleanup method - now only cleans subscriptions by default.
-  /// Downloads are NOT cancelled to prevent "stuck downloading" issues.
+  /// Cleans up subscriptions only. Downloads continue via background URLSession.
   /// Use `cancelAllDownloads()` to explicitly cancel downloads.
   public func cleanup() {
     cleanupSubscriptions()
-    // NOTE: We no longer cancel downloads here!
-    // This was causing the "stuck downloading" bug where downloads were cancelled
-    // when the user closed the audiobook player, but the UI still showed downloading.
-    // Downloads should continue via background URLSession.
   }
   
   /// Explicitly cancels all active downloads.

@@ -97,8 +97,7 @@ final class OverdriveDownloadTask: DownloadTask {
   func localDirectory() -> URL? {
     let fileManager = FileManager.default
     
-    // Use Application Support directory instead of Caches
-    // Caches can be purged by iOS at any time, causing "stuck downloading" issues
+    // Use Application Support directory instead of Caches for persistence
     guard let appSupportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
       ATLog(.error, "Could not find Application Support directory.")
       return nil

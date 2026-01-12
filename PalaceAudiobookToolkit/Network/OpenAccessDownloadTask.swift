@@ -127,8 +127,7 @@ final class OpenAccessDownloadTask: DownloadTask {
   private func localDirectory() -> URL? {
     let fileManager = FileManager.default
     
-    // Use Application Support directory instead of Caches
-    // Caches can be purged by iOS at any time, causing "stuck downloading" issues
+    // Use Application Support directory instead of Caches for persistence
     guard let appSupportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
       ATLog(.error, "Could not find Application Support directory.")
       return nil
@@ -273,8 +272,7 @@ final class OpenAccessDownloadTask: DownloadTask {
     )
 
     // Feedbooks DRM
-    // CantookAudio does not support Authorization fields causing downloads to fail, this fix may need to be less exclusive
-    // if future issues arise with other providers.
+    // CantookAudio does not support Authorization fields, so exclude them for that provider
     if let profile = feedbooksProfile, !profile.contains("cantookaudio") {
       request.setValue(
         "Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")",
