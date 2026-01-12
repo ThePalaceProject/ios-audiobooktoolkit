@@ -138,6 +138,11 @@
 		E7F9BAC22A8E6B72001697DE /* Data+hexString.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */; };
 		E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */; };
 		E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */; };
+		F0AB00012E8E500100000001 /* OpenAccessBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */; };
+		F0AB00012E8E500100000003 /* OverdriveBackgroundListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */; };
+		F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */; };
+		F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000008 /* DownloadWatchdog.swift */; };
+		F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -284,6 +289,11 @@
 		E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+hexString.swift"; sourceTree = "<group>"; };
 		E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+sha256Test.swift"; sourceTree = "<group>"; };
 		E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicConstants.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAccessBackgroundListener.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverdriveBackgroundListener.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookSessionManager.swift; sourceTree = "<group>"; };
+		F0AB00012E8E500100000008 /* DownloadWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadWatchdog.swift; sourceTree = "<group>"; };
+		F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadPersistenceStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -411,6 +421,7 @@
 				E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */,
 				7B5441E0200EA82C0047B6C6 /* AudiobookManager.swift */,
 				7B5441DA200EA82C0047B6C6 /* AudiobookMetadata.swift */,
+				F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */,
 				7BD8E4FB20753BC6008ED3F1 /* Bundle.swift */,
 				7B4F1B1F20361546003F047B /* Cursor.swift */,
 				A9DC9CFC220547F800D122F2 /* ErrorDescriptions.swift */,
@@ -431,6 +442,8 @@
 				7B6C1BCF203F1CDA00EB791E /* AudiobookNetworkService.swift */,
 				E71168B72AB453A800629DC7 /* Reachability.swift */,
 				7BD759C92017CEA3004CE65F /* DownloadTask.swift */,
+				F0AB00012E8E500100000008 /* DownloadWatchdog.swift */,
+				F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */,
 				7B7B370720211CE100030A1E /* OpenAccessDownloadTask.swift */,
 				E5ECFA7F2BED6C1D0008670F /* FindawayDownloadTask.swift */,
 				17576CAB248E89DE00E18B4C /* OverdriveDownloadTask.swift */,
@@ -539,6 +552,8 @@
 				7B5441DF200EA82C0047B6C6 /* AudiobookLifecycleManager.swift */,
 				E5ECFA862BED6C4F0008670F /* FindawayPlaybackNotificationHandler.swift */,
 				E5ECFA812BED6C270008670F /* FindawayAudiobookLifecycleListener.swift */,
+				F0AB00012E8E500100000002 /* OpenAccessBackgroundListener.swift */,
+				F0AB00012E8E500100000004 /* OverdriveBackgroundListener.swift */,
 				7BBF4DFB20506FF600700731 /* SleepTimer.swift */,
 				E5C3820B2BDACB7E00049CF1 /* AVPlayer+Extensions.swift */,
 				E57FCA232BC8D3C0008D8907 /* Tracks */,
@@ -848,6 +863,11 @@
 				E5041F782BBF36B600AE363E /* MediaControlPublisher.swift in Sources */,
 				E5F9AD312E428FBD0092AC59 /* LCPResourceLoaderDelegate.swift in Sources */,
 				E79266972AB34315009901B7 /* AudiobookNavigationView.swift in Sources */,
+				F0AB00012E8E500100000001 /* OpenAccessBackgroundListener.swift in Sources */,
+				F0AB00012E8E500100000003 /* OverdriveBackgroundListener.swift in Sources */,
+				F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */,
+				F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */,
+				F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

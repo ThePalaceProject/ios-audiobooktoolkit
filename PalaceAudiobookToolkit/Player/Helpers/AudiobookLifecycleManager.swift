@@ -58,7 +58,19 @@ import UIKit
   private var listeners = [AudiobookLifecycleListener]()
   override public init() {
     super.init()
+    
+    // Register all audiobook lifecycle listeners
     let findawayListener = FindawayAudiobookLifecycleListener()
     listeners.append(findawayListener)
+    
+    // Register OpenAccess background session listener
+    let openAccessListener = OpenAccessBackgroundListener()
+    listeners.append(openAccessListener)
+    
+    // Register OverDrive background session listener
+    let overdriveListener = OverdriveBackgroundListener()
+    listeners.append(overdriveListener)
+    
+    ATLog(.debug, "AudiobookLifecycleManager: Registered \(listeners.count) listeners")
   }
 }

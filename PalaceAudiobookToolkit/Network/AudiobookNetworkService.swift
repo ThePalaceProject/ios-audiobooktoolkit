@@ -274,18 +274,54 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   }
 
   deinit {
-    cleanup()
+    // Don't cancel downloads on deinit - they should continue in background
+    // Only clean up Combine subscriptions
+    cleanupSubscriptions()
   }
 
-  public func cleanup() {
+  /// Cleans up Combine subscriptions without cancelling downloads.
+  /// Downloads continue in the background via URLSession background sessions.
+  public func cleanupSubscriptions() {
     cancellables.forEach { $0.cancel() }
     cancellables.removeAll()
+    ATLog(.debug, "🎵 [NetworkService] Cleaned up subscriptions, downloads continue in background")
+  }
+  
+  /// Cleans up subscriptions only. Downloads continue via background URLSession.
+  /// Use `cancelAllDownloads()` to explicitly cancel downloads.
+  public func cleanup() {
+    cleanupSubscriptions()
+  }
+  
+  /// Explicitly cancels all active downloads.
+  /// Only call this when the user explicitly wants to cancel downloads,
+  /// NOT when the audiobook player is simply closed.
+  public func cancelAllDownloads() {
+    ATLog(.info, "🎵 [NetworkService] Explicitly cancelling all downloads")
     tracks.forEach { track in
       if track.downloadTask is LCPDownloadTask {
         ATLog(.debug, "🎵 [NetworkService] Keeping LCP download task running for track: \(track.key)")
       } else {
         track.downloadTask?.cancel()
+        ATLog(.debug, "🎵 [NetworkService] Cancelled download for track: \(track.key)")
       }
     }
+  }
+  
+  /// Cancels download for a specific track.
+  /// - Parameter trackKey: The key of the track to cancel
+  public func cancelDownload(forTrackKey trackKey: String) {
+    guard let track = tracks.first(where: { $0.key == trackKey }) else {
+      ATLog(.warn, "🎵 [NetworkService] Track not found for cancellation: \(trackKey)")
+      return
+    }
+    
+    if track.downloadTask is LCPDownloadTask {
+      ATLog(.debug, "🎵 [NetworkService] Cannot cancel LCP download for track: \(trackKey)")
+      return
+    }
+    
+    track.downloadTask?.cancel()
+    ATLog(.info, "🎵 [NetworkService] Cancelled download for track: \(trackKey)")
   }
 }

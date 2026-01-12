@@ -90,6 +90,16 @@ class OpenAccessPlayer: NSObject, Player {
     guard let currentItem = avQueuePlayer.currentItem,
           let currentTrack = tableOfContents.track(forKey: currentItem.trackIdentifier ?? "")
     else {
+      // Validate position refers to a valid track before returning
+      if let lastPos = lastKnownPosition {
+        if tableOfContents.track(forKey: lastPos.track.key) != nil {
+          return lastPos
+        } else {
+          ATLog(.warn, "OpenAccessPlayer: lastKnownPosition refers to invalid track, resetting")
+          resetToBeginning()
+          return lastKnownPosition
+        }
+      }
       return lastKnownPosition
     }
 
@@ -97,7 +107,8 @@ class OpenAccessPlayer: NSObject, Player {
     let currentTime = currentItem.currentTime().seconds
 
     guard currentTime.isFinite else {
-      return lastKnownPosition
+      ATLog(.debug, "OpenAccessPlayer: currentTime is not finite, validating lastKnownPosition")
+      return validateAndReturnLastKnownPosition()
     }
 
     if let lastPosition = lastKnownPosition,
@@ -114,6 +125,49 @@ class OpenAccessPlayer: NSObject, Player {
     )
     lastKnownPosition = position
     return position
+  }
+  
+  /// Validates lastKnownPosition and returns it only if valid.
+  /// If invalid, resets to beginning and returns that position.
+  private func validateAndReturnLastKnownPosition() -> TrackPosition? {
+    guard let lastPos = lastKnownPosition else {
+      return nil
+    }
+    
+    // Check if the track still exists in our table of contents
+    guard tableOfContents.track(forKey: lastPos.track.key) != nil else {
+      ATLog(.warn, "OpenAccessPlayer: lastKnownPosition track '\(lastPos.track.key)' not found in TOC, resetting")
+      resetToBeginning()
+      return lastKnownPosition
+    }
+    
+    // Check if timestamp is valid (not negative, not beyond track duration)
+    let trackDuration = lastPos.track.duration
+    if lastPos.timestamp < 0 || (trackDuration > 0 && lastPos.timestamp > trackDuration) {
+      ATLog(.warn, "OpenAccessPlayer: lastKnownPosition timestamp \(lastPos.timestamp) invalid for track duration \(trackDuration), resetting")
+      resetToBeginning()
+      return lastKnownPosition
+    }
+    
+    return lastPos
+  }
+  
+  /// Resets position to the beginning of the first track.
+  /// Called when position state becomes invalid/stale.
+  private func resetToBeginning() {
+    guard let firstTrack = tableOfContents.allTracks.first else {
+      ATLog(.error, "OpenAccessPlayer: Cannot reset to beginning, no tracks available")
+      lastKnownPosition = nil
+      return
+    }
+    
+    let beginningPosition = TrackPosition(
+      track: firstTrack,
+      timestamp: 0.0,
+      tracks: tableOfContents.tracks
+    )
+    lastKnownPosition = beginningPosition
+    ATLog(.info, "OpenAccessPlayer: Reset position to beginning of track: \(firstTrack.title ?? firstTrack.key)")
   }
 
   private var cancellables = Set<AnyCancellable>()
@@ -150,8 +204,20 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   private func handlePlaybackError(_ error: OpenAccessPlayerError) {
-    playbackStatePublisher.send(.failed(currentTrackPosition, NSError(domain: errorDomain, code: error.rawValue)))
+    ATLog(.error, "OpenAccessPlayer: Playback error occurred: \(error), clearing position state")
+    
+    // Preserve position for error reporting, then clear stale state
+    let errorPosition = currentTrackPosition
+    clearQueuedPosition()
+    
+    playbackStatePublisher.send(.failed(errorPosition, NSError(domain: errorDomain, code: error.rawValue)))
     unload()
+  }
+  
+  /// Clears any queued position and optionally resets lastKnownPosition.
+  private func clearQueuedPosition() {
+    queuedTrackPosition = nil
+    ATLog(.debug, "OpenAccessPlayer: Cleared queued position")
   }
 
   private func attemptToPlay(_ trackPosition: TrackPosition) {
