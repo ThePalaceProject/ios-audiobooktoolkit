@@ -92,19 +92,53 @@ final class OverdriveDownloadTask: DownloadTask {
     }
   }
 
+  /// Returns the local storage URL for this track.
+  /// Uses Application Support instead of Caches to prevent iOS from purging files.
   func localDirectory() -> URL? {
     let fileManager = FileManager.default
-    let cacheDirectories = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
-    guard let cacheDirectory = cacheDirectories.first else {
-      ATLog(.error, "Could not find caches directory.")
+    
+    // Use Application Support directory instead of Caches
+    // Caches can be purged by iOS at any time, causing "stuck downloading" issues
+    guard let appSupportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      ATLog(.error, "Could not find Application Support directory.")
       return nil
+    }
+    
+    // Use shared Audiobooks/Downloads directory for all audiobook types
+    // This ensures backward compatibility during migration (can't distinguish file types)
+    let audiobooksDirectory = appSupportDirectory.appendingPathComponent("Audiobooks/Downloads", isDirectory: true)
+    
+    // Create directory if it doesn't exist
+    if !fileManager.fileExists(atPath: audiobooksDirectory.path) {
+      do {
+        try fileManager.createDirectory(at: audiobooksDirectory, withIntermediateDirectories: true, attributes: nil)
+        
+        // Exclude from iCloud backup (required by Apple for downloaded content)
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        var mutableURL = audiobooksDirectory
+        try mutableURL.setResourceValues(resourceValues)
+      } catch {
+        ATLog(.error, "Could not create OverDrive audiobooks directory: \(error.localizedDescription)")
+        return nil
+      }
     }
 
     guard let filename = hash("\(bookID)-\(url)") else {
       ATLog(.error, "Could not create a valid hash from download task ID.")
       return nil
     }
-    return cacheDirectory.appendingPathComponent(filename, isDirectory: false).appendingPathExtension("mp3")
+    return audiobooksDirectory.appendingPathComponent(filename, isDirectory: false).appendingPathExtension("mp3")
+  }
+  
+  /// Migrates files from old Caches location to new Application Support location.
+  /// Note: This is now handled by OpenAccessDownloadTask.migrateFromCachesIfNeeded()
+  /// since both use the same shared directory. This method is kept for API compatibility.
+  public static func migrateFromCachesIfNeeded() {
+    // Migration is handled by OpenAccessDownloadTask.migrateFromCachesIfNeeded()
+    // Both OverDrive and OpenAccess now use the shared Audiobooks/Downloads directory
+    // to ensure backward compatibility (we can't distinguish file types during migration)
+    ATLog(.debug, "OverdriveDownloadTask: Migration delegated to shared handler")
   }
 
   private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL) {
@@ -114,7 +148,8 @@ final class OverdriveDownloadTask: DownloadTask {
     let delegate = DownloadTaskURLSessionDelegate(
       downloadTask: self,
       statePublisher: statePublisher,
-      finalDirectory: finalURL
+      finalDirectory: finalURL,
+      trackKey: key
     )
 
     urlSession = URLSession(
@@ -122,7 +157,17 @@ final class OverdriveDownloadTask: DownloadTask {
       delegate: delegate,
       delegateQueue: nil
     )
+    
+    // Check for resume data from a previous interrupted download
+    if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
+      ATLog(.info, "OverdriveDownloadTask: Resuming download from saved state for: \(key)")
+      guard let urlSession = urlSession else { return }
+      let task = urlSession.downloadTask(withResumeData: resumeData)
+      task.resume()
+      return
+    }
 
+    // No resume data - start fresh download
     var request = URLRequest(
       url: remoteURL,
       cachePolicy: .reloadIgnoringLocalCacheData, // Ensure we ignore any cached data
@@ -133,6 +178,7 @@ final class OverdriveDownloadTask: DownloadTask {
       return
     }
 
+    ATLog(.debug, "OverdriveDownloadTask: Starting fresh download for: \(key)")
     let task = urlSession.downloadTask(with: request.applyCustomUserAgent())
     task.resume()
   }
@@ -145,6 +191,19 @@ final class OverdriveDownloadTask: DownloadTask {
   }
 
   func cancel() {
+    // Try to save resume data before cancelling
+    urlSession?.getAllTasks { [weak self] tasks in
+      guard let self = self else { return }
+      if let downloadTask = tasks.compactMap({ $0 as? URLSessionDownloadTask }).first {
+        downloadTask.cancel(byProducingResumeData: { resumeData in
+          if let data = resumeData {
+            DownloadPersistenceStore.shared.saveResumeData(data, forTrackKey: self.key)
+            ATLog(.info, "OverdriveDownloadTask: Saved resume data on cancel for: \(self.key)")
+          }
+        })
+      }
+    }
+    
     urlSession?.invalidateAndCancel()
     urlSession = nil
 

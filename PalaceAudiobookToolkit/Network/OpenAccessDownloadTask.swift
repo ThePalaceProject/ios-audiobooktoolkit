@@ -123,18 +123,79 @@ final class OpenAccessDownloadTask: DownloadTask {
   }
 
   /// Directory of the downloaded file.
+  /// Uses Application Support instead of Caches to prevent iOS from purging files.
   private func localDirectory() -> URL? {
     let fileManager = FileManager.default
-    let cacheDirectories = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
-    guard let cacheDirectory = cacheDirectories.first else {
-      ATLog(.error, "Could not find caches directory.")
+    
+    // Use Application Support directory instead of Caches
+    // Caches can be purged by iOS at any time, causing "stuck downloading" issues
+    guard let appSupportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      ATLog(.error, "Could not find Application Support directory.")
       return nil
     }
+    
+    // Create audiobooks subdirectory
+    let audiobooksDirectory = appSupportDirectory.appendingPathComponent("Audiobooks/Downloads", isDirectory: true)
+    
+    // Create directory if it doesn't exist
+    if !fileManager.fileExists(atPath: audiobooksDirectory.path) {
+      do {
+        try fileManager.createDirectory(at: audiobooksDirectory, withIntermediateDirectories: true, attributes: nil)
+        
+        // Exclude from iCloud backup (required by Apple for downloaded content)
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        var mutableURL = audiobooksDirectory
+        try mutableURL.setResourceValues(resourceValues)
+      } catch {
+        ATLog(.error, "Could not create audiobooks directory: \(error.localizedDescription)")
+        return nil
+      }
+    }
+    
     guard let filename = hash(key) else {
       ATLog(.error, "Could not create a valid hash from download task ID.")
       return nil
     }
-    return cacheDirectory.appendingPathComponent(filename, isDirectory: false).appendingPathExtension("mp3")
+    return audiobooksDirectory.appendingPathComponent(filename, isDirectory: false).appendingPathExtension("mp3")
+  }
+  
+  /// Migrates files from old Caches location to new Application Support location.
+  /// Call this on app launch to migrate existing downloads.
+  public static func migrateFromCachesIfNeeded() {
+    let fileManager = FileManager.default
+    
+    guard let cachesDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first,
+          let appSupportDir = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      return
+    }
+    
+    let newDir = appSupportDir.appendingPathComponent("Audiobooks/Downloads", isDirectory: true)
+    
+    // Create new directory if needed
+    if !fileManager.fileExists(atPath: newDir.path) {
+      try? fileManager.createDirectory(at: newDir, withIntermediateDirectories: true)
+    }
+    
+    // Find and migrate .mp3 files from caches
+    do {
+      let cacheContents = try fileManager.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
+      let mp3Files = cacheContents.filter { $0.pathExtension == "mp3" }
+      
+      for oldURL in mp3Files {
+        let newURL = newDir.appendingPathComponent(oldURL.lastPathComponent)
+        if !fileManager.fileExists(atPath: newURL.path) {
+          do {
+            try fileManager.moveItem(at: oldURL, to: newURL)
+            ATLog(.info, "Migrated audiobook file from Caches to Application Support: \(oldURL.lastPathComponent)")
+          } catch {
+            ATLog(.warn, "Failed to migrate audiobook file: \(error.localizedDescription)")
+          }
+        }
+      }
+    } catch {
+      ATLog(.debug, "No files to migrate from Caches: \(error.localizedDescription)")
+    }
   }
 
   /// RBDigital media types first download an intermediate document, which points
@@ -185,7 +246,8 @@ final class OpenAccessDownloadTask: DownloadTask {
     let delegate = DownloadTaskURLSessionDelegate(
       downloadTask: self,
       statePublisher: statePublisher,
-      finalDirectory: finalURL
+      finalDirectory: finalURL,
+      trackKey: key
     )
 
     session = URLSession(
@@ -193,6 +255,17 @@ final class OpenAccessDownloadTask: DownloadTask {
       delegate: delegate,
       delegateQueue: nil
     )
+    
+    // Check for resume data from a previous interrupted download
+    if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
+      ATLog(.info, "OpenAccessDownloadTask: Resuming download from saved state for: \(key)")
+      guard let session else { return }
+      let task = session.downloadTask(withResumeData: resumeData)
+      task.resume()
+      return
+    }
+    
+    // No resume data - start fresh download
     var request = URLRequest(
       url: remoteURL,
       cachePolicy: .useProtocolCachePolicy,
@@ -215,6 +288,7 @@ final class OpenAccessDownloadTask: DownloadTask {
       return
     }
 
+    ATLog(.debug, "OpenAccessDownloadTask: Starting fresh download for: \(key)")
     let task = session.downloadTask(with: request.applyCustomUserAgent())
     task.resume()
   }
@@ -227,9 +301,20 @@ final class OpenAccessDownloadTask: DownloadTask {
   }
 
   func cancel() {
-    downloadTask?.cancel()
+    // Try to save resume data before cancelling
+    if let urlSessionTask = session?.getAllTasks(completionHandler: { _ in }) as? [URLSessionDownloadTask],
+       let downloadTask = urlSessionTask.first {
+      downloadTask.cancel(byProducingResumeData: { [weak self] resumeData in
+        guard let self = self, let data = resumeData else { return }
+        DownloadPersistenceStore.shared.saveResumeData(data, forTrackKey: self.key)
+        ATLog(.info, "OpenAccessDownloadTask: Saved resume data on cancel for: \(self.key)")
+      })
+    } else {
+      // Fallback: just cancel without resume data
+      downloadTask?.cancel()
+    }
+    
     downloadTask = nil
-
     session?.invalidateAndCancel()
     session = nil
 
@@ -245,6 +330,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   private let downloadTask: DownloadTask
   private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   private let finalURL: URL
+  private let trackKey: String
 
   /// Each Spine Element's Download Task has a URLSession delegate.
   /// If the player ever evolves to support concurrent requests, there
@@ -253,16 +339,19 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   ///
   /// - Parameters:
   ///   - downloadTask: The corresponding download task for the URLSession.
-  ///   - delegate: The DownloadTaskDelegate, to forward download progress
+  ///   - statePublisher: Publisher to forward download state changes
   ///   - finalDirectory: Final directory to move the asset to
+  ///   - trackKey: Unique key for the track (used for resume data storage)
   required init(
     downloadTask: DownloadTask,
     statePublisher: PassthroughSubject<DownloadTaskState, Never>,
-    finalDirectory: URL
+    finalDirectory: URL,
+    trackKey: String
   ) {
     self.downloadTask = downloadTask
     self.statePublisher = statePublisher
-    finalURL = finalDirectory
+    self.finalURL = finalDirectory
+    self.trackKey = trackKey
   }
 
   func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -276,6 +365,10 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       verifyDownloadAndMove(from: location, to: finalURL) { success in
         if success {
           ATLog(.debug, "File successfully downloaded and moved to: \(self.finalURL)")
+          
+          // Clear any saved resume data since download completed successfully
+          DownloadPersistenceStore.shared.removeResumeData(forTrackKey: self.trackKey)
+          
           if FileManager.default.fileExists(atPath: location.path) {
             do {
               try FileManager.default.removeItem(at: location)
@@ -306,8 +399,15 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
     }
 
     ATLog(.error, "No file URL or response from download task: \(downloadTask.key).", error: error)
+    
+    // Try to save resume data for later recovery
+    let nsError = error as NSError
+    if let resumeData = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
+      DownloadPersistenceStore.shared.saveResumeData(resumeData, forTrackKey: trackKey)
+      ATLog(.info, "Saved resume data on error for track: \(trackKey) (\(resumeData.count) bytes)")
+    }
 
-    if let code = (error as NSError?)?.code {
+    if let code = nsError.code as Int? {
       switch code {
       case NSURLErrorNotConnectedToInternet,
            NSURLErrorTimedOut,
@@ -318,6 +418,11 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
           userInfo: nil
         )
         statePublisher.send(.error(networkLossError))
+        return
+      case NSURLErrorCancelled:
+        // Download was cancelled - resume data already saved above if available
+        ATLog(.debug, "Download cancelled for track: \(trackKey)")
+        statePublisher.send(.error(error))
         return
       default:
         break
