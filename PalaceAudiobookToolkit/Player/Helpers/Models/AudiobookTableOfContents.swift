@@ -208,8 +208,6 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   }
 
   func chapter(forPosition position: TrackPosition) throws -> Chapter {
-    ATLog(.warn, "📚 chapter(forPosition:) called: track=\(position.track.key), timestamp=\(position.timestamp)")
-    
     for (index, chapter) in toc.enumerated() {
       let chapterStart = chapter.position
       let chapterDuration = chapter.duration ?? chapter.position.track.duration
@@ -232,28 +230,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       // This handles the case where position is at exact chapter boundary
       let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key && 
                             abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
-<<<<<<< HEAD
 
       // Match if within chapter bounds OR if exactly at this chapter's end boundary
       if isAfterStart && (isBeforeEnd || isAtChapterEnd) {
-=======
-      
-      ATLog(.warn, "📚   Checking '\(chapter.title)': start=(\(chapterStart.track.key), \(chapterStart.timestamp)), end=(\(chapterEndPosition.track.key), \(chapterEndPosition.timestamp)), isAfterStart=\(isAfterStart), isBeforeEnd=\(isBeforeEnd), isAtChapterEnd=\(isAtChapterEnd)")
-
-      // Match if within chapter bounds OR if exactly at this chapter's end boundary
-      if isAfterStart && (isBeforeEnd || isAtChapterEnd) {
-        ATLog(.warn, "📚   ✅ MATCHED: '\(chapter.title)'")
->>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
         return chapter
       }
     }
 
-<<<<<<< HEAD
     // Fallback: find closest chapter by position distance
-=======
-    ATLog(.warn, "chapter(forPosition:) - No direct match found, using fallback closest algorithm")
-    
->>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
     let closestChapter = toc.min { chapter1, chapter2 in
       let dist1 = abs((try? position - chapter1.position) ?? Double.greatestFiniteMagnitude)
       let dist2 = abs((try? position - chapter2.position) ?? Double.greatestFiniteMagnitude)
@@ -261,7 +245,6 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     }
 
     if let closest = closestChapter {
-      ATLog(.warn, "  ⚠️ Fallback returned: '\(closest.title)' (this may indicate a bug)")
       return closest
     }
     throw ChapterError.noChapterFoundForPosition

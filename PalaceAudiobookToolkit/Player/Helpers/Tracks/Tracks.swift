@@ -276,10 +276,6 @@ public class Tracks {
   public func nextTrack(_ track: any Track) -> (any Track)? {
     // Find the track in our array by id
     guard let foundTrack = tracks.first(where: { $0.id == track.id }) else {
-<<<<<<< HEAD
-=======
-      ATLog(.warn, "nextTrack: Could not find track with id=\(track.id) in tracks array")
->>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
       return nil
     }
     
@@ -287,26 +283,10 @@ public class Tracks {
     
     // Check if we're at the last track
     guard trackIndex < tracks.count - 1 else {
-<<<<<<< HEAD
       return nil
     }
     
     return tracks[trackIndex + 1]
-=======
-      ATLog(.debug, "nextTrack: Track index \(trackIndex) is last track (count=\(tracks.count))")
-      return nil
-    }
-    
-    // Validate that the index matches the array position
-    let arrayIndex = tracks.firstIndex(where: { $0.id == track.id })
-    if let arrIdx = arrayIndex, arrIdx != trackIndex {
-      ATLog(.warn, "nextTrack: ⚠️ Index mismatch! track.index=\(trackIndex), array position=\(arrIdx)")
-    }
-    
-    let nextTrack = tracks[trackIndex + 1]
-    ATLog(.debug, "nextTrack: Returning track at index \(trackIndex + 1): key=\(nextTrack.key)")
-    return nextTrack
->>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
   }
 
   public subscript(index: Int) -> any Track {

@@ -260,11 +260,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   public var needsDownloadRetry: Bool = false
 
   public private(set) var timer: Cancellable?
-<<<<<<< HEAD
   private var uiUpdateTimer: Cancellable?
-=======
-  private var uiUpdateTimer: Cancellable?  // Fast timer for slider/time UI updates
->>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
   private var lastKnownChapter: Chapter?
 
   private var chapterMonitorTimer: Cancellable?
