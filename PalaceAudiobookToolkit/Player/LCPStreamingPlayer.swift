@@ -144,6 +144,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   override public func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+    ATLog(.warn, "🎯 [LCPStreamingPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
     var needsRebuild = avQueuePlayer.items().isEmpty
 
     if !needsRebuild {
@@ -257,11 +258,21 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // Clear seek flag before rebuilding queue
     isSeekingWithinSameTrack = false
     
+    ATLog(.warn, "🎯 [LCPStreamingPlayer] play(at:) REBUILDING QUEUE for track=\(position.track.key)")
+    
     let allTracks = tableOfContents.allTracks
     avQueuePlayer.removeAllItems()
 
     // Find target track index for windowing
     let targetTrackIndex = allTracks.firstIndex { $0.key == position.track.key } ?? 0
+    
+    if allTracks.firstIndex(where: { $0.key == position.track.key }) == nil {
+      ATLog(.error, "⚠️ [LCPStreamingPlayer] CRITICAL: Target track NOT FOUND in allTracks! Using index 0 as fallback")
+      ATLog(.error, "⚠️   Requested track key: \(position.track.key)")
+      ATLog(.error, "⚠️   Available track keys: \(allTracks.prefix(5).map { $0.key })")
+    } else {
+      ATLog(.warn, "🎯 [LCPStreamingPlayer] Found target track at index \(targetTrackIndex)")
+    }
 
     // Add the target item FIRST so currentItem immediately reflects the intended chapter
     if targetTrackIndex < allTracks.count {
@@ -617,17 +628,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           let endedTrackKey = endedItem.trackIdentifier,
           let endedTrack = tableOfContents.track(forKey: endedTrackKey)
     else {
+      ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] Could not identify ended track")
       return
     }
 
+    ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] Track ended: key=\(endedTrackKey), title=\(endedTrack.title ?? "nil"), index=\(endedTrack.index), duration=\(endedTrack.duration)")
+
     let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
     let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+    
+    ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] Current chapter at track end: '\(currentChapter?.title ?? "nil")'")
 
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
+      ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] Next track found: key=\(nextTrack.key), title=\(nextTrack.title ?? "nil"), index=\(nextTrack.index)")
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
       let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+      
+      ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] nextChapter='\(nextChapter?.title ?? "nil")', queue items=\(avQueuePlayer.items().count)")
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
+<<<<<<< HEAD
         // Same chapter continues on next track - navigate explicitly
         // CRITICAL: Don't use advanceToNextItem() - AVQueuePlayer's internal order
         // may not match our logical track order
@@ -635,11 +655,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         return
       } else {
         // Different chapters - let parent handle chapter transition
+=======
+        ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] SAME chapter ('\(cur.title)') - navigating to next track explicitly")
+        // CRITICAL FIX: Don't use advanceToNextItem() - the AVQueuePlayer's internal order
+        // may not match our logical track order. Always use explicit navigation.
+        play(at: nextStart, completion: nil)
+        return
+      } else {
+        ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] DIFFERENT chapters (cur='\(currentChapter?.title ?? "nil")', next='\(nextChapter?.title ?? "nil")') - calling super")
+>>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
         super.playerItemDidReachEnd(notification)
         return
       }
     } else {
+<<<<<<< HEAD
       // No next track - end of book
+=======
+      // No next track - this is end of book!
+      ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] ⚠️ NO NEXT TRACK FOUND after track index \(endedTrack.index) - treating as END OF BOOK")
+      ATLog(.warn, "🎵 [LCP playerItemDidReachEnd] Total tracks: \(tableOfContents.tracks.count), ended track key: \(endedTrack.key)")
+>>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
       handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
       return
     }
@@ -648,6 +683,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   // MARK: - End of Book Handling
 
   override func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
+<<<<<<< HEAD
+=======
+    ATLog(.warn, "⚠️🔄 [LCPStreamingPlayer] handlePlaybackEnd CALLED - will reset to beginning!")
+    
+>>>>>>> aecbe4a70c5eae6c54b7e4ea62161500f7365756
     // 1. Publish book completed event
     playbackStatePublisher.send(.bookCompleted)
     
