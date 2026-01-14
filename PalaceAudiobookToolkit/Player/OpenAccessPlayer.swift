@@ -241,7 +241,6 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
-    ATLog(.warn, "🎯 [OpenAccessPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
     queuedTrackPosition = position
     
     seekTo(position: position) { [weak self] trackPosition in
@@ -557,12 +556,6 @@ class OpenAccessPlayer: NSObject, Player {
     // Default to first chapter if no explicit target position was provided
     let targetIndex = desiredIndex ?? 0
     
-    if desiredIndex == nil, let trackPos = trackPosition {
-      ATLog(.warn, "⚠️ [rebuildPlayerQueueAndNavigate] Track not found in player items! target track key=\(trackPos.track.key)")
-      ATLog(.warn, "⚠️ [rebuildPlayerQueueAndNavigate] Available item keys: \(playerItems.compactMap { $0.trackIdentifier }.joined(separator: ", "))")
-      ATLog(.warn, "⚠️ [rebuildPlayerQueueAndNavigate] Defaulting to index 0 (first track)")
-    }
-    
     guard targetIndex < playerItems.count else {
       ATLog(.error, "OpenAccessPlayer: Target index \(targetIndex) out of bounds (\(playerItems.count) items)")
       completion?(false)
@@ -570,7 +563,6 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     let targetTimestamp = trackPosition?.timestamp ?? 0.0
-    ATLog(.warn, "🎯 [rebuildPlayerQueueAndNavigate] Navigating to index=\(targetIndex), timestamp=\(targetTimestamp), track=\(playerItems[targetIndex].trackIdentifier ?? "unknown")")
     navigateToItem(at: targetIndex, with: targetTimestamp) { [weak self] success in
       if success && wasPlaying && shouldResumePlayback {
         // Restore playback state after successful navigation
@@ -616,7 +608,6 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-    ATLog(.warn, "🔍 [OpenAccessPlayer] seekTo() CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
     if avQueuePlayer.currentItem?.trackIdentifier == position.track.key {
       performSeek(to: position, completion: completion)
     } else if let _ = avQueuePlayer.items().first(where: { $0.trackIdentifier == position.track.key }) {
@@ -859,8 +850,6 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   public func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
-    ATLog(.warn, "⚠️🔄 [OpenAccessPlayer] handlePlaybackEnd CALLED - will reset to beginning!")
-    
     guard let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first else {
       completion?(nil)
       return
@@ -1191,53 +1180,41 @@ extension OpenAccessPlayer {
           let endedTrackKey = endedItem.trackIdentifier,
           let endedTrack = tableOfContents.track(forKey: endedTrackKey)
     else {
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Could not identify ended track")
       return
     }
 
-    ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Track ended - key=\(endedTrackKey), title=\(endedTrack.title ?? "nil"), duration=\(endedTrack.duration)")
-
     let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
     let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
-    
-    ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Current chapter=\(currentChapter?.title ?? "nil")")
 
+    // Check if next track is in the same chapter - if so, navigate explicitly
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
       let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
-      
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Next track=\(nextTrack.title ?? "nil"), Next chapter=\(nextChapter?.title ?? "nil")")
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
-        ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Same chapter - navigating to next track explicitly")
-        // CRITICAL FIX: Don't use advanceToNextItem() - the AVQueuePlayer's internal order
-        // may not match our logical track order. Always use explicit navigation.
+        // Same chapter continues on next track - navigate explicitly
+        // CRITICAL: Don't use advanceToNextItem() - AVQueuePlayer's internal order
+        // may not match our logical track order
         let wasPlaying = avQueuePlayer.rate > 0
         rebuildPlayerQueueAndNavigate(to: nextStart, shouldResumePlayback: wasPlaying)
         return
       }
-    } else {
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] No next track found")
     }
 
+    // Chapter completed - notify and move to next chapter
     if let completedChapter = currentChapter {
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] Chapter completed - \(completedChapter.title)")
       playbackStatePublisher.send(.completed(completedChapter))
     }
 
     if let curChapter = currentChapter {
       let nextChapter = tableOfContents.nextChapter(after: curChapter)
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] curChapter='\(curChapter.title)', nextChapter(after:)='\(nextChapter?.title ?? "NIL")'")
       
       if let nextChapter = nextChapter {
-        ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] → Transitioning to '\(nextChapter.title)' at track=\(nextChapter.position.track.key), timestamp=\(nextChapter.position.timestamp)")
         play(at: nextChapter.position, completion: nil)
       } else {
-        ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] → nextChapter is NIL - handling end of book")
         handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
       }
     } else {
-      ATLog(.warn, "🎵 [OpenAccess playerItemDidReachEnd] → currentChapter is NIL - handling end of book")
       handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
     }
   }

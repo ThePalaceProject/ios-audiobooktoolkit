@@ -424,7 +424,7 @@ final class FindawayPlayer: NSObject, Player {
       if readyForPlayback {
         playWithCurrentState()
       } else {
-        ATLog(.warn, "🎮 [FindawayPlayer] play(at:) - NOT ready for playback, state queued but not executing")
+        ATLog(.debug, "FindawayPlayer: play(at:) - NOT ready for playback, state queued")
       }
       
       completion?(nil)
@@ -435,7 +435,7 @@ final class FindawayPlayer: NSObject, Player {
   func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
     ATLog(.debug, "🎚️ [FindawayPlayer] move(to: \(value)) SLIDER SEEK CALLED")
     guard let currentTrackPosition = currentTrackPosition else {
-      ATLog(.warn, "🎚️ [FindawayPlayer] move(to:) - No current track position")
+      ATLog(.debug, "FindawayPlayer: move(to:) - No current track position")
       completion?(nil)
       return
     }
