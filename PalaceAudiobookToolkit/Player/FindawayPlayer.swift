@@ -51,6 +51,14 @@ final class FindawayPlayer: NSObject, Player {
 
     return try? tableOfContents.chapter(forPosition: currentTrackPosition)
   }
+  
+  // MARK: - Fast UI Position Updates
+  private let positionSubject = PassthroughSubject<TrackPosition, Never>()
+  private var positionTimerCancellable: AnyCancellable?
+  
+  var positionPublisher: AnyPublisher<TrackPosition, Never> {
+    positionSubject.eraseToAnyPublisher()
+  }
 
   private var readyForPlayback: Bool = false
   private var queuedPlayerState: PlayerState = .none
@@ -180,6 +188,45 @@ final class FindawayPlayer: NSObject, Player {
 
     self.eventHandler.delegate = self
     databaseVerification.registerDelegate(self)
+    setupPositionTimer()
+  }
+  
+  // MARK: - Fast UI Position Updates
+  
+  private func setupPositionTimer() {
+    // Subscribe to playback state changes to start/stop the position timer
+    playbackStatePublisher
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] state in
+        guard let self = self else { return }
+        switch state {
+        case .started:
+          startPositionTimer()
+        case .stopped, .completed, .bookCompleted, .unloaded, .failed:
+          stopPositionTimer()
+        }
+      }
+      .store(in: &cancellables)
+  }
+  
+  private func startPositionTimer() {
+    stopPositionTimer()
+    
+    // 0.25s interval for smooth UI updates
+    positionTimerCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
+      .autoconnect()
+      .compactMap { [weak self] _ -> TrackPosition? in
+        guard let self = self, isPlaying else { return nil }
+        return currentTrackPosition
+      }
+      .sink { [weak self] position in
+        self?.positionSubject.send(position)
+      }
+  }
+  
+  private func stopPositionTimer() {
+    positionTimerCancellable?.cancel()
+    positionTimerCancellable = nil
   }
 
   var playbackRate: PlaybackRate {
@@ -223,6 +270,7 @@ final class FindawayPlayer: NSObject, Player {
   }
 
   func unload() {
+    stopPositionTimer()
     audioEngine?.playbackEngine?.unload()
     isLoaded = false
     playbackStatePublisher.send(.unloaded)

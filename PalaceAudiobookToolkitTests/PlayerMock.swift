@@ -21,6 +21,12 @@ class PlayerMock: NSObject, Player {
   var playbackRate: PalaceAudiobookToolkit.PlaybackRate = .normalTime
   var playbackStatePublisher: PassthroughSubject<PalaceAudiobookToolkit.PlaybackState, Never> = PassthroughSubject()
   var currentChapter: PalaceAudiobookToolkit.Chapter?
+  
+  // Fast UI position updates publisher (required by Player protocol)
+  private let positionSubject = PassthroughSubject<PalaceAudiobookToolkit.TrackPosition, Never>()
+  var positionPublisher: AnyPublisher<PalaceAudiobookToolkit.TrackPosition, Never> {
+    positionSubject.eraseToAnyPublisher()
+  }
 
   required init(tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents) {
     self.tableOfContents = tableOfContents

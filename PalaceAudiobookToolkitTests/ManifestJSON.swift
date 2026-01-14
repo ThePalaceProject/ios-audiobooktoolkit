@@ -45,6 +45,7 @@ enum ManifestJSON: String, CaseIterable {
   case endOfTheWorld = "endOfTheWorld_manifest"
   case whereTheLineIsDrawn = "where_the_line_is_drawn_manifest"
   case dracula = "dracula_manifest"
+  case dungeonCrawlerCarl = "dungeon_crawler_carl_manifest"
 
   var chapterCount: Int {
     switch self {
@@ -65,6 +66,7 @@ enum ManifestJSON: String, CaseIterable {
     case .endOfTheWorld: 14
     case .whereTheLineIsDrawn: 14
     case .dracula: 2
+    case .dungeonCrawlerCarl: 7  // Opening Credits, Ch1, Part I, Ch2, Ch3, Ch4, Ch5
     }
   }
 

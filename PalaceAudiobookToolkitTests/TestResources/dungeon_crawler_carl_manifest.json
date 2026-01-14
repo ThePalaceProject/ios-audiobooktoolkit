@@ -1,0 +1,87 @@
+{
+  "metadata": {
+    "title": "Dungeon Crawler Carl",
+    "subtitle": "Dungeon Crawler Carl, Book 1",
+    "@type": "http://schema.org/Audiobook",
+    "identifier": "urn:isbn:9798350430943",
+    "duration": 48702,
+    "author": [{"name": "Matt Dinniman"}],
+    "publisher": [{"name": "Audible"}]
+  },
+  "@context": ["https://readium.org/webpub-manifest/context.jsonld"],
+  "readingOrder": [
+    {
+      "title": "9798350430943_001.mp3",
+      "href": "9b403689-4782-4566-a734-83f5806f2850.MP3.mp3",
+      "duration": 14,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "9798350430943_002.mp3",
+      "href": "579bf044-04e1-4592-8fb8-783fa30a88df.MP3.mp3",
+      "duration": 1241,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "9798350430943_003.mp3",
+      "href": "0f4397a5-2983-49fa-990d-e091a56498e7.MP3.mp3",
+      "duration": 1409,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "9798350430943_004.mp3",
+      "href": "c8b69b5b-cfe6-4c85-827b-f5239b41677c.MP3.mp3",
+      "duration": 1090,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "9798350430943_005.mp3",
+      "href": "05676627-eb40-4954-b076-0d4d4936339d.MP3.mp3",
+      "duration": 1731,
+      "type": "audio/mpeg"
+    },
+    {
+      "title": "9798350430943_006.mp3",
+      "href": "48ad8d42-350b-4e50-8178-705d46ebae3b.MP3.mp3",
+      "duration": 914,
+      "type": "audio/mpeg"
+    }
+  ],
+  "toc": [
+    {
+      "title": "Opening Credits",
+      "href": "9b403689-4782-4566-a734-83f5806f2850.MP3.mp3#t=0"
+    },
+    {
+      "title": "Chapter 1",
+      "href": "579bf044-04e1-4592-8fb8-783fa30a88df.MP3.mp3#t=1"
+    },
+    {
+      "title": "Part I",
+      "href": "0f4397a5-2983-49fa-990d-e091a56498e7.MP3.mp3#t=1"
+    },
+    {
+      "title": "Chapter 2",
+      "href": "0f4397a5-2983-49fa-990d-e091a56498e7.MP3.mp3#t=3"
+    },
+    {
+      "title": "Chapter 3",
+      "href": "c8b69b5b-cfe6-4c85-827b-f5239b41677c.MP3.mp3#t=1"
+    },
+    {
+      "title": "Chapter 4",
+      "href": "05676627-eb40-4954-b076-0d4d4936339d.MP3.mp3#t=2"
+    },
+    {
+      "title": "Chapter 5",
+      "href": "48ad8d42-350b-4e50-8178-705d46ebae3b.MP3.mp3#t=1"
+    }
+  ],
+  "links": [
+    {
+      "type": "application/audiobook+json",
+      "href": "manifest.json",
+      "rel": ["self"]
+    }
+  ]
+}

@@ -94,6 +94,10 @@
 		E588DB3A2C477BE700144A73 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E588DB392C477BE700144A73 /* LoadingView.swift */; };
 		E58C53442B75507100D861EE /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
 		E58C53462B7550B000D861EE /* anathem_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53452B7550B000D861EE /* anathem_manifest.json */; };
+		E59D31FE2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E59D31FD2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json */; };
+		E59D31FF2F184FFF0021CAE9 /* dracula_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */; };
+		E59D32002F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E59D31FD2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json */; };
+		E59D32012F184FFF0021CAE9 /* dracula_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
@@ -247,6 +251,8 @@
 		E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = the_system_of_the_world_manifest.json; sourceTree = "<group>"; };
 		E58C53452B7550B000D861EE /* anathem_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = anathem_manifest.json; sourceTree = "<group>"; };
 		E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FindawayAudiobook.swift; sourceTree = "<group>"; };
+		E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dracula_manifest.json; sourceTree = "<group>"; };
+		E59D31FD2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dungeon_crawler_carl_manifest.json; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
@@ -377,7 +383,6 @@
 				E5DE01AE2BA3EF360063E68E /* ManifestDecodingTests.swift */,
 				E5B05DA92BA4DB4500686897 /* TableOfContentsTests.swift */,
 				E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */,
-				E5CC0CFF2BA8B6EC001BF751 /* Mocks */,
 				E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */,
 				E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */,
 			);
@@ -513,6 +518,8 @@
 				E58C53452B7550B000D861EE /* anathem_manifest.json */,
 				E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */,
 				E5A018C029368B17003F6D01 /* the_martian_manifest.json */,
+				E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */,
+				E59D31FD2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json */,
 				E55C93DD2B6C1FD30092E5E6 /* christmas_carol_manifest.json */,
 				E55470132B7C1814003447B8 /* quicksilver_manifest.json */,
 				E58496922BAB6B10003C83E6 /* bocas_manifest.json */,
@@ -535,13 +542,6 @@
 				E5ECFA7B2BED6C050008670F /* FindawayTrack.swift */,
 			);
 			path = Tracks;
-			sourceTree = "<group>";
-		};
-		E5CC0CFF2BA8B6EC001BF751 /* Mocks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Mocks;
 			sourceTree = "<group>";
 		};
 		E5DE01A02BA3E1830063E68E /* Helpers */ = {
@@ -716,6 +716,8 @@
 				E7E96BD02B10032E0036B23A /* OpenSans-Bold.ttf in Resources */,
 				E7E96BD12B10032E0036B23A /* OpenSans-Regular.ttf in Resources */,
 				E7E96BD22B10032E0036B23A /* OpenSans-SemiBold.ttf in Resources */,
+				E59D31FE2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json in Resources */,
+				E59D31FF2F184FFF0021CAE9 /* dracula_manifest.json in Resources */,
 				E52C1C422C00437F00D8F30B /* the_martian_manifest.json in Resources */,
 				E52C1C432C00437F00D8F30B /* littleWomenDevotional_manifest.json in Resources */,
 				E52C1C442C00437F00D8F30B /* secret_lives_manifest.json in Resources */,
@@ -754,6 +756,8 @@
 				E55C93DE2B6C1FD30092E5E6 /* christmas_carol_manifest.json in Resources */,
 				E57105E62C2CB6D200F1F033 /* endOfTheWorld_manifest.json in Resources */,
 				E55470142B7C1814003447B8 /* quicksilver_manifest.json in Resources */,
+				E59D32002F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json in Resources */,
+				E59D32012F184FFF0021CAE9 /* dracula_manifest.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
