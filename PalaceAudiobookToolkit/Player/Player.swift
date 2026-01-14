@@ -50,6 +50,10 @@ public protocol Player: NSObject {
   var playbackRate: PlaybackRate { get set }
   var isLoaded: Bool { get }
   var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
+  
+  /// Fast position updates for UI (slider, time displays). Uses AVPlayer's periodic time observer
+  /// at 0.25s intervals for smooth updates. Only emits while playing.
+  var positionPublisher: AnyPublisher<TrackPosition, Never> { get }
 
   init?(tableOfContents: AudiobookTableOfContents)
   func play()

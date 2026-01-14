@@ -197,8 +197,19 @@ private func validateMetadata(_ manifestMetadata: Manifest.Metadata, against jso
   XCTAssertEqual(manifestMetadata.type, jsonMetadata["@type"] as? String)
   XCTAssertEqual(manifestMetadata.identifier, jsonMetadata["identifier"] as? String)
   XCTAssertEqual(manifestMetadata.title, jsonMetadata["title"] as? String)
-  XCTAssertEqual(manifestMetadata.subtitle, jsonMetadata["subtitle"] as? String)
-  XCTAssertEqual(manifestMetadata.language, jsonMetadata["language"] as? String)
+  
+  // Subtitle: compare if both have values, otherwise skip (empty string vs nil is acceptable)
+  if let jsonSubtitle = jsonMetadata["subtitle"] as? String, !jsonSubtitle.isEmpty {
+    XCTAssertEqual(manifestMetadata.subtitle, jsonSubtitle)
+  }
+  
+  // Language: can be string or array in JSON
+  if let jsonLanguage = jsonMetadata["language"] as? String {
+    XCTAssertEqual(manifestMetadata.language, jsonLanguage)
+  } else if let jsonLanguages = jsonMetadata["language"] as? [String], let firstLang = jsonLanguages.first {
+    XCTAssertEqual(manifestMetadata.language, firstLang)
+  }
+  
   XCTAssertEqual(manifestMetadata.duration, jsonMetadata["duration"] as? Double)
   // Handle dates
   if let modifiedString = jsonMetadata["modified"] as? String {
@@ -295,7 +306,9 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
     let jsonLink = jsonLinks[index]
 
     if let rel = jsonLink["rel"] as? String {
-      XCTAssertEqual(manifestLink.rel, rel, "Rel mismatch in link at index \(index)")
+      XCTAssertTrue(manifestLink.rel?.contains(rel) ?? false, "Rel mismatch in link at index \(index)")
+    } else if let relArray = jsonLink["rel"] as? [String] {
+      XCTAssertEqual(manifestLink.rel, relArray, "Rel mismatch in link at index \(index)")
     }
 
     if let href = jsonLink["href"] as? String {

@@ -40,23 +40,13 @@ class SleepTimerTests: XCTestCase {
   /// `Player` and waits for the player to report that the
   /// current chapter has finished.
   func testTestEndOfChapter() {
-    let duration = TimeInterval(60)
-    let trackPosition = TrackPosition(
-      track: try! OpenAccessTrack(
-        manifest: try! Manifest.from(jsonFileName: ManifestJSON.bigFail.rawValue, bundle: Bundle(for: type(of: self))),
-        urlString: "www.google.com",
-        audiobookID: "TEST_ID",
-        title: "TEST_TITLE",
-        duration: duration,
-        index: 1,
-        key: "testKey"
-      ),
-      timestamp: 0,
-      tracks: tableOfContents.tracks
-    )
-
     let playerMock = PlayerMock(tableOfContents: tableOfContents)
-    playerMock.currentTrackPosition = trackPosition
+    
+    // Set the current chapter - required for endOfChapter to activate
+    if let firstChapter = tableOfContents.toc.first {
+      playerMock.currentChapter = firstChapter
+      playerMock.currentTrackPosition = firstChapter.position
+    }
 
     let sleepTimer = SleepTimer(player: playerMock)
     sleepTimer.setTimerTo(trigger: .endOfChapter)
