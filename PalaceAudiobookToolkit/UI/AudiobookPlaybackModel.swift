@@ -162,7 +162,8 @@ public class AudiobookPlaybackModel: ObservableObject {
         }
         switch state {
         case let .overallDownloadProgress(overallProgress):
-          isDownloading = overallProgress < 1
+          let isLCPStreaming = audiobookManager.audiobook.player is LCPStreamingPlayer
+          isDownloading = !isLCPStreaming && overallProgress < 1
           overallDownloadProgress = overallProgress
         case let .positionUpdated(position):
           guard let position else {
