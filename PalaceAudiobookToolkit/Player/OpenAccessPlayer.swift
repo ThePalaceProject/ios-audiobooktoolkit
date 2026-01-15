@@ -23,6 +23,14 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.rate != .zero
   }
 
+  // MARK: - Fast UI Position Updates (0.25s interval)
+  private let positionSubject = PassthroughSubject<TrackPosition, Never>()
+  private var timeObserverToken: Any?
+  
+  var positionPublisher: AnyPublisher<TrackPosition, Never> {
+    positionSubject.eraseToAnyPublisher()
+  }
+
   private var debounceWorkItem: DispatchWorkItem?
 
   var taskCompleteNotification: Notification.Name {
@@ -539,13 +547,15 @@ class OpenAccessPlayer: NSObject, Player {
     for (index, item) in playerItems.enumerated() {
       avQueuePlayer.insert(item, after: nil)
       addEndObserver(for: item)
-      if let trackPos = trackPosition, tableOfContents.allTracks[index].id == trackPos.track.id {
+      // Use item's trackIdentifier to match target position (not array index, which can be misaligned if tracks were skipped)
+      if let trackPos = trackPosition, item.trackIdentifier == trackPos.track.key {
         desiredIndex = index
       }
     }
 
     // Default to first chapter if no explicit target position was provided
     let targetIndex = desiredIndex ?? 0
+    
     guard targetIndex < playerItems.count else {
       ATLog(.error, "OpenAccessPlayer: Target index \(targetIndex) out of bounds (\(playerItems.count) items)")
       completion?(false)
@@ -840,8 +850,6 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   public func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
-    ATLog(.debug, "OpenAccessPlayer: End of book reached. Pausing and resetting to beginning.")
-    
     guard let currentTrackPosition, let firstTrack = currentTrackPosition.tracks.first else {
       completion?(nil)
       return
@@ -928,6 +936,33 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
     avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
     isObservingPlayerStatus = true
+    
+    // Add fast periodic time observer for UI updates (0.25s = 4 updates/second for smooth slider)
+    addPeriodicTimeObserver()
+  }
+  
+  private func addPeriodicTimeObserver() {
+    // Remove existing observer if any
+    if let token = timeObserverToken {
+      avQueuePlayer.removeTimeObserver(token)
+      timeObserverToken = nil
+    }
+    
+    // 0.25 seconds = smooth UI updates without excessive overhead
+    let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+    
+    timeObserverToken = avQueuePlayer.addPeriodicTimeObserver(
+      forInterval: interval,
+      queue: .main
+    ) { [weak self] time in
+      guard let self = self,
+            avQueuePlayer.rate > 0,  // Only emit while playing
+            let position = currentTrackPosition
+      else {
+        return
+      }
+      positionSubject.send(position)
+    }
   }
 
   func removePlayerObservers() {
@@ -939,6 +974,12 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.removeObserver(self, forKeyPath: "status")
     avQueuePlayer.removeObserver(self, forKeyPath: "rate")
     isObservingPlayerStatus = false
+    
+    // Remove periodic time observer
+    if let token = timeObserverToken {
+      avQueuePlayer.removeTimeObserver(token)
+      timeObserverToken = nil
+    }
   }
 }
 
@@ -1145,34 +1186,34 @@ extension OpenAccessPlayer {
     let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
     let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
 
+    // Check if next track is in the same chapter - if so, navigate explicitly
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
       let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
+        // Same chapter continues on next track - navigate explicitly
+        // CRITICAL: Don't use advanceToNextItem() - AVQueuePlayer's internal order
+        // may not match our logical track order
         let wasPlaying = avQueuePlayer.rate > 0
-        if avQueuePlayer.items().count > 1 {
-          avQueuePlayer.advanceToNextItem()
-          if wasPlaying {
-            avQueuePlayer.play(); restorePlaybackRate()
-          }
-        } else {
-          rebuildPlayerQueueAndNavigate(to: nextStart, shouldResumePlayback: false)
-          if wasPlaying {
-            avQueuePlayer.play(); restorePlaybackRate()
-          }
-        }
+        rebuildPlayerQueueAndNavigate(to: nextStart, shouldResumePlayback: wasPlaying)
         return
       }
     }
 
+    // Chapter completed - notify and move to next chapter
     if let completedChapter = currentChapter {
       playbackStatePublisher.send(.completed(completedChapter))
     }
 
-    if let curChapter = currentChapter, let nextChapter = tableOfContents.nextChapter(after: curChapter) {
-      // Use play(at:) for chapter boundaries to ensure proper state management
-      play(at: nextChapter.position, completion: nil)
+    if let curChapter = currentChapter {
+      let nextChapter = tableOfContents.nextChapter(after: curChapter)
+      
+      if let nextChapter = nextChapter {
+        play(at: nextChapter.position, completion: nil)
+      } else {
+        handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
+      }
     } else {
       handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
     }

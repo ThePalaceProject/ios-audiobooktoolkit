@@ -30,6 +30,8 @@ class DownloadTaskMock: DownloadTask {
   }
 
   func delete() {}
+  
+  func cancel() {}
 
   var downloadProgress: Float
 

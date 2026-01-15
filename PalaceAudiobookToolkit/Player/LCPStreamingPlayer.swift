@@ -191,7 +191,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       
       DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self] in
         if let self = self, !self.isLoaded {
-          ATLog(.warn, "🎵 [LCPStreamingPlayer] Publication loading taking longer than expected, attempting fallback")
+          ATLog(.warn, "LCPStreamingPlayer: Publication loading taking longer than expected, attempting fallback")
           if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
             ATLog(.debug, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
             isLoaded = true
@@ -628,46 +628,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
-        let wasPlaying = avQueuePlayer.rate > 0
-
-        if avQueuePlayer.items().count > 1 {
-          lastKnownPosition = nextStart
-          
-          avQueuePlayer.advanceToNextItem()
-          if wasPlaying {
-            if let currentItem = avQueuePlayer.currentItem, currentItem.status == .readyToPlay {
-              avQueuePlayer.play()
-              restorePlaybackRate()
-            } else {
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.avQueuePlayer.play()
-                self?.restorePlaybackRate()
-              }
-            }
-          }
-
-          playbackStatePublisher.send(.started(nextStart))
-        } else {
-          play(at: nextStart, completion: nil)
-        }
+        // Same chapter continues on next track - navigate explicitly
+        // CRITICAL: Don't use advanceToNextItem() - AVQueuePlayer's internal order
+        // may not match our logical track order
+        play(at: nextStart, completion: nil)
         return
       } else {
+        // Different chapters - let parent handle chapter transition
         super.playerItemDidReachEnd(notification)
         return
       }
     } else {
-      // No next track - this is end of book!
+      // No next track - end of book
       handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
       return
     }
-
   }
 
   // MARK: - End of Book Handling
 
   override func handlePlaybackEnd(currentTrack _: any Track, completion: ((TrackPosition?) -> Void)?) {
-    ATLog(.debug, "🎵 [LCPStreamingPlayer] End of book reached. Pausing and resetting to beginning.")
-    
     // 1. Publish book completed event
     playbackStatePublisher.send(.bookCompleted)
     

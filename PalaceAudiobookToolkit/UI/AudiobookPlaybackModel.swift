@@ -240,6 +240,17 @@ public class AudiobookPlaybackModel: ObservableObject {
         self?.saveLocation()
       }
       .store(in: &subscriptions)
+    
+    // MARK: - Fast UI Updates (0.25s via AVPlayer's periodic time observer)
+    // This provides smooth slider and time display updates without expensive operations
+    audiobookManager.audiobook.player.positionPublisher
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] position in
+        guard let self = self else { return }
+        currentLocation = position
+        updateProgress()
+      }
+      .store(in: &subscriptions)
 
     audiobookManager.fetchBookmarks { _ in }
   }

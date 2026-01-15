@@ -48,6 +48,16 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       calculateDurations()
       calculateEndPositions()
     }
+    
+    // DEBUG: Dump full TOC structure for debugging
+    ATLog(.debug, "AudiobookTableOfContents initialized with \(toc.count) chapters and \(tracks.count) tracks")
+    for (index, chapter) in toc.enumerated() {
+      ATLog(.debug, "  Chapter[\(index)]: '\(chapter.title)' - track=\(chapter.position.track.title ?? "nil") (key=\(chapter.position.track.key)), timestamp=\(chapter.position.timestamp), duration=\(chapter.duration ?? -1)")
+    }
+    ATLog(.debug, "Tracks:")
+    for (index, track) in tracks.tracks.enumerated() {
+      ATLog(.debug, "  Track[\(index)]: '\(track.title ?? "nil")' (key=\(track.key)), duration=\(track.duration)")
+    }
   }
 
   func track(forKey key: String) -> (any Track)? {
@@ -214,11 +224,20 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         }
       }
 
-      if position >= chapterStart && position < chapterEndPosition {
+      let isAfterStart = position >= chapterStart
+      let isBeforeEnd = position < chapterEndPosition
+      // Check if position is exactly at THIS chapter's end (not just any track end)
+      // This handles the case where position is at exact chapter boundary
+      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key && 
+                            abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
+
+      // Match if within chapter bounds OR if exactly at this chapter's end boundary
+      if isAfterStart && (isBeforeEnd || isAtChapterEnd) {
         return chapter
       }
     }
 
+    // Fallback: find closest chapter by position distance
     let closestChapter = toc.min { chapter1, chapter2 in
       let dist1 = abs((try? position - chapter1.position) ?? Double.greatestFiniteMagnitude)
       let dist2 = abs((try? position - chapter2.position) ?? Double.greatestFiniteMagnitude)

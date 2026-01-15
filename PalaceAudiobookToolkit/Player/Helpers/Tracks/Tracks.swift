@@ -274,11 +274,19 @@ public class Tracks {
   }
 
   public func nextTrack(_ track: any Track) -> (any Track)? {
-    guard let currentIndex = tracks.first(where: { $0.id == track.id
-    })?.index, currentIndex < tracks.count - 1 else {
+    // Find the track in our array by id
+    guard let foundTrack = tracks.first(where: { $0.id == track.id }) else {
       return nil
     }
-    return tracks[currentIndex + 1]
+    
+    let trackIndex = foundTrack.index
+    
+    // Check if we're at the last track
+    guard trackIndex < tracks.count - 1 else {
+      return nil
+    }
+    
+    return tracks[trackIndex + 1]
   }
 
   public subscript(index: Int) -> any Track {
