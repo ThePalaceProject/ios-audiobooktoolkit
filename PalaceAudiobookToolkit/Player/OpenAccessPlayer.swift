@@ -1013,8 +1013,17 @@ extension OpenAccessPlayer {
         if !session.isOtherAudioPlaying {
           try session.setActive(true, options: [])
         }
-      } catch {
-        ATLog(.error, "🔊 AudioSession setup failed: \(error)")
+      } catch let error as NSError {
+        // Error -50 (kAudio_ParamError) is a known issue that can occur during
+        // audio session configuration in certain app states (backgrounding, route changes).
+        // These are recoverable - the audio system will retry automatically.
+        // -50 = kAudio_ParamError, 560557684 = kAudioServicesNoHardwareError
+        let knownRecoverableErrors: Set<Int> = [-50, 560557684]
+        if knownRecoverableErrors.contains(error.code) {
+          ATLog(.debug, "🔊 AudioSession configuration deferred (recoverable): \(error.localizedDescription)")
+        } else {
+          ATLog(.error, "🔊 AudioSession setup failed: \(error)")
+        }
       }
     }
 
