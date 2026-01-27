@@ -385,7 +385,18 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
     } else {
       ATLog(.error, "Download Task failed with server response: \n\(httpResponse.description)")
       self.downloadTask.downloadProgress = 0.0
-      statePublisher.send(.error(nil))
+      
+      // Create specific error for 401 (authentication required)
+      if httpResponse.statusCode == 401 {
+        let authError = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.authenticationRequired.rawValue,
+          userInfo: [NSLocalizedDescriptionKey: "Authentication required - please sign in to your library account"]
+        )
+        statePublisher.send(.error(authError))
+      } else {
+        statePublisher.send(.error(nil))
+      }
     }
   }
 

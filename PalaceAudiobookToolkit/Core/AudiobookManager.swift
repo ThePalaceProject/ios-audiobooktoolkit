@@ -746,50 +746,66 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         }
         switch command {
         case .play:
+          // Execute play immediately - save position asynchronously
           audiobook.player.play()
           if let currentPosition = audiobook.player.currentTrackPosition {
-            saveLocation(currentPosition)
-            ATLog(.debug, "🔒 Saved position after lock screen play: \(currentPosition.timestamp)")
+            Task.detached(priority: .utility) { [weak self] in
+              self?.saveLocation(currentPosition)
+              ATLog(.debug, "🔒 Saved position after remote play: \(currentPosition.timestamp)")
+            }
           }
         case .pause:
-          if let currentPosition = audiobook.player.currentTrackPosition {
-            saveLocation(currentPosition)
-            ATLog(.debug, "🔒 Saved position before lock screen pause: \(currentPosition.timestamp)")
-          }
+          // Execute pause immediately - save position asynchronously
+          let currentPosition = audiobook.player.currentTrackPosition
           audiobook.player.pause()
+          if let currentPosition = currentPosition {
+            Task.detached(priority: .utility) { [weak self] in
+              self?.saveLocation(currentPosition)
+              ATLog(.debug, "🔒 Saved position after remote pause: \(currentPosition.timestamp)")
+            }
+          }
         case .playPause:
           let wasPlaying = audiobook.player.isPlaying
+          let currentPosition = audiobook.player.currentTrackPosition
+          // Execute toggle immediately
           if wasPlaying {
-            if let currentPosition = audiobook.player.currentTrackPosition {
-              saveLocation(currentPosition)
-              ATLog(.debug, "🔒 Saved position before lock screen playPause (was playing): \(currentPosition.timestamp)")
-            }
             audiobook.player.pause()
           } else {
             audiobook.player.play()
-            if let currentPosition = audiobook.player.currentTrackPosition {
-              saveLocation(currentPosition)
-              ATLog(.debug, "🔒 Saved position after lock screen playPause (was paused): \(currentPosition.timestamp)")
+          }
+          // Save position asynchronously
+          if let currentPosition = currentPosition {
+            Task.detached(priority: .utility) { [weak self] in
+              self?.saveLocation(currentPosition)
+              ATLog(.debug, "🔒 Saved position after remote playPause: \(currentPosition.timestamp)")
             }
           }
         case .skipForward:
+          // Skip executes async internally, update UI immediately on completion
           audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
-            if let newPosition = newPosition {
-              DispatchQueue.main.async {
-                self?.saveLocation(newPosition)
-                self?.updateNowPlayingInfo(newPosition)
-                ATLog(.debug, "🔒 Saved position after lock screen skip forward: \(newPosition.timestamp)")
-              }
+            guard let self = self, let newPosition = newPosition else { return }
+            // Update UI on main thread immediately
+            DispatchQueue.main.async {
+              self.updateNowPlayingInfo(newPosition)
+            }
+            // Save position asynchronously on background
+            Task.detached(priority: .utility) {
+              self.saveLocation(newPosition)
+              ATLog(.debug, "🔒 Saved position after remote skip forward: \(newPosition.timestamp)")
             }
           }
         case .skipBackward:
+          // Skip executes async internally, update UI immediately on completion
           audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
-            if let newPosition = newPosition {
-              DispatchQueue.main.async {
-                self?.saveLocation(newPosition)
-                self?.updateNowPlayingInfo(newPosition)
-                ATLog(.debug, "🔒 Saved position after lock screen skip backward: \(newPosition.timestamp)")
-              }
+            guard let self = self, let newPosition = newPosition else { return }
+            // Update UI on main thread immediately
+            DispatchQueue.main.async {
+              self.updateNowPlayingInfo(newPosition)
+            }
+            // Save position asynchronously on background
+            Task.detached(priority: .utility) {
+              self.saveLocation(newPosition)
+              ATLog(.debug, "🔒 Saved position after remote skip backward: \(newPosition.timestamp)")
             }
           }
         case let .changePlaybackRate(rate):
