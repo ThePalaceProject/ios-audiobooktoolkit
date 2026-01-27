@@ -498,32 +498,67 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       return
     }
 
-    ATLog(.debug, "🔒 [AudiobookManager] Updating lock screen for position: \(currentTrackPosition.timestamp)")
+    ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo START - track timestamp: \(currentTrackPosition.timestamp)")
 
     var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
 
     let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
     let chapterTitle = chapter?.title ?? currentTrackPosition.track.title
-    let chapterDuration = chapter?.duration ?? currentTrackPosition.track.duration
-    let chapterElapsed = (try? tableOfContents.chapterOffset(for: currentTrackPosition)) ?? currentTrackPosition
-      .timestamp
+    
+    // Get chapter duration - ensure it's valid and positive
+    let rawDuration = chapter?.duration ?? currentTrackPosition.track.duration
+    let chapterDuration = max(1.0, abs(rawDuration)) // Ensure positive, at least 1 second
+    
+    ATLog(.info, "🔒 [AudiobookManager] Chapter: '\(chapterTitle ?? "nil")', rawDuration: \(rawDuration), safeDuration: \(chapterDuration)")
+    
+    // Get chapter-relative elapsed time (already clamped in chapterOffset)
+    var chapterElapsed: Double
+    if let offset = try? tableOfContents.chapterOffset(for: currentTrackPosition) {
+      chapterElapsed = offset
+      ATLog(.info, "🔒 [AudiobookManager] Got chapterOffset: \(offset)")
+    } else {
+      // Fallback: use track timestamp, but clamp it
+      chapterElapsed = max(0, min(currentTrackPosition.timestamp, chapterDuration))
+      ATLog(.warn, "🔒 [AudiobookManager] chapterOffset failed, using clamped timestamp: \(chapterElapsed)")
+    }
+    
+    // FINAL SAFETY: Ensure elapsed is NEVER greater than duration
+    // This is the last line of defense against negative time remaining
+    if chapterElapsed > chapterDuration {
+      ATLog(.error, "🔒 [AudiobookManager] CORRECTING: elapsed (\(chapterElapsed)) > duration (\(chapterDuration))")
+      chapterElapsed = chapterDuration
+    }
+    if chapterElapsed < 0 {
+      ATLog(.error, "🔒 [AudiobookManager] CORRECTING: elapsed (\(chapterElapsed)) < 0")
+      chapterElapsed = 0
+    }
+    
+    let timeRemaining = chapterDuration - chapterElapsed
+    ATLog(.info, "🔒 [AudiobookManager] FINAL VALUES - elapsed: \(chapterElapsed)s, duration: \(chapterDuration)s, remaining: \(timeRemaining)s")
 
     nowPlayingInfo[MPMediaItemPropertyTitle] = chapterTitle
     nowPlayingInfo[MPMediaItemPropertyArtist] = metadata.title
     nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = metadata.authors?.joined(separator: ", ")
     nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = chapterElapsed
     nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = chapterDuration
+    
+    // Set media type for CarPlay compatibility
+    nowPlayingInfo[MPMediaItemPropertyMediaType] = MPMediaType.audioBook.rawValue
 
     let playbackRate = PlaybackRate.convert(rate: audiobook.player.playbackRate)
     let isPlaying = audiobook.player.isPlaying
     nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
-    nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0
+    // Always use 1.0 as the rate when playing (CarPlay expects this)
+    nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(playbackRate) : 0.0
+    
+    ATLog(.info, "🔒 [AudiobookManager] Setting nowPlayingInfo - isPlaying: \(isPlaying), rate: \(playbackRate)")
 
-    ATLog(
-      .debug,
-      "🔒 [AudiobookManager] Setting lock screen: '\(chapterTitle ?? "Unknown")' elapsed: \(chapterElapsed)s / \(chapterDuration)s"
-    )
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    
+    // CRITICAL: Also set the playback state explicitly for CarPlay
+    MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    
+    ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo COMPLETE - playbackState: \(isPlaying ? "playing" : "paused")")
   }
 
   // MARK: - Audiobook Actions
@@ -683,6 +718,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private func handlePlaybackCompleted(_ chapter: Chapter) {
     waitingForPlayer = false
     statePublisher.send(.playbackCompleted(chapter.position))
+    
+    // Save tracked time when chapter/track completes
+    // This is critical for continuous playback - without this call,
+    // accumulated time is lost at each track boundary
+    playbackTrackerDelegate?.playbackStopped()
     
     // Save position when chapter/track completes
     saveLocation(chapter.position)

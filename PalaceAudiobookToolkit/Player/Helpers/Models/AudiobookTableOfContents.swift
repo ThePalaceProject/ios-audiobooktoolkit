@@ -250,6 +250,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     throw ChapterError.noChapterFoundForPosition
   }
 
+  /// Returns the elapsed time within the current chapter for the given position.
+  /// The result is always clamped to [0, chapterDuration] to prevent negative time remaining.
   public func chapterOffset(for position: TrackPosition) throws -> Double {
     let chapter = try chapter(forPosition: position)
     let chapterStartPosition = TrackPosition(
@@ -258,7 +260,16 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       tracks: position.tracks
     )
 
-    return try position - chapterStartPosition
+    let rawOffset = try position - chapterStartPosition
+    let chapterDuration = chapter.duration ?? position.track.duration
+    
+    // Clamp to valid range: [0, chapterDuration]
+    // This prevents negative time remaining in Now Playing displays
+    let clampedOffset = max(0, min(rawOffset, chapterDuration))
+    
+    ATLog(.debug, "📊 chapterOffset: raw=\(rawOffset), duration=\(chapterDuration), clamped=\(clampedOffset)")
+    
+    return clampedOffset
   }
 
   public func downloadProgress(for chapter: Chapter) -> Double {
