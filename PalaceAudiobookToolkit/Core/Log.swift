@@ -80,35 +80,60 @@ public func ATLog(
   }
 }
 
-// MARK: - Performance Optimizations
+// MARK: - Performance Optimizations (Thread-Safe)
 
-private var lastLogMessages: [String: Date] = [:]
-private let logThrottleInterval: TimeInterval = 0.5 // 500ms throttle
+/// Thread-safe log throttling for audiobook toolkit.
+/// Uses a dedicated actor to prevent data races on the message dictionary.
+private actor AudiobookLogThrottle {
+  private var lastLogMessages: [String: Date] = [:]
+  private let throttleInterval: TimeInterval = 0.5 // 500ms throttle
+  private let maxTrackedMessages: Int = 100
 
-private func shouldThrottleLogging(level: LogLevel, message: String) -> Bool {
-  // Don't throttle errors - they're important
-  guard level != .error else {
+  func shouldThrottle(level: LogLevel, message: String) -> Bool {
+    // Don't throttle errors - they're important
+    guard level != .error else {
+      return false
+    }
+
+    let now = Date()
+    let messageKey = String(message.prefix(50))
+
+    if let lastTime = lastLogMessages[messageKey] {
+      if now.timeIntervalSince(lastTime) < throttleInterval {
+        return true // Throttle this message
+      }
+    }
+
+    lastLogMessages[messageKey] = now
+
+    // Clean up old entries periodically
+    if lastLogMessages.count > maxTrackedMessages {
+      let cutoffTime = now.addingTimeInterval(-throttleInterval * 10)
+      lastLogMessages = lastLogMessages.filter { $0.value > cutoffTime }
+    }
+
     return false
   }
+}
 
-  let now = Date()
-  let messageKey = message.prefix(50).description // Use first 50 chars as key
+private let audiobookLogThrottle = AudiobookLogThrottle()
 
-  if let lastTime = lastLogMessages[messageKey] {
-    if now.timeIntervalSince(lastTime) < logThrottleInterval {
-      return true // Throttle this message
-    }
+/// Synchronous wrapper for the async throttle check.
+/// Uses a blocking semaphore pattern since logging needs to be synchronous.
+private func shouldThrottleLogging(level: LogLevel, message: String) -> Bool {
+  // For performance, use a simple thread-safe check
+  // The actor-based implementation ensures thread safety
+  var result = false
+  let semaphore = DispatchSemaphore(value: 0)
+
+  Task {
+    result = await audiobookLogThrottle.shouldThrottle(level: level, message: message)
+    semaphore.signal()
   }
 
-  lastLogMessages[messageKey] = now
-
-  // Clean up old entries periodically
-  if lastLogMessages.count > 100 {
-    let cutoffTime = now.addingTimeInterval(-logThrottleInterval * 10)
-    lastLogMessages = lastLogMessages.filter { $0.value > cutoffTime }
-  }
-
-  return false
+  // Wait with timeout to prevent deadlocks
+  _ = semaphore.wait(timeout: .now() + .milliseconds(10))
+  return result
 }
 
 // MARK: - AudiobookLog
