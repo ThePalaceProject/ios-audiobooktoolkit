@@ -413,7 +413,12 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       interval = 5.0
     }
 
-    playbackTrackerDelegate?.playbackStarted()
+    // Only start time tracking if player is actually playing
+    // This prevents overcounting when setupNowPlayingInfoTimer() is called
+    // during init or app foreground transitions while not playing
+    if audiobook.player.isPlaying {
+      playbackTrackerDelegate?.playbackStarted()
+    }
 
     timer = Timer.publish(every: interval, on: .main, in: .common)
       .autoconnect()
