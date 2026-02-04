@@ -40,13 +40,30 @@ final class OpenAccessDownloadTask: DownloadTask {
   private var downloadTask: URLSessionDownloadTask?
 
   /// Progress should be set to 1 if the file already exists.
-  var downloadProgress: Float = 0 {
-    didSet {
-      DispatchQueue.main.async { [weak self] in
-        guard let self else {
-          return
+  /// Lazily initialized based on actual file status to avoid showing 0% for downloaded files.
+  private var _downloadProgress: Float?
+  var downloadProgress: Float {
+    get {
+      if _downloadProgress == nil {
+        // Initialize based on actual file status
+        switch assetFileStatus() {
+        case .saved:
+          _downloadProgress = 1.0
+        case .missing, .unknown:
+          _downloadProgress = 0.0
         }
-        statePublisher.send(.progress(downloadProgress))
+      }
+      return _downloadProgress ?? 0.0
+    }
+    set {
+      let oldValue = _downloadProgress
+      _downloadProgress = newValue
+      // Only publish if value changed to avoid duplicate events
+      if oldValue != newValue {
+        DispatchQueue.main.async { [weak self] in
+          guard let self else { return }
+          self.statePublisher.send(.progress(newValue))
+        }
       }
     }
   }

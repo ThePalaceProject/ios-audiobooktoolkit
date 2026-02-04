@@ -373,10 +373,16 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           statePublisher.send(.error(track, error))
         case .downloadComplete:
           checkIfRetryIsNeeded()
-        default:
+          // Ensure final 100% progress is sent
+          statePublisher.send(.overallDownloadProgress(1.0))
+        case let .overallProgress(progress):
+          // Use the network service's calculated progress directly
+          // This is more accurate as it uses the synchronized progressDictionary
+          statePublisher.send(.overallDownloadProgress(progress))
+        case .progress, .completed, .deleted:
+          // Individual track events - network service will send overallProgress separately
           break
         }
-        calculateOverallDownloadProgress()
       }
       .store(in: &cancellables)
   }

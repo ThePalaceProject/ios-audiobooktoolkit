@@ -76,6 +76,26 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     self.tracks = tracks
     self.decryptor = decryptor
     setupDownloadTasks()
+    initializeProgressFromCurrentState()
+  }
+  
+  /// Initialize progress dictionary based on current download state of all tracks.
+  /// This ensures correct progress is shown when reopening an audiobook mid-download.
+  private func initializeProgressFromCurrentState() {
+    queue.async(flags: .barrier) { [weak self] in
+      guard let self = self else { return }
+      for track in self.tracks {
+        if let downloadTask = track.downloadTask {
+          // Read current progress (which checks actual file status for lazy-initialized tasks)
+          let progress = downloadTask.downloadProgress
+          self.progressDictionary[track.key] = progress
+        }
+      }
+      // Publish initial overall progress on main queue
+      DispatchQueue.main.async {
+        self.updateOverallProgress()
+      }
+    }
   }
 
   public func fetch() {
