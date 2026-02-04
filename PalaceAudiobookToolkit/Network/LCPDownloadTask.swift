@@ -19,8 +19,35 @@ let LCPDownloadTaskCompleteNotification = NSNotification.Name(rawValue: "LCPDown
  */
 final class LCPDownloadTask: DownloadTask {
   var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
-  /// For LCP we decrypt locally into cache; start at 0 and advance as files are decrypted
-  var downloadProgress: Float = 0.0
+  
+  /// For LCP we decrypt locally into cache; lazily initialized based on file status
+  private var _downloadProgress: Float?
+  var downloadProgress: Float {
+    get {
+      if _downloadProgress == nil {
+        // Initialize based on actual decrypted file status
+        switch assetFileStatus() {
+        case .saved:
+          _downloadProgress = 1.0
+        case .missing, .unknown:
+          _downloadProgress = 0.0
+        }
+      }
+      return _downloadProgress ?? 0.0
+    }
+    set {
+      let oldValue = _downloadProgress
+      _downloadProgress = newValue
+      // Only publish if value changed
+      if oldValue != newValue {
+        DispatchQueue.main.async { [weak self] in
+          guard let self else { return }
+          self.statePublisher.send(.progress(newValue))
+        }
+      }
+    }
+  }
+  
   let key: String
   /// URL of a file inside the audiobook archive (e.g., `media/sound.mp3`)
   let urls: [URL]
@@ -35,7 +62,7 @@ final class LCPDownloadTask: DownloadTask {
     self.urls = urls ?? []
     urlMediaType = mediaType
     decryptedUrls = self.urls.compactMap { decryptedFileURL(for: $0) }
-    downloadProgress = 0.0
+    // Note: downloadProgress is lazily initialized based on assetFileStatus()
   }
 
   /// URL for decryption delegate to store decrypted file.
