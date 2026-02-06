@@ -100,6 +100,8 @@
 		E59D32012F184FFF0021CAE9 /* dracula_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */; };
 		E59FCE9A29423E73004FD730 /* PureLayout in Frameworks */ = {isa = PBXBuildFile; productRef = E59FCE9929423E73004FD730 /* PureLayout */; };
 		E59FCEC929425F81004FD730 /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59FCEC829425F81004FD730 /* Strings.swift */; };
+		F0AB00122E8E500100000011 /* AudiobookAccessibilityAnnouncementCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00112E8E500100000010 /* AudiobookAccessibilityAnnouncementCenter.swift */; };
+		F0AB00132E8E500100000012 /* AudiobookAccessibilityAnnouncementCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00142E8E500100000013 /* AudiobookAccessibilityAnnouncementCenterTests.swift */; };
 		E5A018BF2936887E003F6D01 /* alice_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018BE2936887E003F6D01 /* alice_manifest.json */; };
 		E5A018C229368BC2003F6D01 /* the_martian_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5A018C029368B17003F6D01 /* the_martian_manifest.json */; };
 		E5A7C3A82943A8920083BE1F /* Transifex in Frameworks */ = {isa = PBXBuildFile; productRef = E5A7C3A72943A8920083BE1F /* Transifex */; };
@@ -254,6 +256,8 @@
 		E59D31FC2F184FFF0021CAE9 /* dracula_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dracula_manifest.json; sourceTree = "<group>"; };
 		E59D31FD2F184FFF0021CAE9 /* dungeon_crawler_carl_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = dungeon_crawler_carl_manifest.json; sourceTree = "<group>"; };
 		E59FCEC829425F81004FD730 /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
+		F0AB00112E8E500100000010 /* AudiobookAccessibilityAnnouncementCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookAccessibilityAnnouncementCenter.swift; sourceTree = "<group>"; };
+		F0AB00142E8E500100000013 /* AudiobookAccessibilityAnnouncementCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookAccessibilityAnnouncementCenterTests.swift; sourceTree = "<group>"; };
 		E5A018BE2936887E003F6D01 /* alice_manifest.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = alice_manifest.json; sourceTree = "<group>"; };
 		E5A018C029368B17003F6D01 /* the_martian_manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = the_martian_manifest.json; sourceTree = "<group>"; };
 		E5A7C3A92943ABF90083BE1F /* TXNativeExtensions.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TXNativeExtensions.swift; sourceTree = "<group>"; };
@@ -385,6 +389,7 @@
 				E5CC0CFD2BA8ADA0001BF751 /* TrackPositionTests.swift */,
 				E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */,
 				E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */,
+				F0AB00142E8E500100000013 /* AudiobookAccessibilityAnnouncementCenterTests.swift */,
 			);
 			path = PalaceAudiobookToolkitTests;
 			sourceTree = "<group>";
@@ -500,6 +505,7 @@
 				8CF57BD9243277180053C31E /* MediaProcessor.swift */,
 				178707C724DA505700649567 /* RSAUtils.swift */,
 				E59FCEC829425F81004FD730 /* Strings.swift */,
+				F0AB00112E8E500100000010 /* AudiobookAccessibilityAnnouncementCenter.swift */,
 				E71168BD2AB4C4DA00629DC7 /* BoolWithDelay.swift */,
 				E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */,
 			);
@@ -845,6 +851,7 @@
 				E5ECFA822BED6C270008670F /* FindawayAudiobookLifecycleListener.swift in Sources */,
 				8C6CD8AA240D9F8A00E2DFB0 /* JSONUtils.swift in Sources */,
 				E59FCEC929425F81004FD730 /* Strings.swift in Sources */,
+				F0AB00122E8E500100000011 /* AudiobookAccessibilityAnnouncementCenter.swift in Sources */,
 				E5ECFA852BED6C430008670F /* FindawayDatabaseVerification.swift in Sources */,
 				E5A7C3AA2943ABF90083BE1F /* TXNativeExtensions.swift in Sources */,
 				8C3CDB0E2422E7F40020FC0B /* String+Extensions.swift in Sources */,
@@ -891,6 +898,7 @@
 				E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */,
 				7B6C1BD420405C4D00EB791E /* CursorTests.swift in Sources */,
 				E5CC0CFE2BA8ADA0001BF751 /* TrackPositionTests.swift in Sources */,
+				F0AB00132E8E500100000012 /* AudiobookAccessibilityAnnouncementCenterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
