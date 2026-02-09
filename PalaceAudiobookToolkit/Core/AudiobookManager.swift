@@ -176,6 +176,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private var mediaControlPublisher: MediaControlPublisher
   private var playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate?
   public var playbackCompletionHandler: (() -> Void)?
+  private let accessibilityAnnouncements = AudiobookAccessibilityAnnouncementCenter()
+  private let announcementKey: String
+  private var didAnnounceDownloadStart: Bool = false
 
   public static let skipTimeInterval: TimeInterval = 30
 
@@ -279,6 +282,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     self.networkService = networkService
     self.playbackTrackerDelegate = playbackTrackerDelegate
     mediaControlPublisher = MediaControlPublisher()
+    self.announcementKey = metadata.title ?? "audiobook-\(UUID().uuidString)"
 
     super.init()
     setupBindings()
@@ -370,12 +374,30 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         }
         switch downloadState {
         case let .error(track, error):
+          let title = self.metadata.title ?? Strings.Generic.audiobook
+          self.accessibilityAnnouncements.announceDownloadFailed(title: title)
+          self.accessibilityAnnouncements.resetProgress(identifier: self.announcementKey)
+          self.didAnnounceDownloadStart = false
           statePublisher.send(.error(track, error))
         case .downloadComplete:
           checkIfRetryIsNeeded()
           // Ensure final 100% progress is sent
           statePublisher.send(.overallDownloadProgress(1.0))
+          let title = self.metadata.title ?? Strings.Generic.audiobook
+          self.accessibilityAnnouncements.announceDownloadCompleted(title: title)
+          self.accessibilityAnnouncements.resetProgress(identifier: self.announcementKey)
+          self.didAnnounceDownloadStart = false
         case let .overallProgress(progress):
+          let title = self.metadata.title ?? Strings.Generic.audiobook
+          if !self.didAnnounceDownloadStart && progress > 0.0 {
+            self.accessibilityAnnouncements.announceDownloadStarted(title: title)
+            self.didAnnounceDownloadStart = true
+          }
+          self.accessibilityAnnouncements.announceDownloadProgress(
+            title: title,
+            identifier: self.announcementKey,
+            progress: Double(progress)
+          )
           // Use the network service's calculated progress directly
           // This is more accurate as it uses the synchronized progressDictionary
           statePublisher.send(.overallDownloadProgress(progress))

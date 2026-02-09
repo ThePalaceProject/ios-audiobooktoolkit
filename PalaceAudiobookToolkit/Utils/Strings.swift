@@ -111,6 +111,7 @@ enum Strings {
   enum Generic {
     static let downloading = NSLocalizedString("Downloading:", value: "Downloading:", comment: "")
     static let loading = NSLocalizedString("Loading...", value: "Loading...", comment: "")
+    static let audiobook = NSLocalizedString("Audiobook", value: "Audiobook", comment: "VoiceOver fallback title for audiobook announcements")
     static let downloadingFormatted = NSLocalizedString(
       "Downloading: %@%%",
       value: "Downloading: %@%%",
@@ -172,5 +173,36 @@ enum Strings {
       value: "Playback progress %.2f percent",
       comment: "Playback slider value description for VoiceOver"
     )
+  }
+
+  enum DownloadAnnouncements {
+    static func downloadStarted(_ title: String) -> String {
+      String.localizedStringWithFormat(
+        NSLocalizedString("Download started for %@.", comment: "VoiceOver announcement when a download begins"),
+        title
+      )
+    }
+
+    static func downloadProgress(_ title: String, _ percent: Int) -> String {
+      String.localizedStringWithFormat(
+        NSLocalizedString("Download %d percent complete for %@.", comment: "VoiceOver announcement for download progress"),
+        percent,
+        title
+      )
+    }
+
+    static func downloadCompleted(_ title: String) -> String {
+      String.localizedStringWithFormat(
+        NSLocalizedString("Download completed for %@.", comment: "VoiceOver announcement when a download finishes"),
+        title
+      )
+    }
+
+    static func downloadFailed(_ title: String) -> String {
+      String.localizedStringWithFormat(
+        NSLocalizedString("Download failed for %@.", comment: "VoiceOver announcement when a download fails"),
+        title
+      )
+    }
   }
 }
