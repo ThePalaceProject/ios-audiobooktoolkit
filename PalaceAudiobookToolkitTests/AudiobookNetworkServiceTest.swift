@@ -153,6 +153,155 @@ extension Manifest {
   }
 }
 
+// MARK: - Nil DownloadTask Slot Management Tests
+
+/// Regression tests for download hang when tracks have nil downloadTask.
+/// Previously, fillDownloadSlots() would allocate a slot for nil-task tracks
+/// but startDownload() would call nil?.fetch() (no-op), permanently blocking
+/// the slot and eventually stalling all downloads.
+final class NilDownloadTaskSlotTests: XCTestCase {
+  var cancellables = Set<AnyCancellable>()
+  
+  override func tearDown() {
+    cancellables.removeAll()
+    super.tearDown()
+  }
+  
+  /// Verifies that tracks with nil downloadTask don't block download slots.
+  /// A service with nil-task tracks should still progress through remaining tracks.
+  func testFetch_WithNilDownloadTask_DoesNotHang() {
+    // Track with no download task (nil) — this previously caused a permanent slot block
+    let nilTrack = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "nil-task")
+    nilTrack.downloadTask = nil
+    
+    // Track with a real download task
+    let realTrack = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "real-task")
+    let fetchExpectation = XCTestExpectation(description: "Real track's fetch() should be called")
+    (realTrack.downloadTask as? AudiobookNetworkServiceTest.DownloadTaskMock)?.fetchClosure = { _ in
+      fetchExpectation.fulfill()
+    }
+    
+    let service = DefaultAudiobookNetworkService(tracks: [nilTrack, realTrack])
+    service.fetch()
+    
+    // If the nil track blocked the slot, this would time out
+    wait(for: [fetchExpectation], timeout: 3.0)
+  }
+  
+  /// Verifies that a service with ALL nil download tasks doesn't crash or hang.
+  func testFetch_WithAllNilDownloadTasks_DoesNotCrash() {
+    let track1 = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "nil1")
+    track1.downloadTask = nil
+    let track2 = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "nil2")
+    track2.downloadTask = nil
+    
+    let service = DefaultAudiobookNetworkService(tracks: [track1, track2])
+    
+    // This should not crash or hang
+    service.fetch()
+    
+    let waitExpectation = XCTestExpectation(description: "Wait for async operations")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+      waitExpectation.fulfill()
+    }
+    wait(for: [waitExpectation], timeout: 2.0)
+  }
+}
+
+// MARK: - Monotonic Progress Tests
+
+/// Tests that download progress never goes backwards.
+/// URLSession can report lower fractionCompleted on retries/redirects,
+/// and download tasks reset to 0.0 on cancel/error. The service must
+/// clamp progress to max-seen-so-far to prevent jittery progress bars.
+final class MonotonicProgressTests: XCTestCase {
+  var cancellables = Set<AnyCancellable>()
+  
+  override func tearDown() {
+    cancellables.removeAll()
+    super.tearDown()
+  }
+  
+  /// Verifies per-track progress never decreases even when lower values arrive.
+  func testTrackProgress_NeverGoesBackwards() {
+    let track = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "track1")
+    let service = DefaultAudiobookNetworkService(tracks: [track])
+    
+    let expectation = XCTestExpectation(description: "All progress values should be monotonic")
+    var progressValues: [Float] = []
+    
+    service.downloadStatePublisher
+      .sink { state in
+        if case .progress(_, let progress) = state {
+          progressValues.append(progress)
+          // After receiving the last update, verify monotonicity
+          if progressValues.count >= 3 {
+            expectation.fulfill()
+          }
+        }
+      }
+      .store(in: &cancellables)
+    
+    // Simulate: 0.5 → 0.3 (backwards!) → 0.7
+    DispatchQueue.global().async {
+      track.simulateProgressUpdate(0.5)
+      usleep(50_000) // 50ms
+      track.simulateProgressUpdate(0.3) // This should be clamped to 0.5
+      usleep(50_000)
+      track.simulateProgressUpdate(0.7)
+    }
+    
+    wait(for: [expectation], timeout: 5.0)
+    
+    // Verify: progress should be [0.5, 0.5, 0.7] — never 0.3
+    for i in 1..<progressValues.count {
+      XCTAssertGreaterThanOrEqual(
+        progressValues[i], progressValues[i - 1],
+        "Progress went backwards at index \(i): \(progressValues[i]) < \(progressValues[i - 1])"
+      )
+    }
+  }
+  
+  /// Verifies overall progress never decreases.
+  func testOverallProgress_NeverDecreases() {
+    let track1 = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "t1")
+    let track2 = AudiobookNetworkServiceTest.TrackMock(progress: 0.0, key: "t2")
+    let service = DefaultAudiobookNetworkService(tracks: [track1, track2])
+    
+    let expectation = XCTestExpectation(description: "Overall progress should be monotonic")
+    var overallValues: [Float] = []
+    
+    service.downloadStatePublisher
+      .sink { state in
+        if case .overallProgress(let progress) = state {
+          overallValues.append(progress)
+          if overallValues.count >= 2 {
+            expectation.fulfill()
+          }
+        }
+      }
+      .store(in: &cancellables)
+    
+    // Push track1 to 0.8, then send a lower value — overall should not decrease
+    DispatchQueue.global().async {
+      track1.simulateProgressUpdate(0.8)
+      usleep(100_000) // 100ms
+      track1.simulateProgressUpdate(0.4) // Clamped to 0.8, overall stays same
+      usleep(100_000)
+      track2.simulateProgressUpdate(0.6) // Overall increases
+    }
+    
+    wait(for: [expectation], timeout: 5.0)
+    
+    for i in 1..<overallValues.count {
+      XCTAssertGreaterThanOrEqual(
+        overallValues[i], overallValues[i - 1],
+        "Overall progress went backwards at index \(i): \(overallValues[i]) < \(overallValues[i - 1])"
+      )
+    }
+  }
+}
+
 // MARK: - Download Progress Lazy Initialization Tests
 
 /// Tests for the lazy downloadProgress initialization fix that ensures
