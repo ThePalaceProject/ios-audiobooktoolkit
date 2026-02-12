@@ -1027,10 +1027,13 @@ extension OpenAccessPlayer {
       }
     }
 
+    // Use async dispatch to avoid potential deadlock if main thread is blocked.
+    // Audio session configuration is safe to do asynchronously since AVAudioSession
+    // handles its own internal synchronization.
     if Thread.isMainThread {
       configure()
     } else {
-      DispatchQueue.main.sync { configure() }
+      DispatchQueue.main.async { configure() }
     }
   }
 
