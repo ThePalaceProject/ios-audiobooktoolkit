@@ -220,7 +220,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           }
 
           if !success {
-            ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed, but continuing with playback")
+            ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed — rebuilding queue to recover position")
+            // Seek failure can cause position drift. Rebuild the queue to force correct positioning
+            // rather than silently continuing at the wrong position.
+            rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: true) { _ in
+              completion?(nil)
+            }
+            return
           }
 
           // Ensure session is active before resuming
@@ -293,7 +299,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         }
 
         if !success {
-          ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed in queue rebuild, but continuing with playback")
+          ATLog(.error, "🎵 [LCPStreamingPlayer] Seek failed in queue rebuild — position may be inaccurate, notifying playback state")
+          // Notify observers that the seek didn't land precisely so position can be corrected
+          if let currentPos = currentTrackPosition {
+            playbackStatePublisher.send(.started(currentPos))
+          }
         }
 
         do {
