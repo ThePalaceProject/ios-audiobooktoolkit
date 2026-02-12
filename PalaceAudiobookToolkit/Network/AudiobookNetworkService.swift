@@ -231,7 +231,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
         let track = tracks[index]
         let isAlreadyActive = activeDownloadIndices.contains(index)
         let isCompleted: Bool = {
-          if let status = downloadStatus[track.key] {
+          if let status = self.downloadStatus[track.key] {
             switch status {
             case .completed: return true
             default: return false
@@ -310,29 +310,36 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
 
     let total = missingPairs.count
-    // Thread-safe counter for concurrent decryption callbacks
-    let completedCount = OSAllocatedUnfairLock(initialState: 0)
-    let hasErrored = OSAllocatedUnfairLock(initialState: false)
+    // Thread-safe counter for concurrent decryption callbacks.
+    // Using NSLock instead of OSAllocatedUnfairLock to support iOS 13+ deployment target.
+    let lock = NSLock()
+    var completedCount = 0
+    var hasErrored = false
 
     for (src, dst) in missingPairs {
       decryptor.decrypt(url: src, to: dst) { [weak self] error in
         guard let self else { return }
         
+        lock.lock()
         // Bail early if we already reported an error for this track
-        let alreadyErrored = hasErrored.withLock { $0 }
+        let alreadyErrored = hasErrored
+        lock.unlock()
         guard !alreadyErrored else { return }
         
         if let error {
-          hasErrored.withLock { $0 = true }
+          lock.lock()
+          hasErrored = true
+          lock.unlock()
           downloadStatePublisher.send(.error(track: track, error: error))
           updateDownloadStatus(for: track, state: .error(error))
           releaseDownloadSlot(for: track)
           fillDownloadSlots(startingFrom: trackIndex + 1)
         } else {
-          let newCount = completedCount.withLock { count -> Int in
-            count += 1
-            return count
-          }
+          lock.lock()
+          completedCount += 1
+          let newCount = completedCount
+          lock.unlock()
+          
           let progress = Float(newCount) / Float(total)
           task.downloadProgress = progress
           updateProgress(progress, for: track)
