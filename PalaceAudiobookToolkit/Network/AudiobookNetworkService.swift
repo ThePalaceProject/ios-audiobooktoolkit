@@ -161,10 +161,16 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
 
   private func updateProgress(_ progress: Float, for track: any Track) {
     queue.async(flags: .barrier) {
-      self.progressDictionary[track.key] = progress
+      let currentProgress = self.progressDictionary[track.key] ?? 0.0
+      // Enforce monotonic progress: never report a value lower than what we've already seen.
+      // URLSession can report backwards progress on retries or when expectedBytes changes,
+      // and download tasks reset to 0.0 on cancel/error. Clamping here prevents the
+      // progress bar from sliding backwards in the UI.
+      let clampedProgress = max(currentProgress, progress)
+      self.progressDictionary[track.key] = clampedProgress
       DispatchQueue.main.async {
         self.updateOverallProgress()
-        self.downloadStatePublisher.send(.progress(track: track, progress: progress))
+        self.downloadStatePublisher.send(.progress(track: track, progress: clampedProgress))
       }
     }
   }
@@ -178,9 +184,14 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
       let totalProgress = progressDictionary.values.reduce(0, +)
       let overallProgress = totalProgress / Float(tracks.count)
       
+      // Enforce monotonic overall progress: never publish a value lower than
+      // what we've already published. This prevents the overall progress bar
+      // from jittering backwards when individual track progress fluctuates.
+      guard overallProgress >= lastPublishedOverallProgress else { return }
+      
       // Only dispatch to main thread if progress changed meaningfully (>0.5%)
       // This prevents excessive main-thread work during large audiobook downloads
-      let delta = abs(overallProgress - lastPublishedOverallProgress)
+      let delta = overallProgress - lastPublishedOverallProgress
       guard delta > 0.005 || overallProgress >= 1.0 else { return }
       lastPublishedOverallProgress = overallProgress
       
@@ -230,6 +241,14 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
       while index < tracks.count, activeDownloadIndices.count < maxConcurrentTrackDownloads {
         let track = tracks[index]
         let isAlreadyActive = activeDownloadIndices.contains(index)
+        
+        // Skip tracks with no download task — allocating a slot for these
+        // would permanently block it since no progress/completion events will fire.
+        guard track.downloadTask != nil else {
+          index += 1
+          continue
+        }
+        
         let isCompleted: Bool = {
           if let status = self.downloadStatus[track.key] {
             switch status {
@@ -267,6 +286,15 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   private func startDownload(at index: Int) {
     guard index < tracks.count else { return }
     let track = tracks[index]
+
+    // Safety net: if downloadTask is nil, release the slot immediately
+    // to prevent it from being permanently occupied.
+    guard track.downloadTask != nil else {
+      ATLog(.warn, "🎵 [NetworkService] Track \(track.key) has no download task — releasing slot")
+      releaseDownloadSlot(for: track)
+      fillDownloadSlots(startingFrom: index + 1)
+      return
+    }
 
     if let lcpTask = track.downloadTask as? LCPDownloadTask, let decryptedUrls = lcpTask.decryptedUrls,
        let decryptor = decryptor

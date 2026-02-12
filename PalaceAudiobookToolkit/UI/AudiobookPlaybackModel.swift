@@ -164,7 +164,8 @@ public class AudiobookPlaybackModel: ObservableObject {
         case let .overallDownloadProgress(overallProgress):
           let isLCPStreaming = audiobookManager.audiobook.player is LCPStreamingPlayer
           isDownloading = !isLCPStreaming && overallProgress < 1
-          overallDownloadProgress = overallProgress
+          // Clamp to max-seen-so-far to prevent the progress bar from sliding backwards
+          overallDownloadProgress = max(overallDownloadProgress, overallProgress)
         case let .positionUpdated(position):
           guard let position else {
             return
