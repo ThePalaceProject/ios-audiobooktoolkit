@@ -68,9 +68,13 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   private var cancellables: Set<AnyCancellable> = []
   private var progressDictionary: [String: Float] = [:]
   private var downloadStatus: [String: DownloadTaskState] = [:]
-  private let queue = DispatchQueue(label: "com.yourapp.progressDictionaryQueue", attributes: .concurrent)
-  private var currentDownloadIndex: Int = 0
+  private let queue = DispatchQueue(label: "com.palace.downloadProgressQueue", attributes: .concurrent)
+  private var activeDownloadIndices: Set<Int> = []
+  private let maxConcurrentTrackDownloads = 3
   public let decryptor: DRMDecryptor?
+  
+  /// Cached overall progress to avoid redundant main-thread dispatches
+  private var lastPublishedOverallProgress: Float = -1
 
   public init(tracks: [any Track], decryptor: DRMDecryptor? = nil) {
     self.tracks = tracks
@@ -99,21 +103,18 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   }
 
   public func fetch() {
-    startDownload(at: currentDownloadIndex)
+    fillDownloadSlots(startingFrom: 0)
   }
 
   public func fetchUndownloadedTracks() {
-    var startedAny = false
+    // Retry any tracks that need it, then fill remaining slots
     for (index, track) in tracks.enumerated() {
       if track.downloadTask?.needsRetry ?? false {
-        currentDownloadIndex = index
-        track.downloadTask?.fetch()
-        startedAny = true
+        startDownload(at: index)
       }
     }
-    if !startedAny {
-      startNextUndownloadedTrack()
-    }
+    // Fill any remaining download slots with the next undownloaded tracks
+    fillDownloadSlots(startingFrom: 0)
   }
 
   public func deleteAll() {
@@ -142,14 +143,15 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
       updateProgress(progress, for: track)
     case .completed:
       updateProgress(1.0, for: track)
-
       downloadStatePublisher.send(.completed(track: track))
       updateDownloadStatus(for: track, state: .completed)
-      startNextDownload()
+      releaseDownloadSlot(for: track)
+      fillDownloadSlots(startingFrom: 0)
     case let .error(error):
       downloadStatePublisher.send(.error(track: track, error: error))
       updateDownloadStatus(for: track, state: .error(error))
-      startNextDownload()
+      releaseDownloadSlot(for: track)
+      fillDownloadSlots(startingFrom: 0)
     case .deleted:
       downloadStatePublisher.send(.deleted(track: track))
     }
@@ -175,6 +177,13 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
 
       let totalProgress = progressDictionary.values.reduce(0, +)
       let overallProgress = totalProgress / Float(tracks.count)
+      
+      // Only dispatch to main thread if progress changed meaningfully (>0.5%)
+      // This prevents excessive main-thread work during large audiobook downloads
+      let delta = abs(overallProgress - lastPublishedOverallProgress)
+      guard delta > 0.005 || overallProgress >= 1.0 else { return }
+      lastPublishedOverallProgress = overallProgress
+      
       DispatchQueue.main.async {
         self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
       }
@@ -209,86 +218,132 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
   }
 
-  private func startDownload(at index: Int) {
-    guard index < tracks.count else {
-      return
+  // MARK: - Concurrent Download Slot Management
+  
+  /// Fills available download slots starting from the given index.
+  /// Downloads up to `maxConcurrentTrackDownloads` tracks simultaneously.
+  private func fillDownloadSlots(startingFrom searchStart: Int) {
+    queue.async(flags: .barrier) { [weak self] in
+      guard let self else { return }
+      
+      var index = searchStart
+      while index < tracks.count, activeDownloadIndices.count < maxConcurrentTrackDownloads {
+        let track = tracks[index]
+        let isAlreadyActive = activeDownloadIndices.contains(index)
+        let isCompleted: Bool = {
+          if let status = downloadStatus[track.key] {
+            switch status {
+            case .completed: return true
+            default: return false
+            }
+          }
+          return false
+        }()
+        let progress = track.downloadTask?.downloadProgress ?? 0.0
+        
+        if !isAlreadyActive && !isCompleted && progress < 1.0 {
+          activeDownloadIndices.insert(index)
+          let capturedIndex = index
+          // Dispatch the actual download start outside the barrier to avoid holding the lock
+          DispatchQueue.main.async { [weak self] in
+            self?.startDownload(at: capturedIndex)
+          }
+        }
+        index += 1
+      }
     }
+  }
+  
+  /// Releases a download slot when a track completes or errors.
+  private func releaseDownloadSlot(for track: any Track) {
+    queue.async(flags: .barrier) { [weak self] in
+      guard let self else { return }
+      if let index = tracks.firstIndex(where: { $0.key == track.key }) {
+        activeDownloadIndices.remove(index)
+      }
+    }
+  }
+
+  private func startDownload(at index: Int) {
+    guard index < tracks.count else { return }
     let track = tracks[index]
-    currentDownloadIndex = index
 
     if let lcpTask = track.downloadTask as? LCPDownloadTask, let decryptedUrls = lcpTask.decryptedUrls,
        let decryptor = decryptor
     {
-      startLCPDecryption(task: lcpTask, originalUrls: lcpTask.urls, decryptedUrls: decryptedUrls, decryptor: decryptor)
+      startLCPDecryption(task: lcpTask, trackIndex: index, originalUrls: lcpTask.urls, decryptedUrls: decryptedUrls, decryptor: decryptor)
       return
     }
 
     if track.downloadTask?.downloadProgress ?? 0.0 < 1.0 {
       track.downloadTask?.fetch()
     } else {
-      startNextDownload()
+      // Already downloaded — release slot and fill next
+      releaseDownloadSlot(for: track)
+      fillDownloadSlots(startingFrom: index + 1)
     }
   }
 
+  /// Thread-safe LCP decryption using an atomic counter to prevent data races
+  /// on the `completed` variable when multiple decrypt callbacks fire concurrently.
   private func startLCPDecryption(
     task: LCPDownloadTask,
+    trackIndex: Int,
     originalUrls: [URL],
     decryptedUrls: [URL],
     decryptor: DRMDecryptor
   ) {
     let fileManager = FileManager.default
-    let total = decryptedUrls.count
-    var completed = 0
+    let track = tracks[trackIndex]
 
     let missingPairs: [(URL, URL)] = zip(originalUrls, decryptedUrls)
       .filter { _, dst in !fileManager.fileExists(atPath: dst.path) }
+    
     if missingPairs.isEmpty {
       task.downloadProgress = 1.0
-      let track = tracks[currentDownloadIndex]
       updateProgress(1.0, for: track)
       downloadStatePublisher.send(.completed(track: track))
       updateDownloadStatus(for: track, state: .completed)
-      startNextDownload()
+      releaseDownloadSlot(for: track)
+      fillDownloadSlots(startingFrom: trackIndex + 1)
       return
     }
 
+    let total = missingPairs.count
+    // Thread-safe counter for concurrent decryption callbacks
+    let completedCount = OSAllocatedUnfairLock(initialState: 0)
+    let hasErrored = OSAllocatedUnfairLock(initialState: false)
+
     for (src, dst) in missingPairs {
       decryptor.decrypt(url: src, to: dst) { [weak self] error in
-        guard let self = self else {
-          return
-        }
-        if let error = error {
-          downloadStatePublisher.send(.error(track: tracks[currentDownloadIndex], error: error))
-          updateDownloadStatus(for: tracks[currentDownloadIndex], state: .error(error))
+        guard let self else { return }
+        
+        // Bail early if we already reported an error for this track
+        let alreadyErrored = hasErrored.withLock { $0 }
+        guard !alreadyErrored else { return }
+        
+        if let error {
+          hasErrored.withLock { $0 = true }
+          downloadStatePublisher.send(.error(track: track, error: error))
+          updateDownloadStatus(for: track, state: .error(error))
+          releaseDownloadSlot(for: track)
+          fillDownloadSlots(startingFrom: trackIndex + 1)
         } else {
-          completed += 1
-          let progress = Float(completed) / Float(total)
+          let newCount = completedCount.withLock { count -> Int in
+            count += 1
+            return count
+          }
+          let progress = Float(newCount) / Float(total)
           task.downloadProgress = progress
-          downloadStatePublisher.send(.progress(track: tracks[currentDownloadIndex], progress: progress))
-          if completed == total {
-            downloadStatePublisher.send(.completed(track: tracks[currentDownloadIndex]))
-            updateDownloadStatus(for: tracks[currentDownloadIndex], state: .completed)
-            startNextDownload()
+          updateProgress(progress, for: track)
+          
+          if newCount == total {
+            downloadStatePublisher.send(.completed(track: track))
+            updateDownloadStatus(for: track, state: .completed)
+            releaseDownloadSlot(for: track)
+            fillDownloadSlots(startingFrom: trackIndex + 1)
           }
         }
-      }
-    }
-  }
-
-  private func startNextDownload() {
-    let nextIndex = currentDownloadIndex + 1
-    if nextIndex < tracks.count {
-      startDownload(at: nextIndex)
-    }
-  }
-
-  private func startNextUndownloadedTrack() {
-    for index in currentDownloadIndex..<tracks.count {
-      let track = tracks[index]
-      if track.downloadTask?.needsRetry ?? false {
-        currentDownloadIndex = index
-        track.downloadTask?.fetch()
-        break
       }
     }
   }
