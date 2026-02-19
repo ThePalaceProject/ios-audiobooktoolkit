@@ -31,7 +31,10 @@ final class OpenAccessDownloadTask: DownloadTask {
   let urlMediaType: TrackMediaType
   let alternateLinks: [(TrackMediaType, URL)]?
   let feedbooksProfile: String?
-  let token: String?
+  var token: String?
+  /// The CM fulfill URL for refreshing expired bearer tokens.
+  var fulfillURL: URL?
+  private var hasAttemptedTokenRefresh = false
 
   private static let DownloadTaskTimeoutValue: TimeInterval = 60
   private var downloadURL: URL
@@ -337,6 +340,52 @@ final class OpenAccessDownloadTask: DownloadTask {
     statePublisher.send(.error(nil))
     ATLog(.debug, "Download task cancelled for key: \(key)")
   }
+
+  /// Attempts to refresh the bearer token from the stored CM fulfill URL and retry the download.
+  /// Returns `true` if a refresh attempt was initiated, `false` if refresh is not possible.
+  func attemptTokenRefreshAndRetry() -> Bool {
+    guard let fulfillURL, !hasAttemptedTokenRefresh else {
+      return false
+    }
+
+    hasAttemptedTokenRefresh = true
+    ATLog(.info, "OpenAccessDownloadTask: Attempting bearer token refresh for: \(key)")
+
+    session?.invalidateAndCancel()
+    session = nil
+    downloadTask = nil
+
+    var request = URLRequest(url: fulfillURL)
+    request.cachePolicy = .reloadIgnoringLocalCacheData
+
+    let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+      guard let self else { return }
+
+      guard let data, error == nil,
+            let httpResponse = response as? HTTPURLResponse,
+            httpResponse.statusCode == 200,
+            let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let accessToken = dictionary?["access_token"] as? String
+      else {
+        ATLog(.error, "OpenAccessDownloadTask: Token refresh failed for: \(self.key)")
+        self.downloadProgress = 0.0
+        let authError = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.authenticationRequired.rawValue,
+          userInfo: [NSLocalizedDescriptionKey: "Authentication required - please sign in to your library account"]
+        )
+        self.statePublisher.send(.error(authError))
+        return
+      }
+
+      ATLog(.info, "OpenAccessDownloadTask: Token refreshed successfully for: \(self.key)")
+      self.token = accessToken
+      self.hasAttemptedTokenRefresh = false
+      self.fetch()
+    }
+    task.resume()
+    return true
+  }
 }
 
 // MARK: - DownloadTaskURLSessionDelegate
@@ -403,7 +452,13 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       ATLog(.error, "Download Task failed with server response: \n\(httpResponse.description)")
       self.downloadTask.downloadProgress = 0.0
       
-      // Create specific error for 401 (authentication required)
+      if httpResponse.statusCode == 401,
+         let oaTask = self.downloadTask as? OpenAccessDownloadTask,
+         oaTask.attemptTokenRefreshAndRetry() {
+        ATLog(.info, "DownloadTaskDelegate: 401 received, token refresh initiated for: \(self.downloadTask.key)")
+        return
+      }
+
       if httpResponse.statusCode == 401 {
         let authError = NSError(
           domain: OpenAccessPlayerErrorDomain,

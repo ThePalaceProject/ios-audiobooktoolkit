@@ -341,8 +341,14 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
   }
 
+  /// Force-saves the current position, bypassing any active save suppression.
+  /// Use for critical lifecycle events (termination, backgrounding) where data
+  /// loss is unacceptable.
   public func persistLocation() {
-    saveLocation()
+    suppressSavesUntil = nil
+    if let currentLocation {
+      audiobookManager.saveLocation(currentLocation)
+    }
   }
 
   func skipBack() {

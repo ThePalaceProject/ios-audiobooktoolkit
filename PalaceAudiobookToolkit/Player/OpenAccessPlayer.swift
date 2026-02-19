@@ -182,6 +182,9 @@ class OpenAccessPlayer: NSObject, Player {
   public var lastKnownPosition: TrackPosition?
   private var isObservingPlayerStatus = false
   private var bearerToken: String?
+  private var fulfillURL: URL?
+  private var isRefreshingToken = false
+  private var wasPlayingBeforeInterruption = false
 
   private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
     didSet {
@@ -197,6 +200,7 @@ class OpenAccessPlayer: NSObject, Player {
     self.tableOfContents = tableOfContents
     avQueuePlayer = AVQueuePlayer()
     bearerToken = tableOfContents.tracks.token
+    fulfillURL = tableOfContents.tracks.fulfillURL
     super.init()
     
     if let firstTrack = tableOfContents.allTracks.first {
@@ -204,6 +208,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
     configurePlayer()
     addPlayerObservers()
+    addItemFailedObserver()
   }
 
   func configurePlayer() {
@@ -741,6 +746,9 @@ class OpenAccessPlayer: NSObject, Player {
   private func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
     if item.status == .failed {
       ATLog(.error, "OpenAccessPlayer: Item already failed - \(item.error?.localizedDescription ?? "unknown")")
+      if isItemAuthFailure(item), fulfillURL != nil {
+        refreshBearerTokenAndRebuildQueue()
+      }
       completion(false)
       return
     }
@@ -753,7 +761,7 @@ class OpenAccessPlayer: NSObject, Player {
     
     var observation: NSKeyValueObservation?
     observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
-      guard self != nil else { return }
+      guard let self else { return }
       
       if observedItem.status == .readyToPlay {
         timeoutWorkItem.cancel()
@@ -763,9 +771,25 @@ class OpenAccessPlayer: NSObject, Player {
         ATLog(.error, "OpenAccessPlayer: Item load failed - \(observedItem.error?.localizedDescription ?? "unknown")")
         timeoutWorkItem.cancel()
         observation?.invalidate()
+        if isItemAuthFailure(observedItem), fulfillURL != nil {
+          refreshBearerTokenAndRebuildQueue()
+        }
         completion(false)
       }
     }
+  }
+
+  private func isItemAuthFailure(_ item: AVPlayerItem) -> Bool {
+    guard let error = item.error as? NSError else { return false }
+    if error.code == NSURLErrorUserAuthenticationRequired ||
+       error.code == NSURLErrorUserCancelledAuthentication {
+      return true
+    }
+    if let underlyingError = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+      return underlyingError.code == NSURLErrorUserAuthenticationRequired ||
+             underlyingError.code == NSURLErrorUserCancelledAuthentication
+    }
+    return false
   }
 
   func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
@@ -981,6 +1005,79 @@ class OpenAccessPlayer: NSObject, Player {
       timeObserverToken = nil
     }
   }
+
+  /// Observes AVPlayerItem failures to detect bearer token expiration during streaming.
+  private func addItemFailedObserver() {
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleItemFailedToPlay(_:)),
+      name: .AVPlayerItemFailedToPlayToEndTime,
+      object: nil
+    )
+  }
+
+  @objc private func handleItemFailedToPlay(_ notification: Notification) {
+    guard let item = notification.object as? AVPlayerItem,
+          avQueuePlayer.items().contains(item),
+          let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? NSError
+    else {
+      return
+    }
+
+    let isAuthError = error.domain == NSURLErrorDomain && error.code == NSURLErrorUserAuthenticationRequired
+    let isAccessDenied = error.domain == NSURLErrorDomain && error.code == NSURLErrorUserCancelledAuthentication
+
+    if (isAuthError || isAccessDenied), fulfillURL != nil {
+      ATLog(.warn, "OpenAccessPlayer: Streaming auth failure detected, attempting token refresh")
+      refreshBearerTokenAndRebuildQueue()
+    }
+  }
+
+  /// Refreshes the bearer token from the stored CM fulfill URL and rebuilds the player queue.
+  private func refreshBearerTokenAndRebuildQueue() {
+    guard let fulfillURL, !isRefreshingToken else { return }
+
+    isRefreshingToken = true
+    let savedPosition = currentTrackPosition ?? lastKnownPosition
+    pause()
+
+    var request = URLRequest(url: fulfillURL)
+    request.cachePolicy = .reloadIgnoringLocalCacheData
+    if let currentToken = bearerToken {
+      request.setValue("Bearer \(currentToken)", forHTTPHeaderField: "Authorization")
+    }
+
+    let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+      guard let self else { return }
+
+      defer { self.isRefreshingToken = false }
+
+      let statusCode = (response as? HTTPURLResponse)?.statusCode
+      guard let data, error == nil,
+            statusCode == 200,
+            let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let newToken = dictionary?["access_token"] as? String
+      else {
+        ATLog(.error, "OpenAccessPlayer: Bearer token refresh failed (status: \(statusCode ?? -1), error: \(error?.localizedDescription ?? "none"))")
+        DispatchQueue.main.async {
+          self.handlePlaybackError(.authenticationRequired)
+        }
+        return
+      }
+
+      ATLog(.info, "OpenAccessPlayer: Bearer token refreshed successfully")
+      self.bearerToken = newToken
+      self.tableOfContents.tracks.token = newToken
+
+      DispatchQueue.main.async {
+        self.rebuildPlayerQueueAndNavigate(
+          to: savedPosition,
+          shouldResumePlayback: true
+        )
+      }
+    }
+    task.resume()
+  }
 }
 
 extension OpenAccessPlayer {
@@ -1070,16 +1167,33 @@ extension OpenAccessPlayer {
 
     switch type {
     case .began:
-      ATLog(.warn, "System audio interruption began.")
+      wasPlayingBeforeInterruption = isPlaying
+      ATLog(.warn, "System audio interruption began (wasPlaying: \(wasPlayingBeforeInterruption)).")
     case .ended:
       ATLog(.warn, "System audio interruption ended.")
-      guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
-        return
+
+      // Re-activate the audio session after any interruption
+      do {
+        try AVAudioSession.sharedInstance().setActive(true, options: [])
+      } catch {
+        ATLog(.error, "Failed to re-activate audio session after interruption: \(error)")
       }
-      let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-      if options.contains(.shouldResume) {
+
+      let options: AVAudioSession.InterruptionOptions = {
+        guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
+          return []
+        }
+        return AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+      }()
+
+      // Resume if the system says we should, OR if we were actively playing
+      // before the interruption. Many interruptions (Siri, declined calls)
+      // don't set .shouldResume even though resumption is safe.
+      if options.contains(.shouldResume) || wasPlayingBeforeInterruption {
+        ATLog(.info, "Resuming playback after interruption (shouldResume: \(options.contains(.shouldResume)), wasPlaying: \(wasPlayingBeforeInterruption))")
         play()
       }
+      wasPlayingBeforeInterruption = false
     default: ()
     }
   }

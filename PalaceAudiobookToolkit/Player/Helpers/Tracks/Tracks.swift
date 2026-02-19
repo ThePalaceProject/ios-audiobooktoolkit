@@ -93,6 +93,18 @@ public class Tracks {
 
   public var token: String?
 
+  /// The CM fulfill URL for refreshing expired bearer tokens.
+  /// Setting this propagates the URL to all OpenAccessDownloadTask instances.
+  public var fulfillURL: URL? {
+    didSet {
+      for track in tracks {
+        if let oaTask = track.downloadTask as? OpenAccessDownloadTask {
+          oaTask.fulfillURL = fulfillURL
+        }
+      }
+    }
+  }
+
   init(manifest: Manifest, audiobookID: String, token: String?) {
     self.manifest = manifest
     self.audiobookID = audiobookID
