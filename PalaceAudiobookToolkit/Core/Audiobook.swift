@@ -56,15 +56,20 @@ public enum AudiobookFactory {
     for manifest: Manifest,
     bookIdentifier: String,
     decryptor: DRMDecryptor?,
-    token: String?
+    token: String?,
+    fulfillURL: URL? = nil
   ) -> Audiobook? {
     let cls = audiobookClass(for: manifest)
-    return cls.init(
+    let audiobook = cls.init(
       manifest: manifest,
       bookIdentifier: bookIdentifier,
       decryptor: decryptor,
       token: token
     )
+    if let fulfillURL {
+      audiobook?.setFulfillURL(fulfillURL)
+    }
+    return audiobook
   }
 }
 
@@ -101,6 +106,12 @@ open class Audiobook: NSObject {
   }
 
   open func checkDrmAsync() {}
+
+  /// Propagates the CM fulfill URL to tracks and their download tasks,
+  /// enabling bearer token refresh on expiration.
+  public func setFulfillURL(_ url: URL) {
+    tableOfContents.tracks.fulfillURL = url
+  }
 
   public class func deleteLocalContent(manifest: Manifest, bookIdentifier: String, token: String? = nil) {
     let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
