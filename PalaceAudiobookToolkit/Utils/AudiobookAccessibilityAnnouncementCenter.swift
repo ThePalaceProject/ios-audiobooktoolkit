@@ -14,6 +14,7 @@ public final class AudiobookAccessibilityAnnouncementCenter {
   private let postHandler: PostHandler
   private let isVoiceOverRunning: VoiceOverRunningProvider
   private let progressStep: Int
+  private let lock = NSLock()
   private var lastProgressBucketByKey: [String: Int] = [:]
 
   public init(
@@ -47,7 +48,9 @@ public final class AudiobookAccessibilityAnnouncementCenter {
   }
 
   public func resetProgress(identifier: String) {
+    lock.lock()
     lastProgressBucketByKey.removeValue(forKey: identifier)
+    lock.unlock()
   }
 
   // MARK: - Private
@@ -71,6 +74,8 @@ public final class AudiobookAccessibilityAnnouncementCenter {
 
   private func shouldAnnounceProgress(identifier: String, bucket: Int) -> Bool {
     guard bucket > 0 else { return false }
+    lock.lock()
+    defer { lock.unlock() }
     let lastBucket = lastProgressBucketByKey[identifier] ?? -progressStep
     guard bucket > lastBucket else { return false }
     lastProgressBucketByKey[identifier] = bucket
