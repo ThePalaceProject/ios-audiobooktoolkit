@@ -201,7 +201,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
         case .playbackUnloaded:
           _isPlaying = false
-        case let .playbackFailed(position):
+        case let .playbackFailed(position, _):
           isWaitingForPlayer = false
           _isPlaying = false
           if let position = position {
