@@ -16,7 +16,7 @@ public class HTTPRangeRetriever {
   public let httpClient: HTTPClient
   private let cacheManager: RangeCacheManager
 
-  public init(httpClient: HTTPClient = DefaultHTTPClient()) {
+  public init(httpClient: HTTPClient = LCPCredentialStrippingHTTPClient()) {
     self.httpClient = httpClient
     cacheManager = RangeCacheManager()
   }
