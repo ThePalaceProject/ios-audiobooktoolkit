@@ -19,7 +19,7 @@ public enum AudiobookManagerState {
   case bookmarkDeleted(Bool)
   case playbackBegan(TrackPosition)
   case playbackStopped(TrackPosition)
-  case playbackFailed(TrackPosition?)
+  case playbackFailed(TrackPosition?, Error?)
   case playbackCompleted(TrackPosition)
   case playbackUnloaded
   case overallDownloadProgress(Float)
@@ -743,8 +743,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     ATLog(.debug, "🔒 Saved position on playback stopped: \(trackPosition.timestamp)")
   }
 
-  private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error _: Error?) {
-    statePublisher.send(.playbackFailed(trackPosition))
+  private func handlePlaybackFailed(_ trackPosition: TrackPosition?, error: Error?) {
+    statePublisher.send(.playbackFailed(trackPosition, error))
     playbackTrackerDelegate?.playbackStopped()
   }
 

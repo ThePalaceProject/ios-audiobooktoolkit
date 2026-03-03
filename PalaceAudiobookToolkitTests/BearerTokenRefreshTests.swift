@@ -246,3 +246,41 @@ final class AudiobookFulfillURLTests: XCTestCase {
         }
     }
 }
+
+// MARK: - AudiobookManagerState.playbackFailed Error Association (PP-3703)
+
+/// Regression tests: playbackFailed must carry Error? so the app can detect auth-required
+/// (e.g. SAML + BiblioBoard double-expiration) and trigger re-auth.
+final class PlaybackFailedErrorAssociationTests: XCTestCase {
+
+    func testPlaybackFailed_hasErrorAssociatedValue() {
+        let error = NSError(
+            domain: OpenAccessPlayerErrorDomain,
+            code: OpenAccessPlayerError.authenticationRequired.rawValue,
+            userInfo: nil
+        )
+        let state = AudiobookManagerState.playbackFailed(nil, error)
+
+        switch state {
+        case let .playbackFailed(_, err):
+            XCTAssertNotNil(err)
+            let nsErr = err as NSError?
+            XCTAssertEqual(nsErr?.domain, OpenAccessPlayerErrorDomain)
+            XCTAssertEqual(nsErr?.code, OpenAccessPlayerError.authenticationRequired.rawValue)
+        default:
+            XCTFail("Expected playbackFailed(position, error)")
+        }
+    }
+
+    func testPlaybackFailed_nilError_isPreserved() {
+        let state = AudiobookManagerState.playbackFailed(nil, nil)
+
+        switch state {
+        case let .playbackFailed(pos, err):
+            XCTAssertNil(pos)
+            XCTAssertNil(err)
+        default:
+            XCTFail("Expected playbackFailed(position, error)")
+        }
+    }
+}
