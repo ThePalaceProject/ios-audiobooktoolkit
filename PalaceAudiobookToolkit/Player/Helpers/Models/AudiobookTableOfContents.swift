@@ -194,14 +194,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   }
 
   func nextChapter(after chapter: Chapter) -> Chapter? {
-    guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index + 1 < toc.count else {
+    guard let index = toc.firstIndex(where: { $0 == chapter }), index + 1 < toc.count else {
       return nil
     }
     return toc[index + 1]
   }
 
   func previousChapter(before chapter: Chapter) -> Chapter? {
-    guard let index = toc.firstIndex(where: { $0.title == chapter.title }), index - 1 >= 0 else {
+    guard let index = toc.firstIndex(where: { $0 == chapter }), index - 1 >= 0 else {
       return nil
     }
     return toc[index - 1]
@@ -323,7 +323,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   }
 
   func index(of chapter: Chapter) -> Int? {
-    toc.firstIndex(where: { $0.title == chapter.title })
+    toc.firstIndex(where: { $0 == chapter })
   }
 
   subscript(index: Int) -> Chapter {
