@@ -32,6 +32,10 @@ final class OpenAccessDownloadTask: DownloadTask {
   let alternateLinks: [(TrackMediaType, URL)]?
   let feedbooksProfile: String?
   var token: String?
+  /// Host from the manifest's self link. When set, the bearer token is only
+  /// sent to chapter URLs whose host matches, preventing credential leakage
+  /// to unrelated domains.
+  var tokenScopeHost: String?
   /// The CM fulfill URL for refreshing expired bearer tokens.
   var fulfillURL: URL?
   private var hasAttemptedTokenRefresh = false
@@ -291,14 +295,12 @@ final class OpenAccessDownloadTask: DownloadTask {
       timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue
     )
 
-    // Feedbooks DRM
-    // CantookAudio does not support Authorization fields, so exclude them for that provider
     if let profile = feedbooksProfile, !profile.contains("cantookaudio") {
       request.setValue(
         "Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")",
         forHTTPHeaderField: "Authorization"
       )
-    } else if let token = token {
+    } else if let token = token, shouldSendToken(to: remoteURL) {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
@@ -309,6 +311,13 @@ final class OpenAccessDownloadTask: DownloadTask {
     ATLog(.debug, "OpenAccessDownloadTask: Starting fresh download for: \(key)")
     let task = session.downloadTask(with: request.applyCustomUserAgent())
     task.resume()
+  }
+
+  /// Only send the bearer token when the target URL matches the manifest origin,
+  /// or when no scope information is available (backwards compatibility).
+  func shouldSendToken(to url: URL) -> Bool {
+    guard let scopeHost = tokenScopeHost else { return true }
+    return url.host == scopeHost
   }
 
   private func hash(_ key: String) -> String? {
