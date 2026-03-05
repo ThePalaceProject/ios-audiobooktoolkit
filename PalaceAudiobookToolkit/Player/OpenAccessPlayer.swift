@@ -915,9 +915,10 @@ class OpenAccessPlayer: NSObject, Player {
       }
     }
     if let remote = track.urls?.first {
-      // Use AVURLAsset with Authorization header for BiblioBoard/Blackstone streaming
       let asset: AVURLAsset
-      if let token = bearerToken {
+      let scopeHost = tableOfContents.manifest.originHost
+      let hostMatches = scopeHost == nil || remote.host == scopeHost
+      if let token = bearerToken, hostMatches {
         let headers = ["Authorization": "Bearer \(token)"]
         let options = ["AVURLAssetHTTPHeaderFieldsKey": headers]
         asset = AVURLAsset(url: remote, options: options)

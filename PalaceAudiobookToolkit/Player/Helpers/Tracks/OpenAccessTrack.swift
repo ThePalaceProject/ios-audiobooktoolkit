@@ -73,7 +73,7 @@ public class OpenAccessTrack: Track {
     alternateUrls = []
     feedbooksProfile = manifest.profile(for: .findaway)
     self.token = token
-    downloadTask = OpenAccessDownloadTask(
+    let task = OpenAccessDownloadTask(
       key: self.key,
       downloadURL: url,
       urlString: urlString,
@@ -82,5 +82,7 @@ public class OpenAccessTrack: Track {
       feedbooksProfile: feedbooksProfile,
       token: token
     )
+    task.tokenScopeHost = manifest.originHost
+    downloadTask = task
   }
 }

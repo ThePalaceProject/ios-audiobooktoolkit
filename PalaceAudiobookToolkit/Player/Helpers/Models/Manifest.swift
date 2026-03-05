@@ -272,6 +272,19 @@ public struct Manifest: Codable {
     }
   }
 
+  /// The host of the manifest's self link, used to scope bearer token
+  /// transmission to the origin that served the manifest.
+  var originHost: String? {
+    if let selfLink = linksDictionary?.selfLink, let url = URL(string: selfLink.href) {
+      return url.host
+    }
+    if let selfLink = links?.first(where: { $0.rel?.contains("self") == true }),
+       let url = URL(string: selfLink.href) {
+      return url.host
+    }
+    return nil
+  }
+
   public struct SpineItem: Codable {
     let title: String?
     let href: String

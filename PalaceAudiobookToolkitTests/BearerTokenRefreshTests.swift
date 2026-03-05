@@ -247,6 +247,91 @@ final class AudiobookFulfillURLTests: XCTestCase {
     }
 }
 
+// MARK: - Token Scope Host Tests (PP-3705)
+
+final class TokenScopeHostTests: XCTestCase {
+
+    private func makeTask(
+        downloadURL: String = "https://library.biblioboard.com/content/chapter1.mp3",
+        token: String? = "test-token",
+        scopeHost: String? = nil
+    ) -> OpenAccessDownloadTask {
+        let url = URL(string: downloadURL)!
+        let task = OpenAccessDownloadTask(
+            key: "test-\(UUID().uuidString.prefix(8))",
+            downloadURL: url,
+            urlString: downloadURL,
+            urlMediaType: .audioMPEG,
+            alternateLinks: nil,
+            feedbooksProfile: nil,
+            token: token
+        )
+        task.tokenScopeHost = scopeHost
+        return task
+    }
+
+    func testShouldSendToken_noScopeHost_returnsTrue() {
+        let task = makeTask(scopeHost: nil)
+        let url = URL(string: "https://any-domain.com/chapter.mp3")!
+        XCTAssertTrue(task.shouldSendToken(to: url),
+            "Without scope host, token should be sent to any URL for backward compatibility")
+    }
+
+    func testShouldSendToken_matchingHost_returnsTrue() {
+        let task = makeTask(
+            downloadURL: "https://library.biblioboard.com/content/ch1.mp3",
+            scopeHost: "library.biblioboard.com"
+        )
+        let url = URL(string: "https://library.biblioboard.com/content/ch1.mp3")!
+        XCTAssertTrue(task.shouldSendToken(to: url),
+            "Token should be sent when chapter host matches scope host")
+    }
+
+    func testShouldSendToken_differentHost_returnsFalse() {
+        let task = makeTask(
+            downloadURL: "https://cdn.other-provider.com/audio/ch1.mp3",
+            scopeHost: "library.biblioboard.com"
+        )
+        let url = URL(string: "https://cdn.other-provider.com/audio/ch1.mp3")!
+        XCTAssertFalse(task.shouldSendToken(to: url),
+            "Token should NOT be sent when chapter host differs from scope host")
+    }
+
+    func testTokenScopeHost_defaultsToNil() {
+        let task = makeTask()
+        XCTAssertNil(task.tokenScopeHost)
+    }
+
+    func testTokenScopeHost_canBeSet() {
+        let task = makeTask()
+        task.tokenScopeHost = "library.biblioboard.com"
+        XCTAssertEqual(task.tokenScopeHost, "library.biblioboard.com")
+    }
+}
+
+// MARK: - Manifest.originHost Tests (PP-3705)
+
+final class ManifestOriginHostTests: XCTestCase {
+
+    func testOriginHost_fromSelfLink() throws {
+        let manifest = try Manifest.from(
+            jsonFileName: "littleWomenDevotional_manifest",
+            bundle: Bundle(for: ManifestOriginHostTests.self)
+        )
+        XCTAssertEqual(manifest.originHost, "app.unlimitedlistens.com",
+            "Should extract host from the self link in the manifest's links array")
+    }
+
+    func testOriginHost_noSelfLink_returnsNil() throws {
+        let manifest = try Manifest.from(
+            jsonFileName: "bocas_manifest",
+            bundle: Bundle(for: ManifestOriginHostTests.self)
+        )
+        XCTAssertNil(manifest.originHost,
+            "Should return nil when manifest has no self link")
+    }
+}
+
 // MARK: - AudiobookManagerState.playbackFailed Error Association (PP-3703)
 
 /// Regression tests: playbackFailed must carry Error? so the app can detect auth-required
