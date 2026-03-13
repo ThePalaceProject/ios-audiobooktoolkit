@@ -23,6 +23,7 @@ public struct AudiobookPlayerView: View {
   @State private var showPlaybackSpeed = false
   @State private var showSleepTimer = false
   @State private var isInBackground = false
+  @AccessibilityFocusState private var isTitleFocused: Bool
   @State private var showTOC = false
   @State private var screenSize: CGSize = UIScreen.main.bounds.size
 
@@ -81,6 +82,15 @@ public struct AudiobookPlayerView: View {
     .navigationBarBackButtonHidden(true)
     .toolbar(.hidden, for: .tabBar)
     .font(.body)
+    .onAppear {
+      NotificationCenter.default.post(
+        name: Notification.Name("TPPAccessibilityScreenTransition"),
+        object: nil
+      )
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+        isTitleFocused = true
+      }
+    }
     .onDisappear {
       if !showTOC {
         playbackModel.persistLocation()
@@ -148,6 +158,7 @@ public struct AudiobookPlayerView: View {
       Text(playbackModel.audiobookManager.metadata.title ?? "")
         .palaceFont(.headline)
         .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
+        .accessibilityFocused($isTitleFocused)
       Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
         .palaceFont(.body)
         .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
