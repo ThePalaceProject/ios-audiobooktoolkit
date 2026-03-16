@@ -26,6 +26,7 @@ public struct AudiobookPlayerView: View {
   @AccessibilityFocusState private var isTitleFocused: Bool
   @State private var showTOC = false
   @State private var screenSize: CGSize = UIScreen.main.bounds.size
+  @State private var loadingTimedOut = false
 
   public init(model: AudiobookPlaybackModel) {
     playbackModel = model
@@ -57,7 +58,22 @@ public struct AudiobookPlayerView: View {
       bookmarkAddedToastView
 
       if !playbackModel.audiobookManager.audiobook.player.isLoaded {
-        LoadingView()
+        if loadingTimedOut {
+          LoadingErrorView {
+            loadingTimedOut = false
+            playbackModel.audiobookManager.audiobook.player.play()
+          }
+        } else {
+          LoadingView()
+            .onAppear {
+              loadingTimedOut = false
+              DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                if !playbackModel.audiobookManager.audiobook.player.isLoaded {
+                  loadingTimedOut = true
+                }
+              }
+            }
+        }
       }
     }
     .background(

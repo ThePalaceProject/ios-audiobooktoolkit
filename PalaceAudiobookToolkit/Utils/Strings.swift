@@ -111,6 +111,7 @@ enum Strings {
   enum Generic {
     static let downloading = NSLocalizedString("Downloading:", value: "Downloading:", comment: "")
     static let loading = NSLocalizedString("Loading...", value: "Loading...", comment: "")
+    static let retry = NSLocalizedString("Retry", value: "Retry", comment: "Button to retry a failed operation")
     static let audiobook = NSLocalizedString("Audiobook", value: "Audiobook", comment: "VoiceOver fallback title for audiobook announcements")
     static let downloadingFormatted = NSLocalizedString(
       "Downloading: %@%%",

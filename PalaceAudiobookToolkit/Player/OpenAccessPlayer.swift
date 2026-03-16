@@ -486,9 +486,14 @@ class OpenAccessPlayer: NSObject, Player {
 
     let playerItems = buildPlayerItems(fromTracks: tracksToLoad)
     if playerItems.isEmpty {
+      ATLog(.error, "OpenAccessPlayer: buildPlayerItems returned empty for \(tracksToLoad.count) tracks")
+      for track in tracksToLoad {
+        ATLog(.error, "  Track \(track.index): key=\(track.key), url=\(track.urls?.first?.absoluteString ?? "nil"), duration=\(track.duration)")
+      }
       if let firstTrack = allTracks.first {
         let firstItems = buildPlayerItems(fromTracks: [firstTrack])
         if firstItems.isEmpty {
+          ATLog(.error, "OpenAccessPlayer: Cannot create player item even for first track - playback impossible")
           isLoaded = false
           return
         }
@@ -499,6 +504,7 @@ class OpenAccessPlayer: NSObject, Player {
           }
         }
       } else {
+        ATLog(.error, "OpenAccessPlayer: No tracks available at all in table of contents")
         isLoaded = false
         return
       }
@@ -1044,8 +1050,8 @@ class OpenAccessPlayer: NSObject, Player {
 
     var request = URLRequest(url: fulfillURL)
     request.cachePolicy = .reloadIgnoringLocalCacheData
-    if let currentToken = bearerToken {
-      request.setValue("Bearer \(currentToken)", forHTTPHeaderField: "Authorization")
+    if let authToken = PalaceAuthTokenProvider.currentToken {
+      request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
     }
 
     let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in

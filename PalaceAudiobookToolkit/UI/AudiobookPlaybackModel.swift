@@ -212,9 +212,9 @@ public class AudiobookPlaybackModel: ObservableObject {
             ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback failed but position is nil - possibly SDK crash")
           }
           
-          // Show error to user
-          let errorMessage = "There was a problem playing this audiobook. It may be corrupted. Try re-downloading it."
+          let errorMessage = "\(Strings.AudiobookPlayerViewController.problemHasOccurred). \(Strings.AudiobookPlayerViewController.tryAgain)"
           ATLog(.error, "  Showing error to user: \(errorMessage)")
+          toastMessage = errorMessage
 
         default:
           break
