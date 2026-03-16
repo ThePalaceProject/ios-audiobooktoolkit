@@ -129,15 +129,26 @@ public class Tracks {
 
   private func initializeTracks() {
     if let spine = manifest.spine, !spine.isEmpty {
+      ATLog(.debug, "Tracks: Initializing \(spine.count) tracks from spine")
       addTracksFromSpine(spine)
     } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
+      ATLog(.debug, "Tracks: Initializing \(readingOrder.count) tracks from readingOrder")
       addTracksFromReadingOrder(readingOrder)
     } else if let linksDict = manifest.linksDictionary, let contentLinks = linksDict.contentLinks,
               !contentLinks.isEmpty
     {
+      ATLog(.debug, "Tracks: Initializing \(contentLinks.count) tracks from contentLinks")
       addTracksFromLinks(contentLinks)
     } else if let linksArray = manifest.links, !linksArray.isEmpty {
+      ATLog(.debug, "Tracks: Initializing \(linksArray.count) tracks from links")
       addTracksFromLinks(linksArray)
+    } else {
+      ATLog(.error, "Tracks: No spine, readingOrder, contentLinks, or links found in manifest for audiobook \(audiobookID)")
+    }
+
+    ATLog(.debug, "Tracks: Created \(tracks.count) tracks for audiobook \(audiobookID)")
+    if tracks.isEmpty {
+      ATLog(.error, "Tracks: Zero tracks created - manifest may be malformed. Keys: \(manifest.metadata?.title ?? "unknown title")")
     }
   }
 
@@ -145,6 +156,8 @@ public class Tracks {
     for (index, item) in readingOrder.enumerated() {
       if let track = createTrack(from: item, index: index) {
         tracks.append(track)
+      } else {
+        ATLog(.warn, "Tracks: Failed to create track \(index) from readingOrder (href: \(item.href ?? "nil"), duration: \(item.duration))")
       }
     }
   }

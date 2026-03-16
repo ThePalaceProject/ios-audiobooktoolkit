@@ -366,6 +366,9 @@ final class OpenAccessDownloadTask: DownloadTask {
 
     var request = URLRequest(url: fulfillURL)
     request.cachePolicy = .reloadIgnoringLocalCacheData
+    if let authToken = PalaceAuthTokenProvider.currentToken {
+      request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+    }
 
     let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
       guard let self else { return }

@@ -151,6 +151,7 @@
 		F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */; };
 		F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E500100000008 /* DownloadWatchdog.swift */; };
 		F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */; };
+		F0AB00012E8E50010000000B /* PalaceAuthTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB00012E8E50010000000C /* PalaceAuthTokenProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -308,6 +309,7 @@
 		F0AB00012E8E500100000006 /* AudiobookSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookSessionManager.swift; sourceTree = "<group>"; };
 		F0AB00012E8E500100000008 /* DownloadWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadWatchdog.swift; sourceTree = "<group>"; };
 		F0AB00012E8E50010000000A /* DownloadPersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadPersistenceStore.swift; sourceTree = "<group>"; };
+		F0AB00012E8E50010000000C /* PalaceAuthTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalaceAuthTokenProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -447,6 +449,7 @@
 				E67CA9A4215C0D320081A10B /* Log.swift */,
 				7BD8E4F9206EB49D008ED3F1 /* VoiceOverTimestamp.swift */,
 				E5041F772BBF36B600AE363E /* MediaControlPublisher.swift */,
+				F0AB00012E8E50010000000C /* PalaceAuthTokenProvider.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -886,6 +889,7 @@
 				F0AB00012E8E500100000005 /* AudiobookSessionManager.swift in Sources */,
 				F0AB00012E8E500100000007 /* DownloadWatchdog.swift in Sources */,
 				F0AB00012E8E500100000009 /* DownloadPersistenceStore.swift in Sources */,
+				F0AB00012E8E50010000000B /* PalaceAuthTokenProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
