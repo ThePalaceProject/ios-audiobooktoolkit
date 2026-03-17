@@ -19,6 +19,8 @@ enum MediaControlCommand {
   case playPause
   case skipForward
   case skipBackward
+  case nextTrack
+  case previousTrack
   case changePlaybackRate(Float)
 }
 
@@ -40,6 +42,8 @@ class MediaControlPublisher {
   private var toggleTarget: Any?
   private var skipForwardTarget: Any?
   private var skipBackwardTarget: Any?
+  private var nextTrackTarget: Any?
+  private var previousTrackTarget: Any?
   private var rateTarget: Any?
 
   init() {
@@ -103,11 +107,10 @@ class MediaControlPublisher {
     commandCenter.skipBackwardCommand.preferredIntervals = [30]
     commandCenter.changePlaybackRateCommand.isEnabled = true
     
-    // CRITICAL: Explicitly disable track navigation commands for audiobooks
-    // Without this, CarPlay may interpret skip buttons as next/previous track
-    // which causes playback to restart instead of skipping 30 seconds
-    commandCenter.nextTrackCommand.isEnabled = false
-    commandCenter.previousTrackCommand.isEnabled = false
+    // PP-3679: Enable next/previous track so car hardware buttons (steering wheel)
+    // trigger 30-second skip forward/backward
+    commandCenter.nextTrackCommand.isEnabled = true
+    commandCenter.previousTrackCommand.isEnabled = true
     commandCenter.seekForwardCommand.isEnabled = false
     commandCenter.seekBackwardCommand.isEnabled = false
     commandCenter.changeRepeatModeCommand.isEnabled = false
@@ -148,6 +151,16 @@ class MediaControlPublisher {
       self?.commandPublisher.send(.changePlaybackRate(Float(rateEvent.playbackRate)))
       return .success
     }
+
+    nextTrackTarget = commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+      self?.commandPublisher.send(.nextTrack)
+      return .success
+    }
+
+    previousTrackTarget = commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+      self?.commandPublisher.send(.previousTrack)
+      return .success
+    }
   }
 
   deinit {
@@ -182,6 +195,14 @@ class MediaControlPublisher {
     if let target = rateTarget {
       commandCenter.changePlaybackRateCommand.removeTarget(target)
       rateTarget = nil
+    }
+    if let target = nextTrackTarget {
+      commandCenter.nextTrackCommand.removeTarget(target)
+      nextTrackTarget = nil
+    }
+    if let target = previousTrackTarget {
+      commandCenter.previousTrackCommand.removeTarget(target)
+      previousTrackTarget = nil
     }
     
     isSetup = false
