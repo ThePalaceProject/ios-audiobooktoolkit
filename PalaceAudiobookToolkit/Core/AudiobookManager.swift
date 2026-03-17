@@ -818,7 +818,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
               ATLog(.debug, "🔒 Saved position after remote playPause: \(currentPosition.timestamp)")
             }
           }
-        case .skipForward:
+        case .skipForward, .nextTrack:
           // Skip executes async internally, update UI immediately on completion
           audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
             guard let self = self, let newPosition = newPosition else { return }
@@ -832,7 +832,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
               ATLog(.debug, "🔒 Saved position after remote skip forward: \(newPosition.timestamp)")
             }
           }
-        case .skipBackward:
+        case .skipBackward, .previousTrack:
           // Skip executes async internally, update UI immediately on completion
           audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
             guard let self = self, let newPosition = newPosition else { return }
