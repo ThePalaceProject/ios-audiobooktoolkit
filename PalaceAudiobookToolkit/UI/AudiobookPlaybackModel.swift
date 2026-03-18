@@ -201,9 +201,11 @@ public class AudiobookPlaybackModel: ObservableObject {
 
         case .playbackUnloaded:
           _isPlaying = false
+          isNavigating = false
         case let .playbackFailed(position, _):
           isWaitingForPlayer = false
           _isPlaying = false
+          isNavigating = false
           if let position = position {
             ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback error at position: \(position.timestamp)")
             ATLog(.error, "  Track: \(position.track.title ?? "unknown")")
@@ -327,7 +329,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
   func stop() {
     _isPlaying = false
-    saveLocation()
+    persistLocation()
     audiobookManager.unload()
     subscriptions.removeAll()
   }
