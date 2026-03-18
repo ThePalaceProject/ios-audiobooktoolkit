@@ -743,7 +743,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     statePublisher.send(.playbackStopped(trackPosition))
     playbackTrackerDelegate?.playbackStopped()
     
-    // Save position when playback stops
+    // PP-3679: Update Now Playing info so lock screen / CarPlay shows final position
+    updateNowPlayingInfo(trackPosition)
+    
     saveLocation(trackPosition)
     ATLog(.debug, "🔒 Saved position on playback stopped: \(trackPosition.timestamp)")
   }
