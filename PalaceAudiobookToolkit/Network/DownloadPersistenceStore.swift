@@ -281,11 +281,12 @@ public final class DownloadPersistenceStore {
     }
   }
   
-  /// Clears all persisted data.
+  /// Clears all persisted data synchronously.
+  /// Blocks the calling thread until the cache and disk file are both cleared.
   public func clearAll() {
-    queue.async(flags: .barrier) { [weak self] in
-      self?.cache.removeAll()
-      if let url = self?.storeURL {
+    queue.sync(flags: .barrier) {
+      cache.removeAll()
+      if let url = storeURL {
         try? FileManager.default.removeItem(at: url)
       }
       ATLog(.info, "DownloadPersistenceStore: Cleared all persisted downloads")
