@@ -622,6 +622,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   public func unload() {
     playbackTrackerDelegate?.playbackStopped()
+    mediaControlPublisher.tearDown()
     audiobook.player.unload()
     networkService.cleanup()
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nil

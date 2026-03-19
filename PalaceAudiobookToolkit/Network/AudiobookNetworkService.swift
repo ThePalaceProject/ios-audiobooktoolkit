@@ -72,6 +72,10 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   private var activeDownloadIndices: Set<Int> = []
   private let maxConcurrentTrackDownloads = 3
   public let decryptor: DRMDecryptor?
+
+  /// When `true`, track downloads are only started on Wi-Fi connections.
+  public var downloadOnlyOnWiFi: Bool = false
+  private let reachability = Reachability()
   
   /// Cached overall progress to avoid redundant main-thread dispatches
   private var lastPublishedOverallProgress: Float = -1
@@ -79,6 +83,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   public init(tracks: [any Track], decryptor: DRMDecryptor? = nil) {
     self.tracks = tracks
     self.decryptor = decryptor
+    reachability.startMonitoring()
     setupDownloadTasks()
     initializeProgressFromCurrentState()
   }
@@ -236,6 +241,11 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   private func fillDownloadSlots(startingFrom searchStart: Int) {
     queue.async(flags: .barrier) { [weak self] in
       guard let self else { return }
+
+      if self.downloadOnlyOnWiFi && !self.reachability.isOnWiFi {
+        ATLog(.info, "🎵 [NetworkService] Download blocked — Wi-Fi only mode and device is not on Wi-Fi")
+        return
+      }
       
       var index = searchStart
       while index < tracks.count, activeDownloadIndices.count < maxConcurrentTrackDownloads {
@@ -386,6 +396,7 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   deinit {
     // Don't cancel downloads on deinit - they should continue in background
     // Only clean up Combine subscriptions
+    reachability.stopMonitoring()
     cleanupSubscriptions()
   }
 
