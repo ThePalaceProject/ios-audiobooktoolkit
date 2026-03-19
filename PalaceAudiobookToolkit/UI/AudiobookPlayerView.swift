@@ -119,17 +119,17 @@ public struct AudiobookPlayerView: View {
   
   @ViewBuilder
   private var portraitLayout: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 8) {
       headerView
       playbackInfoView
-      Spacer()
+      Spacer(minLength: 8)
       coverImageView
       if !isInBackground {
         downloadProgressView(value: playbackModel.overallDownloadProgress)
       }
-      Spacer()
+      Spacer(minLength: 12)
       playbackControlsView
-        .padding(.bottom)
+        .padding(.bottom, 8)
       controlPanelView
     }
   }
@@ -221,7 +221,11 @@ public struct AudiobookPlayerView: View {
   @ViewBuilder
   private var coverImageView: some View {
     ToolkitImage(name: "example_cover", uiImage: playbackModel.coverImage)
-      .padding(.horizontal, isLandscape ? 0 : nil)
+      .cornerRadius(6)
+      .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+      .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
+      .shadow(color: .white.opacity(0.08), radius: 4, x: 0, y: -1)
+      .padding(.horizontal, isLandscape ? 0 : 20)
       .padding(.vertical, isLandscape ? 15 : 0)
       .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
   }
@@ -308,19 +312,20 @@ public struct AudiobookPlayerView: View {
     accessibilityString: String,
     action: @escaping () -> Void
   ) -> some View {
-    // Button size: 50 landscape, 66 compact, 96 regular
-    let size: CGFloat = isLandscape ? 50 : (horizontalSizeClass == .compact ? 66 : 96)
+    let size: CGFloat = isLandscape ? 44 : (horizontalSizeClass == .compact ? 52 : 72)
+    let labelFont: Font = isLandscape ? .system(size: 11) : (horizontalSizeClass == .compact ? .system(size: 13, weight: .medium) : .system(size: 16, weight: .medium))
+    let secFont: Font = isLandscape ? .system(size: 8) : (horizontalSizeClass == .compact ? .system(size: 9) : .system(size: 11))
     Button(action: action) {
       ToolkitImage(name: imageName, renderingMode: .template)
         .overlay(
-          VStack(spacing: -4) {
+          VStack(spacing: -2) {
             Text("\(Int(playbackModel.skipTimeInterval))")
-              .palaceFont(.body)
+              .font(labelFont)
               .offset(x: -1)
             Text("sec")
-              .palaceFont(.caption)
+              .font(secFont)
           }
-          .offset(y: 4)
+          .offset(y: 3)
         )
         .frame(width: size, height: size)
     }
@@ -330,18 +335,23 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private func playButton(isPlaying: Bool, textLabel _: String, action: @escaping () -> Void) -> some View {
-    // Button size: 44 landscape, 56 compact, 80 regular
-    let size: CGFloat = isLandscape ? 44 : (horizontalSizeClass == .compact ? 56 : 80)
+    let iconSize: CGFloat = isLandscape ? 38 : (horizontalSizeClass == .compact ? 48 : 64)
+    let bgSize: CGFloat = isLandscape ? 56 : (horizontalSizeClass == .compact ? 72 : 92)
     Button(action: action) {
       ZStack {
-        ToolkitImage(name: "pause", renderingMode: .template)
-          .opacity(isPlaying ? 1 : 0)
-          .frame(width: size, height: size)
-        ToolkitImage(name: "play", renderingMode: .template)
-          .opacity(isPlaying ? 0 : 1)
-          .frame(width: size, height: size)
-          .offset(x: isLandscape ? 5 : 7) // makes the button visually centered
+        Circle()
+          .fill(Color.white.opacity(0.12))
+        if isPlaying {
+          ToolkitImage(name: "pause", renderingMode: .template)
+            .frame(width: iconSize, height: iconSize)
+        } else {
+          ToolkitImage(name: "play", renderingMode: .template)
+            .frame(width: iconSize, height: iconSize)
+            .offset(x: isLandscape ? 3 : 5)
+        }
       }
+      .frame(width: bgSize, height: bgSize)
+      .animation(.none, value: isPlaying)
     }
     .foregroundColor(.primary)
     .accessibilityLabel(Text(isPlaying ? Strings.Accessibility.pauseButton : Strings.Accessibility.playButton))
@@ -376,29 +386,48 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private var bookmarkAddedToastView: some View {
-    HStack {
+    HStack(spacing: 10) {
+      Image(systemName: playbackModel.toastMessage.contains("error") || playbackModel.toastMessage.contains("Error") ? "exclamationmark.circle.fill" : "bookmark.fill")
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundColor(.white)
+
       Text(playbackModel.toastMessage)
+        .font(.system(size: 14, weight: .medium))
+        .foregroundColor(.white)
+        .lineLimit(2)
         .multilineTextAlignment(.leading)
-      Spacer()
+
+      Spacer(minLength: 8)
+
       Button {
         showToast.value = false
       } label: {
-        Image(systemName: "xmark.circle")
+        Image(systemName: "xmark")
+          .font(.system(size: 11, weight: .bold))
+          .foregroundColor(.white.opacity(0.6))
+          .padding(6)
+          .background(Color.white.opacity(0.12))
+          .clipShape(Circle())
       }
     }
-    .palaceFont(.subheadline)
-    .foregroundColor(.white)
-    .padding(.horizontal)
-    .padding(.vertical, 10)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 14)
     .background(
-      RoundedRectangle(cornerRadius: 8)
-        .fill(Color(.darkGray))
-        .edgesIgnoringSafeArea([.bottom])
+      ZStack {
+        RoundedRectangle(cornerRadius: 16)
+          .fill(.ultraThinMaterial)
+        RoundedRectangle(cornerRadius: 16)
+          .fill(Color.white.opacity(0.08))
+        RoundedRectangle(cornerRadius: 16)
+          .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+      }
     )
-    .padding(.horizontal, 30)
-    .padding(.bottom, 100)
+    .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 4)
+    .padding(.horizontal, 20)
+    .padding(.bottom, 110)
+    .offset(y: showToast.value ? 0 : 20)
     .opacity(showToast.value ? 1 : 0)
-    .animation(.easeInOut, value: showToast.value)
+    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: showToast.value)
   }
 
   @ViewBuilder
@@ -422,70 +451,109 @@ public struct AudiobookPlayerView: View {
         action: playbackModel.skipForward
       )
     }
-    .frame(height: isLandscape ? 50 : 66)
+    .frame(height: isLandscape ? 56 : 72)
+  }
+
+  private var isNarrowScreen: Bool {
+    screenSize.width < 370
   }
 
   @ViewBuilder
   private var controlPanelView: some View {
-    VStack {
-      HStack {
-        Spacer()
-          .overlay(
-            Button {
-              showPlaybackSpeed.toggle()
-            } label: {
-              Text(playbackRateText)
-                .font(.body)
-            }
-            .actionSheet(isPresented: $showPlaybackSpeed) {
-              ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
-            }
-            .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
-          )
+    let chipHeight: CGFloat = isLandscape ? 34 : (isNarrowScreen ? 34 : 40)
+    let chipBg = Color.white.opacity(0.10)
+    let fontSize: CGFloat = isLandscape ? 13 : (isNarrowScreen ? 12 : 15)
+    let iconSize: CGFloat = isLandscape ? 16 : (isNarrowScreen ? 15 : 19)
+    let chipPadH: CGFloat = isLandscape ? 12 : (isNarrowScreen ? 10 : 14)
+    let outerPadH: CGFloat = isLandscape ? 16 : (isNarrowScreen ? 12 : 20)
+    let chipSpacing: CGFloat = isLandscape ? 8 : (isNarrowScreen ? 6 : 12)
 
-        Spacer()
-          .overlay(
-            AVRoutePickerViewWrapper()
-              .accessibility(label: Text(Strings.Accessibility.airplaybutton))
-          )
-
-        Spacer()
-          .overlay(
-            Button {
-              showSleepTimer.toggle()
-            } label: {
-              Text(sleepTimerText)
-                .palaceFont(.body)
-            }
-            .accessibility(label: Text(sleepTimerAccessibilityLabel))
-            .actionSheet(isPresented: $showSleepTimer) {
-              ActionSheet(title: Text(DisplayStrings.sleepTimer), buttons: sleepTimerButtons)
-            }
-          )
-        Spacer()
-          .overlay(
-            Button {
-              playbackModel.addBookmark { error in
-                showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?
-                  .localizedDescription ?? ""
-                )
-              }
-            } label: {
-              ToolkitImage(name: "bookmark", renderingMode: .template)
-                .frame(height: 20)
-            }
-            .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
-          )
+    HStack(spacing: chipSpacing) {
+      // Speed
+      Button {
+        showPlaybackSpeed = true
+      } label: {
+        Text(playbackRateText)
+          .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+          .padding(.horizontal, chipPadH + 2)
+          .frame(height: chipHeight)
+          .background(chipBg)
+          .clipShape(Capsule())
+          .contentShape(Capsule())
       }
-      .frame(minHeight: isLandscape ? 32 : 40)
-      .foregroundColor(.white)
-      .padding(.horizontal)
-      .padding(.vertical, isLandscape ? 6 : nil)
+      .actionSheet(isPresented: $showPlaybackSpeed) {
+        ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
+      }
+      .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
+
+      Spacer(minLength: 0)
+
+      // Airplay
+      AVRoutePickerViewWrapper()
+        .frame(height: chipHeight)
+        .padding(.horizontal, chipPadH)
+        .background(chipBg)
+        .clipShape(Capsule())
+        .accessibility(label: Text(Strings.Accessibility.airplaybutton))
+
+      Spacer(minLength: 0)
+
+      // Sleep timer
+      Button {
+        showSleepTimer = true
+      } label: {
+        HStack(spacing: isNarrowScreen ? 4 : 6) {
+          Image(systemName: "moon.fill")
+            .font(.system(size: iconSize - 2))
+          if playbackModel.audiobookManager.sleepTimer.isActive {
+            Text(HumanReadableTimestamp(timeInterval: playbackModel.audiobookManager.sleepTimer.timeRemaining).timecode)
+              .font(.system(size: fontSize - 1, weight: .medium, design: .monospaced))
+              .lineLimit(1)
+              .minimumScaleFactor(0.6)
+          }
+        }
+        .padding(.horizontal, chipPadH)
+        .frame(height: chipHeight)
+        .background(chipBg)
+        .clipShape(Capsule())
+        .contentShape(Capsule())
+      }
+      .accessibility(label: Text(sleepTimerAccessibilityLabel))
+      .actionSheet(isPresented: $showSleepTimer) {
+        ActionSheet(title: Text(DisplayStrings.sleepTimer), buttons: sleepTimerButtons)
+      }
+
+      Spacer(minLength: 0)
+
+      // Bookmark
+      Button {
+        playbackModel.addBookmark { error in
+          showToast(message: error == nil ? DisplayStrings.bookmarkAdded : (error as? BookmarkError)?
+            .localizedDescription ?? ""
+          )
+        }
+      } label: {
+        Image(systemName: "bookmark")
+          .font(.system(size: iconSize))
+          .padding(.horizontal, chipPadH)
+          .frame(height: chipHeight)
+          .background(chipBg)
+          .clipShape(Capsule())
+          .contentShape(Capsule())
+      }
+      .accessibilityLabel(Strings.Accessibility.addBookmarksButton)
     }
+    .foregroundColor(.white.opacity(0.9))
+    .padding(.horizontal, outerPadH)
+    .padding(.vertical, isLandscape ? 6 : 10)
     .background(
-      Rectangle()
-        .fill(Color(.darkGray))
-        .edgesIgnoringSafeArea([.bottom])
+      VStack(spacing: 0) {
+        Color.white.opacity(0.06)
+          .frame(height: 0.5)
+        Rectangle()
+          .fill(Color(white: 0.15))
+      }
+      .edgesIgnoringSafeArea([.bottom])
     )
   }
 
@@ -752,72 +820,88 @@ struct AudiobookSlider: View {
 
 // MARK: - PlaybackSliderView
 
-/// Clean playback slider with anti-flicker on release
+/// Modern playback slider: thin rounded track that expands on touch,
+/// with a circular thumb that scales up while dragging.
 struct PlaybackSliderView: View {
   @Binding var value: Double
   @State private var tempValue: Double?
+  @State private var isDragging: Bool = false
   @State private var isCommitting: Bool = false
   var onChange: (_ value: Double) -> Void
 
+  private let trackRest: CGFloat = 4
+  private let trackActive: CGFloat = 6
+  private let thumbRest: CGFloat = 8
+  private let thumbActive: CGFloat = 14
+  private let hitHeight: CGFloat = 44
+
+  private var currentTrackHeight: CGFloat { isDragging ? trackActive : trackRest }
+  private var currentThumbSize: CGFloat { isDragging ? thumbActive : thumbRest }
+
   var body: some View {
     GeometryReader { geometry in
+      let width = geometry.size.width
+
       ZStack(alignment: .leading) {
-        Rectangle()
-          .fill(.gray)
-          .frame(height: trackHeight)
-
-        Rectangle()
-          .fill(Color(.label))
-          .frame(width: offsetX(in: geometry.size, for: displayValue), height: trackHeight)
-
+        // Background track
         Capsule()
-          .fill(Color.red)
-          .frame(width: thumbWidth, height: thumbHeight)
-          .offset(x: offsetX(in: geometry.size, for: displayValue))
-          .gesture(
-            DragGesture()
-              .onChanged { gesture in
-                let newValue = max(0, min(1, Double(gesture.location.x / geometry.size.width)))
-                tempValue = newValue
-              }
-              .onEnded { _ in
-                if let finalValue = tempValue {
-                  // Prevent flicker by keeping temp value until seek completes
-                  isCommitting = true
-                  value = finalValue
-                  onChange(finalValue)
+          .fill(Color.white.opacity(0.2))
+          .frame(height: currentTrackHeight)
 
-                  // Clear temp value after brief delay to prevent flicker
-                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    tempValue = nil
-                    isCommitting = false
-                  }
-                }
-              }
+        // Progress fill
+        Capsule()
+          .fill(Color(.label))
+          .frame(
+            width: max(currentTrackHeight, progressWidth(in: width)),
+            height: currentTrackHeight
           )
-          .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
+
+        // Thumb
+        Circle()
+          .fill(Color(.label))
+          .frame(width: currentThumbSize, height: currentThumbSize)
+          .offset(x: thumbOffset(in: width))
       }
+      .frame(maxHeight: .infinity)
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { gesture in
+            if !isDragging {
+              withAnimation(.easeOut(duration: 0.15)) { isDragging = true }
+            }
+            let newValue = max(0, min(1, Double(gesture.location.x / width)))
+            tempValue = newValue
+          }
+          .onEnded { _ in
+            withAnimation(.easeOut(duration: 0.2)) { isDragging = false }
+            if let finalValue = tempValue {
+              isCommitting = true
+              value = finalValue
+              onChange(finalValue)
+              DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                tempValue = nil
+                isCommitting = false
+              }
+            }
+          }
+      )
+      .accessibilityLabel(Strings.Accessibility.audiobookPlaybackSlider)
     }
-    .frame(height: thumbHeight)
+    .frame(height: hitHeight)
   }
 
-  // Use temp value during drag and briefly after release to prevent flicker
   private var displayValue: Double {
-    if let tempValue = tempValue {
-      return tempValue
-    }
-    return value
+    tempValue ?? value
   }
 
-  private func offsetX(in size: CGSize, for value: Double) -> CGFloat {
-    CGFloat(value) * (size.width - thumbWidth)
+  private func progressWidth(in totalWidth: CGFloat) -> CGFloat {
+    CGFloat(displayValue) * totalWidth
   }
 
-  // MARK: - View configuration
-
-  private let thumbWidth: CGFloat = 10
-  private let thumbHeight: CGFloat = 36
-  private let trackHeight: CGFloat = 10
+  private func thumbOffset(in totalWidth: CGFloat) -> CGFloat {
+    CGFloat(displayValue) * (totalWidth - currentThumbSize)
+  }
 }
 
 // MARK: - ToolkitImage

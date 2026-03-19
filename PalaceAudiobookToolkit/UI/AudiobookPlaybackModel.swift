@@ -27,6 +27,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   @Published public var currentLocation: TrackPosition?
   private var pendingLocation: TrackPosition?
   private var suppressSavesUntil: Date?
+  private var suppressPlaybackPollUntil: Date?
   private var isNavigating = false
 
   var selectedLocation: TrackPosition? {
@@ -263,9 +264,8 @@ public class AudiobookPlaybackModel: ObservableObject {
     Timer.publish(every: 0.5, on: .main, in: .common)
       .autoconnect()
       .sink { [weak self] _ in
-        guard let self = self else {
-          return
-        }
+        guard let self = self else { return }
+        if let suppress = suppressPlaybackPollUntil, Date() < suppress { return }
         let currentPlayingState = audiobookManager.audiobook.player.isPlaying
         if _isPlaying != currentPlayingState {
           _isPlaying = currentPlayingState
@@ -301,6 +301,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   }
 
   func playPause() {
+    suppressPlaybackPollUntil = Date().addingTimeInterval(1.0)
     let wasPlaying = isPlaying
     if wasPlaying {
       audiobookManager.pause()
