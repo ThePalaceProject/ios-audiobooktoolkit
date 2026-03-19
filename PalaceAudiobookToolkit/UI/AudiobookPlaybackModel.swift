@@ -511,6 +511,15 @@ public class AudiobookPlaybackModel: ObservableObject {
     updateLockScreenCoverArtwork(image: image)
   }
 
+  /// Updates the cover with a cross-fade — use this when upgrading from a
+  /// low-res placeholder to the full-resolution player image.
+  public func updateCoverImageAnimated(_ image: UIImage?) {
+    withAnimation(.easeInOut(duration: 0.3)) {
+      coverImage = image
+    }
+    updateLockScreenCoverArtwork(image: image)
+  }
+
   private func updateLockScreenCoverArtwork(image: UIImage?) {
     DispatchQueue.main.async {
       if let image = image {

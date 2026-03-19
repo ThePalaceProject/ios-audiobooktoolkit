@@ -168,15 +168,27 @@ public struct AudiobookPlayerView: View {
   
   // MARK: - View Components
   
+  // MARK: - Adaptive type scale
+  // Three tiers based on screen width: narrow (<370pt SE/Mini), standard (370-420pt), wide (>420pt Pro Max/iPad)
+  private var isWideScreen: Bool { screenSize.width > 420 }
+
+  private var titleFontSize: CGFloat     { isLandscape ? 15 : (isNarrowScreen ? 15 : (isWideScreen ? 20 : 17)) }
+  private var authorFontSize: CGFloat    { isLandscape ? 12 : (isNarrowScreen ? 12 : (isWideScreen ? 15 : 13)) }
+  private var timeRemFontSize: CGFloat   { isLandscape ? 11 : (isNarrowScreen ? 11 : (isWideScreen ? 13 : 12)) }
+  private var timestampFontSize: CGFloat { isLandscape ? 11 : (isNarrowScreen ? 11 : (isWideScreen ? 13 : 12)) }
+  private var chapterFontSize: CGFloat   { isLandscape ? 13 : (isNarrowScreen ? 13 : (isWideScreen ? 17 : 15)) }
+
   @ViewBuilder
   private var headerView: some View {
     VStack {
       Text(playbackModel.audiobookManager.metadata.title ?? "")
         .palaceFont(.headline)
+        .font(.system(size: titleFontSize))
         .accessibilityLabel(Text(playbackModel.audiobookManager.metadata.title ?? ""))
         .accessibilityFocused($isTitleFocused)
       Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", "))
         .palaceFont(.body)
+        .font(.system(size: authorFontSize))
         .accessibilityLabel(Text((playbackModel.audiobookManager.metadata.authors ?? []).joined(separator: ", ")))
     }
     .padding(.top, isLandscape ? 5 : nil)
@@ -189,6 +201,7 @@ public struct AudiobookPlayerView: View {
       if !isInBackground {
         Text(timeLeftInBookText)
           .palaceFont(.caption)
+          .font(.system(size: timeRemFontSize))
           .accessibilityLabel(Text("Time left in book: \(timeLeftInBookText)"))
 
         PlaybackSliderView(value: $playbackModel.playbackProgress) { newValue in
@@ -199,19 +212,21 @@ public struct AudiobookPlayerView: View {
       }
 
       HStack(alignment: .firstTextBaseline) {
-        Text("\(playheadOffsetText)")
+        Text(playheadOffsetText)
           .palaceFont(.caption)
+          .font(.system(size: timestampFontSize))
           .accessibilityLabel(Text("Time elapsed: \(playheadOffsetAccessibleText)"))
         Spacer()
         Text(chapterTitle)
           .palaceFont(.headline)
+          .font(.system(size: chapterFontSize))
           .multilineTextAlignment(.center)
           .lineLimit(2)
           .accessibilityLabel(Text(chapterTitle))
-
         Spacer()
-        Text("\(timeLeftText)")
+        Text(timeLeftText)
           .palaceFont(.caption)
+          .font(.system(size: timestampFontSize))
           .accessibilityLabel(Text("Time left in chapter \(timeLeftAccessibleText)"))
       }
       .padding(.horizontal)
@@ -228,6 +243,7 @@ public struct AudiobookPlayerView: View {
       .padding(.horizontal, isLandscape ? 0 : 20)
       .padding(.vertical, isLandscape ? 15 : 0)
       .animation(.easeInOut(duration: 0.2), value: playbackModel.isDownloading)
+      .animation(.easeInOut(duration: 0.3), value: playbackModel.coverImage == nil)
   }
 
   private func setupBackgroundStateHandling() {
@@ -359,29 +375,43 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private func downloadProgressView(value: Float) -> some View {
-    let progressHeight: CGFloat = 6
-    HStack(alignment: .bottom) {
-      VStack(alignment: .center) {
-        ZStack {
-          GeometryReader { geometry in
-            Rectangle()
-              .frame(height: progressHeight)
-              .opacity(0.3)
-            Rectangle()
-              .frame(height: progressHeight)
-              .frame(width: geometry.size.width * CGFloat(value))
+    VStack(spacing: 6) {
+      HStack(spacing: 8) {
+        Image(systemName: "arrow.down.circle.fill")
+          .font(.system(size: 12, weight: .medium))
+          .foregroundColor(.white.opacity(0.6))
+
+        GeometryReader { geometry in
+          ZStack(alignment: .leading) {
+            Capsule()
+              .fill(Color.white.opacity(0.15))
+              .frame(height: 4)
+
+            Capsule()
+              .fill(Color.white.opacity(0.8))
+              .frame(width: max(4, geometry.size.width * CGFloat(value)), height: 4)
+              .animation(.easeInOut(duration: 0.3), value: value)
           }
-          .frame(maxHeight: 6)
+          .frame(maxHeight: .infinity)
         }
-        Text(Strings.ScrubberView.downloading)
+        .frame(height: 4)
+
+        Text("\(Int(value * 100))%")
+          .font(.system(size: 11, weight: .medium, design: .rounded))
+          .foregroundColor(.white.opacity(0.6))
+          .frame(width: 34, alignment: .trailing)
+          .monospacedDigit()
       }
-      .font(.caption)
-      .padding(8)
-      .padding(.horizontal)
+      .padding(.horizontal, 20)
+
+      Text(Strings.ScrubberView.downloading)
+        .font(.system(size: 11, weight: .medium))
+        .foregroundColor(.white.opacity(0.45))
     }
-    .frame(maxWidth: .infinity)
+    .padding(.vertical, playbackModel.isDownloading ? 8 : 0)
     .frame(height: playbackModel.isDownloading ? nil : 0)
     .clipped()
+    .animation(.easeInOut(duration: 0.25), value: playbackModel.isDownloading)
   }
 
   @ViewBuilder
