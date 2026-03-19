@@ -18,6 +18,12 @@ class Reachability: ObservableObject {
   private let maxRetries = 30
   private var retriesCounter = 0
 
+  var isOnWiFi: Bool {
+    let path = connectionMonitor.currentPath
+    return path.status == .satisfied
+      && (path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet))
+  }
+
   func startMonitoring() {
     connectionMonitor.pathUpdateHandler = { [weak self] _ in
       // This seems to be the most reliable way to determine the connectin status
