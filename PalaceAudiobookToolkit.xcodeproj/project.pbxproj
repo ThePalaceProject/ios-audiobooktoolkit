@@ -143,6 +143,7 @@
 		E7E96BD12B10032E0036B23A /* OpenSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7E96BCA2B0FCD450036B23A /* OpenSans-Regular.ttf */; };
 		E7E96BD22B10032E0036B23A /* OpenSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7E96BCB2B0FCD450036B23A /* OpenSans-SemiBold.ttf */; };
 		E7F127BA2A9921BE001ED616 /* AudiobookPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F127B92A9921BE001ED616 /* AudiobookPlayerView.swift */; };
+		C822F18BA3A94D16A7295A38 /* SpeedSliderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC08A6FDAE14519BD997FE3 /* SpeedSliderSheet.swift */; };
 		E7F9BAC22A8E6B72001697DE /* Data+hexString.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */; };
 		E7F9BAC42A8E6E08001697DE /* String+sha256Test.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */; };
 		E7F9BAE82A8E7F48001697DE /* PublicConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */; };
@@ -301,6 +302,7 @@
 		E7E96BCB2B0FCD450036B23A /* OpenSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "OpenSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		E7E96BCC2B0FCD450036B23A /* OpenSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "OpenSans-Bold.ttf"; sourceTree = "<group>"; };
 		E7F127B92A9921BE001ED616 /* AudiobookPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudiobookPlayerView.swift; sourceTree = "<group>"; };
+		BFC08A6FDAE14519BD997FE3 /* SpeedSliderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedSliderSheet.swift; sourceTree = "<group>"; };
 		E7F9BAC12A8E6B72001697DE /* Data+hexString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+hexString.swift"; sourceTree = "<group>"; };
 		E7F9BAC32A8E6E08001697DE /* String+sha256Test.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+sha256Test.swift"; sourceTree = "<group>"; };
 		E7F9BAE72A8E7F48001697DE /* PublicConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicConstants.swift; sourceTree = "<group>"; };
@@ -612,6 +614,7 @@
 			children = (
 				E71168BB2AB4BEFC00629DC7 /* AudiobookPlayer.swift */,
 				E7F127B92A9921BE001ED616 /* AudiobookPlayerView.swift */,
+				BFC08A6FDAE14519BD997FE3 /* SpeedSliderSheet.swift */,
 				E79266962AB34315009901B7 /* AudiobookNavigationView.swift */,
 				E71168B52AB44B4A00629DC7 /* AudiobookPlaybackModel.swift */,
 				E56C00C52BC3912100A25A97 /* ChapterCell.swift */,
@@ -833,6 +836,7 @@
 				E71168BC2AB4BEFC00629DC7 /* AudiobookPlayer.swift in Sources */,
 				8C882C952409B04F0000CA59 /* DateUtils.swift in Sources */,
 				E7F127BA2A9921BE001ED616 /* AudiobookPlayerView.swift in Sources */,
+				C822F18BA3A94D16A7295A38 /* SpeedSliderSheet.swift in Sources */,
 				7B5441E6200EA82C0047B6C6 /* AudiobookLifecycleManager.swift in Sources */,
 				7B5441E7200EA82C0047B6C6 /* AudiobookManager.swift in Sources */,
 				E5ECFA7E2BED6C150008670F /* FindawayPlayer.swift in Sources */,

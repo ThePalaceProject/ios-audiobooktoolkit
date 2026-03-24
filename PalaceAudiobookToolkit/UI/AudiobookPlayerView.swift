@@ -1,9 +1,9 @@
 //
-//  AudiobookPlayerView.swift
-//  PalaceAudiobookToolkit
+// AudiobookPlayerView.swift
+// PalaceAudiobookToolkit
 //
-//  Created by Vladimir Fedorov on 10/08/2023.
-//  Copyright © 2023 The Palace Project. All rights reserved.
+// Created by Vladimir Fedorov on 10/08/2023.
+// Copyright © 2023 The Palace Project. All rights reserved.
 //
 
 import AVKit
@@ -172,11 +172,11 @@ public struct AudiobookPlayerView: View {
   // Three tiers based on screen width: narrow (<370pt SE/Mini), standard (370-420pt), wide (>420pt Pro Max/iPad)
   private var isWideScreen: Bool { screenSize.width > 420 }
 
-  private var titleFontSize: CGFloat     { isLandscape ? 15 : (isNarrowScreen ? 15 : (isWideScreen ? 20 : 17)) }
-  private var authorFontSize: CGFloat    { isLandscape ? 12 : (isNarrowScreen ? 12 : (isWideScreen ? 15 : 13)) }
-  private var timeRemFontSize: CGFloat   { isLandscape ? 11 : (isNarrowScreen ? 11 : (isWideScreen ? 13 : 12)) }
+  private var titleFontSize: CGFloat    { isLandscape ? 15 : (isNarrowScreen ? 15 : (isWideScreen ? 20 : 17)) }
+  private var authorFontSize: CGFloat   { isLandscape ? 12 : (isNarrowScreen ? 12 : (isWideScreen ? 15 : 13)) }
+  private var timeRemFontSize: CGFloat  { isLandscape ? 11 : (isNarrowScreen ? 11 : (isWideScreen ? 13 : 12)) }
   private var timestampFontSize: CGFloat { isLandscape ? 11 : (isNarrowScreen ? 11 : (isWideScreen ? 13 : 12)) }
-  private var chapterFontSize: CGFloat   { isLandscape ? 13 : (isNarrowScreen ? 13 : (isWideScreen ? 17 : 15)) }
+  private var chapterFontSize: CGFloat  { isLandscape ? 13 : (isNarrowScreen ? 13 : (isWideScreen ? 17 : 15)) }
 
   @ViewBuilder
   private var headerView: some View {
@@ -511,8 +511,13 @@ public struct AudiobookPlayerView: View {
           .clipShape(Capsule())
           .contentShape(Capsule())
       }
-      .actionSheet(isPresented: $showPlaybackSpeed) {
-        ActionSheet(title: Text(DisplayStrings.playbackSpeed), buttons: playbackRateButtons)
+      .sheet(isPresented: $showPlaybackSpeed) {
+        SpeedSliderSheet(
+          playbackRate: playbackRateBinding,
+          onDismiss: { showPlaybackSpeed = false }
+        )
+        .presentationDetents([.height(260)])
+        .presentationDragIndicator(.hidden)
       }
       .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
 
@@ -651,19 +656,11 @@ public struct AudiobookPlayerView: View {
     return String(format: formatString, timeLeft)
   }
 
-  private var playbackRateButtons: [ActionSheet.Button] {
-    var buttons = [ActionSheet.Button]()
-    for playbackRate in PlaybackRate.allCases {
-      buttons.append(
-        .default(
-          Text(HumanReadablePlaybackRate(rate: playbackRate).value),
-          action: { playbackModel.setPlaybackRate(playbackRate)
-          }
-        )
-      )
-    }
-    buttons.append(.cancel())
-    return buttons
+  private var playbackRateBinding: Binding<PlaybackRate> {
+    Binding(
+      get: { playbackModel.audiobookManager.audiobook.player.playbackRate },
+      set: { playbackModel.setPlaybackRate($0) }
+    )
   }
 
   private var sleepTimerButtons: [ActionSheet.Button] {
