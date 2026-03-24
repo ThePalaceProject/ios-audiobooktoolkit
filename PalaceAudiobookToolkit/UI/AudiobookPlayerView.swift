@@ -721,6 +721,7 @@ private extension AudiobookPlayerView {
       )
     )
     playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
+    useIncrementalSpeedSlider = false
   }
 }
 
