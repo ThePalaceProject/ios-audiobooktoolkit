@@ -169,6 +169,39 @@ struct SpeedSliderSheet: View {
   }
 }
 
+// MARK: - SpeedPickerModifier
+
+/// Routes the speed-picker presentation to either the stepped slider sheet
+/// or the legacy action sheet depending on `useSlider`.
+struct SpeedPickerModifier: ViewModifier {
+  @Binding var isPresented: Bool
+  let useSlider: Bool
+  let playbackRateBinding: Binding<PlaybackRate>
+  let legacyButtons: [ActionSheet.Button]
+
+  func body(content: Content) -> some View {
+    if useSlider {
+      content
+        .sheet(isPresented: $isPresented) {
+          SpeedSliderSheet(
+            playbackRate: playbackRateBinding,
+            onDismiss: { isPresented = false }
+          )
+          .presentationDetents([.height(260)])
+          .presentationDragIndicator(.hidden)
+        }
+    } else {
+      content
+        .actionSheet(isPresented: $isPresented) {
+          ActionSheet(
+            title: Text(Strings.AudiobookPlayerViewController.playbackSpeed),
+            buttons: legacyButtons
+          )
+        }
+    }
+  }
+}
+
 // MARK: - Double rounding helper
 
 private extension Double {

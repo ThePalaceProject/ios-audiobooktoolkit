@@ -20,6 +20,8 @@ public struct AudiobookPlayerView: View {
   @ObservedObject var playbackModel: AudiobookPlaybackModel
   @ObservedObject private var showToast = BoolWithDelay(delay: 3)
 
+  private let useIncrementalSpeedSlider: Bool
+
   @State private var showPlaybackSpeed = false
   @State private var showSleepTimer = false
   @State private var isInBackground = false
@@ -28,8 +30,9 @@ public struct AudiobookPlayerView: View {
   @State private var screenSize: CGSize = UIScreen.main.bounds.size
   @State private var loadingTimedOut = false
 
-  public init(model: AudiobookPlaybackModel) {
+  public init(model: AudiobookPlaybackModel, useIncrementalSpeedSlider: Bool = false) {
     playbackModel = model
+    self.useIncrementalSpeedSlider = useIncrementalSpeedSlider
     setupBackgroundStateHandling()
   }
   
@@ -511,14 +514,12 @@ public struct AudiobookPlayerView: View {
           .clipShape(Capsule())
           .contentShape(Capsule())
       }
-      .sheet(isPresented: $showPlaybackSpeed) {
-        SpeedSliderSheet(
-          playbackRate: playbackRateBinding,
-          onDismiss: { showPlaybackSpeed = false }
-        )
-        .presentationDetents([.height(260)])
-        .presentationDragIndicator(.hidden)
-      }
+      .modifier(SpeedPickerModifier(
+        isPresented: $showPlaybackSpeed,
+        useSlider: useIncrementalSpeedSlider,
+        playbackRateBinding: playbackRateBinding,
+        legacyButtons: playbackRateButtons
+      ))
       .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
 
       Spacer(minLength: 0)
@@ -661,6 +662,17 @@ public struct AudiobookPlayerView: View {
       get: { playbackModel.audiobookManager.audiobook.player.playbackRate },
       set: { playbackModel.setPlaybackRate($0) }
     )
+  }
+
+  private var playbackRateButtons: [ActionSheet.Button] {
+    var buttons = PlaybackRate.presets.map { rate in
+      ActionSheet.Button.default(
+        Text(HumanReadablePlaybackRate(rate: rate).value),
+        action: { playbackModel.setPlaybackRate(rate) }
+      )
+    }
+    buttons.append(.cancel())
+    return buttons
   }
 
   private var sleepTimerButtons: [ActionSheet.Button] {
