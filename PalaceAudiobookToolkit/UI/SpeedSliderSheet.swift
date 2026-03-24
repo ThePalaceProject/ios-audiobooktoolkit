@@ -10,7 +10,7 @@ import SwiftUI
 
 // MARK: - SpeedSliderSheet
 
-/// Audible-style playback speed picker: stepped slider + ± stepper buttons + preset chips.
+/// Playback speed picker: stepped slider + ± stepper buttons + preset chips.
 struct SpeedSliderSheet: View {
   @Binding var playbackRate: PlaybackRate
   var onDismiss: () -> Void
