@@ -1,73 +1,71 @@
 //
-//  HumanReadablePlaybackRate.swift
-//  NYPLAudiobookToolkit
+// HumanReadablePlaybackRate.swift
+// NYPLAudiobookToolkit
 //
-//  Created by Dean Silfen on 3/27/18.
-//  Copyright © 2018 Dean Silfen. All rights reserved.
+// Created by Dean Silfen on 3/27/18.
+// Copyright © 2018 Dean Silfen. All rights reserved.
 //
 
 import UIKit
 
 class HumanReadablePlaybackRate {
   lazy var value: String = {
-    let output: String = switch rate {
-    case .threeQuartersTime:
-      NSLocalizedString("0.75×", bundle: Bundle.audiobookToolkit()!, value: "0.75×", comment: "Three quaters time")
-    case .normalTime:
-      NSLocalizedString(
+    if rate == .normalTime {
+      return NSLocalizedString(
         "1.0× (Normal)",
         bundle: Bundle.audiobookToolkit()!,
         value: "1.0× (Normal)",
         comment: "Normal time"
       )
-    case .oneAndAQuarterTime:
-      NSLocalizedString("1.25×", bundle: Bundle.audiobookToolkit()!, value: "1.25×", comment: "One and a quarter time")
-    case .oneAndAHalfTime:
-      NSLocalizedString("1.50×", bundle: Bundle.audiobookToolkit()!, value: "1.50×", comment: "One and a half time")
-    case .doubleTime:
-      NSLocalizedString("2.0×", bundle: Bundle.audiobookToolkit()!, value: "2.0×", comment: "Double time")
     }
-    return output
+    return Self.formatMultiplier(PlaybackRate.convert(rate: rate))
   }()
 
   lazy var accessibleDescription: String = {
-    let output: String = switch rate {
+    switch rate {
     case .threeQuartersTime:
-      NSLocalizedString(
+      return NSLocalizedString(
         "Three quarters of normal speed. Slower.",
         bundle: Bundle.audiobookToolkit()!,
         value: "Three quarters of normal speed. Slower.",
         comment: ""
       )
     case .normalTime:
-      NSLocalizedString("Normal speed.", bundle: Bundle.audiobookToolkit()!, value: "Normal speed.", comment: "")
-    case .oneAndAQuarterTime:
-      NSLocalizedString(
-        "One and one quarter faster than normal speed.",
-        bundle: Bundle.audiobookToolkit()!,
-        value: "One and one quarter faster than normal speed.",
-        comment: ""
-      )
-    case .oneAndAHalfTime:
-      NSLocalizedString(
-        "One and a half times faster than normal speed.",
-        bundle: Bundle.audiobookToolkit()!,
-        value: "One and a half times faster than normal speed.",
-        comment: ""
-      )
+      return NSLocalizedString("Normal speed.", bundle: Bundle.audiobookToolkit()!, value: "Normal speed.", comment: "")
     case .doubleTime:
-      NSLocalizedString(
+      return NSLocalizedString(
         "Two times normal speed. Fastest.",
         bundle: Bundle.audiobookToolkit()!,
         value: "Two times normal speed. Fastest.",
         comment: ""
       )
+    default:
+      let multiplier = PlaybackRate.convert(rate: rate)
+      let formatted = Self.formatMultiplier(multiplier)
+      if multiplier < 1.0 {
+        return String(format: NSLocalizedString("%@ speed. Slower than normal.", bundle: Bundle.audiobookToolkit()!, value: "%@ speed. Slower than normal.", comment: ""), formatted)
+      } else {
+        return String(format: NSLocalizedString("%@ speed. Faster than normal.", bundle: Bundle.audiobookToolkit()!, value: "%@ speed. Faster than normal.", comment: ""), formatted)
+      }
     }
-    return output
   }()
 
   let rate: PlaybackRate
+
   init(rate: PlaybackRate) {
     self.rate = rate
+  }
+
+  /// Formats a multiplier Float as "1.25×", trimming insignificant trailing zeros.
+  static func formatMultiplier(_ multiplier: Float) -> String {
+    // Use up to 2 decimal places, trim trailing zeros
+    let value = Double(multiplier)
+    if value.truncatingRemainder(dividingBy: 1) == 0 {
+      return String(format: "%.1f×", value)
+    } else if (value * 10).truncatingRemainder(dividingBy: 1) == 0 {
+      return String(format: "%.1f×", value)
+    } else {
+      return String(format: "%.2f×", value)
+    }
   }
 }
