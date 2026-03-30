@@ -40,11 +40,9 @@ public final class AudiobookAccessibilityAnnouncementCenter {
   }
 
   public func announceDownloadProgress(title: String, identifier: String, progress: Double) {
-    let percent = progressPercent(progress)
-    guard percent < 100 else { return }
-    let bucket = progressBucket(for: percent)
-    guard shouldAnnounceProgress(identifier: identifier, bucket: bucket) else { return }
-    announce(Strings.DownloadAnnouncements.downloadProgress(title, percent))
+    // Intermediate progress announcements are suppressed; only start and
+    // completion are announced so VoiceOver users are not interrupted while
+    // listening to a book.
   }
 
   public func resetProgress(identifier: String) {
