@@ -185,6 +185,17 @@ class OpenAccessPlayer: NSObject, Player {
   private var fulfillURL: URL?
   private var isRefreshingToken = false
   private var wasPlayingBeforeInterruption = false
+  /// KVO on `avQueuePlayer.currentItem` so we can re-arm `currentItemStatusObservation`
+  /// every time the player advances to a new item. Without this, a chapter
+  /// that loads cleanly followed by one that 403s silently keeps the UI
+  /// ticking because nothing emits `.failed`.
+  private var currentItemObservation: NSKeyValueObservation?
+  /// KVO on the currently-playing item's `.status`. Catches load failures
+  /// that happen through code paths which don't go through `waitForItemReady`
+  /// (e.g. `navigateToPosition`'s `seek(to:)` returns success immediately
+  /// even if the item's status is still `.unknown` and then transitions to
+  /// `.failed` when the underlying HTTP request returns 403/401).
+  private var currentItemStatusObservation: NSKeyValueObservation?
 
   private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
     didSet {
@@ -752,23 +763,22 @@ class OpenAccessPlayer: NSObject, Player {
   private func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
     if item.status == .failed {
       ATLog(.error, "OpenAccessPlayer: Item already failed - \(item.error?.localizedDescription ?? "unknown")")
-      if isItemAuthFailure(item), fulfillURL != nil {
-        refreshBearerTokenAndRebuildQueue()
-      }
+      handleItemLoadFailure(item)
       completion(false)
       return
     }
-    
-    let timeoutWorkItem = DispatchWorkItem {
+
+    let timeoutWorkItem = DispatchWorkItem { [weak self] in
       ATLog(.warn, "OpenAccessPlayer: Item ready timeout after \(timeout)s")
+      self?.handleItemLoadFailure(item)
       completion(false)
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
-    
+
     var observation: NSKeyValueObservation?
     observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
       guard let self else { return }
-      
+
       if observedItem.status == .readyToPlay {
         timeoutWorkItem.cancel()
         observation?.invalidate()
@@ -777,12 +787,30 @@ class OpenAccessPlayer: NSObject, Player {
         ATLog(.error, "OpenAccessPlayer: Item load failed - \(observedItem.error?.localizedDescription ?? "unknown")")
         timeoutWorkItem.cancel()
         observation?.invalidate()
-        if isItemAuthFailure(observedItem), fulfillURL != nil {
-          refreshBearerTokenAndRebuildQueue()
-        }
+        self.handleItemLoadFailure(observedItem)
         completion(false)
       }
     }
+  }
+
+  /// Unified failure path for items that either arrived in `.failed` status or
+  /// transitioned to it while we were waiting. Auth failures trigger a bearer-
+  /// token refresh + queue rebuild; everything else surfaces as `.failed` on
+  /// `playbackStatePublisher` so the manager can stop the now-playing timer
+  /// and the app can present a retry UI instead of silently ticking.
+  private func handleItemLoadFailure(_ item: AVPlayerItem) {
+    if isItemAuthFailure(item), fulfillURL != nil {
+      refreshBearerTokenAndRebuildQueue()
+      return
+    }
+    avQueuePlayer.pause()
+    let errorPosition = currentTrackPosition ?? lastKnownPosition ?? queuedTrackPosition
+    let error = item.error ?? NSError(
+      domain: OpenAccessPlayerErrorDomain,
+      code: OpenAccessPlayerError.unknown.rawValue,
+      userInfo: [NSLocalizedDescriptionKey: "Audiobook chapter failed to load"]
+    )
+    playbackStatePublisher.send(.failed(errorPosition, error))
   }
 
   private func isItemAuthFailure(_ item: AVPlayerItem) -> Bool {
@@ -967,9 +995,34 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
     avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
     isObservingPlayerStatus = true
-    
+
+    observeCurrentItemStatus()
+
     // Add fast periodic time observer for UI updates (0.25s = 4 updates/second for smooth slider)
     addPeriodicTimeObserver()
+  }
+
+  /// Re-arm `currentItemStatusObservation` whenever the queue player advances
+  /// to a new item. Emits `.failed` on `playbackStatePublisher` if the item
+  /// transitions to `.failed` — the necessary counterpart to `waitForItemReady`
+  /// for the streaming paths (`performSeek`, `navigateToPosition`) where
+  /// `seek(to:)` returns success before we know the HTTP load will succeed.
+  private func observeCurrentItemStatus() {
+    currentItemObservation = avQueuePlayer.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
+      self?.attachStatusObserverToCurrentItem()
+    }
+    attachStatusObserverToCurrentItem()
+  }
+
+  private func attachStatusObserverToCurrentItem() {
+    currentItemStatusObservation?.invalidate()
+    currentItemStatusObservation = nil
+    guard let item = avQueuePlayer.currentItem else { return }
+    currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
+      guard let self, observedItem.status == .failed else { return }
+      ATLog(.error, "OpenAccessPlayer: Current item transitioned to failed - \(observedItem.error?.localizedDescription ?? "unknown")")
+      self.handleItemLoadFailure(observedItem)
+    }
   }
   
   private func addPeriodicTimeObserver() {
@@ -1005,7 +1058,12 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.removeObserver(self, forKeyPath: "status")
     avQueuePlayer.removeObserver(self, forKeyPath: "rate")
     isObservingPlayerStatus = false
-    
+
+    currentItemObservation?.invalidate()
+    currentItemObservation = nil
+    currentItemStatusObservation?.invalidate()
+    currentItemStatusObservation = nil
+
     // Remove periodic time observer
     if let token = timeObserverToken {
       avQueuePlayer.removeTimeObserver(token)
