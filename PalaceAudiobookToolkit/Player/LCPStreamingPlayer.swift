@@ -36,6 +36,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   private var suppressAudibleUntilPlaying = false
   private var lastStartedItemKey: String?
   private var isSeekingWithinSameTrack = false
+  private var loadTimeoutWorkItem: DispatchWorkItem?
 
   override var currentOffset: Double {
     guard let currentTrackPosition, let currentChapter else {
@@ -188,20 +189,20 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       suppressAudibleUntilPlaying = true
       avQueuePlayer.isMuted = true
       lastStartedItemKey = nil
-      
-      DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self] in
-        if let self = self, !self.isLoaded {
-          ATLog(.warn, "LCPStreamingPlayer: Publication loading taking longer than expected, attempting fallback")
-          if streamingProvider?.getPublication() != nil || !avQueuePlayer.items().isEmpty {
-            ATLog(.debug, "🎵 [LCPStreamingPlayer] Fallback: Publication or items available, proceeding")
-            isLoaded = true
-            suppressAudibleUntilPlaying = false
-            avQueuePlayer.isMuted = false
-          } else {
-            ATLog(.error, "🎵 [LCPStreamingPlayer] Critical timeout: No publication or items available")
-          }
-        }
+
+      // Cancel any prior fallback from an earlier play(at:) so stale timers don't
+      // fire after the queue has advanced past the startup window. Without this,
+      // rapid re-presentations stack multiple timers that all log at once.
+      loadTimeoutWorkItem?.cancel()
+      let workItem = DispatchWorkItem { [weak self] in
+        guard let self = self, !self.isLoaded else { return }
+        ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — forcing unmute so audio is not stuck")
+        self.isLoaded = true
+        self.suppressAudibleUntilPlaying = false
+        self.avQueuePlayer.isMuted = false
       }
+      loadTimeoutWorkItem = workItem
+      DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: workItem)
     }
 
     if !needsRebuild {
@@ -564,6 +565,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         switch player.timeControlStatus {
         case .playing:
           self.isLoaded = true
+          loadTimeoutWorkItem?.cancel()
+          loadTimeoutWorkItem = nil
           if suppressAudibleUntilPlaying {
             avQueuePlayer.isMuted = false
             suppressAudibleUntilPlaying = false
@@ -580,7 +583,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             }
           }
         case .waitingToPlayAtSpecifiedRate:
-          if !isSeekingWithinSameTrack {
+          // AVPlayer enters this state for ordinary mid-playback buffering, not just
+          // initial load. Only treat it as "not loaded" while we've never confirmed
+          // `.playing` for the current play(at:) call — otherwise every LCP decrypt
+          // gap re-mutes the player and leaves the user on a silent spinner.
+          if lastStartedItemKey == nil, !isSeekingWithinSameTrack {
             self.isLoaded = false
             if !self.avQueuePlayer.isMuted {
               avQueuePlayer.isMuted = true
