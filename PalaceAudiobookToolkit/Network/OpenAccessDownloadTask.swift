@@ -22,7 +22,7 @@ final class OpenAccessDownloadTask: DownloadTask {
   var needsRetry: Bool {
     switch assetFileStatus() {
     case .missing, .unknown:
-      true
+      !isForbidden
     case .saved:
       false
     }
@@ -39,6 +39,10 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// The CM fulfill URL for refreshing expired bearer tokens.
   var fulfillURL: URL?
   private var hasAttemptedTokenRefresh = false
+
+  /// Set when the server returns 403 Forbidden. Prevents infinite retry loops
+  /// that effectively DDoS the content server.
+  var isForbidden = false
 
   private static let DownloadTaskTimeoutValue: TimeInterval = 60
   private var downloadURL: URL
@@ -266,6 +270,23 @@ final class OpenAccessDownloadTask: DownloadTask {
     let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "")
       .appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
     let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
+
+    // Set auth headers on the session configuration so iOS preserves them
+    // when the system process takes over background transfers. Headers set
+    // only on individual URLRequest objects are stripped by the background
+    // transfer daemon, causing 403s on bearer-token audiobook downloads.
+    var additionalHeaders: [String: String] = [:]
+    if let profile = feedbooksProfile, !profile.contains("cantookaudio") {
+      if let jwt = FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) {
+        additionalHeaders["Authorization"] = "Bearer \(jwt)"
+      }
+    } else if let token = token, shouldSendToken(to: remoteURL) {
+      additionalHeaders["Authorization"] = "Bearer \(token)"
+    }
+    if !additionalHeaders.isEmpty {
+      config.httpAdditionalHeaders = additionalHeaders
+    }
+
     let delegate = DownloadTaskURLSessionDelegate(
       downloadTask: self,
       statePublisher: statePublisher,
@@ -273,12 +294,15 @@ final class OpenAccessDownloadTask: DownloadTask {
       trackKey: key
     )
 
+    // Invalidate any previous session with the same identifier to prevent
+    // delegate confusion and resource leaks on retry.
+    session?.invalidateAndCancel()
     session = URLSession(
       configuration: config,
       delegate: delegate,
       delegateQueue: nil
     )
-    
+
     // Check for resume data from a previous interrupted download
     if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
       ATLog(.info, "OpenAccessDownloadTask: Resuming download from saved state for: \(key)")
@@ -287,7 +311,7 @@ final class OpenAccessDownloadTask: DownloadTask {
       task.resume()
       return
     }
-    
+
     // No resume data - start fresh download
     var request = URLRequest(
       url: remoteURL,
@@ -295,6 +319,8 @@ final class OpenAccessDownloadTask: DownloadTask {
       timeoutInterval: OpenAccessDownloadTask.DownloadTaskTimeoutValue
     )
 
+    // Also set headers on the request for non-background paths and
+    // immediate transfers that may complete before backgrounding.
     if let profile = feedbooksProfile, !profile.contains("cantookaudio") {
       request.setValue(
         "Bearer \(FeedbookDRMProcessor.getJWTToken(profile: profile, resourceUri: urlString) ?? "")",
@@ -463,12 +489,21 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
     } else {
       ATLog(.error, "Download Task failed with server response: \n\(httpResponse.description)")
       self.downloadTask.downloadProgress = 0.0
-      
+
       if httpResponse.statusCode == 401,
          let oaTask = self.downloadTask as? OpenAccessDownloadTask,
          oaTask.attemptTokenRefreshAndRetry() {
         ATLog(.info, "DownloadTaskDelegate: 401 received, token refresh initiated for: \(self.downloadTask.key)")
         return
+      }
+
+      // Mark 403 Forbidden so the retry loop stops. Retrying 403 is pointless
+      // (the server knows who we are but won't serve the content) and creates
+      // a DDoS pattern against the content server.
+      if httpResponse.statusCode == 403,
+         let oaTask = self.downloadTask as? OpenAccessDownloadTask {
+        ATLog(.error, "DownloadTaskDelegate: 403 Forbidden for: \(self.downloadTask.key) — will not retry")
+        oaTask.isForbidden = true
       }
 
       if httpResponse.statusCode == 401 {

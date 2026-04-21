@@ -269,8 +269,12 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
           return false
         }()
         let progress = track.downloadTask?.downloadProgress ?? 0.0
-        
-        if !isAlreadyActive && !isCompleted && progress < 1.0 {
+
+        // Skip tracks that received 403 Forbidden — retrying is pointless
+        // and hammers the content server.
+        let isForbidden = (track.downloadTask as? OpenAccessDownloadTask)?.isForbidden ?? false
+
+        if !isAlreadyActive && !isCompleted && !isForbidden && progress < 1.0 {
           activeDownloadIndices.insert(index)
           let capturedIndex = index
           // Dispatch the actual download start outside the barrier to avoid holding the lock
