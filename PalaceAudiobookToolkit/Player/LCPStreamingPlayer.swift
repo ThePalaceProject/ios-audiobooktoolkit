@@ -194,12 +194,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       // fire after the queue has advanced past the startup window. Without this,
       // rapid re-presentations stack multiple timers that all log at once.
       loadTimeoutWorkItem?.cancel()
+      let timeoutPosition = position
+      let timeoutCompletion = completion
       let workItem = DispatchWorkItem { [weak self] in
         guard let self = self, !self.isLoaded else { return }
-        ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — forcing unmute so audio is not stuck")
+        ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — surfacing failure so caller can show an alert and release the open lock")
         self.isLoaded = true
         self.suppressAudibleUntilPlaying = false
         self.avQueuePlayer.isMuted = false
+
+        // Emit a playback failure so AudiobookManager → Palace surfaces the
+        // "Audiobook Unavailable" alert and the BookService open lock releases
+        // instead of latching. Without this, a stalled resource loader looks
+        // identical to a successful open from the UI's perspective.
+        let timeoutError = NSError(
+          domain: "LCPStreamingPlayer",
+          code: -1,
+          userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
+        )
+        self.playbackStatePublisher.send(.failed(timeoutPosition, timeoutError))
+        timeoutCompletion?(timeoutError)
       }
       loadTimeoutWorkItem = workItem
       DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: workItem)
@@ -247,6 +261,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 isLoaded = true
                 suppressAudibleUntilPlaying = false
                 avQueuePlayer.isMuted = false
+                self.loadTimeoutWorkItem?.cancel()
               }
             }
           } else {

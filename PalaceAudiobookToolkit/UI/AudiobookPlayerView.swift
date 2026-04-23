@@ -885,7 +885,7 @@ struct PlaybackSliderView: View {
       ZStack(alignment: .leading) {
         // Background track
         Capsule()
-          .fill(Color.white.opacity(0.2))
+          .fill(Color(.systemGray4))
           .frame(height: currentTrackHeight)
 
         // Progress fill
