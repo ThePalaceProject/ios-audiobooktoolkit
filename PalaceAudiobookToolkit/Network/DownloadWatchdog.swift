@@ -109,15 +109,21 @@ public final class DownloadWatchdog {
   public func start() {
     guard !isRunning else { return }
     isRunning = true
-    
+
     ATLog(.info, "DownloadWatchdog: Starting with stallTimeout=\(configuration.stallTimeout)s, maxRetries=\(configuration.maxRetries)")
-    
-    // Start periodic check using AsyncStream
+
+    // Capture the interval out-of-line so the Task body does not need `self`
+    // for stream setup. The body intentionally does not strong-rebind `self`
+    // at the top — holding a strong reference across the full for-await
+    // would pin the instance's lifetime to the Task, so the instance could
+    // never deinit while the stream was still emitting. With per-iteration
+    // weak-unwrap we release `self` between ticks; when `stop()` cancels the
+    // Task, the stream exits on the next iteration and the Task returns
+    // without ever having held `self` strongly.
+    let interval = configuration.checkInterval
     monitoringTask = Task { [weak self] in
-      guard let self = self else { return }
-      
-      for await _ in Self.timerStream(interval: self.configuration.checkInterval) {
-        guard self.isRunning else { break }
+      for await _ in Self.timerStream(interval: interval) {
+        guard let self = self, self.isRunning else { break }
         self.checkForStalledDownloads()
       }
     }
@@ -141,25 +147,31 @@ public final class DownloadWatchdog {
     }
   }
   
-  /// Stops monitoring downloads.
+  /// Stops monitoring downloads. Synchronous and idempotent — safe to call
+  /// from `deinit`, from `stop()` itself (it guards via `isRunning`), or
+  /// repeatedly from any thread. After this returns, no watchdog-owned
+  /// state remains on the internal barrier queue.
   public func stop() {
     isRunning = false
     monitoringTask?.cancel()
     monitoringTask = nil
-    
-    // Cancel all pending retry tasks
-    queue.sync {
+
+    // Cancel pending retry tasks and clear all state in a single synchronous
+    // barrier. The previous implementation issued `queue.sync { ... }` for
+    // cancellation and then fire-and-forgot `queue.async(flags: .barrier)`
+    // for clear-out, which meant stop() returned before state was actually
+    // cleared. If the caller was `deinit`, the instance would finish
+    // deallocating while that async barrier was still in flight, racing
+    // the still-terminating monitoring Task.
+    queue.sync(flags: .barrier) {
       for (_, task) in retryTasks {
         task.cancel()
       }
+      retryTasks.removeAll()
+      monitoredDownloads.removeAll()
+      cancellables.removeAll()
     }
-    
-    queue.async(flags: .barrier) { [weak self] in
-      self?.monitoredDownloads.removeAll()
-      self?.retryTasks.removeAll()
-      self?.cancellables.removeAll()
-    }
-    
+
     ATLog(.info, "DownloadWatchdog: Stopped")
   }
   
