@@ -117,7 +117,15 @@ public struct Manifest: Codable {
         "yyyy-MM-dd"
       ]
 
+      // Apple TN2154 / QA1480: pin locale, calendar, and timeZone so fixed-format
+      // dates stay parseable when the user's iOS region uses a non-Gregorian calendar
+      // or non-Latin numerals.  Helpspot 17727 — RAILS user on iOS could not open any
+      // audiobook because the unconfigured DateFormatter rejected (or silently
+      // shifted) the manifest's `metadata.modified` value.
       let dateFormatter = DateFormatter()
+      dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+      dateFormatter.calendar = Calendar(identifier: .gregorian)
+      dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
 
       for dateFormat in dateFormats {
         dateFormatter.dateFormat = dateFormat
