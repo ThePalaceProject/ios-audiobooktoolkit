@@ -117,7 +117,13 @@ public extension Manifest {
       "yyyy-MM-dd"
     ]
 
+    // Pin locale/calendar/timeZone (Apple TN2154 / QA1480) — same fix as
+    // Manifest.customDecoder; without it this helper produces wrong dates on
+    // devices configured for non-Gregorian calendars.
     let dateFormatter = DateFormatter()
+    dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+    dateFormatter.calendar = Calendar(identifier: .gregorian)
+    dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
     for format in dateFormats {
       dateFormatter.dateFormat = format
       if let date = dateFormatter.date(from: string) {
