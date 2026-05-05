@@ -40,6 +40,19 @@ final class OpenAccessDownloadTask: DownloadTask {
   var fulfillURL: URL?
   private var hasAttemptedTokenRefresh = false
 
+  /// Once-per-task guard for the transient-network-error retry. Re-armed on
+  /// successful download completion in `didFinishDownloadingTo`. Prevents an
+  /// infinite retry loop while still recovering from a single transient blip
+  /// (server returns no HTTP response, idle stall, dropped TCP mid-transfer).
+  /// Helpspot 17725 (audiobook reaches halfway, then "error 914").
+  private var hasAttemptedNetworkRetry = false
+
+  /// Delay before retrying after a transient network failure. Mirrors
+  /// `DownloadWatchdog.Configuration.default.retryDelay` (5s) so behaviour is
+  /// consistent whether the retry comes from this inline path or the
+  /// (currently un-wired) watchdog path.
+  static let NetworkRetryDelay: TimeInterval = 5.0
+
   /// Set when the server returns 403 Forbidden. Prevents infinite retry loops
   /// that effectively DDoS the content server.
   var isForbidden = false
@@ -424,6 +437,60 @@ final class OpenAccessDownloadTask: DownloadTask {
     task.resume()
     return true
   }
+
+  /// Attempts a single retry after a transient network error
+  /// (server returned no HTTP response, idle stall mid-transfer, dropped
+  /// connection). Returns `true` if a retry was scheduled, `false` if the
+  /// retry budget for this task instance is already exhausted.
+  ///
+  /// HelpSpot 17725: audiobook chunk downloads were stalling mid-transfer
+  /// (e.g. "reached about the halfway point before it seemed to stall...
+  /// error 914"). The pre-fix behaviour surfaced a terminal `connectionLost`
+  /// error to the publisher on the first transient blip, so the rest of the
+  /// audiobook was lost even though the next request would have succeeded.
+  ///
+  /// The retry is once per task instance (re-armed on successful completion
+  /// via `didFinishDownloadingTo`) and waits `NetworkRetryDelay` seconds
+  /// before re-fetching, giving the network a chance to recover and avoiding
+  /// hammering an origin that is genuinely down.
+  ///
+  /// Note: this is intentionally narrower than the full `DownloadWatchdog`
+  /// retry budget (3 attempts with backoff). Keeping it bounded to one
+  /// inline retry preserves "fail fast for the user" behaviour for genuine
+  /// outages while recovering the dominant case (single transient blip
+  /// during a long chunk download).
+  func attemptNetworkRetryAfterTransientError() -> Bool {
+    guard !hasAttemptedNetworkRetry else { return false }
+    hasAttemptedNetworkRetry = true
+
+    ATLog(.info, "OpenAccessDownloadTask: Scheduling network-retry in \(Self.NetworkRetryDelay)s for: \(key)")
+
+    session?.invalidateAndCancel()
+    session = nil
+    downloadTask = nil
+
+    DispatchQueue.global().asyncAfter(deadline: .now() + Self.NetworkRetryDelay) { [weak self] in
+      guard let self else { return }
+      ATLog(.info, "OpenAccessDownloadTask: Retrying download after transient network error: \(self.key)")
+      self.fetch()
+    }
+    return true
+  }
+
+  /// Re-arms the once-per-task network-retry guard. Called by the URLSession
+  /// delegate on successful download completion so a future re-download
+  /// (after delete + re-borrow, or app relaunch + retry) starts with a fresh
+  /// single-retry budget. Internal-by-default; tests bypass through
+  /// `@testable import` and call this to reset state between assertions.
+  func resetNetworkRetryBudget() {
+    hasAttemptedNetworkRetry = false
+  }
+
+  /// Test seam — read-only view of the once-per-task retry guard. Used by
+  /// unit tests to assert state without poking private storage.
+  var hasUsedNetworkRetry: Bool {
+    hasAttemptedNetworkRetry
+  }
 }
 
 // MARK: - DownloadTaskURLSessionDelegate
@@ -467,10 +534,16 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       verifyDownloadAndMove(from: location, to: finalURL) { success in
         if success {
           ATLog(.debug, "File successfully downloaded and moved to: \(self.finalURL)")
-          
+
+          // Re-arm the network-retry guard so a future re-download (e.g. user
+          // deletes and re-borrows) gets a fresh single-retry budget.
+          if let oaTask = self.downloadTask as? OpenAccessDownloadTask {
+            oaTask.resetNetworkRetryBudget()
+          }
+
           // Clear any saved resume data since download completed successfully
           DownloadPersistenceStore.shared.removeResumeData(forTrackKey: self.trackKey)
-          
+
           if FileManager.default.fileExists(atPath: location.path) {
             do {
               try FileManager.default.removeItem(at: location)
@@ -539,7 +612,20 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       switch code {
       case NSURLErrorNotConnectedToInternet,
            NSURLErrorTimedOut,
-           NSURLErrorNetworkConnectionLost:
+           NSURLErrorNetworkConnectionLost,
+           NSURLErrorBadServerResponse,
+           NSURLErrorCannotConnectToHost,
+           NSURLErrorDNSLookupFailed:
+        // HelpSpot 17725: try a single bounded retry before publishing the
+        // terminal connectionLost error. Recovers the dominant case (one
+        // transient blip mid-chunk-download) without hammering an origin
+        // that is genuinely down. Cap is per-task-instance, re-armed on
+        // successful completion in `didFinishDownloadingTo`.
+        if let oaTask = self.downloadTask as? OpenAccessDownloadTask,
+           oaTask.attemptNetworkRetryAfterTransientError() {
+          ATLog(.info, "DownloadTaskDelegate: transient network error (\(code)) for \(self.downloadTask.key) — retry scheduled, suppressing terminal error")
+          return
+        }
         let networkLossError = NSError(
           domain: OpenAccessPlayerErrorDomain,
           code: OpenAccessPlayerError.connectionLost.rawValue,
