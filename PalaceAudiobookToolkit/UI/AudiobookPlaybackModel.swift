@@ -163,8 +163,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         }
         switch state {
         case let .overallDownloadProgress(overallProgress):
-          let isLCPStreaming = audiobookManager.audiobook.player is LCPStreamingPlayer
-          isDownloading = !isLCPStreaming && overallProgress < 1
+          isDownloading = AudiobookPlaybackModel.shouldShowDownloadIndicator(forOverallProgress: overallProgress)
           // Clamp to max-seen-so-far to prevent the progress bar from sliding backwards
           overallDownloadProgress = max(overallDownloadProgress, overallProgress)
         case let .positionUpdated(position):
@@ -532,5 +531,17 @@ public class AudiobookPlaybackModel: ObservableObject {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
       }
     }
+  }
+}
+
+// MARK: - PP-4156 download-indicator visibility rule
+public extension AudiobookPlaybackModel {
+  /// Whether the player's download-progress indicator should be visible for a given
+  /// overall download progress value. The rule is intentionally a function of progress
+  /// only — adding a player-type parameter (as a prior commit did) hid the indicator
+  /// for LCP audiobooks even while their tracks were still decrypting in the background.
+  /// PP-4156: PR introduced via git, see retrospective for full context.
+  static func shouldShowDownloadIndicator(forOverallProgress progress: Float) -> Bool {
+    progress < 1
   }
 }

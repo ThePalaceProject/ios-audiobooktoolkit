@@ -378,20 +378,23 @@ public struct AudiobookPlayerView: View {
 
   @ViewBuilder
   private func downloadProgressView(value: Float) -> some View {
+    // PP-4156: indicator uses semantic colors so it remains visible against the player's
+    // system-background (white in light mode, black in dark). Hard-coded white-on-white was
+    // invisible in light mode even when isDownloading was true.
     VStack(spacing: 6) {
       HStack(spacing: 8) {
         Image(systemName: "arrow.down.circle.fill")
           .font(.system(size: 12, weight: .medium))
-          .foregroundColor(.white.opacity(0.6))
+          .foregroundColor(.secondary)
 
         GeometryReader { geometry in
           ZStack(alignment: .leading) {
             Capsule()
-              .fill(Color.white.opacity(0.15))
+              .fill(Color.primary.opacity(0.15))
               .frame(height: 4)
 
             Capsule()
-              .fill(Color.white.opacity(0.8))
+              .fill(Color.accentColor)
               .frame(width: max(4, geometry.size.width * CGFloat(value)), height: 4)
               .animation(.easeInOut(duration: 0.3), value: value)
           }
@@ -401,7 +404,7 @@ public struct AudiobookPlayerView: View {
 
         Text("\(Int(value * 100))%")
           .font(.system(size: 11, weight: .medium, design: .rounded))
-          .foregroundColor(.white.opacity(0.6))
+          .foregroundColor(.secondary)
           .frame(width: 34, alignment: .trailing)
           .monospacedDigit()
       }
@@ -409,7 +412,7 @@ public struct AudiobookPlayerView: View {
 
       Text(Strings.ScrubberView.downloading)
         .font(.system(size: 11, weight: .medium))
-        .foregroundColor(.white.opacity(0.45))
+        .foregroundColor(.secondary)
     }
     .padding(.vertical, playbackModel.isDownloading ? 8 : 0)
     .frame(height: playbackModel.isDownloading ? nil : 0)
