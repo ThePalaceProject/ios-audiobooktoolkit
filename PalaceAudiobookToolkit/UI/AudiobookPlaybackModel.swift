@@ -209,8 +209,31 @@ public class AudiobookPlaybackModel: ObservableObject {
 
           let nsError = error as NSError?
           let openAccessError: OpenAccessPlayerError? = {
-            guard let nsError = nsError, nsError.domain == OpenAccessPlayerErrorDomain else { return nil }
-            return OpenAccessPlayerError(rawValue: nsError.code)
+            guard let nsError = nsError else { return nil }
+            if nsError.domain == OpenAccessPlayerErrorDomain {
+              return OpenAccessPlayerError(rawValue: nsError.code)
+            }
+            // AVFoundation wraps HTTP 403 as NSURLErrorNoPermissionsToReadFile
+            // (-1102) before the error reaches us — by the time playback hits
+            // the AVPlayerItem, the OpenAccessPlayerError.contentForbidden we
+            // published from OpenAccessDownloadTask has been re-typed by the
+            // system networking layer. Treat -1102 as contentForbidden so the
+            // patron sees "Title Unavailable" instead of generic.
+            if nsError.domain == NSURLErrorDomain {
+              switch nsError.code {
+              case NSURLErrorNoPermissionsToReadFile:
+                return .contentForbidden
+              case NSURLErrorUserAuthenticationRequired:
+                return .authenticationRequired
+              case NSURLErrorNotConnectedToInternet,
+                   NSURLErrorNetworkConnectionLost,
+                   NSURLErrorTimedOut:
+                return .connectionLost
+              default:
+                return nil
+              }
+            }
+            return nil
           }()
 
           if let position = position {
