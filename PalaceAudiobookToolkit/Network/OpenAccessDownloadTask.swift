@@ -577,6 +577,24 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
          let oaTask = self.downloadTask as? OpenAccessDownloadTask {
         ATLog(.error, "DownloadTaskDelegate: 403 Forbidden for: \(self.downloadTask.key) — will not retry")
         oaTask.isForbidden = true
+
+        // Publish a typed error with HTTP status + URL context so the player
+        // surfaces a specific message ("Title Unavailable") and so Palace can
+        // record a Crashlytics non-fatal with full context. Generic
+        // .error(nil) hid the cause and surfaced as "A Problem Has Occurred"
+        // — the patron got a useless message and Crashlytics got nothing.
+        let forbiddenError = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.contentForbidden.rawValue,
+          userInfo: [
+            NSLocalizedDescriptionKey: OpenAccessPlayerError.contentForbidden.errorDescription(),
+            "httpStatusCode": httpResponse.statusCode,
+            "trackKey": self.downloadTask.key,
+            "url": httpResponse.url?.absoluteString ?? ""
+          ]
+        )
+        statePublisher.send(.error(forbiddenError))
+        return
       }
 
       if httpResponse.statusCode == 401 {
@@ -587,7 +605,19 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
         )
         statePublisher.send(.error(authError))
       } else {
-        statePublisher.send(.error(nil))
+        // Other 4xx/5xx: still publish a typed error so downstream sees the
+        // status code and URL rather than a nil error.
+        let httpError = NSError(
+          domain: OpenAccessPlayerErrorDomain,
+          code: OpenAccessPlayerError.unknown.rawValue,
+          userInfo: [
+            NSLocalizedDescriptionKey: "Server returned HTTP \(httpResponse.statusCode)",
+            "httpStatusCode": httpResponse.statusCode,
+            "trackKey": self.downloadTask.key,
+            "url": httpResponse.url?.absoluteString ?? ""
+          ]
+        )
+        statePublisher.send(.error(httpError))
       }
     }
   }

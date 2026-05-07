@@ -202,19 +202,42 @@ public class AudiobookPlaybackModel: ObservableObject {
         case .playbackUnloaded:
           _isPlaying = false
           isNavigating = false
-        case let .playbackFailed(position, _):
+        case let .playbackFailed(position, error):
           isWaitingForPlayer = false
           _isPlaying = false
           isNavigating = false
+
+          let nsError = error as NSError?
+          let openAccessError: OpenAccessPlayerError? = {
+            guard let nsError = nsError, nsError.domain == OpenAccessPlayerErrorDomain else { return nil }
+            return OpenAccessPlayerError(rawValue: nsError.code)
+          }()
+
           if let position = position {
             ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback error at position: \(position.timestamp)")
             ATLog(.error, "  Track: \(position.track.title ?? "unknown")")
-            ATLog(.error, "  This may indicate corrupted file or decryption issues")
+            if let nsError = nsError {
+              let status = nsError.userInfo["httpStatusCode"] as? Int
+              let url = nsError.userInfo["url"] as? String
+              ATLog(.error, "  Underlying error: \(nsError.domain) code=\(nsError.code) http=\(status.map { "\($0)" } ?? "n/a") url=\(url ?? "n/a")")
+            } else {
+              ATLog(.error, "  No underlying error provided — may indicate corrupted file or decryption issues")
+            }
           } else {
             ATLog(.error, "🚨 [AudiobookPlaybackModel] Playback failed but position is nil - possibly SDK crash")
           }
-          
-          let errorMessage = "\(Strings.AudiobookPlayerViewController.problemHasOccurred). \(Strings.AudiobookPlayerViewController.tryAgain)"
+
+          // Surface a specific message when we have one, fall back to generic
+          // only when the error is unknown / nil. Previously every failure
+          // showed "A Problem Has Occurred" — including 403 Forbidden, which
+          // patrons could not act on. Now contentForbidden / connectionLost /
+          // drmExpired / authenticationRequired each get their own copy.
+          let errorMessage: String
+          if let oaError = openAccessError, oaError != .unknown {
+            errorMessage = "\(oaError.errorTitle()). \(oaError.errorDescription())"
+          } else {
+            errorMessage = "\(Strings.AudiobookPlayerViewController.problemHasOccurred). \(Strings.AudiobookPlayerViewController.tryAgain)"
+          }
           ATLog(.error, "  Showing error to user: \(errorMessage)")
           toastMessage = errorMessage
 
