@@ -10,6 +10,7 @@ enum OpenAccessPlayerError: Int {
   case connectionLost
   case drmExpired
   case authenticationRequired
+  case contentForbidden
 
   func errorTitle() -> String {
     switch self {
@@ -21,6 +22,8 @@ enum OpenAccessPlayerError: Int {
       "DRM Protection"
     case .authenticationRequired:
       "Sign In Required"
+    case .contentForbidden:
+      "Title Unavailable"
     default:
       "A Problem Has Occurred"
     }
@@ -54,6 +57,11 @@ enum OpenAccessPlayerError: Int {
     case .authenticationRequired:
       """
       Your session has expired. Please sign in to your library account to continue listening.
+      """
+    case .contentForbidden:
+      """
+      This audiobook is no longer available from the publisher. Please return it and try a \
+      different title. If the problem persists, contact your library.
       """
     }
   }
