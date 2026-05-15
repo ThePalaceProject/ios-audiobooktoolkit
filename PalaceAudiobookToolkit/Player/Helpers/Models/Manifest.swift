@@ -102,6 +102,29 @@ public struct Manifest: Codable {
       resources = []
       print("Failed to decode resources or resources were empty. Defaulting to an empty array.")
     }
+
+    // Root invariant: at minimum the manifest must (a) carry metadata, and
+    // (b) describe at least one playable track via readingOrder OR spine.
+    // Without one of these the loader has nothing to bootstrap from and
+    // currently crashes downstream (Crashlytics 7bf923ee — F-005,
+    // AudiobookLoader.finalizeBuild). Reject early with a clear error so
+    // the failure surfaces as a typed DecodingError the caller can handle
+    // (UI: "Audiobook manifest is missing required fields") instead of an
+    // EXC_BREAKPOINT in finalizeBuild.
+    let hasReadingOrder = (readingOrder?.isEmpty == false)
+    let hasSpine = (spine?.isEmpty == false)
+    let hasMetadata = (metadata != nil)
+    if !hasMetadata || (!hasReadingOrder && !hasSpine) {
+      var missing: [String] = []
+      if !hasMetadata { missing.append("metadata") }
+      if !hasReadingOrder && !hasSpine { missing.append("readingOrder|spine") }
+      throw DecodingError.dataCorrupted(
+        DecodingError.Context(
+          codingPath: container.codingPath,
+          debugDescription: "Manifest is missing required root field(s): \(missing.joined(separator: ", "))"
+        )
+      )
+    }
   }
 
   public static func customDecoder() -> JSONDecoder {

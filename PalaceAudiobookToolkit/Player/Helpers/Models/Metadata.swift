@@ -188,12 +188,24 @@ public extension Manifest {
   }
 
   struct FindawayDRMInformation: Codable {
-    var scheme: String?
+    // Load-bearing for playback — without these we cannot decrypt anything,
+    // so they remain required and any partial response is rejected.
     let licenseId: String
     let sessionKey: String
-    let checkoutId: String
-    let fulfillmentId: String
-    let accountId: String
+
+    // Reporting/cleanup metadata. A server response that drops one of these
+    // (Helpspot 17727 RAILS case: fulfillmentId was missing from the
+    // partial-resync feed) used to throw the whole DRMType decode, which
+    // bubbled up as "DRM information could not be decoded" and crashed
+    // AudiobookLoader.finalizeBuild (Crashlytics 7bf923ee — F-005). Allow
+    // these to be nil so we can salvage the usable session+license and
+    // still play. Consumers already access these via `drmInformation?.fooId`
+    // and handle nil at the API surface (FindawayAudiobook.swift:28,
+    // FindawayTrack.swift:82).
+    var scheme: String?
+    let checkoutId: String?
+    let fulfillmentId: String?
+    let accountId: String?
 
     enum CodingKeys: String, CodingKey {
       case scheme

@@ -466,4 +466,115 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
       XCTAssert(true)
     }
   }
+
+  // MARK: - FU-3: Findaway DRM partial decode
+
+  /// Crashlytics 7bf923ee (F-005, AudiobookLoader.finalizeBuild EXC_BREAKPOINT)
+  /// surfaces on partial Findaway license responses missing one of the
+  /// reporting fields (checkoutId / fulfillmentId / accountId). Before this
+  /// fix the whole DRMType decode threw and bubbled up as a generic
+  /// "DRM information could not be decoded" error. Now the load-bearing
+  /// licenseId + sessionKey are kept, optional fields stay nil, playback
+  /// can still start.
+  func testFindawayDRMInformation_partialDecode_preservesPlayableFields() throws {
+    let json = """
+    {
+      "scheme": "http://librarysimplified.org/terms/drm/scheme/FAE",
+      "findaway:licenseId": "LICENSE-123",
+      "findaway:sessionKey": "SESSION-456",
+      "findaway:checkoutId": "CHECKOUT-789"
+    }
+    """.data(using: .utf8)!
+
+    let drm = try JSONDecoder().decode(Manifest.Metadata.FindawayDRMInformation.self, from: json)
+
+    XCTAssertEqual(drm.licenseId, "LICENSE-123", "licenseId must survive partial decode — load-bearing for playback")
+    XCTAssertEqual(drm.sessionKey, "SESSION-456", "sessionKey must survive partial decode — load-bearing for playback")
+    XCTAssertEqual(drm.checkoutId, "CHECKOUT-789")
+    XCTAssertNil(drm.fulfillmentId, "fulfillmentId missing from server response should decode as nil, not throw")
+    XCTAssertNil(drm.accountId, "accountId missing from server response should decode as nil, not throw")
+  }
+
+  /// licenseId is non-negotiable; without it Findaway cannot decrypt
+  /// anything. Decoding MUST still throw if it's absent — partial-decode
+  /// resilience is for reporting fields only, not load-bearing fields.
+  func testFindawayDRMInformation_missingLicenseId_throws() {
+    let json = """
+    {
+      "findaway:sessionKey": "SESSION-456"
+    }
+    """.data(using: .utf8)!
+
+    XCTAssertThrowsError(
+      try JSONDecoder().decode(Manifest.Metadata.FindawayDRMInformation.self, from: json),
+      "Missing licenseId must throw — playback cannot start without it"
+    )
+  }
+
+  // MARK: - FU-8: Manifest root invariant validation
+
+  /// A "{}" manifest (or any manifest missing both readingOrder AND spine,
+  /// or missing metadata) used to decode successfully into a Manifest with
+  /// all-nil fields. AudiobookLoader.finalizeBuild then crashed reaching
+  /// for those nils (Crashlytics 7bf923ee — F-005). Now the decoder
+  /// rejects up front with a clear DecodingError so the caller can show
+  /// "manifest invalid" instead of the app dying in finalizeBuild.
+  func testManifest_emptyObject_failsWithRootInvariantError() {
+    let json = "{}".data(using: .utf8)!
+    let decoder = Manifest.customDecoder()
+
+    XCTAssertThrowsError(try decoder.decode(Manifest.self, from: json)) { error in
+      guard case let DecodingError.dataCorrupted(context) = error else {
+        XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
+        return
+      }
+      XCTAssertTrue(
+        context.debugDescription.contains("metadata") ||
+        context.debugDescription.contains("readingOrder"),
+        "Error message should name the missing root field(s); got: \(context.debugDescription)"
+      )
+    }
+  }
+
+  /// A manifest with metadata but neither readingOrder nor spine has
+  /// nothing to play. The loader has no way to bootstrap from this
+  /// shape — reject it at decode time, not at playback time.
+  func testManifest_metadataOnly_failsWithMissingTracks() {
+    let json = """
+    {
+      "metadata": { "title": "Empty book" }
+    }
+    """.data(using: .utf8)!
+    let decoder = Manifest.customDecoder()
+
+    XCTAssertThrowsError(try decoder.decode(Manifest.self, from: json)) { error in
+      guard case let DecodingError.dataCorrupted(context) = error else {
+        XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
+        return
+      }
+      XCTAssertTrue(
+        context.debugDescription.contains("readingOrder") ||
+        context.debugDescription.contains("spine"),
+        "Error message should name tracks-missing; got: \(context.debugDescription)"
+      )
+    }
+  }
+
+  /// Positive control — the root-invariant check must NOT regress the
+  /// happy path. A manifest with metadata + at least one readingOrder
+  /// entry decodes cleanly.
+  func testManifest_metadataPlusReadingOrder_decodesCleanly() throws {
+    let json = """
+    {
+      "metadata": { "title": "Test Book" },
+      "readingOrder": [
+        { "href": "https://example.com/ch1.mp3", "type": "audio/mpeg" }
+      ]
+    }
+    """.data(using: .utf8)!
+
+    let manifest = try Manifest.customDecoder().decode(Manifest.self, from: json)
+    XCTAssertNotNil(manifest.metadata)
+    XCTAssertEqual(manifest.readingOrder?.count, 1)
+  }
 }
