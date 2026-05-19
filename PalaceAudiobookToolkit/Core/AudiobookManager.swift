@@ -310,16 +310,24 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.debug, "⚡ App became active - restarting optimized timer and updating position")
-        
-        // Immediately capture and update current position for UI sync
-        if let currentPosition = audiobook.player.currentTrackPosition {
-          statePublisher.send(.positionUpdated(currentPosition))
-          updateNowPlayingInfo(currentPosition)
-          ATLog(.debug, "🔒 Immediately updated position on foreground: \(currentPosition.timestamp)")
-        }
-        
+        ATLog(.debug, "⚡ App became active - restarting optimized timer (HelpSpot 17865)")
+
+        // HelpSpot 17865: rebuild the timer FIRST (so the .active 2s cadence
+        // is restored), then defer one main-runloop tick before reading the
+        // player's currentTrackPosition. The previous order (publish-then-
+        // rebuild) raced a stale cached timestamp against the player's
+        // resumed clock and the slider visibly jumped forward by the suspend
+        // duration. Deferring lets the underlying engine refresh first.
         setupNowPlayingInfoTimer()
+
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
+          if let currentPosition = audiobook.player.currentTrackPosition {
+            statePublisher.send(.positionUpdated(currentPosition))
+            updateNowPlayingInfo(currentPosition)
+            ATLog(.debug, "🔒 Published refreshed position on foreground: \(currentPosition.timestamp)")
+          }
+        }
       }
       .store(in: &cancellables)
 
@@ -339,16 +347,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.debug, "⚡ App entered background - pausing timer for energy savings")
-        
+        ATLog(.debug, "⚡ App entered background - rebuilding timer at background interval (HelpSpot 17865)")
+
         // Final position save when entering background
         if let currentPosition = audiobook.player.currentTrackPosition {
           saveLocation(currentPosition)
           ATLog(.debug, "🔒 Final position save on background: \(currentPosition.timestamp)")
         }
-        
-        timer?.cancel()
-        timer = nil
+
+        // HelpSpot 17865: do NOT nil-out the timer here. Rebuild it via
+        // setupNowPlayingInfoTimer() so the .background switch arm (15s
+        // interval, line ~443) becomes reachable and the lock-screen writer
+        // keeps firing. iOS audio-session entitlement permits this cadence
+        // while audio is actively playing.
+        setupNowPlayingInfoTimer()
       }
       .store(in: &cancellables)
     
@@ -591,11 +603,20 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     
     ATLog(.info, "🔒 [AudiobookManager] Setting nowPlayingInfo - isPlaying: \(isPlaying), rate: \(playbackRate)")
 
+    // HelpSpot 17865: wrap the MPNowPlayingInfoCenter write in a background
+    // task envelope so the system grants us enough wall-time to complete it
+    // when the app is suspending. Otherwise the write can be cut mid-flight
+    // and the lock-screen view goes stale until next resume.
+    let bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "PalaceAudiobookNowPlayingWrite") { }
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-    
+
     // CRITICAL: Also set the playback state explicitly for CarPlay
     MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
-    
+
+    if bgTaskID != .invalid {
+      UIApplication.shared.endBackgroundTask(bgTaskID)
+    }
+
     ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo COMPLETE - playbackState: \(isPlaying ? "playing" : "paused")")
   }
 
