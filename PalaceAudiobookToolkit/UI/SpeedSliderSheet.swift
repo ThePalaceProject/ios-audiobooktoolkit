@@ -222,34 +222,23 @@ struct SpeedSliderSheet: View {
 
 // MARK: - SpeedPickerModifier
 
-/// Routes the speed-picker presentation to either the stepped slider sheet
-/// or the legacy action sheet depending on `useSlider`.
+/// Presents the audiobook playback-speed bottom sheet. PP-4358 made this
+/// the only speed-control surface in the player — the previous legacy
+/// ActionSheet path and the `useSlider` toggle have been removed.
 struct SpeedPickerModifier: ViewModifier {
   @Binding var isPresented: Bool
-  let useSlider: Bool
   let playbackRateBinding: Binding<PlaybackRate>
-  let legacyButtons: [ActionSheet.Button]
 
   func body(content: Content) -> some View {
-    if useSlider {
-      content
-        .sheet(isPresented: $isPresented) {
-          SpeedSliderSheet(
-            playbackRate: playbackRateBinding,
-            onDismiss: { isPresented = false }
-          )
-          .presentationDetents([.height(260)])
-          .presentationDragIndicator(.hidden)
-        }
-    } else {
-      content
-        .actionSheet(isPresented: $isPresented) {
-          ActionSheet(
-            title: Text(Strings.AudiobookPlayerViewController.playbackSpeed),
-            buttons: legacyButtons
-          )
-        }
-    }
+    content
+      .sheet(isPresented: $isPresented) {
+        SpeedSliderSheet(
+          playbackRate: playbackRateBinding,
+          onDismiss: { isPresented = false }
+        )
+        .presentationDetents([.height(260)])
+        .presentationDragIndicator(.hidden)
+      }
   }
 }
 

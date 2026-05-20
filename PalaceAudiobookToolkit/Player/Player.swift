@@ -47,9 +47,14 @@ public enum PlaybackRate: Int, CaseIterable {
     Float(rate.rawValue) * 0.01
   }
 
-  /// Named preset rates shown as quick-select chips in the speed picker UI
+  /// Preset rates shown as quick-select chips in the speed picker UI.
+  /// PP-4358 locks this to [0.75×, 1.0×, 1.2×, 1.5×, 2.0×]. The third
+  /// preset is `.p120` (1.20×), not `.oneAndAQuarterTime` (1.25×) — the
+  /// PP-4233 design review picked 1.2× over 1.25×. `.oneAndAQuarterTime`
+  /// remains a valid enum case so historic UserDefaults values (raw 125)
+  /// still decode for users who selected 1.25× before this change.
   public static let presets: [PlaybackRate] = [
-    .threeQuartersTime, .normalTime, .oneAndAQuarterTime, .oneAndAHalfTime, .doubleTime
+    .threeQuartersTime, .normalTime, .p120, .oneAndAHalfTime, .doubleTime
   ]
 
   /// All available steps in ascending order (0.75× → 2.0×)
