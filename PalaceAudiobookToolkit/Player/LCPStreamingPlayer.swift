@@ -35,7 +35,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   private var isObservingTimeControlStatus = false
   private var suppressAudibleUntilPlaying = false
   private var lastStartedItemKey: String?
-  private var isSeekingWithinSameTrack = false
+  // Internal (not private) so the test target's @testable import can read
+  // it from the contract tests — verifies that seekTo's same-track
+  // fast-path flag is still set/cleared post-async-migration.
+  internal var isSeekingWithinSameTrack = false
   private var loadTimeoutWorkItem: DispatchWorkItem?
 
   override var currentOffset: Double {
@@ -144,7 +147,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
   }
 
-  override public func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+  /// LCP-specific callback implementation. Overrides the base
+  /// `playCallback(at:completion:)` so the existing fast-path /
+  /// rebuild logic still drives playback. The async protocol override
+  /// (below) bridges into this through a continuation.
+  override public func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
     var needsRebuild = avQueuePlayer.items().isEmpty
 
     if !needsRebuild {
@@ -414,12 +421,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
   }
 
-  override public func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+  override public func move(to value: Double) async -> TrackPosition? {
     guard let currentTrackPosition,
           let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
     else {
-      completion?(currentTrackPosition)
-      return
+      return currentTrackPosition
     }
 
     let chapterDuration = currentChapter.duration ?? 0.0
@@ -431,10 +437,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     newPosition.timestamp = safeTs
     let seekTime = CMTime(seconds: safeTs, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
     let tolerance = CMTime(seconds: 0.15, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-    avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
-      completion?(newPosition)
-      if let self, avQueuePlayer.rate > 0 {
-        avQueuePlayer.play()
+
+    return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+      avQueuePlayer.seek(to: seekTime, toleranceBefore: tolerance, toleranceAfter: .zero) { [weak self] _ in
+        if let self, avQueuePlayer.rate > 0 {
+          avQueuePlayer.play()
+        }
+        continuation.resume(returning: newPosition)
       }
     }
   }
@@ -663,7 +672,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         // Same chapter continues on next track - navigate explicitly
         // CRITICAL: Don't use advanceToNextItem() - AVQueuePlayer's internal order
         // may not match our logical track order
-        play(at: nextStart, completion: nil)
+        playCallback(at: nextStart, completion: nil)
         return
       } else {
         // Different chapters - let parent handle chapter transition

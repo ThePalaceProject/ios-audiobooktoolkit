@@ -45,10 +45,11 @@ public class AudiobookPlaybackModel: ObservableObject {
       }
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
-        audiobookManager.audiobook.player.play(at: selectedLocation) { _ in
-          DispatchQueue.main.async {
-            self.isNavigating = false
-          }
+        // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+        let target = selectedLocation
+        Task { [weak self] in
+          _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
+          await MainActor.run { self?.isNavigating = false }
         }
       } else {
         pendingLocation = selectedLocation
@@ -175,7 +176,10 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            audiobookManager.audiobook.player.play(at: target) { _ in }
+            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+            Task { [weak self] in
+              _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
+            }
           }
 
         case let .playbackBegan(position):
@@ -186,7 +190,10 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            audiobookManager.audiobook.player.play(at: target) { _ in }
+            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+            Task { [weak self] in
+              _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
+            }
           }
 
         case let .playbackCompleted(position):
@@ -196,7 +203,10 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            audiobookManager.audiobook.player.play(at: target) { _ in }
+            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+            Task { [weak self] in
+              _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
+            }
           }
 
         case .playbackUnloaded:
@@ -406,12 +416,11 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     isWaitingForPlayer = true
 
-    audiobookManager.audiobook.player.skipPlayhead(-skipTimeInterval) { [weak self] adjustedLocation in
-      DispatchQueue.main.async {
-        guard let self = self else {
-          return
-        }
-
+    // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+    Task { [weak self] in
+      guard let self = self else { return }
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipTimeInterval)
+      await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
           self.saveLocation()
@@ -425,8 +434,6 @@ public class AudiobookPlaybackModel: ObservableObject {
             ATLog(.debug, "Skip back used fallback position calculation")
           }
         }
-
-        // Force UI progress update immediately after skip
         self.updateProgress()
         self.isWaitingForPlayer = false
       }
@@ -440,12 +447,11 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     isWaitingForPlayer = true
 
-    audiobookManager.audiobook.player.skipPlayhead(skipTimeInterval) { [weak self] adjustedLocation in
-      DispatchQueue.main.async {
-        guard let self = self else {
-          return
-        }
-
+    // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+    Task { [weak self] in
+      guard let self = self else { return }
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipTimeInterval)
+      await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
           self.saveLocation()
@@ -459,8 +465,6 @@ public class AudiobookPlaybackModel: ObservableObject {
             ATLog(.debug, "Skip forward used fallback position calculation")
           }
         }
-
-        // Force UI progress update immediately after skip
         self.updateProgress()
         self.isWaitingForPlayer = false
       }
@@ -479,10 +483,13 @@ public class AudiobookPlaybackModel: ObservableObject {
         self?.saveLocation()
       }
     } else {
-      // Legacy fallback
-      audiobookManager.audiobook.player.move(to: value) { [weak self] adjustedLocation in
-        self?.currentLocation = adjustedLocation
-        self?.saveLocation()
+      // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+      Task { [weak self] in
+        let adjustedLocation = await self?.audiobookManager.audiobook.player.move(to: value)
+        await MainActor.run {
+          self?.currentLocation = adjustedLocation
+          self?.saveLocation()
+        }
       }
     }
   }

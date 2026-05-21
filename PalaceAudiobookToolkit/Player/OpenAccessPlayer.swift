@@ -38,7 +38,6 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   var queuesEvents: Bool = false
-  var taskCompletion: Completion?
   var isLoaded: Bool = false
   var queuedTrackPosition: TrackPosition?
 
@@ -256,12 +255,16 @@ class OpenAccessPlayer: NSObject, Player {
     }
   }
 
-  func play(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+  /// Internal callback-shaped play(at:) — retains the prior implementation
+  /// verbatim so existing call sites (and the new async wrapper below) share
+  /// one path. Marked `@discardableResult` only inside the class; not exposed
+  /// on the `Player` protocol.
+  func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
     queuedTrackPosition = position
-    
+
     seekTo(position: position) { [weak self] trackPosition in
       guard let self = self else { return }
-      
+
       if trackPosition == nil {
         ATLog(.error, "OpenAccessPlayer: Seek failed for \(position.track.title ?? "track"), not starting playback")
         let error = NSError(
@@ -273,7 +276,7 @@ class OpenAccessPlayer: NSObject, Player {
         completion?(error)
         return
       }
-      
+
       queuedTrackPosition = nil
       avQueuePlayer.play()
       restorePlaybackRate()
@@ -284,6 +287,21 @@ class OpenAccessPlayer: NSObject, Player {
         playbackStatePublisher.send(.started(position))
       }
       completion?(nil)
+    }
+  }
+
+  /// Async protocol surface — bridges to the internal callback implementation
+  /// via `withCheckedThrowingContinuation`. Throws when the underlying seek
+  /// fails (callback would have surfaced `Error`).
+  func play(at position: TrackPosition) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      playCallback(at: position) { error in
+        if let error = error {
+          continuation.resume(throwing: error)
+        } else {
+          continuation.resume()
+        }
+      }
     }
   }
 
@@ -619,14 +637,20 @@ class OpenAccessPlayer: NSObject, Player {
     )
   }
 
-  public func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
+  /// Async protocol surface — bridges to the internal callback `seekTo` via
+  /// `withCheckedContinuation`. Returns nil when there is no current/last-
+  /// known position to compute a target from.
+  public func skipPlayhead(_ timeInterval: TimeInterval) async -> TrackPosition? {
     guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
-      completion?(nil)
-      return
+      return nil
     }
 
     let newPosition = currentTrackPosition + timeInterval
-    seekTo(position: newPosition, completion: completion)
+    return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+      seekTo(position: newPosition) { result in
+        continuation.resume(returning: result)
+      }
+    }
   }
 
   public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
@@ -826,12 +850,18 @@ class OpenAccessPlayer: NSObject, Player {
     return false
   }
 
-  func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+  /// Async protocol surface — translates the requested fractional progress
+  /// into an absolute clamped `TrackPosition` and delegates to the existing
+  /// callback `seekTo`. Returns nil when no current position / chapter
+  /// can be resolved (matches the prior callback's nil semantics).
+  func move(to value: Double) async -> TrackPosition? {
     guard let currentTrackPosition = currentTrackPosition,
           let currentChapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
     else {
-      completion?(currentTrackPosition)
-      return
+      // Preserve prior callback behaviour: when no chapter context is
+      // available, surface whatever currentTrackPosition we have (may be nil)
+      // so callers don't get a misleading "no position" signal.
+      return currentTrackPosition
     }
 
     let chapterDuration = currentChapter.duration ?? currentChapter.position.track.duration
@@ -860,7 +890,11 @@ class OpenAccessPlayer: NSObject, Player {
       success: true
     )
 
-    seekTo(position: newPosition, completion: completion)
+    return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+      seekTo(position: newPosition) { result in
+        continuation.resume(returning: result)
+      }
+    }
   }
 
   public func navigateToPosition(
@@ -1401,7 +1435,7 @@ extension OpenAccessPlayer {
       let nextChapter = tableOfContents.nextChapter(after: curChapter)
       
       if let nextChapter = nextChapter {
-        play(at: nextChapter.position, completion: nil)
+        playCallback(at: nextChapter.position, completion: nil)
       } else {
         handlePlaybackEnd(currentTrack: endedTrack, completion: nil)
       }

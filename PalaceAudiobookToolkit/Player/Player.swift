@@ -82,8 +82,6 @@ public enum PlaybackState {
 // MARK: - Player
 
 public protocol Player: NSObject {
-  typealias Completion = (Error?) -> Void
-
   var isPlaying: Bool { get }
   var queuesEvents: Bool { get }
   var isDrmOk: Bool { get set }
@@ -94,7 +92,7 @@ public protocol Player: NSObject {
   var playbackRate: PlaybackRate { get set }
   var isLoaded: Bool { get }
   var playbackStatePublisher: PassthroughSubject<PlaybackState, Never> { get }
-  
+
   /// Fast position updates for UI (slider, time displays). Uses AVPlayer's periodic time observer
   /// at 0.25s intervals for smooth updates. Only emits while playing.
   var positionPublisher: AnyPublisher<TrackPosition, Never> { get }
@@ -103,9 +101,22 @@ public protocol Player: NSObject {
   func play()
   func pause()
   func unload()
-  func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?)
-  func play(at position: TrackPosition, completion: ((Error?) -> Void)?)
-  func move(to value: Double, completion: ((TrackPosition?) -> Void)?)
+
+  /// Skips the playhead by `timeInterval` seconds (negative for back).
+  /// Returns the resulting `TrackPosition`, or nil if no position could
+  /// be determined (e.g. player not loaded, no current position).
+  func skipPlayhead(_ timeInterval: TimeInterval) async -> TrackPosition?
+
+  /// Begins playback at the given position. Throws if the underlying
+  /// seek/load fails. Successful return implies AVPlayer is now playing
+  /// (or has been told to play; race against AVPlayer rate is unchanged
+  /// from the prior callback shape).
+  func play(at position: TrackPosition) async throws
+
+  /// Moves the playhead to fractional progress `value` (0.0..1.0) within
+  /// the current chapter. Returns the resulting `TrackPosition`, or nil
+  /// if no current position / chapter could be resolved.
+  func move(to value: Double) async -> TrackPosition?
 }
 
 extension Player {
