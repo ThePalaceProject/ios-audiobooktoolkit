@@ -20,8 +20,6 @@ public struct AudiobookPlayerView: View {
   @ObservedObject var playbackModel: AudiobookPlaybackModel
   @ObservedObject private var showToast = BoolWithDelay(delay: 3)
 
-  private let useIncrementalSpeedSlider: Bool
-
   @State private var showPlaybackSpeed = false
   @State private var showSleepTimer = false
   @State private var isInBackground = false
@@ -30,9 +28,8 @@ public struct AudiobookPlayerView: View {
   @State private var screenSize: CGSize = UIScreen.main.bounds.size
   @State private var loadingTimedOut = false
 
-  public init(model: AudiobookPlaybackModel, useIncrementalSpeedSlider: Bool = false) {
+  public init(model: AudiobookPlaybackModel) {
     playbackModel = model
-    self.useIncrementalSpeedSlider = useIncrementalSpeedSlider
     setupBackgroundStateHandling()
   }
   
@@ -519,9 +516,7 @@ public struct AudiobookPlayerView: View {
       }
       .modifier(SpeedPickerModifier(
         isPresented: $showPlaybackSpeed,
-        useSlider: useIncrementalSpeedSlider,
-        playbackRateBinding: playbackRateBinding,
-        legacyButtons: playbackRateButtons
+        playbackRateBinding: playbackRateBinding
       ))
       .accessibilityLabel(Text("Playback speed: \(playbackRateText)"))
 
@@ -667,17 +662,6 @@ public struct AudiobookPlayerView: View {
     )
   }
 
-  private var playbackRateButtons: [ActionSheet.Button] {
-    var buttons = PlaybackRate.presets.map { rate in
-      ActionSheet.Button.default(
-        Text(HumanReadablePlaybackRate(rate: rate).value),
-        action: { playbackModel.setPlaybackRate(rate) }
-      )
-    }
-    buttons.append(.cancel())
-    return buttons
-  }
-
   private var sleepTimerButtons: [ActionSheet.Button] {
     var buttons = [ActionSheet.Button]()
     for sleepTimer in SleepTimerTriggerAt.allCases {
@@ -724,7 +708,6 @@ private extension AudiobookPlayerView {
       )
     )
     playbackModel = AudiobookPlaybackModel(audiobookManager: audiobookManager)
-    useIncrementalSpeedSlider = false
   }
 }
 
