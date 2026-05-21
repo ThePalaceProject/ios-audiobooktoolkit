@@ -44,7 +44,7 @@ public class OverdriveBackgroundListener: AudiobookLifecycleListener {
     ATLog(.info, "OverdriveBackgroundListener: Handling background session: \(identifier)")
     
     // Register the completion handler with the session manager
-    AudiobookSessionManager.shared.registerBackgroundCompletionHandler(
+    AudiobookDownloadCoordinator.shared.registerBackgroundCompletionHandler(
       completionHandler,
       forSessionIdentifier: identifier
     )
@@ -66,7 +66,7 @@ public class OverdriveBackgroundListener: AudiobookLifecycleListener {
     let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     
     // Store the session so it's not deallocated
-    AudiobookSessionManager.shared.storeReconnectedSession(session, forIdentifier: identifier)
+    AudiobookDownloadCoordinator.shared.storeReconnectedSession(session, forIdentifier: identifier)
     
     ATLog(.debug, "OverdriveBackgroundListener: Reconnected to background session: \(identifier)")
   }
