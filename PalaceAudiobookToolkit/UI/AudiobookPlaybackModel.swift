@@ -45,7 +45,6 @@ public class AudiobookPlaybackModel: ObservableObject {
       }
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
-        // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
         let target = selectedLocation
         Task { [weak self] in
           _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
@@ -176,7 +175,6 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
             Task { [weak self] in
               _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
             }
@@ -190,7 +188,6 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
             Task { [weak self] in
               _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
             }
@@ -203,7 +200,6 @@ public class AudiobookPlaybackModel: ObservableObject {
           updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
-            // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
             Task { [weak self] in
               _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
             }
@@ -416,7 +412,6 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     isWaitingForPlayer = true
 
-    // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
     Task { [weak self] in
       guard let self = self else { return }
       let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipTimeInterval)
@@ -447,7 +442,6 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     isWaitingForPlayer = true
 
-    // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
     Task { [weak self] in
       guard let self = self else { return }
       let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipTimeInterval)
@@ -483,7 +477,6 @@ public class AudiobookPlaybackModel: ObservableObject {
         self?.saveLocation()
       }
     } else {
-      // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
       Task { [weak self] in
         let adjustedLocation = await self?.audiobookManager.audiobook.player.move(to: value)
         await MainActor.run {

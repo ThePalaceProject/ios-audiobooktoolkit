@@ -220,7 +220,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         completion(adjustedPosition)
       }
     } else {
-      // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
       Task {
         do {
           try await audiobook.player.play(at: targetPosition)
@@ -849,7 +848,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
           }
         case .skipForward, .nextTrack:
-          // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
           Task { [weak self] in
             guard let self = self else { return }
             let newPosition = await audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval)
@@ -863,7 +861,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
           }
         case .skipBackward, .previousTrack:
-          // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
           Task { [weak self] in
             guard let self = self else { return }
             let newPosition = await audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval)
