@@ -1,5 +1,5 @@
 //
-//  AudiobookSessionManager.swift
+//  AudiobookDownloadCoordinator.swift
 //  PalaceAudiobookToolkit
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
@@ -11,11 +11,11 @@ import Combine
 /// Singleton manager for audiobook download sessions.
 /// Persists across audiobook opens to maintain download state and handle
 /// background session reconnection.
-public final class AudiobookSessionManager {
+public final class AudiobookDownloadCoordinator {
   
   // MARK: - Singleton
   
-  public static let shared = AudiobookSessionManager()
+  public static let shared = AudiobookDownloadCoordinator()
   
   // MARK: - Properties
   
@@ -65,7 +65,7 @@ public final class AudiobookSessionManager {
   // MARK: - Initialization
   
   private init() {
-    ATLog(.debug, "AudiobookSessionManager: Initialized")
+    ATLog(.debug, "AudiobookDownloadCoordinator: Initialized")
     loadPersistedState()
   }
   
@@ -80,7 +80,7 @@ public final class AudiobookSessionManager {
   public func registerBackgroundCompletionHandler(_ handler: @escaping () -> Void, forSessionIdentifier identifier: String) {
     queue.async(flags: .barrier) { [weak self] in
       self?.backgroundCompletionHandlers[identifier] = handler
-      ATLog(.debug, "AudiobookSessionManager: Registered completion handler for session: \(identifier)")
+      ATLog(.debug, "AudiobookDownloadCoordinator: Registered completion handler for session: \(identifier)")
     }
   }
   
@@ -91,12 +91,12 @@ public final class AudiobookSessionManager {
   public func callCompletionHandler(forSessionIdentifier identifier: String) {
     queue.async(flags: .barrier) { [weak self] in
       guard let handler = self?.backgroundCompletionHandlers.removeValue(forKey: identifier) else {
-        ATLog(.warn, "AudiobookSessionManager: No completion handler found for session: \(identifier)")
+        ATLog(.warn, "AudiobookDownloadCoordinator: No completion handler found for session: \(identifier)")
         return
       }
       
       DispatchQueue.main.async {
-        ATLog(.info, "AudiobookSessionManager: Calling completion handler for session: \(identifier)")
+        ATLog(.info, "AudiobookDownloadCoordinator: Calling completion handler for session: \(identifier)")
         handler()
       }
       
@@ -113,7 +113,7 @@ public final class AudiobookSessionManager {
   public func storeReconnectedSession(_ session: URLSession, forIdentifier identifier: String) {
     queue.async(flags: .barrier) { [weak self] in
       self?.reconnectedSessions[identifier] = session
-      ATLog(.debug, "AudiobookSessionManager: Stored reconnected session: \(identifier)")
+      ATLog(.debug, "AudiobookDownloadCoordinator: Stored reconnected session: \(identifier)")
     }
     
     downloadStatePublisher.send(.sessionReconnected(sessionIdentifier: identifier))
@@ -161,7 +161,7 @@ public final class AudiobookSessionManager {
           downloadInfo.progress = 1.0
           self.activeDownloads[sessionIdentifier] = downloadInfo
           
-          ATLog(.info, "AudiobookSessionManager: Download completed and moved to: \(destinationURL.path)")
+          ATLog(.info, "AudiobookDownloadCoordinator: Download completed and moved to: \(destinationURL.path)")
           
           DispatchQueue.main.async {
             self.downloadStatePublisher.send(.downloadCompleted(sessionIdentifier: sessionIdentifier, fileURL: destinationURL))
@@ -171,7 +171,7 @@ public final class AudiobookSessionManager {
           self.persistState()
           
         } catch {
-          ATLog(.error, "AudiobookSessionManager: Failed to move downloaded file: \(error.localizedDescription)")
+          ATLog(.error, "AudiobookDownloadCoordinator: Failed to move downloaded file: \(error.localizedDescription)")
           downloadInfo.state = .failed
           self.activeDownloads[sessionIdentifier] = downloadInfo
           
@@ -180,7 +180,7 @@ public final class AudiobookSessionManager {
           }
         }
       } else {
-        ATLog(.warn, "AudiobookSessionManager: No download info found for session: \(sessionIdentifier)")
+        ATLog(.warn, "AudiobookDownloadCoordinator: No download info found for session: \(sessionIdentifier)")
         
         // Still notify about the completion
         DispatchQueue.main.async {
@@ -205,7 +205,7 @@ public final class AudiobookSessionManager {
         self.persistState()
       }
       
-      ATLog(.error, "AudiobookSessionManager: Download failed for session \(sessionIdentifier): \(error.localizedDescription)")
+      ATLog(.error, "AudiobookDownloadCoordinator: Download failed for session \(sessionIdentifier): \(error.localizedDescription)")
       
       DispatchQueue.main.async {
         self.downloadStatePublisher.send(.downloadFailed(sessionIdentifier: sessionIdentifier, error: error))
@@ -243,7 +243,7 @@ public final class AudiobookSessionManager {
       self?.activeDownloads[sessionIdentifier] = downloadInfo
       self?.persistState()
       
-      ATLog(.debug, "AudiobookSessionManager: Registered active download for session: \(sessionIdentifier)")
+      ATLog(.debug, "AudiobookDownloadCoordinator: Registered active download for session: \(sessionIdentifier)")
     }
   }
   
@@ -274,7 +274,7 @@ public final class AudiobookSessionManager {
     queue.async(flags: .barrier) { [weak self] in
       self?.activeDownloads.removeValue(forKey: sessionIdentifier)
       self?.persistState()
-      ATLog(.debug, "AudiobookSessionManager: Removed active download for session: \(sessionIdentifier)")
+      ATLog(.debug, "AudiobookDownloadCoordinator: Removed active download for session: \(sessionIdentifier)")
     }
   }
   
@@ -312,7 +312,7 @@ public final class AudiobookSessionManager {
   /// Persists the current download state to disk.
   private func persistState() {
     guard let url = persistenceURL else {
-      ATLog(.error, "AudiobookSessionManager: Cannot get persistence URL")
+      ATLog(.error, "AudiobookDownloadCoordinator: Cannot get persistence URL")
       return
     }
     
@@ -339,9 +339,9 @@ public final class AudiobookSessionManager {
       let data = try JSONEncoder().encode(persistableDownloads)
       try data.write(to: url)
       
-      ATLog(.debug, "AudiobookSessionManager: Persisted \(activeDownloads.count) downloads to disk")
+      ATLog(.debug, "AudiobookDownloadCoordinator: Persisted \(activeDownloads.count) downloads to disk")
     } catch {
-      ATLog(.error, "AudiobookSessionManager: Failed to persist state: \(error.localizedDescription)")
+      ATLog(.error, "AudiobookDownloadCoordinator: Failed to persist state: \(error.localizedDescription)")
     }
   }
   
@@ -374,9 +374,9 @@ public final class AudiobookSessionManager {
         )
       }
       
-      ATLog(.info, "AudiobookSessionManager: Loaded \(activeDownloads.count) persisted downloads")
+      ATLog(.info, "AudiobookDownloadCoordinator: Loaded \(activeDownloads.count) persisted downloads")
     } catch {
-      ATLog(.debug, "AudiobookSessionManager: No persisted state found or failed to load: \(error.localizedDescription)")
+      ATLog(.debug, "AudiobookDownloadCoordinator: No persisted state found or failed to load: \(error.localizedDescription)")
     }
   }
   
@@ -391,7 +391,7 @@ public final class AudiobookSessionManager {
         try? FileManager.default.removeItem(at: url)
       }
       
-      ATLog(.info, "AudiobookSessionManager: Cleared all state")
+      ATLog(.info, "AudiobookDownloadCoordinator: Cleared all state")
     }
   }
   
@@ -401,7 +401,7 @@ public final class AudiobookSessionManager {
   public static func migrateDownloadsFromCaches() {
     OpenAccessDownloadTask.migrateFromCachesIfNeeded()
     OverdriveDownloadTask.migrateFromCachesIfNeeded()
-    ATLog(.info, "AudiobookSessionManager: Completed download migration check")
+    ATLog(.info, "AudiobookDownloadCoordinator: Completed download migration check")
   }
 }
 

@@ -44,7 +44,7 @@ public class OpenAccessBackgroundListener: AudiobookLifecycleListener {
     ATLog(.info, "OpenAccessBackgroundListener: Handling background session: \(identifier)")
     
     // Register the completion handler with the session manager
-    AudiobookSessionManager.shared.registerBackgroundCompletionHandler(
+    AudiobookDownloadCoordinator.shared.registerBackgroundCompletionHandler(
       completionHandler,
       forSessionIdentifier: identifier
     )
@@ -66,7 +66,7 @@ public class OpenAccessBackgroundListener: AudiobookLifecycleListener {
     let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     
     // Store the session so it's not deallocated
-    AudiobookSessionManager.shared.storeReconnectedSession(session, forIdentifier: identifier)
+    AudiobookDownloadCoordinator.shared.storeReconnectedSession(session, forIdentifier: identifier)
     
     ATLog(.debug, "OpenAccessBackgroundListener: Reconnected to background session: \(identifier)")
   }
@@ -88,7 +88,7 @@ final class BackgroundSessionReconnectDelegate: NSObject, URLSessionDelegate, UR
     ATLog(.info, "BackgroundSessionReconnectDelegate: Session finished events: \(sessionIdentifier)")
     
     // Call the completion handler that iOS is waiting for
-    AudiobookSessionManager.shared.callCompletionHandler(forSessionIdentifier: sessionIdentifier)
+    AudiobookDownloadCoordinator.shared.callCompletionHandler(forSessionIdentifier: sessionIdentifier)
   }
   
   // MARK: - URLSessionDownloadDelegate
@@ -104,7 +104,7 @@ final class BackgroundSessionReconnectDelegate: NSObject, URLSessionDelegate, UR
     }
     
     // Notify the session manager about the completed download
-    AudiobookSessionManager.shared.handleBackgroundDownloadCompletion(
+    AudiobookDownloadCoordinator.shared.handleBackgroundDownloadCompletion(
       sessionIdentifier: sessionIdentifier,
       downloadedFileURL: location,
       originalURL: originalURL
@@ -114,7 +114,7 @@ final class BackgroundSessionReconnectDelegate: NSObject, URLSessionDelegate, UR
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     if let error = error {
       ATLog(.error, "BackgroundSessionReconnectDelegate: Task completed with error: \(error.localizedDescription)")
-      AudiobookSessionManager.shared.handleBackgroundDownloadError(
+      AudiobookDownloadCoordinator.shared.handleBackgroundDownloadError(
         sessionIdentifier: sessionIdentifier,
         error: error
       )
