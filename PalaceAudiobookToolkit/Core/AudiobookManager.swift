@@ -220,9 +220,15 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         completion(adjustedPosition)
       }
     } else {
-        audiobook.player.play(at: targetPosition) { error in
-            completion(error == nil ? targetPosition : nil)
+      // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+      Task {
+        do {
+          try await audiobook.player.play(at: targetPosition)
+          completion(targetPosition)
+        } catch {
+          completion(nil)
         }
+      }
     }
   }
 
@@ -843,28 +849,28 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
             }
           }
         case .skipForward, .nextTrack:
-          // Skip executes async internally, update UI immediately on completion
-          audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
-            guard let self = self, let newPosition = newPosition else { return }
-            // Update UI on main thread immediately
-            DispatchQueue.main.async {
+          // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+          Task { [weak self] in
+            guard let self = self else { return }
+            let newPosition = await audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval)
+            guard let newPosition = newPosition else { return }
+            await MainActor.run {
               self.updateNowPlayingInfo(newPosition)
             }
-            // Save position asynchronously on background
             Task.detached(priority: .utility) {
               self.saveLocation(newPosition)
               ATLog(.debug, "🔒 Saved position after remote skip forward: \(newPosition.timestamp)")
             }
           }
         case .skipBackward, .previousTrack:
-          // Skip executes async internally, update UI immediately on completion
-          audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval) { [weak self] newPosition in
-            guard let self = self, let newPosition = newPosition else { return }
-            // Update UI on main thread immediately
-            DispatchQueue.main.async {
+          // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+          Task { [weak self] in
+            guard let self = self else { return }
+            let newPosition = await audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval)
+            guard let newPosition = newPosition else { return }
+            await MainActor.run {
               self.updateNowPlayingInfo(newPosition)
             }
-            // Save position asynchronously on background
             Task.detached(priority: .utility) {
               self.saveLocation(newPosition)
               ATLog(.debug, "🔒 Saved position after remote skip backward: \(newPosition.timestamp)")

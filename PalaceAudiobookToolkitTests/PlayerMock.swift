@@ -33,12 +33,44 @@ class PlayerMock: NSObject, Player {
     playbackStatePublisher = PassthroughSubject()
   }
 
-  func skipPlayhead(_: TimeInterval, completion: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {
-    completion?(currentTrackPosition)
+  // MARK: - Recorded calls (spy)
+
+  private(set) var skipPlayheadCalls: [TimeInterval] = []
+  private(set) var playAtCalls: [PalaceAudiobookToolkit.TrackPosition] = []
+  private(set) var moveToCalls: [Double] = []
+
+  // MARK: - Programmable return values
+
+  /// If non-nil, `play(at:)` will throw this error instead of returning.
+  var playAtError: Error?
+  /// If non-nil, `skipPlayhead` returns this. Otherwise returns `currentTrackPosition`.
+  var skipPlayheadResult: PalaceAudiobookToolkit.TrackPosition??
+  /// If non-nil, `move(to:)` returns this. Otherwise returns `currentTrackPosition`.
+  var moveToResult: PalaceAudiobookToolkit.TrackPosition??
+
+  func skipPlayhead(_ timeInterval: TimeInterval) async -> PalaceAudiobookToolkit.TrackPosition? {
+    skipPlayheadCalls.append(timeInterval)
+    if let override = skipPlayheadResult {
+      return override
+    }
+    return currentTrackPosition
   }
 
-  func play(at _: PalaceAudiobookToolkit.TrackPosition, completion: (((any Error)?) -> Void)?) {
-    completion?(nil)
+  func play(at position: PalaceAudiobookToolkit.TrackPosition) async throws {
+    playAtCalls.append(position)
+    if let error = playAtError {
+      throw error
+    }
+    isPlaying = true
+    currentTrackPosition = position
+  }
+
+  func move(to value: Double) async -> PalaceAudiobookToolkit.TrackPosition? {
+    moveToCalls.append(value)
+    if let override = moveToResult {
+      return override
+    }
+    return currentTrackPosition
   }
 
   func play() {
@@ -52,9 +84,4 @@ class PlayerMock: NSObject, Player {
   func unload() {
     isPlaying = false
   }
-
-  func playAtLocation(_: TrackPosition, completion _: Completion?) {}
-
-  func movePlayheadToLocation(_: TrackPosition, completion _: Completion?) {}
-  func move(to _: Double, completion _: ((PalaceAudiobookToolkit.TrackPosition?) -> Void)?) {}
 }

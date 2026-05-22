@@ -276,7 +276,17 @@ final class FindawayPlayer: NSObject, Player {
     playbackStatePublisher.send(.unloaded)
   }
 
-  func skipPlayhead(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
+  // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+  // Async protocol conformance routed through the existing callback impl.
+  func skipPlayhead(_ timeInterval: TimeInterval) async -> TrackPosition? {
+    await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+      skipPlayheadCallback(timeInterval) { result in
+        continuation.resume(returning: result)
+      }
+    }
+  }
+
+  func skipPlayheadCallback(_ timeInterval: TimeInterval, completion: ((TrackPosition?) -> Void)?) {
     queue.async { [weak self] in
       guard let self = self, let currentTrackPosition = currentTrackPosition else {
         ATLog(.error, "Invalid chapter information required for skip.")
@@ -399,7 +409,20 @@ final class FindawayPlayer: NSObject, Player {
     move(to: newPosition, completion: completion)
   }
 
-  func play(at position: TrackPosition, completion: ((Error?) -> Void)? = nil) {
+  // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+  func play(at position: TrackPosition) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      playCallback(at: position) { error in
+        if let error = error {
+          continuation.resume(throwing: error)
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+
+  func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)? = nil) {
     ATLog(.debug, "🎮 [FindawayPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
     queue.async { [weak self] in
       guard let self = self else {
@@ -432,7 +455,16 @@ final class FindawayPlayer: NSObject, Player {
     }
   }
 
-  func move(to value: Double, completion: ((TrackPosition?) -> Void)?) {
+  // swarm_efd1f0c3-T1 BRIDGE — replaced atomically by T2
+  func move(to value: Double) async -> TrackPosition? {
+    await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+      moveCallback(to: value) { result in
+        continuation.resume(returning: result)
+      }
+    }
+  }
+
+  func moveCallback(to value: Double, completion: ((TrackPosition?) -> Void)?) {
     ATLog(.debug, "🎚️ [FindawayPlayer] move(to: \(value)) SLIDER SEEK CALLED")
     guard let currentTrackPosition = currentTrackPosition else {
       ATLog(.debug, "FindawayPlayer: move(to:) - No current track position")

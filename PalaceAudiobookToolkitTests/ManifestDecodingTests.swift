@@ -486,7 +486,7 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
     }
     """.data(using: .utf8)!
 
-    let drm = try JSONDecoder().decode(Manifest.Metadata.FindawayDRMInformation.self, from: json)
+    let drm = try JSONDecoder().decode(Manifest.FindawayDRMInformation.self, from: json)
 
     XCTAssertEqual(drm.licenseId, "LICENSE-123", "licenseId must survive partial decode — load-bearing for playback")
     XCTAssertEqual(drm.sessionKey, "SESSION-456", "sessionKey must survive partial decode — load-bearing for playback")
@@ -506,7 +506,7 @@ private func validateLinks(_ manifestLinks: [Manifest.Link], against jsonLinks: 
     """.data(using: .utf8)!
 
     XCTAssertThrowsError(
-      try JSONDecoder().decode(Manifest.Metadata.FindawayDRMInformation.self, from: json),
+      try JSONDecoder().decode(Manifest.FindawayDRMInformation.self, from: json),
       "Missing licenseId must throw — playback cannot start without it"
     )
   }
