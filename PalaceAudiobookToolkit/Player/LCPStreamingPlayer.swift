@@ -152,6 +152,15 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// rebuild logic still drives playback. The async protocol override
   /// (below) bridges into this through a continuation.
   override public func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+    // Multiple async paths below — the 30s load-timeout work item, the
+    // avQueuePlayer.seek callback, the rebuild-fallback, the target-not-found
+    // branch — can all race to fire `completion`. If the timeout surfaces a
+    // failure and the underlying seek later succeeds (or vice versa), the
+    // `play(at:) async` bridge resumes its continuation twice and traps with
+    // SWIFT TASK CONTINUATION MISUSE. Wrap once at entry so every downstream
+    // call site is fire-at-most-once and thread-safe.
+    let onceCompletion = Self.makeOnceCompletion(completion)
+
     var needsRebuild = avQueuePlayer.items().isEmpty
 
     if !needsRebuild {
@@ -202,7 +211,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       // rapid re-presentations stack multiple timers that all log at once.
       loadTimeoutWorkItem?.cancel()
       let timeoutPosition = position
-      let timeoutCompletion = completion
       let workItem = DispatchWorkItem { [weak self] in
         guard let self = self, !self.isLoaded else { return }
         ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — surfacing failure so caller can show an alert and release the open lock")
@@ -220,7 +228,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
         )
         self.playbackStatePublisher.send(.failed(timeoutPosition, timeoutError))
-        timeoutCompletion?(timeoutError)
+        onceCompletion(timeoutError)
       }
       loadTimeoutWorkItem = workItem
       DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: workItem)
@@ -246,7 +254,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             // Seek failure can cause position drift. Rebuild the queue to force correct positioning
             // rather than silently continuing at the wrong position.
             rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: true) { _ in
-              completion?(nil)
+              onceCompletion(nil)
             }
             return
           }
@@ -277,7 +285,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             }
           }
 
-          completion?(nil)
+          onceCompletion(nil)
         }
         return
       }
@@ -351,10 +359,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           }
         }
 
-        completion?(nil)
+        onceCompletion(nil)
       }
     } else {
-      completion?(NSError(
+      onceCompletion(NSError(
         domain: "LCPStreamingPlayer",
         code: -1,
         userInfo: [NSLocalizedDescriptionKey: "Target track not found in queue"]
@@ -449,6 +457,27 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   // MARK: - Helpers
+
+  /// Wraps an optional `(Error?) -> Void` completion in a thread-safe,
+  /// fire-at-most-once closure. Required because `playCallback` has multiple
+  /// racing async paths (timeout work item, seek callback, rebuild fallback)
+  /// that can each invoke the caller's completion; the upstream `play(at:)`
+  /// async bridge resumes a CheckedContinuation and traps on a second resume.
+  /// Returns a non-optional closure so call sites stay simple even when the
+  /// caller passed `nil`.
+  static func makeOnceCompletion(_ completion: ((Error?) -> Void)?) -> (Error?) -> Void {
+    let lock = NSLock()
+    var fired = false
+    return { error in
+      lock.lock()
+      let shouldFire = !fired
+      fired = true
+      lock.unlock()
+      if shouldFire {
+        completion?(error)
+      }
+    }
+  }
 
   private func safeTimestamp(for position: TrackPosition) -> TimeInterval {
     let duration = position.track.duration

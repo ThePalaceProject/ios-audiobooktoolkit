@@ -293,9 +293,25 @@ class OpenAccessPlayer: NSObject, Player {
   /// Async protocol surface — bridges to the internal callback implementation
   /// via `withCheckedThrowingContinuation`. Throws when the underlying seek
   /// fails (callback would have surfaced `Error`).
+  ///
+  /// Defensive: subclass overrides of `playCallback` historically had races
+  /// (timeout work item + late seek-success in LCPStreamingPlayer) that fired
+  /// the completion twice and trapped on second-resume. Guard the
+  /// continuation here so any future regression in any subclass logs instead
+  /// of crashing users.
   func play(at position: TrackPosition) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      let lock = NSLock()
+      var resumed = false
       playCallback(at: position) { error in
+        lock.lock()
+        let shouldResume = !resumed
+        resumed = true
+        lock.unlock()
+        guard shouldResume else {
+          ATLog(.warn, "OpenAccessPlayer.play(at:): playCallback completion fired more than once; ignoring duplicate (error: \(error.map { "\($0)" } ?? "nil"))")
+          return
+        }
         if let error = error {
           continuation.resume(throwing: error)
         } else {
