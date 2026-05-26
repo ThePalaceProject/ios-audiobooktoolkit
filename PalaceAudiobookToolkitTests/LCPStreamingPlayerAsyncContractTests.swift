@@ -148,6 +148,133 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
                    "Position must be passed unchanged to playCallback")
   }
 
+  /// Regression for the 3.2.0 "publication loading timeout → seek-late-success"
+  /// race: `LCPStreamingPlayer.playCallback` has multiple racing async paths
+  /// (30s timeout work item, avQueuePlayer.seek callback, rebuild fallback)
+  /// that all invoke the caller's `completion`. Before the fix, a timeout
+  /// would surface failure, and the underlying seek's late success would
+  /// invoke the same completion again — double-resuming the `play(at:)`
+  /// async continuation and trapping with SWIFT TASK CONTINUATION MISUSE.
+  ///
+  /// This test simulates that race by stubbing `playCallback` to fire its
+  /// completion twice (first with the timeout error, then with success).
+  /// The async surface MUST resolve exactly once. The bridge-level
+  /// once-guard in OpenAccessPlayer.play(at:) is what holds the line for
+  /// any future subclass regression; this test pins that contract.
+  func testPlayAt_asyncSurface_doesNotDoubleResume_whenPlayCallbackFiresTwice() async {
+    final class DoubleFireStub: LCPStreamingPlayer {
+      var firstError: Error?
+      var secondError: Error?
+
+      override func configurePlayer() {}
+      override func addPlayerObservers() {}
+      override func removePlayerObservers() {}
+
+      override public func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        // First call: simulate the 30s timeout surfacing failure.
+        completion?(firstError)
+        // Second call: simulate the underlying seek eventually completing
+        // — historically this resumed the continuation a second time.
+        completion?(secondError)
+      }
+    }
+
+    let player = DoubleFireStub(tableOfContents: toc, drmDecryptor: nil)
+    player.firstError = NSError(
+      domain: "LCPStreamingPlayer",
+      code: -1,
+      userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
+    )
+    player.secondError = nil // late success after the timeout already fired
+
+    // If the bridge double-resumed, this `try await` would trap the test
+    // process with SWIFT TASK CONTINUATION MISUSE. Surviving the await
+    // (regardless of throw/non-throw outcome) is the contract.
+    let target = TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+    do {
+      try await player.play(at: target)
+      // The first resume was the timeout error — the bridge should propagate
+      // that as a throw. If it returned success, the once-guard fired in the
+      // wrong direction (would mean the timeout error was swallowed).
+      XCTFail("Expected first-fire timeout error to propagate as throw")
+    } catch let error as NSError {
+      XCTAssertEqual(error.domain, "LCPStreamingPlayer",
+                     "First completion fire (timeout error) must be the one that resolves the continuation")
+      XCTAssertEqual(error.code, -1)
+    }
+
+    // Give the runtime a beat to surface a double-resume trap if the guard
+    // failed — XCTest reports continuation-misuse on the next runloop tick.
+    try? await Task.sleep(nanoseconds: 50_000_000)
+  }
+
+  /// Inverse of the above: when the late "success" fires FIRST and the
+  /// timeout fires second (e.g. seek completes at 29.9s and the timeout
+  /// at 30s sneaks in before isLoaded propagates), the async surface must
+  /// still resolve exactly once — and with the first outcome.
+  func testPlayAt_asyncSurface_doesNotDoubleResume_whenSuccessThenTimeout() async {
+    final class DoubleFireStub: LCPStreamingPlayer {
+      override func configurePlayer() {}
+      override func addPlayerObservers() {}
+      override func removePlayerObservers() {}
+
+      override public func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+        completion?(nil) // seek succeeded
+        completion?(NSError(domain: "LCPStreamingPlayer", code: -1)) // stale timeout
+      }
+    }
+
+    let player = DoubleFireStub(tableOfContents: toc, drmDecryptor: nil)
+    let target = TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+    do {
+      try await player.play(at: target)
+    } catch {
+      XCTFail("Expected first-fire success to win, but bridge threw \(error)")
+    }
+    try? await Task.sleep(nanoseconds: 50_000_000)
+  }
+
+  // MARK: - makeOnceCompletion helper
+
+  /// Unit-level pin for the once-guard helper used inside
+  /// `LCPStreamingPlayer.playCallback` to defang the timeout/seek race
+  /// at its source. The bridge-level guard in OpenAccessPlayer is a
+  /// safety net; THIS guard ensures the seek callback's playback
+  /// side-effects (e.g. mute toggles, isLoaded flips, started events)
+  /// aren't accompanied by a spurious second completion.
+  func testMakeOnceCompletion_firesAtMostOnceAcrossThreads() {
+    let invocationCount = NSLock()
+    var calls: [Error?] = []
+    let wrapped = LCPStreamingPlayer.makeOnceCompletion { error in
+      invocationCount.lock()
+      calls.append(error)
+      invocationCount.unlock()
+    }
+
+    let group = DispatchGroup()
+    for i in 0..<32 {
+      group.enter()
+      DispatchQueue.global().async {
+        wrapped(i == 0 ? nil : NSError(domain: "test", code: i))
+        group.leave()
+      }
+    }
+    group.wait()
+
+    XCTAssertEqual(calls.count, 1,
+                   "makeOnceCompletion must collapse concurrent invocations to a single underlying call")
+  }
+
+  /// Nil-completion case: the wrapped closure must still be safe to call
+  /// (no trap, no allocation surprises). Mutant: a `completion!` in the
+  /// wrapper would crash here.
+  func testMakeOnceCompletion_safeWhenSourceCompletionIsNil() {
+    let wrapped = LCPStreamingPlayer.makeOnceCompletion(nil)
+    wrapped(nil)
+    wrapped(NSError(domain: "test", code: 1))
+    // Reaching here without crashing IS the assertion.
+  }
+
   /// When the LCP override's playCallback yields an error, the async
   /// surface must throw. Mutant: swallowing the error in the
   /// continuation would let failed LCP loads silently no-op.
