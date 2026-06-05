@@ -33,7 +33,10 @@ public class RangeResource: Resource {
 
       var props = ResourceProperties()
       if let len = response.contentLength {
-        props["length"] = UInt64(len)
+        // Readium 3.9.0: ResourceProperties values must be JSONValueEncodable
+        // *and* JSONValueDecodable. UInt64 is only Encodable, so store the
+        // length as Int (which conforms to both) and widen on read-back.
+        props["length"] = Int(len)
       }
       if let mt = response.mediaType {
         props.mediaType = mt
@@ -91,9 +94,10 @@ public class RangeResource: Resource {
       return cached
     }
     let props = try await properties().get()
-    guard let l = props.properties["length"] as? UInt64 else {
+    guard let lengthValue: Int = props["length"] else {
       throw NSError(domain: "NoContentLength", code: -1)
     }
+    let l = UInt64(lengthValue)
     lengthCache = l
     return l
   }
