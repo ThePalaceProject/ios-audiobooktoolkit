@@ -11,7 +11,7 @@ import SwiftUI
 
 // MARK: - AudiobookNavigationView
 
-struct AudiobookNavigationView: View {
+public struct AudiobookNavigationView: View {
   typealias DisplayStrings = Strings.AudiobookTableOfContentsTableViewController
 
   enum NavigationSection: Identifiable, CaseIterable {
@@ -36,11 +36,11 @@ struct AudiobookNavigationView: View {
   @State private var isLoading: Bool = false
 
   @ObservedObject private var playback: AudiobookPlaybackModel
-  init(model: AudiobookPlaybackModel) {
+  public init(model: AudiobookPlaybackModel) {
     playback = model
   }
 
-  var body: some View {
+  public var body: some View {
     ZStack {
       VStack(spacing: 0) {
         if playback.audiobookManager.needsDownloadRetry {
