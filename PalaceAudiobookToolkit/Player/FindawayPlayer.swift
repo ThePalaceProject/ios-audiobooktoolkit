@@ -160,6 +160,14 @@ class FindawayPlayer: NSObject, Player {
   // and it ought be checked when playback initiated
   // notifications come in from FAEPlaybackEngine.
   private var shouldPauseWhenPlaybackResumes = false
+
+  // `isPlaybackDesired` tracks whether the USER intends playback to be active,
+  // independent of the SDK's instantaneous `isPlaying` (FAEPlayerStatus.playing).
+  // After a seek the SDK enters a buffer window where `isPlaying` is transiently
+  // false; keying seek decisions off `isPlaying` then misclassifies same-track
+  // skips as expensive cross-track reloads and pauses playback afterwards
+  // (forcing the user to tap play again). Seek decisions key off this intent.
+  private(set) var isPlaybackDesired = false
   private var willBeReadyToPerformPlayheadManipulation: Date = .init()
   private var debounceBufferTime: TimeInterval = 0.50
   private var pendingStartPosition: TrackPosition?
@@ -342,6 +350,7 @@ class FindawayPlayer: NSObject, Player {
   }
 
   func unload() {
+    isPlaybackDesired = false
     stopPositionTimer()
     audioEngine?.playbackEngine?.unload()
     isLoaded = false
@@ -533,6 +542,7 @@ class FindawayPlayer: NSObject, Player {
       ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Creating manipulation, readyForPlayback=\(readyForPlayback)")
 
       // Set queued state directly to prevent race conditions with initial position
+      isPlaybackDesired = true
       let manipulation = createManipulation(position)
       pendingStartPosition = position
       queuedPlayerState = .play(manipulation)
@@ -595,13 +605,21 @@ class FindawayPlayer: NSObject, Player {
       let manipulation = createManipulation(position)
       pendingStartPosition = position
 
-      let wasPlaying = self.isPlaying
+      // Key the post-reload pause decision off the user's play INTENT, not the
+      // SDK's transient `isPlaying` (false during the buffer window after the
+      // prior seek). Otherwise a reload while the user is actively listening
+      // ends paused, forcing them to tap play again.
+      let pauseAfterReload = Self.shouldPauseAfterReload(playbackDesired: self.isPlaybackDesired)
       self.queuedPlayerState = .play(manipulation)
 
-      DispatchQueue.main.asyncAfter(deadline: .now() + self.debounceBufferTime) { [weak self] in
+      // Stay on the player's serial `queue` (not main) so the seek state machine
+      // — `queuedPlayerState`, `pendingStartPosition`, `shouldPauseWhenPlaybackResumes`,
+      // `isPlaybackDesired` — is mutated from a single thread, serialized with the
+      // SDK notification handlers that also run on `queue`.
+      self.queue.asyncAfter(deadline: .now() + self.debounceBufferTime) { [weak self] in
         guard let self = self else { return }
 
-        if !wasPlaying {
+        if pauseAfterReload {
           self.shouldPauseWhenPlaybackResumes = true
         }
 
@@ -622,6 +640,7 @@ class FindawayPlayer: NSObject, Player {
   }
 
   private func performPlay() {
+    isPlaybackDesired = true
     switch queuedPlayerState {
     case .none:
       if var position = currentTrackPosition {
@@ -639,6 +658,7 @@ class FindawayPlayer: NSObject, Player {
   }
 
   private func performPause() {
+    isPlaybackDesired = false
     guard let position = currentTrackPosition else {
       return
     }
@@ -655,6 +675,7 @@ class FindawayPlayer: NSObject, Player {
   }
 
   private func performJumpToLocation(_ position: TrackPosition) {
+    isPlaybackDesired = true
     if readyForPlayback {
       queuedPlayerState = .play(createManipulation(position))
       playWithCurrentState()
@@ -687,9 +708,14 @@ class FindawayPlayer: NSObject, Player {
         ATLog(.debug, "🎮 [FindawayPlayer] isSameTrackSeek: NO (no previous position)")
         return false
       }
-      // Check if we're seeking within the same track (cheap operation)
-      let result = bookIsLoaded && isPlaying && previous.track.key == destinationPosition.track.key
-      ATLog(.debug, "🎮 [FindawayPlayer] isSameTrackSeek: \(result) (bookIsLoaded=\(bookIsLoaded), isPlaying=\(isPlaying), sameTracks=\(previous.track.key == destinationPosition.track.key))")
+      // Seeking within the same loaded track is a cheap `setCurrentOffset`,
+      // valid whether or not the SDK is momentarily emitting audio. We must NOT
+      // gate this on `isPlaying`: during the buffer window after a prior seek
+      // `isPlaying` is transiently false, which would misroute a same-track skip
+      // to the expensive unload/reload path (the audible stop→start).
+      let sameTrackKey = previous.track.key == destinationPosition.track.key
+      let result = Self.isSameTrackSeekDecision(bookIsLoaded: bookIsLoaded, isSameTrackKey: sameTrackKey)
+      ATLog(.debug, "🎮 [FindawayPlayer] isSameTrackSeek: \(result) (bookIsLoaded=\(bookIsLoaded), sameTracks=\(sameTrackKey))")
       return result
     }
 
@@ -762,7 +788,6 @@ class FindawayPlayer: NSObject, Player {
       }
     case let .play((previous, position)) where isSameTrackSeek(previous, position):
       // Same track seek - use cheap offset update to avoid unload/reload
-      let wasPlaying = isPlaying
       let epsilon: Double = 0.1
       let maxSafe = max(0.0, position.track.duration - epsilon)
       let safeTimestamp = min(max(0.0, position.timestamp), maxSafe)
@@ -780,8 +805,10 @@ class FindawayPlayer: NSObject, Player {
         tracks: position.tracks
       )
 
-      if !wasPlaying {
-        // Keep paused after seek; clear pause-after-resume intent since no reload will occur
+      if isPlaybackDesired {
+        // A same-track seek never reloads, so clear any stale pending-pause that
+        // would otherwise stop playback the user intends to continue. When the
+        // user intends to stay paused we leave the flag untouched.
         shouldPauseWhenPlaybackResumes = false
       }
 
@@ -844,6 +871,27 @@ class FindawayPlayer: NSObject, Player {
   private func dispatchDeadline() -> DispatchTime {
     DispatchTime.now() + debounceBufferTime
   }
+
+  // MARK: - Pure seek-strategy decisions (unit-tested)
+  //
+  // Extracted so the seek routing is provable without standing up the
+  // FAEPlaybackEngine SDK. These deliberately do NOT consult the SDK's
+  // instantaneous `isPlaying` — that is the bug this fix removes.
+
+  /// A seek that stays within the currently loaded track is the cheap
+  /// `setCurrentOffset` path; everything else needs a full reload. Crucially
+  /// independent of `isPlaying` so a same-track skip during the post-seek buffer
+  /// window is not misrouted to the expensive unload/reload path.
+  static func isSameTrackSeekDecision(bookIsLoaded: Bool, isSameTrackKey: Bool) -> Bool {
+    bookIsLoaded && isSameTrackKey
+  }
+
+  /// After a reload, pause only when the user does NOT intend playback. Keying
+  /// this off play-intent (not transient `isPlaying`) keeps a reload triggered
+  /// while actively listening from ending paused.
+  static func shouldPauseAfterReload(playbackDesired: Bool) -> Bool {
+    !playbackDesired
+  }
 }
 
 // MARK: FindawayDatabaseVerificationDelegate
@@ -903,7 +951,17 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
                target.track.key == currentChapter.position.track.key {
               return target
             }
-            return currentChapter.position
+            // Do NOT fall back to the chapter start (timestamp 0). On rapid
+            // same-track skips the engine buffers→resumes repeatedly, firing
+            // this notification after `pendingStartPosition` was already
+            // consumed; emitting position 0 snaps the UI back to the start of
+            // the book/chapter before the progress timer corrects it. Reflect
+            // the engine's actual offset instead.
+            return TrackPosition(
+              track: currentChapter.position.track,
+              timestamp: self.currentOffset,
+              tracks: currentChapter.position.tracks
+            )
           }()
 
           self.pendingStartPosition = nil
@@ -929,6 +987,11 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       }
 
       queue.async(flags: .barrier) {
+        // A genuine SDK pause (user pause already cleared intent via
+        // performPause; reload-pauses too) means audio is stopped — keep
+        // play-intent consistent so a later cross-track skip does not resume
+        // playback the user did not ask for (e.g. after an audio interruption).
+        self.isPlaybackDesired = false
         switch self.queuedPlayerState {
         case .none:
           self.queuedPlayerState = .paused(currentTrackPosition)
@@ -945,6 +1008,9 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     for chapter: FAEChapterDescription
   ) {
     sliderSeekPosition = nil
+    // Playback stopped on error — drop play-intent so a retry/seek is not
+    // treated as "user wants playback" and made to auto-resume.
+    isPlaybackDesired = false
 
     ATLog(.error, "🚨 [FindawayPlayer] Playback failed for chapter - part: \(chapter.partNumber), chapter: \(chapter.chapterNumber)")
     if let error = error {
@@ -995,6 +1061,10 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       queue.async { [weak self] in
         guard let self else { return }
 
+        // Book finished: the user is no longer actively listening. Clear intent
+        // so a later same-track scrub of the rewound-to-start book does not
+        // resume audio against this pause.
+        isPlaybackDesired = false
         shouldPauseWhenPlaybackResumes = true
         queuedPlayerState = .paused(beginningPosition)
         loadAndRequestPlayback(beginningPosition)

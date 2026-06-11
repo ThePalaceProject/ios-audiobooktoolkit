@@ -61,11 +61,13 @@ final class FindawayDownloadTask: DownloadTask {
       return status
     }
 
-    let statusFromFindaway = FAEAudioEngine.shared()?.downloadEngine?.status(
-      forAudiobookID: downloadRequest.audiobookID,
-      partNumber: downloadRequest.partNumber,
-      chapterNumber: downloadRequest.chapterNumber
-    )
+    let statusFromFindaway = FindawayDownloadEngineGate.shared.perform {
+      FAEAudioEngine.shared()?.downloadEngine?.status(
+        forAudiobookID: downloadRequest.audiobookID,
+        partNumber: downloadRequest.partNumber,
+        chapterNumber: downloadRequest.chapterNumber
+      )
+    }
     if let storedStatus = statusFromFindaway {
       status = storedStatus
     }
@@ -77,7 +79,9 @@ final class FindawayDownloadTask: DownloadTask {
       return false
     }
 
-    return FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests().isEmpty ?? false
+    return FindawayDownloadEngineGate.shared.perform {
+      FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests().isEmpty ?? false
+    }
   }
 
   private let queue: DispatchQueue
@@ -107,12 +111,14 @@ final class FindawayDownloadTask: DownloadTask {
     sessionKey: String,
     licenseID: String
   ) {
-    var request: FAEDownloadRequest! = FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests()
-      .first(where: { existingRequest -> Bool in
-        return existingRequest.audiobookID == audiobookID
-          && existingRequest.chapterNumber == chapterNumber
-          && existingRequest.partNumber == partNumber
-      })
+    var request: FAEDownloadRequest! = FindawayDownloadEngineGate.shared.perform {
+      FAEAudioEngine.shared()?.downloadEngine?.currentDownloadRequests()
+        .first(where: { existingRequest -> Bool in
+          return existingRequest.audiobookID == audiobookID
+            && existingRequest.chapterNumber == chapterNumber
+            && existingRequest.partNumber == partNumber
+        })
+    }
 
     if request == nil {
       request = FAEDownloadRequest(
@@ -147,7 +153,9 @@ final class FindawayDownloadTask: DownloadTask {
 
     let status = downloadStatus
     if status == .notDownloaded {
-      FAEAudioEngine.shared()?.downloadEngine?.startDownload(with: downloadRequest)
+      FindawayDownloadEngineGate.shared.perform {
+        FAEAudioEngine.shared()?.downloadEngine?.startDownload(with: downloadRequest)
+      }
       retryAfterVerification = false
       pollAgainForPercentageAt = Date().addingTimeInterval(pollRate) // Ensure polling starts
       pollForDownloadPercentage()
@@ -185,11 +193,13 @@ final class FindawayDownloadTask: DownloadTask {
       }
 
       let progress = findawayProgressToNYPLToolkit(
-        FAEAudioEngine.shared()?.downloadEngine?.percentage(
-          forAudiobookID: downloadRequest.audiobookID,
-          partNumber: downloadRequest.partNumber,
-          chapterNumber: downloadRequest.chapterNumber
-        )
+        FindawayDownloadEngineGate.shared.perform {
+          FAEAudioEngine.shared()?.downloadEngine?.percentage(
+            forAudiobookID: self.downloadRequest.audiobookID,
+            partNumber: self.downloadRequest.partNumber,
+            chapterNumber: self.downloadRequest.chapterNumber
+          )
+        }
       )
 
       if progress == 1.0 {
@@ -203,11 +213,13 @@ final class FindawayDownloadTask: DownloadTask {
 
   public func delete() {
     queue.async(flags: .barrier) {
-      FAEAudioEngine.shared()?.downloadEngine?.delete(
-        forAudiobookID: self.downloadRequest.audiobookID,
-        partNumber: self.downloadRequest.partNumber,
-        chapterNumber: self.downloadRequest.chapterNumber
-      )
+      FindawayDownloadEngineGate.shared.perform {
+        FAEAudioEngine.shared()?.downloadEngine?.delete(
+          forAudiobookID: self.downloadRequest.audiobookID,
+          partNumber: self.downloadRequest.partNumber,
+          chapterNumber: self.downloadRequest.chapterNumber
+        )
+      }
       self.readyToDownload = false
     }
   }

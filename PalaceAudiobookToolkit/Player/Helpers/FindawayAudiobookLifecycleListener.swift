@@ -26,7 +26,9 @@ public class FindawayAudiobookLifecycleListener: AudiobookLifecycleListener {
     let isHandled: Bool
     if identifier.contains("FWAE") {
       FAEAudioEngine.shared()?.didFinishLaunching()
-      FAEAudioEngine.shared()?.downloadEngine?.addCompletionHandler(completionHandler, forSession: identifier)
+      FindawayDownloadEngineGate.shared.perform {
+        FAEAudioEngine.shared()?.downloadEngine?.addCompletionHandler(completionHandler, forSession: identifier)
+      }
       isHandled = true
     } else {
       isHandled = false

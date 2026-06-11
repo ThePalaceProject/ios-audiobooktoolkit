@@ -197,6 +197,90 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
                    "move(to: 0.25) must land at 25% of track duration")
   }
 
+  // MARK: - Seek-strategy decisions (skip-stutter regression, 2026-06-11)
+  //
+  // Device logs proved same-chapter skips were misrouted to the expensive
+  // unload/reload path because the old `isSameTrackSeek` required `isPlaying`,
+  // which is transiently false during the post-seek buffer window. The reload
+  // then ended paused, forcing the user to tap play. These pin the corrected,
+  // intent-based routing.
+
+  /// THE regression gate: a seek within the currently loaded track must take
+  /// the cheap same-track-offset path even when the SDK is momentarily NOT
+  /// playing (buffering). The decision must not depend on play state at all.
+  /// Mutant: reintroducing an `isPlaying`/`&& false` term, or flipping `&&` to
+  /// `||`, changes this result.
+  func testSameTrackSeek_loadedAndSameTrack_takesCheapOffsetPath() {
+    XCTAssertTrue(
+      FindawayPlayer.isSameTrackSeekDecision(bookIsLoaded: true, isSameTrackKey: true),
+      "Same loaded track must use cheap setCurrentOffset regardless of isPlaying"
+    )
+  }
+
+  /// A seek to a different track always needs a full reload.
+  func testSameTrackSeek_differentTrack_requiresReload() {
+    XCTAssertFalse(
+      FindawayPlayer.isSameTrackSeekDecision(bookIsLoaded: true, isSameTrackKey: false),
+      "Cross-track seek must reload"
+    )
+  }
+
+  /// If nothing is loaded yet, even a same-key target needs a full load.
+  func testSameTrackSeek_notLoaded_requiresReload() {
+    XCTAssertFalse(
+      FindawayPlayer.isSameTrackSeekDecision(bookIsLoaded: false, isSameTrackKey: true),
+      "Nothing loaded must reload"
+    )
+  }
+
+  /// When the user is actively listening, a reload must NOT pause afterwards —
+  /// this is the "have to tap play again" half of the bug. Mutant: dropping the
+  /// `!` returns true and reintroduces the spurious pause.
+  func testShouldPauseAfterReload_whenPlaybackDesired_keepsPlaying() {
+    XCTAssertFalse(
+      FindawayPlayer.shouldPauseAfterReload(playbackDesired: true),
+      "A reload while the user intends playback must not end paused"
+    )
+  }
+
+  /// When the user intends to stay paused, a reload must remain paused.
+  func testShouldPauseAfterReload_whenNotDesired_staysPaused() {
+    XCTAssertTrue(
+      FindawayPlayer.shouldPauseAfterReload(playbackDesired: false),
+      "A reload while paused must stay paused"
+    )
+  }
+
+  // MARK: - Play-intent wiring (drives the real public seam, not the flag directly)
+
+  /// `play(at:)` must register user play-intent. Driven through the production
+  /// async seam: the continuation resumes only after performPlayAt sets the flag.
+  /// Mutant: dropping `isPlaybackDesired = true` in performPlayAt fails this.
+  func testPlayAt_registersPlayIntent() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(SpyFindawayPlayer(tableOfContents: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    XCTAssertFalse(player.isPlaybackDesired, "Precondition: no intent before play")
+
+    try await player.play(at: TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks))
+
+    XCTAssertTrue(player.isPlaybackDesired, "play(at:) must set play-intent")
+  }
+
+  /// `unload()` must drop play-intent so a teardown-then-reopen doesn't inherit
+  /// a stale "wants playback" that would auto-resume on the next seek.
+  func testUnload_clearsPlayIntent() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(SpyFindawayPlayer(tableOfContents: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    try await player.play(at: TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks))
+    XCTAssertTrue(player.isPlaybackDesired, "Precondition: intent set by play(at:)")
+
+    player.unload()
+
+    XCTAssertFalse(player.isPlaybackDesired, "unload() must clear play-intent")
+  }
+
   // MARK: - Test doubles
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
