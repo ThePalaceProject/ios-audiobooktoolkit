@@ -28,7 +28,26 @@ public class AudiobookPlaybackModel: ObservableObject {
   private var pendingLocation: TrackPosition?
   private var suppressSavesUntil: Date?
   private var suppressPlaybackPollUntil: Date?
+  // While a skip/seek is settling, the SDK buffers→resumes and briefly emits
+  // transient position/`.playbackBegan` events (chapter start, chapter end,
+  // momentarily-not-playing). Holding the display at the user's skip target
+  // through this window prevents the progress bar / title / play-button from
+  // flickering to those bogus intermediate values.
+  private var suppressPositionUpdatesUntil: Date?
   private var isNavigating = false
+
+  private var isSuppressingPositionUpdates: Bool {
+    if let until = suppressPositionUpdatesUntil { return Date() < until }
+    return false
+  }
+
+  /// Begins (or extends) the post-skip suppression window. Rapid skips keep
+  /// pushing it out so the display tracks the latest target, not the churn.
+  private func suppressTransientPlaybackUpdates(for seconds: TimeInterval) {
+    let until = Date().addingTimeInterval(seconds)
+    suppressPositionUpdatesUntil = until
+    suppressPlaybackPollUntil = until
+  }
 
   var selectedLocation: TrackPosition? {
     didSet {
@@ -170,6 +189,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           guard let position else {
             return
           }
+          if isSuppressingPositionUpdates { break }
 
           currentLocation = position
           updateProgress()
@@ -181,11 +201,16 @@ public class AudiobookPlaybackModel: ObservableObject {
           }
 
         case let .playbackBegan(position):
-          currentLocation = position
+          // `.playbackBegan` fires on every buffer→resume during a skip burst,
+          // often carrying the chapter-start position; keep the play-state flags
+          // but don't let it yank the displayed location off the skip target.
+          if !isSuppressingPositionUpdates {
+            currentLocation = position
+            updateProgress()
+          }
           isWaitingForPlayer = false
           _isPlaying = true
           isNavigating = false
-          updateProgress()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
             Task { [weak self] in
@@ -194,10 +219,17 @@ public class AudiobookPlaybackModel: ObservableObject {
           }
 
         case let .playbackCompleted(position):
-          currentLocation = position
           isWaitingForPlayer = false
-          _isPlaying = false
-          updateProgress()
+          // During a skip burst the SDK can emit a chapter-`.completed` at the
+          // chapter END as it tears down to reload — which would slam the
+          // progress bar to the end and the button to paused. Ignore it while
+          // the skip is settling; a real end-of-chapter resolves after the
+          // window via the subsequent `.playbackBegan` for the next chapter.
+          if !isSuppressingPositionUpdates {
+            currentLocation = position
+            _isPlaying = false
+            updateProgress()
+          }
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
             Task { [weak self] in
@@ -303,6 +335,9 @@ public class AudiobookPlaybackModel: ObservableObject {
       .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
         guard let self = self else { return }
+        // Hold the user's skip target while the seek settles; ignore the
+        // transient positions the SDK emits during the buffer→resume.
+        if isSuppressingPositionUpdates { return }
         currentLocation = position
         updateProgress()
       }
@@ -411,6 +446,9 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
 
     isWaitingForPlayer = true
+    // Hold the UI at the skip target through the SDK's buffer→resume so rapid
+    // skips don't flicker the progress bar / title / play-button.
+    suppressTransientPlaybackUpdates(for: 1.5)
 
     Task { [weak self] in
       guard let self = self else { return }
@@ -441,6 +479,9 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
 
     isWaitingForPlayer = true
+    // Hold the UI at the skip target through the SDK's buffer→resume so rapid
+    // skips don't flicker the progress bar / title / play-button.
+    suppressTransientPlaybackUpdates(for: 1.5)
 
     Task { [weak self] in
       guard let self = self else { return }

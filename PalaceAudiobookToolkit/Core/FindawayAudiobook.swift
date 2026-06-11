@@ -32,6 +32,8 @@ public final class FindawayAudiobook: Audiobook {
     guard let fulfillmentId = getFulfillmentId(from: manifest) else {
       return
     }
-    FAEAudioEngine.shared()?.downloadEngine?.delete(forAudiobookID: fulfillmentId)
+    FindawayDownloadEngineGate.shared.perform {
+      FAEAudioEngine.shared()?.downloadEngine?.delete(forAudiobookID: fulfillmentId)
+    }
   }
 }
