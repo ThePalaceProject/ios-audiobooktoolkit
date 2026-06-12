@@ -44,11 +44,13 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       loadTocFromLinks(linksDictionary)
     }
 
+    collapseAdjacentDuplicateKeyChapters()
+
     if manifest.audiobookType != .findaway && manifest.audiobookType != .overdrive {
       calculateDurations()
       calculateEndPositions()
     }
-    
+
     // DEBUG: Dump full TOC structure for debugging
     ATLog(.debug, "AudiobookTableOfContents initialized with \(toc.count) chapters and \(tracks.count) tracks")
     for (index, chapter) in toc.enumerated() {
@@ -153,6 +155,76 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
         toc.append(chapter)
       }
     }
+  }
+
+  /// Repair chapter lists that don't match the physical audio files, so the
+  /// toolkit's `toc` (used by currentChapter / NowPlaying / saved-position) is the
+  /// SAME single list the UI shows. Two cases, one rule each:
+  ///
+  /// 1. Densely-subdivided TOC — many section/paragraph entries over few audio
+  ///    files (e.g. "The Martian": 41 TOC entries, 8 files). Detected by the 1.5x
+  ///    inflation threshold; collapsed to ONE chapter per physical `track.key`.
+  ///    This is the app's historical `ChapterTOCNormalizer` collapse, MOVED here
+  ///    so the toolkit and app share one implementation (no second list to drift).
+  ///
+  /// 2. Oversubdivided readingOrder — a manifest that repeats the same physical
+  ///    `(part, sequence)` / `track.key` for several chapters that all start at the
+  ///    SAME offset (Findaway "Dune", Findaway id 32884: 3 chapters all on
+  ///    findaway:1:3 @ts0). Not dense enough to trip the threshold, but still one
+  ///    playable file behind several @ts0 chapters → currentChapter / NowPlaying /
+  ///    saved-position desync ("dual numbering"; a 30s skip never crosses a
+  ///    non-existent intra-file boundary). Collapsed by dropping adjacent chapters
+  ///    that repeat the previous chapter's (track.key, start offset).
+  ///
+  /// Both keep the FIRST chapter of a group unchanged (matching the app's display).
+  /// Chapters that share a `track.key` but start at DISTINCT offsets — legitimate
+  /// multi-chapter-per-file, e.g. open-access "Dungeon Crawler Carl" (Part I @t=1,
+  /// Chapter 2 @t=3 in one MP3) — are PRESERVED: offset-distinctness is the
+  /// separator, so real navigation is never lost.
+  private mutating func collapseAdjacentDuplicateKeyChapters() {
+    guard toc.count > 1 else { return }
+    if Self.isOversubdivided(tocCount: toc.count, trackCount: tracks.tracks.count) {
+      keepFirstChapterPerTrackKey()
+    } else {
+      collapseAdjacentDuplicatePositions()
+    }
+  }
+
+  /// Dense-TOC collapse: keep one chapter per physical `track.key`.
+  private mutating func keepFirstChapterPerTrackKey() {
+    var seenKeys = Set<String>()
+    var collapsed: [Chapter] = []
+    collapsed.reserveCapacity(toc.count)
+    for chapter in toc where seenKeys.insert(chapter.position.track.key).inserted {
+      collapsed.append(chapter)
+    }
+    toc = collapsed
+  }
+
+  /// Findaway-oversubdivision collapse: drop adjacent chapters that repeat the
+  /// previous chapter's (track.key, start offset). Distinct offsets are preserved.
+  private mutating func collapseAdjacentDuplicatePositions() {
+    let epsilon = 0.5
+    var collapsed: [Chapter] = []
+    collapsed.reserveCapacity(toc.count)
+    for chapter in toc {
+      if let last = collapsed.last,
+         last.position.track.key == chapter.position.track.key,
+         abs(last.position.timestamp - chapter.position.timestamp) < epsilon {
+        continue
+      }
+      collapsed.append(chapter)
+    }
+    toc = collapsed
+  }
+
+  /// TOC oversubdivision threshold: a flat TOC with more than `trackCount * 1.5`
+  /// entries is densely subdivided into sections rather than chapters. Mirrors the
+  /// app's historical `ChapterTOCNormalizer.isOversubdivided` so the dense-collapse
+  /// behavior is identical when it moves into the toolkit (single source of truth).
+  static func isOversubdivided(tocCount: Int, trackCount: Int) -> Bool {
+    guard trackCount > 0 else { return false }
+    return Double(tocCount) > Double(trackCount) * 1.5
   }
 
   private mutating func prependForwardChapterIfNeeded() {

@@ -55,12 +55,12 @@ enum ManifestJSON: String, CaseIterable {
     case .bigFail: 22
     case .bocas: 14
     case .christmasCarol: 6
-    case .flatland: 25
+    case .flatland: 9  // 25 dense TOC entries collapse to 9 physical files (1.5x gate)
     case .littleWomenDevotional: 54
-    case .martian: 41
+    case .martian: 7  // 41 dense TOC entries collapse to 7 physical files (1.5x gate)
     case .bestNewHorror: 7
     case .quickSilver: 29
-    case .snowcrash: 72
+    case .snowcrash: 24  // 72 dense TOC entries collapse to 24 physical files (1.5x gate)
     case .secretLives: 10
     case .theSystemOfTheWorld: 47
     case .endOfTheWorld: 14
