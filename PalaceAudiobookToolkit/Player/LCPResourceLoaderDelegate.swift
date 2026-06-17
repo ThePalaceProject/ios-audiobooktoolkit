@@ -267,25 +267,35 @@ private extension LCPResourceLoaderDelegate {
           while bytesRemaining > 0 {
             let thisCount = bytesRemaining == Int.max ? segmentSize : min(bytesRemaining, segmentSize)
             let endExcl = currentStart + thisCount
-            let range: Range<UInt64> = UInt64(currentStart)..<UInt64(endExcl)
-            let data = try await res.read(range: range).get()
-            if data.isEmpty {
-              break
+            // PP-4542: tolerate a length/size mismatch instead of failing the
+            // AVPlayerItem. Readium 3.9.0's LCP resource can report a length
+            // larger than ZIPFoundation will serve — extractRange throws
+            // rangeOutOfBounds when a range's upperBound exceeds the ZIP entry's
+            // uncompressedSize. AVPlayer's first-open TAIL probe (it reads the
+            // last bytes for mp3 duration/metadata) then overshoots and the item
+            // dead-ends ("Audiobook Unavailable"). CLAMP the read to the largest
+            // readable prefix and finish SUCCESSFULLY, so AVPlayer gets the real
+            // tail bytes and plays.
+            let (data, reachedEOF) = try await LCPResourceLoaderDelegate.readClampedToAvailable(
+              start: UInt64(currentStart),
+              requestedEnd: UInt64(endExcl)
+            ) { try await res.read(range: $0).get() }
+            if !data.isEmpty {
+              dataRequest.respond(with: data)
+              totalBytesRead += data.count
+              if bytesRemaining != Int.max {
+                bytesRemaining -= data.count
+              }
+              currentStart += data.count
             }
-            dataRequest.respond(with: data)
-            totalBytesRead += data.count
-            if bytesRemaining != Int.max {
-              bytesRemaining -= data.count
-            }
-            currentStart += data.count
-            if data.count < thisCount {
+            if reachedEOF || data.isEmpty {
               break
             }
           }
           ATLog(.debug, "🎵 ResourceLoader: Successfully loaded \(totalBytesRead) bytes (decrypted)")
           loadingRequest.finishLoading()
         } catch {
-          ATLog(.error, "🎵 ResourceLoader: ERROR loading data: \(error)")
+          ATLog(.error, "🎵 ResourceLoader: ERROR loading data (after cold-load retries): \(error)")
           loadingRequest.finishLoading(with: error)
         }
         return
@@ -344,5 +354,77 @@ private extension LCPResourceLoaderDelegate {
     }
 
     return "public.audio"
+  }
+}
+
+// MARK: - Range clamp (PP-4542)
+
+// Internal (not `private`) so the clamp logic is unit-testable via
+// `@testable import` without standing up a real AVAsset + Readium Resource stack.
+extension LCPResourceLoaderDelegate {
+  /// Classifies a `Resource.read(range:)` error as a *range-out-of-bounds*
+  /// failure. Readium 3.9.0 (PP-4340) / ReadiumZIPFoundation throws
+  /// `Archive.ArchiveError.rangeOutOfBounds` when a requested range's upperBound
+  /// exceeds the ZIP entry's `uncompressedSize` — i.e. the LCP resource reported
+  /// a length larger than it can actually serve, so AVPlayer's tail probe
+  /// overshoots. Matched on the error *description* so we don't couple to
+  /// Readium's nested error-enum layout (which the 3.9.0 bump itself changed).
+  static func isRangeOutOfBoundsError(_ error: Error) -> Bool {
+    let desc = String(describing: error).lowercased()
+    return desc.contains("rangeoutofbounds")
+      || desc.contains("out of bounds")
+      || desc.contains("out-of-bounds")
+  }
+
+  /// Reads `[start, requestedEnd)`, tolerating a length/size mismatch instead of
+  /// failing. If the underlying resource throws `rangeOutOfBounds` (it reported a
+  /// length larger than it can serve), this CLAMPS to the largest readable prefix
+  /// via binary search and returns that, signalling EOF — rather than dead-ending
+  /// the AVPlayerItem. This is the durable fix for the 3.2.0 first-open
+  /// "Audiobook Unavailable" regression: AVPlayer's tail metadata probe overshoots
+  /// the real decrypted size, and a hard failure there kills the whole item.
+  ///
+  /// Returns `(data, reachedEOF)`:
+  ///   • a normal full read → `(data, data.count < requested)`,
+  ///   • an overshoot clamped to the real end → `(clampedData, true)`,
+  ///   • `start` already at/after EOF → `(empty, true)`.
+  /// Non-bounds errors (decryption, cancellation, network) are re-thrown
+  /// unchanged — never masked. Binary search only runs on the rare overshoot, so
+  /// well-formed reads stay single-shot.
+  static func readClampedToAvailable(
+    start: UInt64,
+    requestedEnd: UInt64,
+    isOutOfBounds: (Error) -> Bool = LCPResourceLoaderDelegate.isRangeOutOfBoundsError,
+    _ read: (Range<UInt64>) async throws -> Data
+  ) async throws -> (data: Data, reachedEOF: Bool) {
+    guard requestedEnd > start else { return (Data(), true) }
+    do {
+      let data = try await read(start..<requestedEnd)
+      return (data, data.count < Int(requestedEnd - start))
+    } catch {
+      guard isOutOfBounds(error) else { throw error }
+      // The real readable end is somewhere in [start, requestedEnd). Binary-search
+      // the largest `end` for which read(start..<end) succeeds. Invariant:
+      // read(start..<lo) is known-OK (lo==start ⇒ empty), read(start..<hi) failed.
+      var lo = start
+      var hi = requestedEnd
+      while hi - lo > 1 {
+        let mid = lo + (hi - lo) / 2
+        do {
+          _ = try await read(start..<mid)
+          lo = mid
+        } catch {
+          guard isOutOfBounds(error) else { throw error }
+          hi = mid
+        }
+      }
+      guard lo > start else {
+        ATLog(.debug, "🎵 ResourceLoader: range start \(start) is past EOF — serving empty (clamped)")
+        return (Data(), true)
+      }
+      let data = try await read(start..<lo)
+      ATLog(.warn, "🎵 ResourceLoader: clamped overshooting range \(start)..<\(requestedEnd) to real EOF \(lo) (\(data.count) bytes) — LCP/ZIP length mismatch (PP-4542)")
+      return (data, true)
+    }
   }
 }
