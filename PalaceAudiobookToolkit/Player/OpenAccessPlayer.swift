@@ -394,7 +394,16 @@ class OpenAccessPlayer: NSObject, Player {
 
   deinit {
     NotificationCenter.default.removeObserver(self)
-    try? AVAudioSession.sharedInstance().setActive(false, options: [])
+    // PP-4542 (systemic): do NOT deactivate the shared AVAudioSession here.
+    // A new player is created on every open/reopen and ARC deallocates the
+    // PREVIOUS one at a non-deterministic time — often right AFTER the new
+    // player has started. Deactivating the app-wide session in deinit then
+    // yanked it out from under the live player, surfacing as AVError -11849
+    // "Operation Stopped" (+ PlayerRemoteXPC -12860) and a failed AVPlayerItem.
+    // Audio-session lifecycle is owned by the app's playback layer (activate on
+    // open, deactivate when playback genuinely ends) — never by a player's
+    // dealloc. Leaving the session active across player transitions is the
+    // correct, race-free behavior.
     unload()
     removePlayerObservers()
     clearPositionCache()
