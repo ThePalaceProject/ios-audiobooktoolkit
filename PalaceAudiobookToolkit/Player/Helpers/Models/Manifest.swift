@@ -114,7 +114,16 @@ public struct Manifest: Codable {
     let hasReadingOrder = (readingOrder?.isEmpty == false)
     let hasSpine = (spine?.isEmpty == false)
     let hasMetadata = (metadata != nil)
-    if !hasMetadata || (!hasReadingOrder && !hasSpine) {
+    // PP-4631: Overdrive audiobook manifests legitimately carry neither
+    // `metadata` nor `readingOrder`/`spine` at the root — their playable
+    // tracks come from `links.contentlinks` (see Tracks.addTracksFromLinks;
+    // audiobookType == .overdrive). Exempt that shape from the invariant so a
+    // valid Overdrive manifest is not rejected before the contentLinks track
+    // path can run. The strict check is preserved for all other manifests
+    // (the F-005 / Crashlytics 7bf923ee crash guard).
+    let hasContentLinks = (linksDictionary?.contentLinks?.isEmpty == false)
+    let isOverdriveManifest = (formatType?.contains("overdrive") == true) && hasContentLinks
+    if !isOverdriveManifest, !hasMetadata || (!hasReadingOrder && !hasSpine) {
       var missing: [String] = []
       if !hasMetadata { missing.append("metadata") }
       if !hasReadingOrder && !hasSpine { missing.append("readingOrder|spine") }
