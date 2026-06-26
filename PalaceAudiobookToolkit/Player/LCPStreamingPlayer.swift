@@ -515,7 +515,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         return nil
       }
     }
-    return AVPlayerItem(asset: composition)
+    let item = AVPlayerItem(asset: composition)
+    // PP-4518: preserve narrator pitch across the full 0.5×–3.0× range.
+    item.audioTimePitchAlgorithm = .timeDomain
+    return item
   }
 
   // Build a single item for a specific index using the same priority: local file -> streaming -> placeholder

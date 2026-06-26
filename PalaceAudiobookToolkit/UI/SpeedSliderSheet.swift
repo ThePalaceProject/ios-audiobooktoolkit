@@ -19,8 +19,10 @@ struct SpeedSliderSheet: View {
   @State private var sliderValue: Double = 1.0
 
   private let step: Double = 0.05
-  private let minRate: Double = 0.75
-  private let maxRate: Double = 2.0
+  // PP-4518: slider rail spans 0.5× … 3.0×. The 0.75× preset chip remains the
+  // quick-select slow-down, but the rail floor drops to 0.5× per acceptance.
+  private let minRate: Double = 0.5
+  private let maxRate: Double = 3.0
 
   // MARK: - Computed labels
 

@@ -19,8 +19,14 @@ public enum PlaybackRate: Int, CaseIterable {
   case oneAndAQuarterTime = 125
   case oneAndAHalfTime = 150
   case doubleTime = 200
+  case tripleTime = 300
 
-  // Intermediate 0.05× steps
+  // Intermediate 0.05× steps (PP-4518: rail extended to 0.50× … 3.00×)
+  case p050 = 50
+  case p055 = 55
+  case p060 = 60
+  case p065 = 65
+  case p070 = 70
   case p080 = 80
   case p085 = 85
   case p090 = 90
@@ -42,22 +48,46 @@ public enum PlaybackRate: Int, CaseIterable {
   case p185 = 185
   case p190 = 190
   case p195 = 195
+  case p205 = 205
+  case p210 = 210
+  case p215 = 215
+  case p220 = 220
+  case p225 = 225
+  case p230 = 230
+  case p235 = 235
+  case p240 = 240
+  case p245 = 245
+  case p250 = 250
+  case p255 = 255
+  case p260 = 260
+  case p265 = 265
+  case p270 = 270
+  case p275 = 275
+  case p280 = 280
+  case p285 = 285
+  case p290 = 290
+  case p295 = 295
 
   public static func convert(rate: PlaybackRate) -> Float {
     Float(rate.rawValue) * 0.01
   }
 
   /// Preset rates shown as quick-select chips in the speed picker UI.
-  /// PP-4358 locks this to [0.75×, 1.0×, 1.2×, 1.5×, 2.0×]. The third
-  /// preset is `.p120` (1.20×), not `.oneAndAQuarterTime` (1.25×) — the
-  /// PP-4233 design review picked 1.2× over 1.25×. `.oneAndAQuarterTime`
-  /// remains a valid enum case so historic UserDefaults values (raw 125)
-  /// still decode for users who selected 1.25× before this change.
+  /// PP-4518 product direction: even 0.5× steps across the full rail —
+  /// [0.5×, 1.0×, 1.5×, 2.0×, 2.5×, 3.0×]. This supersedes the earlier
+  /// PP-4358/PP-4233 ladder. 0.75× and 1.25× are intentionally NOT chips:
+  ///   - Android parity (ThePalaceProject/android-audiobook PlayerPlaybackRate.kt
+  ///     ships 0.5/1.0/1.25/1.5/2.0/2.5/3.0 and likewise drops 0.75×), so
+  ///     omitting 0.75× is Android-aligned;
+  ///   - we deliberately omit Android's 1.25× in favor of an even 0.5 ladder.
+  /// Both `.threeQuartersTime` (raw 75) and `.oneAndAQuarterTime` (raw 125)
+  /// remain valid enum cases — historic UserDefaults values still decode and
+  /// both stay reachable on the 0.05-step slider for accessibility slow-down.
   public static let presets: [PlaybackRate] = [
-    .threeQuartersTime, .normalTime, .p120, .oneAndAHalfTime, .doubleTime
+    .p050, .normalTime, .oneAndAHalfTime, .doubleTime, .p250, .tripleTime
   ]
 
-  /// All available steps in ascending order (0.75× → 2.0×)
+  /// All available steps in ascending order (0.50× → 3.0×)
   public static let steps: [PlaybackRate] = PlaybackRate.allCases.sorted { $0.rawValue < $1.rawValue }
 
   /// Returns the PlaybackRate whose multiplier is closest to `value`
