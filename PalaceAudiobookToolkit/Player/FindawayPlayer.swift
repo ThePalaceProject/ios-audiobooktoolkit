@@ -314,14 +314,17 @@ class FindawayPlayer: NSObject, Player {
       let cachedValue = UserDefaults.standard.double(forKey: audioPlaybackRateIdentifierKey)
       guard cachedValue != 0 else {
         if let value = audioEngine?.playbackEngine?.currentRate {
-          return PlaybackRate(rawValue: Int(value * 100))!
+          // PP-4518: snap to the nearest enum step rather than force-unwrap —
+          // the Findaway SDK may report a rate that has no exact case (and the
+          // rail now spans 0.5×–3.0×, widening the chance of a mismatch).
+          return PlaybackRate.nearest(to: value)
         } else {
           return .normalTime
         }
       }
 
       audioEngine?.playbackEngine?.currentRate = Float(cachedValue)
-      return PlaybackRate(rawValue: Int(cachedValue * 100))!
+      return PlaybackRate.nearest(to: Float(cachedValue))
     }
 
     set(newRate) {

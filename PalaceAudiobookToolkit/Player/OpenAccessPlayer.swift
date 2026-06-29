@@ -1391,7 +1391,10 @@ extension OpenAccessPlayer {
 
   private func createPlayerItem(files: [URL]) -> AVPlayerItem? {
     guard files.count > 1 else {
-      return AVPlayerItem(url: files[0])
+      let item = AVPlayerItem(url: files[0])
+      // PP-4518: preserve narrator pitch across the full 0.5×–3.0× range.
+      item.audioTimePitchAlgorithm = .timeDomain
+      return item
     }
 
     let composition = AVMutableComposition()
@@ -1422,7 +1425,10 @@ extension OpenAccessPlayer {
       return nil
     }
 
-    return AVPlayerItem(asset: composition)
+    let item = AVPlayerItem(asset: composition)
+    // PP-4518: preserve narrator pitch across the full 0.5×–3.0× range.
+    item.audioTimePitchAlgorithm = .timeDomain
+    return item
   }
 
   @objc func playerItemDidReachEnd(_ notification: Notification) {

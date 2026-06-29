@@ -34,9 +34,17 @@ class HumanReadablePlaybackRate {
       return NSLocalizedString("Normal speed.", bundle: Bundle.audiobookToolkit()!, value: "Normal speed.", comment: "")
     case .doubleTime:
       return NSLocalizedString(
-        "Two times normal speed. Fastest.",
+        "Two times normal speed.",
         bundle: Bundle.audiobookToolkit()!,
-        value: "Two times normal speed. Fastest.",
+        value: "Two times normal speed.",
+        comment: ""
+      )
+    case .tripleTime:
+      // PP-4518: 3.0× is the new ceiling and therefore the fastest speed.
+      return NSLocalizedString(
+        "Three times normal speed. Fastest.",
+        bundle: Bundle.audiobookToolkit()!,
+        value: "Three times normal speed. Fastest.",
         comment: ""
       )
     default:
