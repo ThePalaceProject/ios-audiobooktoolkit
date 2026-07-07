@@ -67,6 +67,8 @@ struct SpeedSliderSheet: View {
       let nearest = PlaybackRate.nearest(to: Float(newValue))
       if nearest != playbackRate {
         playbackRate = nearest
+        // Detent tick as the committed rate crosses to a new step.
+        UISelectionFeedbackGenerator().selectionChanged()
         UIAccessibility.post(notification: .announcement, argument: speedAccessibleDescription)
       }
     }
