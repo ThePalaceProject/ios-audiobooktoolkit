@@ -77,7 +77,7 @@
 		E52C1C4D2C00437F00D8F30B /* flatland_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E549653227FBEAC400913BD6 /* flatland_manifest.json */; };
 		E52C1C4E2C00437F00D8F30B /* the_system_of_the_world_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E58C53432B75507100D861EE /* the_system_of_the_world_manifest.json */; };
 		E530533029B69BDC005E831F /* snowcrash_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E530532F29B69B91005E831F /* snowcrash_manifest.json */; };
-		E531FF072D0691D70003E2FA /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; };
+		E531FF072D0691D70003E2FA /* AudioEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5ECFA9B2BED70E80008670F /* AudioEngine.xcframework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		E5338AD12BEAB816002387E1 /* littleWomenDevotional_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E5338AD02BEAB816002387E1 /* littleWomenDevotional_manifest.json */; };
 		E5338AD52BEABFC3002387E1 /* FindawayAudiobook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E58FCC632BE09ED200943CEB /* FindawayAudiobook.swift */; };
 		E53A1B792C3E443200F490CD /* ManifestJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52C1C3F2C00435700D8F30B /* ManifestJSON.swift */; };
@@ -1139,6 +1139,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) FEATURE_FINDAWAY";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1177,6 +1178,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) FEATURE_FINDAWAY";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1201,6 +1203,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = PalaceAudiobooksToolkit.PalaceAudiobookToolkitTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) FEATURE_FINDAWAY";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1225,6 +1228,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = PalaceAudiobooksToolkit.PalaceAudiobookToolkitTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) FEATURE_FINDAWAY";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
