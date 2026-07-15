@@ -37,7 +37,14 @@ class TrackFactory: TrackFactoryProtocol {
     key: String?
   ) -> (any Track)? {
     switch manifest.audiobookType {
-    case .findaway:
+    #if FEATURE_FINDAWAY
+    // Defense-in-depth: `FindawayTrack` builds a `FindawayDownloadTask`, which
+    // constructs `FAEDownloadRequest` (AudioEngine). When AudioEngine isn't
+    // linked (the open, no-DRM build) fall through to `OpenAccessTrack` rather
+    // than force-unwrapping an absent Obj-C class. The `AudiobookFactory` gate
+    // already keeps a no-DRM catalog off this path; this closes the residual
+    // window if a Findaway-typed manifest ever reaches the open build.
+    case .findaway where FindawaySupport.isAvailable:
       try? FindawayTrack(
         manifest: manifest,
         urlString: urlString,
@@ -47,6 +54,7 @@ class TrackFactory: TrackFactoryProtocol {
         index: index,
         token: token
       )
+    #endif
     case .lcp:
       try? LCPTrack(
         manifest: manifest,
