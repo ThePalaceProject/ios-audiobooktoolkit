@@ -75,7 +75,7 @@ final class AsyncCallSiteTests: XCTestCase {
     await waitUntil { player.skipPlayheadCalls.count == 1 }
     await waitUntil { model.currentLocation?.timestamp == 100 }
 
-    XCTAssertEqual(player.skipPlayheadCalls.first, -model.skipTimeInterval,
+    XCTAssertEqual(player.skipPlayheadCalls.first, -model.skipBackInterval,
                    "skipBack must request skipPlayhead with NEGATIVE interval")
     XCTAssertEqual(model.currentLocation?.timestamp, 100,
                    "skipBack must apply the awaited result")
@@ -96,8 +96,41 @@ final class AsyncCallSiteTests: XCTestCase {
 
     await waitUntil { player.skipPlayheadCalls.count == 1 }
 
-    XCTAssertEqual(player.skipPlayheadCalls.first, model.skipTimeInterval,
+    XCTAssertEqual(player.skipPlayheadCalls.first, model.skipForwardInterval,
                    "skipForward must request skipPlayhead with POSITIVE interval")
+  }
+
+  /// PP-4712: the player must use the manager's INDEPENDENT forward/back
+  /// intervals, not a single shared value. Mutant: a forward/back swap (or
+  /// reading one interval for both directions) is invisible at the default
+  /// 30/30 — this asymmetric 45/15 case makes it fail.
+  func testSkip_usesConfiguredAsymmetricIntervals() async throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "async-asym-test", decryptor: nil, token: nil)
+    )
+    let player = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Asym", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    manager.skipForwardInterval = 45
+    manager.skipBackInterval = 15
+    let model = AudiobookPlaybackModel(audiobookManager: manager)
+    let firstTrack = try XCTUnwrap(player.tableOfContents.allTracks.first)
+    player.skipPlayheadResult = .some(TrackPosition(track: firstTrack, timestamp: 45, tracks: player.tableOfContents.tracks))
+
+    model.skipForward()
+    await waitUntil { player.skipPlayheadCalls.count == 1 }
+    XCTAssertEqual(player.skipPlayheadCalls.first, 45,
+                   "skipForward must use the configured forward interval (45), not 30 or the back value")
+
+    model.skipBack()
+    await waitUntil { player.skipPlayheadCalls.count == 2 }
+    XCTAssertEqual(player.skipPlayheadCalls.last, -15,
+                   "skipBack must use the configured back interval (−15), independently of forward")
   }
 
   /// When `player.skipPlayhead` returns nil (player not ready), the model's

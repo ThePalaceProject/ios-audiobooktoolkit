@@ -199,8 +199,12 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   /// Patron-configurable skip intervals, defaulting to `skipTimeInterval` (30s).
   /// A host (the Palace app's Playback settings) sets these per manager; they
   /// drive the in-app player, the on-screen button labels, and remote commands.
-  public var skipForwardInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
-  public var skipBackInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+  public var skipForwardInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval {
+    didSet { mediaControlPublisher.updateSkipIntervals(forward: skipForwardInterval, back: skipBackInterval) }
+  }
+  public var skipBackInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval {
+    didSet { mediaControlPublisher.updateSkipIntervals(forward: skipForwardInterval, back: skipBackInterval) }
+  }
 
   // MARK: - Enhanced Position System
 

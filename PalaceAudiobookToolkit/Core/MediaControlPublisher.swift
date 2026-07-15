@@ -46,6 +46,13 @@ class MediaControlPublisher {
   private var previousTrackTarget: Any?
   private var rateTarget: Any?
 
+  // PP-4712: the skip intervals shown on the lock-screen/CarPlay controls.
+  // Default 30 each; the owning manager pushes patron-configured values via
+  // `updateSkipIntervals(forward:back:)`, which re-applies them so a foreground
+  // cycle or interruption re-config doesn't revert the badge to a hardcoded 30.
+  private var skipForwardInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+  private var skipBackInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+
   init() {
     setup()
     
@@ -102,19 +109,28 @@ class MediaControlPublisher {
     commandCenter.pauseCommand.isEnabled = true
     commandCenter.togglePlayPauseCommand.isEnabled = true
     commandCenter.skipForwardCommand.isEnabled = true
-    commandCenter.skipForwardCommand.preferredIntervals = [30]
+    commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: skipForwardInterval)]
     commandCenter.skipBackwardCommand.isEnabled = true
-    commandCenter.skipBackwardCommand.preferredIntervals = [30]
+    commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: skipBackInterval)]
     commandCenter.changePlaybackRateCommand.isEnabled = true
-    
+
     // PP-3679: Enable next/previous track so car hardware buttons (steering wheel)
-    // trigger 30-second skip forward/backward
+    // trigger a skip forward/backward (by the configured interval)
     commandCenter.nextTrackCommand.isEnabled = true
     commandCenter.previousTrackCommand.isEnabled = true
     commandCenter.seekForwardCommand.isEnabled = false
     commandCenter.seekBackwardCommand.isEnabled = false
     commandCenter.changeRepeatModeCommand.isEnabled = false
     commandCenter.changeShuffleModeCommand.isEnabled = false
+  }
+
+  /// PP-4712: set the patron-configured skip intervals and re-apply them to the
+  /// command center so the lock-screen/CarPlay badges match the player. Safe to
+  /// call repeatedly; `configureCommands()` is idempotent.
+  func updateSkipIntervals(forward: TimeInterval, back: TimeInterval) {
+    skipForwardInterval = forward
+    skipBackInterval = back
+    configureCommands()
   }
   
   /// Adds command targets. Should only be called once.
