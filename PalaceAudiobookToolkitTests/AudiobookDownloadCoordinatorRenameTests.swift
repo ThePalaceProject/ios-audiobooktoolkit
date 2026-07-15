@@ -65,4 +65,73 @@ final class AudiobookDownloadCoordinatorRenameTests: XCTestCase {
     XCTAssertEqual(Set(downloads.map(\.trackKey)), ["track-1", "track-2"])
     XCTAssertTrue(downloads.allSatisfy { $0.bookID == bookID })
   }
+
+  // MARK: - F1: background-completion finalization (PP-4800 root cause)
+
+  /// When a track download is registered (as `OverdriveDownloadTask.downloadAsset`
+  /// now does), a background completion delivered after the app was killed is
+  /// finalized: the temp file is MOVED to the track's destination. This is the
+  /// mechanism the F1 fix relies on — wiring `registerActiveDownload` is what
+  /// makes `activeDownloads[id]` non-empty so this branch runs.
+  func testBackgroundCompletion_whenRegistered_movesTempFileToDestination() throws {
+    let coordinator = AudiobookDownloadCoordinator.shared
+    let bookID = "book-F1-finalize"
+    let session = "app.overdriveBackgroundIdentifier.f1-finalize-stable"
+    let url = URL(string: "https://ofsdirect.api.overdrive.com/track-1.mp3")!
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent("F1FinalizeTest", isDirectory: true)
+    try? FileManager.default.removeItem(at: dir)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let destination = dir.appendingPathComponent("final-track.mp3")
+    let downloadedTemp = dir.appendingPathComponent("downloaded.tmp")
+    XCTAssertTrue(FileManager.default.createFile(atPath: downloadedTemp.path,
+                                                 contents: Data("audio-bytes".utf8)))
+
+    coordinator.registerActiveDownload(
+      sessionIdentifier: session, bookID: bookID, trackKey: "track-1",
+      originalURL: url, localDestination: destination)
+
+    coordinator.handleBackgroundDownloadCompletion(
+      sessionIdentifier: session, downloadedFileURL: downloadedTemp, originalURL: url)
+
+    // Flush the coordinator's barrier queue with a sync read before asserting.
+    _ = coordinator.activeDownloads(forBookID: bookID)
+
+    XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path),
+      "A registered download must be finalized to its destination on background completion")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: downloadedTemp.path),
+      "The temp file must be moved, not left behind")
+    XCTAssertEqual(try? String(contentsOf: destination, encoding: .utf8), "audio-bytes")
+
+    try? FileManager.default.removeItem(at: dir)
+  }
+
+  /// Documents the F1 defect the fix closes: with NO registration (the pre-fix
+  /// state where `registerActiveDownload` was never called in production), the
+  /// coordinator has no destination and cannot finalize — so the finished file
+  /// is not moved anywhere and is lost when iOS reclaims the temp file.
+  func testBackgroundCompletion_whenNotRegistered_cannotFinalize() throws {
+    let coordinator = AudiobookDownloadCoordinator.shared
+    let session = "app.overdriveBackgroundIdentifier.f1-unregistered"
+    let url = URL(string: "https://ofsdirect.api.overdrive.com/orphan.mp3")!
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent("F1UnregisteredTest", isDirectory: true)
+    try? FileManager.default.removeItem(at: dir)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let downloadedTemp = dir.appendingPathComponent("downloaded.tmp")
+    XCTAssertTrue(FileManager.default.createFile(atPath: downloadedTemp.path,
+                                                 contents: Data("audio-bytes".utf8)))
+
+    // No registerActiveDownload — the pre-fix production behavior.
+    coordinator.handleBackgroundDownloadCompletion(
+      sessionIdentifier: session, downloadedFileURL: downloadedTemp, originalURL: url)
+    _ = coordinator.activeDownloads(forBookID: "any")  // flush
+
+    XCTAssertTrue(FileManager.default.fileExists(atPath: downloadedTemp.path),
+      "Without a registered download the coordinator has no destination and cannot finalize — the F1 gap the fix closes by wiring registerActiveDownload in downloadAsset")
+
+    try? FileManager.default.removeItem(at: dir)
+  }
 }
