@@ -79,7 +79,10 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
   }
 
-  let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+  /// Independently-configurable skip intervals, read live from the manager so a
+  /// host's Playback-settings change applies to subsequently opened audiobooks.
+  var skipForwardInterval: TimeInterval { audiobookManager.skipForwardInterval }
+  var skipBackInterval: TimeInterval { audiobookManager.skipBackInterval }
 
   var offset: TimeInterval {
     if let currentLocation = currentLocation,
@@ -452,7 +455,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     Task { [weak self] in
       guard let self = self else { return }
-      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipTimeInterval)
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipBackInterval)
       await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
@@ -460,7 +463,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           self.notifyHomeScreenOfPositionUpdate()
         } else {
           if let currentLocation = self.currentLocation {
-            let fallbackPosition = currentLocation + (-self.skipTimeInterval)
+            let fallbackPosition = currentLocation + (-self.skipBackInterval)
             self.currentLocation = fallbackPosition
             self.saveLocation()
             self.notifyHomeScreenOfPositionUpdate()
@@ -485,7 +488,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     Task { [weak self] in
       guard let self = self else { return }
-      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipTimeInterval)
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipForwardInterval)
       await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
@@ -493,7 +496,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           self.notifyHomeScreenOfPositionUpdate()
         } else {
           if let currentLocation = self.currentLocation {
-            let fallbackPosition = currentLocation + self.skipTimeInterval
+            let fallbackPosition = currentLocation + self.skipForwardInterval
             self.currentLocation = fallbackPosition
             self.saveLocation()
             self.notifyHomeScreenOfPositionUpdate()

@@ -58,6 +58,13 @@ public protocol AudiobookManager {
   var totalDuration: Double { get }
   var currentChapter: Chapter? { get }
 
+  /// Patron-configurable skip intervals in seconds, independently settable for
+  /// each direction. Default 30 each (see the extension below); a host injects
+  /// patron-chosen values. Drives the in-app player, the on-screen skip-button
+  /// labels, and the remote/lock-screen/CarPlay skip commands.
+  var skipForwardInterval: TimeInterval { get }
+  var skipBackInterval: TimeInterval { get }
+
   func updateNowPlayingInfo(_ position: TrackPosition?)
 
   static func setLogHandler(_ handler: @escaping LogHandler)
@@ -76,6 +83,13 @@ public protocol AudiobookManager {
   var statePublisher: PassthroughSubject<AudiobookManagerState, Never> { get }
 
   var playbackCompletionHandler: (() -> Void)? { get set }
+}
+
+public extension AudiobookManager {
+  /// Back-compat default: conformers that don't configure skip intervals keep
+  /// the historical 30s skip until a host injects patron-configured values.
+  var skipForwardInterval: TimeInterval { DefaultAudiobookManager.skipTimeInterval }
+  var skipBackInterval: TimeInterval { DefaultAudiobookManager.skipTimeInterval }
 }
 
 // MARK: - BookmarkError
@@ -181,6 +195,12 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private var didAnnounceDownloadStart: Bool = false
 
   public static let skipTimeInterval: TimeInterval = 30
+
+  /// Patron-configurable skip intervals, defaulting to `skipTimeInterval` (30s).
+  /// A host (the Palace app's Playback settings) sets these per manager; they
+  /// drive the in-app player, the on-screen button labels, and remote commands.
+  public var skipForwardInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+  public var skipBackInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
 
   // MARK: - Enhanced Position System
 
@@ -850,7 +870,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         case .skipForward, .nextTrack:
           Task { [weak self] in
             guard let self = self else { return }
-            let newPosition = await audiobook.player.skipPlayhead(DefaultAudiobookManager.skipTimeInterval)
+            let newPosition = await audiobook.player.skipPlayhead(self.skipForwardInterval)
             guard let newPosition = newPosition else { return }
             await MainActor.run {
               self.updateNowPlayingInfo(newPosition)
@@ -863,7 +883,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         case .skipBackward, .previousTrack:
           Task { [weak self] in
             guard let self = self else { return }
-            let newPosition = await audiobook.player.skipPlayhead(-DefaultAudiobookManager.skipTimeInterval)
+            let newPosition = await audiobook.player.skipPlayhead(-self.skipBackInterval)
             guard let newPosition = newPosition else { return }
             await MainActor.run {
               self.updateNowPlayingInfo(newPosition)
