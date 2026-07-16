@@ -57,6 +57,12 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// that effectively DDoS the content server.
   var isForbidden = false
 
+  /// The audiobook identifier this track belongs to. Threaded through from
+  /// `OpenAccessTrack` (mirroring how `OverdriveTrack` passes `audiobookID` to
+  /// `OverdriveDownloadTask`) so the download can be registered with the
+  /// coordinator for background-completion finalization.
+  let bookID: String
+
   private static let DownloadTaskTimeoutValue: TimeInterval = 60
   private var downloadURL: URL
   private var urlString: String
@@ -94,6 +100,7 @@ final class OpenAccessDownloadTask: DownloadTask {
 
   init(
     key: String,
+    bookID: String,
     downloadURL: URL,
     urlString: String,
     urlMediaType: TrackMediaType,
@@ -102,6 +109,7 @@ final class OpenAccessDownloadTask: DownloadTask {
     token: String?
   ) {
     self.key = key
+    self.bookID = bookID
     self.downloadURL = downloadURL
     self.urlString = urlString
     self.urlMediaType = urlMediaType
@@ -280,8 +288,17 @@ final class OpenAccessDownloadTask: DownloadTask {
   }
 
   private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL) {
+    // Stable, launch-independent session identifier. Swift's `hashValue` is
+    // per-process SipHash-seeded, so the previous `remoteURL.hashValue`
+    // produced a *different* identifier on every launch (and wasn't even
+    // book-scoped) — the reconnected background session on relaunch could
+    // never match the persisted download record, so a track that finished
+    // while the app was killed was silently discarded. Key the identifier on
+    // the stable (bookID, trackKey) pair, mirroring the OverDrive F1 fix.
+    // OpenAccess track keys are already book-scoped, so this is unique per track.
+    let stableSessionKey = hash("\(bookID)-\(key)") ?? "\(bookID)-\(key)"
     let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "")
-      .appending(".openAccessBackgroundIdentifier.\(remoteURL.hashValue)")
+      .appending(".openAccessBackgroundIdentifier.\(stableSessionKey)")
     let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
 
     // Set auth headers on the session configuration so iOS preserves them
@@ -314,6 +331,19 @@ final class OpenAccessDownloadTask: DownloadTask {
       configuration: config,
       delegate: delegate,
       delegateQueue: nil
+    )
+
+    // Record the download with the coordinator so a background completion that
+    // iOS delivers after the app is killed can be finalized to `finalURL` on
+    // the next launch. Without this record, `activeDownloads` stays empty,
+    // `handleBackgroundDownloadCompletion` hits its no-mapping branch, and the
+    // finished temp file is dropped by the OS. Mirrors the OverDrive F1 fix.
+    AudiobookDownloadCoordinator.shared.registerActiveDownload(
+      sessionIdentifier: backgroundIdentifier,
+      bookID: bookID,
+      trackKey: key,
+      originalURL: remoteURL,
+      localDestination: finalURL
     )
 
     // Check for resume data from a previous interrupted download

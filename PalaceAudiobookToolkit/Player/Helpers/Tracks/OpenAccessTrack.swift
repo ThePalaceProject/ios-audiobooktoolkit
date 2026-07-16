@@ -75,6 +75,7 @@ public class OpenAccessTrack: Track {
     self.token = token
     let task = OpenAccessDownloadTask(
       key: self.key,
+      bookID: audiobookID,
       downloadURL: url,
       urlString: urlString,
       urlMediaType: mediaType,

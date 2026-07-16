@@ -82,6 +82,7 @@ final class OpenAccessDownloadTaskTokenRefreshTests: XCTestCase {
     ) -> OpenAccessDownloadTask {
         let task = OpenAccessDownloadTask(
             key: "test-track-\(UUID().uuidString.prefix(8))",
+            bookID: "test-book",
             downloadURL: URL(string: "https://distributor.example.com/content/chapter1.mp3")!,
             urlString: "https://distributor.example.com/content/chapter1.mp3",
             urlMediaType: .audioMPEG,
@@ -259,6 +260,7 @@ final class TokenScopeHostTests: XCTestCase {
         let url = URL(string: downloadURL)!
         let task = OpenAccessDownloadTask(
             key: "test-\(UUID().uuidString.prefix(8))",
+            bookID: "test-book",
             downloadURL: url,
             urlString: downloadURL,
             urlMediaType: .audioMPEG,
