@@ -156,20 +156,23 @@ public final class AudiobookDownloadCoordinator {
           
           // Move the downloaded file
           try fileManager.moveItem(at: downloadedFileURL, to: destinationURL)
-          
-          downloadInfo.state = .completed
-          downloadInfo.progress = 1.0
-          self.activeDownloads[sessionIdentifier] = downloadInfo
-          
+
+          // The download is finalized on disk, so the map should no longer
+          // retain it. Leaving a `.completed` entry accretes forever (both F1
+          // reviewers flagged this): it reloads every launch and never gets a
+          // production `removeActiveDownload` caller. Remove it here so the
+          // persisted state is bounded to genuinely in-flight downloads.
+          self.activeDownloads.removeValue(forKey: sessionIdentifier)
+
           ATLog(.info, "AudiobookDownloadCoordinator: Download completed and moved to: \(destinationURL.path)")
-          
+
           DispatchQueue.main.async {
             self.downloadStatePublisher.send(.downloadCompleted(sessionIdentifier: sessionIdentifier, fileURL: destinationURL))
           }
-          
-          // Persist the updated state
+
+          // Persist the updated (pruned) state
           self.persistState()
-          
+
         } catch {
           ATLog(.error, "AudiobookDownloadCoordinator: Failed to move downloaded file: \(error.localizedDescription)")
           downloadInfo.state = .failed
@@ -355,14 +358,26 @@ public final class AudiobookDownloadCoordinator {
       let data = try Data(contentsOf: url)
       let persistedDownloads = try JSONDecoder().decode([String: PersistableDownloadInfo].self, from: data)
       
-      // Convert back to DownloadInfo
+      // Convert back to DownloadInfo, pruning terminal entries so the map
+      // stays bounded across launches. An entry is dropped if it is already
+      // `.completed`/`.failed`, or if its destination file already exists on
+      // disk (the download finished out-of-band — e.g. the in-process success
+      // path moved the file without touching the coordinator). Only genuinely
+      // in-flight downloads survive the reload.
       activeDownloads = persistedDownloads.compactMapValues { persisted in
         guard let originalURL = URL(string: persisted.originalURL),
               let localDestination = URL(string: persisted.localDestination),
               let state = DownloadInfo.DownloadState(rawValue: persisted.state) else {
           return nil
         }
-        
+
+        if state == .completed || state == .failed {
+          return nil
+        }
+        if FileManager.default.fileExists(atPath: localDestination.path) {
+          return nil
+        }
+
         return DownloadInfo(
           sessionIdentifier: persisted.sessionIdentifier,
           bookID: persisted.bookID,
@@ -373,7 +388,7 @@ public final class AudiobookDownloadCoordinator {
           state: state
         )
       }
-      
+
       ATLog(.info, "AudiobookDownloadCoordinator: Loaded \(activeDownloads.count) persisted downloads")
     } catch {
       ATLog(.debug, "AudiobookDownloadCoordinator: No persisted state found or failed to load: \(error.localizedDescription)")

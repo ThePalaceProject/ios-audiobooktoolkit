@@ -134,4 +134,50 @@ final class AudiobookDownloadCoordinatorRenameTests: XCTestCase {
 
     try? FileManager.default.removeItem(at: dir)
   }
+
+  // MARK: - Prune completed entries (F1 fast-follow — both reviewers flagged)
+
+  /// After a background completion finalizes the file, the entry must be
+  /// PRUNED from `activeDownloads` — not left `.completed`. Without pruning,
+  /// every finished download reloads forever on each launch (unbounded growth,
+  /// no production `removeActiveDownload` caller). Asserts both: (a) the file
+  /// is at its destination, and (b) the entry no longer appears for the book.
+  func testBackgroundCompletion_whenRegistered_prunesEntryAfterFinalizing() throws {
+    let coordinator = AudiobookDownloadCoordinator.shared
+    let bookID = "book-prune-after-complete"
+    let session = "app.overdriveBackgroundIdentifier.prune-stable"
+    let url = URL(string: "https://ofsdirect.api.overdrive.com/track-1.mp3")!
+
+    let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent("PruneAfterCompleteTest", isDirectory: true)
+    try? FileManager.default.removeItem(at: dir)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let destination = dir.appendingPathComponent("final-track.mp3")
+    let downloadedTemp = dir.appendingPathComponent("downloaded.tmp")
+    XCTAssertTrue(FileManager.default.createFile(atPath: downloadedTemp.path,
+                                                 contents: Data("audio-bytes".utf8)))
+
+    coordinator.registerActiveDownload(
+      sessionIdentifier: session, bookID: bookID, trackKey: "track-1",
+      originalURL: url, localDestination: destination)
+
+    // Sanity: registered and present before completion.
+    XCTAssertEqual(coordinator.activeDownloads(forBookID: bookID).count, 1,
+      "Precondition: the download is tracked before it completes")
+
+    coordinator.handleBackgroundDownloadCompletion(
+      sessionIdentifier: session, downloadedFileURL: downloadedTemp, originalURL: url)
+
+    // Flush the coordinator's barrier queue with a sync read before asserting.
+    let remaining = coordinator.activeDownloads(forBookID: bookID)
+
+    XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path),
+      "The finalized file must be at its destination")
+    XCTAssertTrue(remaining.isEmpty,
+      "A finalized download must be pruned from activeDownloads, not left .completed")
+    XCTAssertNil(coordinator.downloadInfo(forSessionIdentifier: session),
+      "The session identifier must no longer resolve to a DownloadInfo after finalization")
+
+    try? FileManager.default.removeItem(at: dir)
+  }
 }
