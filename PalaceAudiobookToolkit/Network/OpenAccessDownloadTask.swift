@@ -69,6 +69,18 @@ final class OpenAccessDownloadTask: DownloadTask {
   private var session: URLSession?
   private var downloadTask: URLSessionDownloadTask?
 
+  /// Strong reference to this task's session delegate. F2: the coordinator-owned
+  /// session's delegate is the durable router, which holds the observer WEAKLY,
+  /// so the task itself must retain its `DownloadTaskURLSessionDelegate` for it
+  /// to stay alive and keep receiving forwarded callbacks. Released when the task
+  /// deallocates (player close) — at which point the router's weak ref goes nil
+  /// and the durable-completion fallback takes over.
+  private var sessionDelegate: DownloadTaskURLSessionDelegate?
+
+  /// The background-session identifier this task last created/reused, so the
+  /// cancel/retry paths can evict the coordinator-owned session for it. (F2)
+  private var backgroundSessionIdentifier: String?
+
   /// Progress should be set to 1 if the file already exists.
   /// Lazily initialized based on actual file status to avoid showing 0% for downloaded files.
   private var _downloadProgress: Float?
@@ -323,21 +335,16 @@ final class OpenAccessDownloadTask: DownloadTask {
       finalDirectory: finalURL,
       trackKey: key
     )
-
-    // Invalidate any previous session with the same identifier to prevent
-    // delegate confusion and resource leaks on retry.
-    session?.invalidateAndCancel()
-    session = URLSession(
-      configuration: config,
-      delegate: delegate,
-      delegateQueue: nil
-    )
+    // Retain the delegate strongly: the coordinator-owned session's delegate is
+    // the durable router, which holds this observer weakly. (F2)
+    sessionDelegate = delegate
 
     // Record the download with the coordinator so a background completion that
     // iOS delivers after the app is killed can be finalized to `finalURL` on
     // the next launch. Without this record, `activeDownloads` stays empty,
     // `handleBackgroundDownloadCompletion` hits its no-mapping branch, and the
     // finished temp file is dropped by the OS. Mirrors the OverDrive F1 fix.
+    // (Also the mapping the F2 no-observer durable-completion fallback relies on.)
     AudiobookDownloadCoordinator.shared.registerActiveDownload(
       sessionIdentifier: backgroundIdentifier,
       bookID: bookID,
@@ -345,6 +352,20 @@ final class OpenAccessDownloadTask: DownloadTask {
       originalURL: remoteURL,
       localDestination: finalURL
     )
+
+    // F2: GET-OR-CREATE the coordinator-owned background session. On a reopen
+    // this REUSES the live session created by the previous task (instead of
+    // spawning a duplicate with the same identifier, which iOS treats as
+    // undefined behavior and which froze the progress bar), then re-registers
+    // THIS task's delegate as the current observer so the live player sees
+    // progress. We must NOT invalidate on reuse — that would kill an in-flight
+    // background download.
+    let ownedSession = AudiobookDownloadCoordinator.shared.session(forIdentifier: backgroundIdentifier) { router in
+      URLSession(configuration: config, delegate: router, delegateQueue: nil)
+    }
+    AudiobookDownloadCoordinator.shared.registerObserver(delegate, forIdentifier: backgroundIdentifier)
+    session = ownedSession
+    backgroundSessionIdentifier = backgroundIdentifier
 
     // Check for resume data from a previous interrupted download
     if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
@@ -411,8 +432,14 @@ final class OpenAccessDownloadTask: DownloadTask {
     }
     
     downloadTask = nil
-    session?.invalidateAndCancel()
+    // F2: the session is coordinator-owned. Explicit user cancel is the one case
+    // where tearing it down is correct — evict it from the registry so a later
+    // re-fetch creates a fresh session rather than reusing an invalidated one.
+    if let identifier = backgroundSessionIdentifier {
+      AudiobookDownloadCoordinator.shared.discardOwnedSession(forIdentifier: identifier)
+    }
     session = nil
+    sessionDelegate = nil
 
     downloadProgress = 0.0
     statePublisher.send(.error(nil))
@@ -429,8 +456,14 @@ final class OpenAccessDownloadTask: DownloadTask {
     hasAttemptedTokenRefresh = true
     ATLog(.info, "OpenAccessDownloadTask: Attempting bearer token refresh for: \(key)")
 
-    session?.invalidateAndCancel()
+    // F2: evict the coordinator-owned session before re-fetching so the retry
+    // creates a fresh session (a new bearer token means new headers on the
+    // session config) instead of reusing the now-invalidated one.
+    if let identifier = backgroundSessionIdentifier {
+      AudiobookDownloadCoordinator.shared.discardOwnedSession(forIdentifier: identifier)
+    }
     session = nil
+    sessionDelegate = nil
     downloadTask = nil
 
     var request = URLRequest(url: fulfillURL)
@@ -495,8 +528,13 @@ final class OpenAccessDownloadTask: DownloadTask {
 
     ATLog(.info, "OpenAccessDownloadTask: Scheduling network-retry in \(Self.NetworkRetryDelay)s for: \(key)")
 
-    session?.invalidateAndCancel()
+    // F2: evict the coordinator-owned session before the delayed re-fetch so
+    // the retry builds a fresh session rather than reusing an invalidated one.
+    if let identifier = backgroundSessionIdentifier {
+      AudiobookDownloadCoordinator.shared.discardOwnedSession(forIdentifier: identifier)
+    }
     session = nil
+    sessionDelegate = nil
     downloadTask = nil
 
     DispatchQueue.global().asyncAfter(deadline: .now() + Self.NetworkRetryDelay) { [weak self] in
@@ -525,7 +563,7 @@ final class OpenAccessDownloadTask: DownloadTask {
 
 // MARK: - DownloadTaskURLSessionDelegate
 
-final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
+final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate, DownloadTaskObserver {
   private let downloadTask: DownloadTask
   private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   private let finalURL: URL
