@@ -29,6 +29,7 @@ final class ChunkStallRetryTests: XCTestCase {
     private func makeTask(token: String? = "test-token") -> OpenAccessDownloadTask {
         OpenAccessDownloadTask(
             key: "test-track-key",
+            bookID: "test-book",
             downloadURL: URL(string: "https://example.com/track.mp3")!,
             urlString: "https://example.com/track.mp3",
             urlMediaType: .audioMPEG,
