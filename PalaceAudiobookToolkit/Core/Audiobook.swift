@@ -45,8 +45,13 @@ public enum AudiobookFactory {
     for manifest: Manifest
   ) -> Audiobook.Type {
     switch manifest.audiobookType {
-    case .findaway:
+    #if FEATURE_FINDAWAY
+    // Findaway playback requires the proprietary AudioEngine SDK. When it isn't
+    // linked (the open, no-DRM build) fall through to OpenAccess rather than
+    // touching absent AudioEngine symbols. Mirrors Android's optional Findaway.
+    case .findaway where FindawaySupport.isAvailable:
       FindawayAudiobook.self
+    #endif
     default:
       OpenAccessAudiobook.self
     }
@@ -160,8 +165,10 @@ class DynamicPlayerFactory: PlayerFactoryProtocol {
         return LCPStreamingPlayer(tableOfContents: toc, drmDecryptor: decryptor)
       }
 
-    case .findaway:
+    #if FEATURE_FINDAWAY
+    case .findaway where FindawaySupport.isAvailable:
       return FindawayPlayer(tableOfContents: toc) ?? OpenAccessPlayer(tableOfContents: toc)
+    #endif
     default:
       return OpenAccessPlayer(tableOfContents: toc)
     }

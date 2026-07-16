@@ -19,6 +19,24 @@ import UIKit
   case endOfChapter
 }
 
+public extension SleepTimerTriggerAt {
+  /// Human-readable menu title for this sleep-timer option, matching the
+  /// toolkit player's own sleep-timer action-sheet labels
+  /// (`AudiobookPlayerView.sleepTimerTitle(for:)`). Exposed so an in-app
+  /// custom player can build its own sleep-timer menu without reimplementing
+  /// the copy.
+  var displayTitle: String {
+    typealias S = Strings.AudiobookPlayerViewController
+    switch self {
+    case .endOfChapter: return S.endOfChapter
+    case .oneHour: return S.oneHour
+    case .thirtyMinutes: return S.thirtyMinutes
+    case .fifteenMinutes: return S.fifteenMinutes
+    case .never: return S.off
+    }
+  }
+}
+
 // MARK: - TimerStopPoint
 
 private enum TimerStopPoint {

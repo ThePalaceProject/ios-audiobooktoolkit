@@ -330,6 +330,7 @@ public struct AudiobookPlayerView: View {
   private func skipButton(
     _ imageName: String,
     textLabel _: String,
+    interval: TimeInterval,
     accessibilityString: String,
     action: @escaping () -> Void
   ) -> some View {
@@ -343,7 +344,7 @@ public struct AudiobookPlayerView: View {
       ToolkitImage(name: imageName, renderingMode: .template)
         .overlay(
           VStack(spacing: -2) {
-            Text("\(Int(playbackModel.skipTimeInterval))")
+            Text("\(Int(interval))")
               .font(labelFont)
               .offset(x: -1)
             Text("sec")
@@ -473,6 +474,7 @@ public struct AudiobookPlayerView: View {
       skipButton(
         "skip_back",
         textLabel: "skip back",
+        interval: playbackModel.skipBackInterval,
         accessibilityString: Strings.Accessibility.skipBackButton,
         action: playbackModel.skipBack
       )
@@ -484,6 +486,7 @@ public struct AudiobookPlayerView: View {
       skipButton(
         "skip_forward",
         textLabel: "skip forward",
+        interval: playbackModel.skipForwardInterval,
         accessibilityString: Strings.Accessibility.skipForwardButton,
         action: playbackModel.skipForward
       )

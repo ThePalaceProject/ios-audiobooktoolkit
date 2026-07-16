@@ -98,6 +98,17 @@ public enum PlaybackRate: Int, CaseIterable {
   }
 }
 
+public extension PlaybackRate {
+  /// The short multiplier label shown on the speed chip, e.g. "1.0×",
+  /// "1.5×", "1.25×". Mirrors the toolkit player's own speed-chip formatting
+  /// (`AudiobookPlayerView.playbackRateText` / `SpeedSliderSheet.speedLabel`).
+  /// Exposed so an in-app custom player can label its speed control identically.
+  var displayLabel: String {
+    if self == .normalTime { return "1.0×" }
+    return HumanReadablePlaybackRate.formatMultiplier(PlaybackRate.convert(rate: self))
+  }
+}
+
 // MARK: - PlaybackState
 
 public enum PlaybackState {

@@ -14,11 +14,11 @@ public class AudiobookPlaybackModel: ObservableObject {
   @Published private var reachability = Reachability()
   @Published var isWaitingForPlayer = false
   @Published var playbackProgress: Double = 0
-  @Published var isDownloading = false
-  @Published var overallDownloadProgress: Float = 0
+  @Published public var isDownloading = false
+  @Published public var overallDownloadProgress: Float = 0
   @Published var trackErrors: [String: Error] = [:]
   @Published var coverImage: UIImage?
-  @Published var toastMessage: String = ""
+  @Published public var toastMessage: String = ""
   @Published private var _isPlaying: Bool = false
 
   private var subscriptions: Set<AnyCancellable> = []
@@ -79,7 +79,10 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
   }
 
-  let skipTimeInterval: TimeInterval = DefaultAudiobookManager.skipTimeInterval
+  /// Independently-configurable skip intervals, read live from the manager so a
+  /// host's Playback-settings change applies to subsequently opened audiobooks.
+  var skipForwardInterval: TimeInterval { audiobookManager.skipForwardInterval }
+  var skipBackInterval: TimeInterval { audiobookManager.skipBackInterval }
 
   var offset: TimeInterval {
     if let currentLocation = currentLocation,
@@ -452,7 +455,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     Task { [weak self] in
       guard let self = self else { return }
-      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipTimeInterval)
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(-self.skipBackInterval)
       await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
@@ -460,7 +463,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           self.notifyHomeScreenOfPositionUpdate()
         } else {
           if let currentLocation = self.currentLocation {
-            let fallbackPosition = currentLocation + (-self.skipTimeInterval)
+            let fallbackPosition = currentLocation + (-self.skipBackInterval)
             self.currentLocation = fallbackPosition
             self.saveLocation()
             self.notifyHomeScreenOfPositionUpdate()
@@ -485,7 +488,7 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     Task { [weak self] in
       guard let self = self else { return }
-      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipTimeInterval)
+      let adjustedLocation = await self.audiobookManager.audiobook.player.skipPlayhead(self.skipForwardInterval)
       await MainActor.run {
         if let adjustedLocation = adjustedLocation {
           self.currentLocation = adjustedLocation
@@ -493,7 +496,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           self.notifyHomeScreenOfPositionUpdate()
         } else {
           if let currentLocation = self.currentLocation {
-            let fallbackPosition = currentLocation + self.skipTimeInterval
+            let fallbackPosition = currentLocation + self.skipForwardInterval
             self.currentLocation = fallbackPosition
             self.saveLocation()
             self.notifyHomeScreenOfPositionUpdate()
@@ -540,7 +543,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     audiobookManager.sleepTimer.setTimerTo(trigger: trigger)
   }
 
-  func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
+  public func addBookmark(completion: @escaping (_ error: Error?) -> Void) {
     guard let currentLocation else {
       completion(BookmarkError.bookmarkFailedToSave)
       return
@@ -619,6 +622,19 @@ public class AudiobookPlaybackModel: ObservableObject {
       }
     }
   }
+}
+
+// MARK: - Chapter-relative time accessors (in-app custom player)
+public extension AudiobookPlaybackModel {
+  /// Chapter-relative playhead position, in seconds from the start of the
+  /// current chapter. This is the raw `TimeInterval` behind the toolkit
+  /// player's `playheadOffsetText` timecode — exposed (not the formatted
+  /// string) so an in-app custom player can format it itself.
+  var chapterPlayheadOffset: TimeInterval { offset }
+
+  /// Seconds remaining in the current chapter — the raw `TimeInterval`
+  /// behind the toolkit player's `timeLeftText` timecode.
+  var chapterTimeLeft: TimeInterval { timeLeft }
 }
 
 // MARK: - PP-4156 download-indicator visibility rule
