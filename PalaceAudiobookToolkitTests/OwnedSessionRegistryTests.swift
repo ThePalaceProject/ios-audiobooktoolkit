@@ -140,6 +140,63 @@ final class OwnedSessionRegistryTests: XCTestCase {
     session.invalidateAndCancel()
   }
 
+  // MARK: - Retain cycle (architect SoD blocker — the mutant-killer)
+
+  /// F2 makes a download task strongly retain its `DownloadTaskURLSessionDelegate`
+  /// (`sessionDelegate`), and the delegate holds the task back. If that back-ref
+  /// were strong, task⇄delegate would be a self-retaining cycle that never breaks
+  /// on player close — leaking the pair AND keeping the router's weak observer
+  /// alive, which would make the no-observer durable-completion fallback
+  /// unreachable via close. The back-ref is `weak`, so dropping every external
+  /// strong ref must dealloc BOTH. This asserts exactly that.
+  ///
+  /// Mutation coverage: flip the delegate's `weak var downloadTask` back to a
+  /// strong `let`/`var` and this test fails (the sentinels stay non-nil).
+  func testTaskAndDelegate_deallocateWhenExternalRefsDropped_noRetainCycle() {
+    weak var weakTask: OpenAccessDownloadTask?
+    weak var weakDelegate: DownloadTaskURLSessionDelegate?
+
+    autoreleasepool {
+      let url = URL(string: "https://example.com/chapter.mp3")!
+      let dest = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("cycle-dest.mp3")
+
+      let task = OpenAccessDownloadTask(
+        key: "cycle-track",
+        bookID: "cycle-book",
+        downloadURL: url,
+        urlString: url.absoluteString,
+        urlMediaType: .audioMPEG,
+        alternateLinks: nil,
+        feedbooksProfile: nil,
+        token: nil
+      )
+      let delegate = DownloadTaskURLSessionDelegate(
+        downloadTask: task,
+        statePublisher: task.statePublisher,
+        finalDirectory: dest,
+        trackKey: task.key
+      )
+      // Reproduce production ownership: the task strongly retains its delegate,
+      // exactly as `downloadAsset` does. The delegate's back-ref to the task is
+      // the thing under test.
+      task.installSessionDelegateForTesting(delegate)
+
+      weakTask = task
+      weakDelegate = delegate
+
+      // Sanity: both alive while the local strong refs exist.
+      XCTAssertNotNil(weakTask)
+      XCTAssertNotNil(weakDelegate)
+    }
+
+    // External strong refs (the locals) are gone. With a weak back-reference the
+    // cycle is broken, so both must have deallocated.
+    XCTAssertNil(weakTask,
+      "The download task must deallocate when external refs drop — a strong delegate back-ref would leak it")
+    XCTAssertNil(weakDelegate,
+      "The session delegate must deallocate with its task — otherwise the router's weak observer never nils and Refinement 1 is unreachable on close")
+  }
+
   // MARK: - Observer swap (thread-safety smoke)
 
   /// `registerObserver` for an identifier with a live session must not crash and

@@ -559,6 +559,16 @@ final class OpenAccessDownloadTask: DownloadTask {
   var hasUsedNetworkRetry: Bool {
     hasAttemptedNetworkRetry
   }
+
+  /// Test seam — installs `delegate` as this task's strongly-held session
+  /// delegate, reproducing the exact ownership `downloadAsset` sets up
+  /// (`sessionDelegate = delegate`). Lets the retain-cycle test assert that
+  /// task⇄delegate is NOT a cycle: with the delegate's back-reference weak,
+  /// dropping external strong refs must dealloc both. If the back-reference
+  /// regressed to strong, neither would dealloc and the test would fail.
+  func installSessionDelegateForTesting(_ delegate: DownloadTaskURLSessionDelegate) {
+    sessionDelegate = delegate
+  }
 }
 
 // MARK: - DownloadTaskURLSessionDelegate
