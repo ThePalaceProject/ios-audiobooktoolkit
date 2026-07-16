@@ -255,6 +255,32 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     }
   }
 
+  /// Sync wrapper around `player.play(at:)` for `@MainActor` hosts under strict
+  /// concurrency that must not send the non-Sendable `Player`/`TrackPosition`
+  /// across an isolation boundary. Fire-and-forget with optional completion —
+  /// mirrors `seekWithSlider(value:completion:)`, whose own internal `Task` does
+  /// the identical call. (Unblocks the app's Release archive under
+  /// SWIFT_STRICT_CONCURRENCY=complete.)
+  public func playAtPosition(_ position: TrackPosition, completion: ((Error?) -> Void)? = nil) {
+    Task {
+      do {
+        try await audiobook.player.play(at: position)
+        completion?(nil)
+      } catch {
+        completion?(error)
+      }
+    }
+  }
+
+  /// Sync wrapper around `player.skipPlayhead(_:)`. Same isolation rationale as
+  /// `playAtPosition`.
+  public func skipPlayhead(_ interval: TimeInterval, completion: ((TrackPosition?) -> Void)? = nil) {
+    Task {
+      let result = await audiobook.player.skipPlayhead(interval)
+      completion?(result)
+    }
+  }
+
   /// Calculate chapter-relative progress for a given position
   public func calculateChapterProgress(for position: TrackPosition) -> Double {
     do {
