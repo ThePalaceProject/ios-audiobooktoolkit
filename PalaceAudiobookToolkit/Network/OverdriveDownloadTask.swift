@@ -141,8 +141,16 @@ final class OverdriveDownloadTask: DownloadTask {
   }
 
   private func downloadAsset(fromRemoteURL remoteURL: URL, toLocalDirectory finalURL: URL) {
+    // Stable, launch-independent session identifier. Swift's hashValue is
+    // per-process SipHash-seeded, so the previous `remoteURL.hashValue` produced
+    // a *different* identifier on every launch — the reconnected background
+    // session on relaunch could never match the persisted download record, so a
+    // track that finished downloading while the app was killed was silently
+    // discarded. Key the identifier on the stable (bookID, trackKey) pair.
+    // (PP-4800 root-cause contributor — F1.)
+    let stableSessionKey = hash("\(bookID)-\(key)") ?? "\(bookID)-\(key)"
     let backgroundIdentifier = (Bundle.main.bundleIdentifier ?? "")
-      .appending(".overdriveBackgroundIdentifier.\(bookID)-\(remoteURL.hashValue)")
+      .appending(".overdriveBackgroundIdentifier.\(stableSessionKey)")
     let config = URLSessionConfiguration.background(withIdentifier: backgroundIdentifier)
     let delegate = DownloadTaskURLSessionDelegate(
       downloadTask: self,
@@ -156,7 +164,20 @@ final class OverdriveDownloadTask: DownloadTask {
       delegate: delegate,
       delegateQueue: nil
     )
-    
+
+    // Record the download with the coordinator so a background completion that
+    // iOS delivers after the app is killed can be finalized to `finalURL` on the
+    // next launch. Without this record, `activeDownloads` stays empty,
+    // `handleBackgroundDownloadCompletion` hits its no-mapping branch, and the
+    // finished temp file is dropped by the OS. (PP-4800 root-cause fix — F1.)
+    AudiobookDownloadCoordinator.shared.registerActiveDownload(
+      sessionIdentifier: backgroundIdentifier,
+      bookID: bookID,
+      trackKey: key,
+      originalURL: remoteURL,
+      localDestination: finalURL
+    )
+
     // Check for resume data from a previous interrupted download
     if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
       ATLog(.info, "OverdriveDownloadTask: Resuming download from saved state for: \(key)")
