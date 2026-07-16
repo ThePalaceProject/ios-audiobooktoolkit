@@ -24,7 +24,24 @@ public final class AudiobookDownloadCoordinator {
   
   /// Reconnected URLSessions that must be kept alive
   private var reconnectedSessions: [String: URLSession] = [:]
-  
+
+  /// Background `URLSession`s owned by the coordinator for the app's lifetime,
+  /// keyed by background-session identifier. F2: exactly ONE live background
+  /// session per identifier. The per-track download tasks (`OpenAccessDownloadTask`
+  /// / `OverdriveDownloadTask`) are recreated on every audiobook open, so if each
+  /// created its own `URLSession` with the (now-stable, F1) identifier, a reopen
+  /// spawned a SECOND live background session sharing the identifier — undefined
+  /// behavior, whose delegate callbacks stop firing, so the reopened player's
+  /// progress bar looks frozen while the original session keeps downloading.
+  /// Owning the session here (GET-OR-CREATE in `session(forIdentifier:...)`) makes
+  /// it survive player close and be reused on reopen instead of duplicated.
+  private var ownedSessions: [String: URLSession] = [:]
+
+  /// Durable router delegates for the coordinator-owned sessions, retained
+  /// alongside their session (a `URLSession` retains its delegate, but we keep an
+  /// explicit reference so the type is available for observer re-registration).
+  private var ownedSessionDelegates: [String: DurableSessionRouterDelegate] = [:]
+
   /// Active download tasks mapped by session identifier
   private var activeDownloads: [String: DownloadInfo] = [:]
   
@@ -118,7 +135,73 @@ public final class AudiobookDownloadCoordinator {
     
     downloadStatePublisher.send(.sessionReconnected(sessionIdentifier: identifier))
   }
-  
+
+  // MARK: - Coordinator-Owned Session Registry (F2)
+
+  /// Returns the coordinator-owned background `URLSession` for `identifier`,
+  /// creating it (via `configure`) on first use and REUSING the live one on
+  /// every subsequent call. This guarantees exactly one live background session
+  /// per identifier across audiobook close/reopen: the per-track download task
+  /// that outlives player close keeps its session here, and the freshly-created
+  /// task on reopen reuses it (re-registering itself as the current observer)
+  /// instead of spawning a duplicate that iOS would treat as undefined behavior.
+  ///
+  /// The router delegate that owns the session forwards its callbacks to a
+  /// swappable current observer; `registerObserver(_:forIdentifier:)` swaps it.
+  ///
+  /// - Parameters:
+  ///   - identifier: The background-session identifier (stable per book+track).
+  ///   - configure: Builds the `URLSession` on first use for this identifier.
+  ///     Called with the durable router delegate that MUST be set as the
+  ///     session's delegate. Only invoked on a cache miss.
+  /// - Returns: The live coordinator-owned session for `identifier`.
+  func session(
+    forIdentifier identifier: String,
+    configure: (DurableSessionRouterDelegate) -> URLSession
+  ) -> URLSession {
+    queue.sync(flags: .barrier) {
+      if let existing = ownedSessions[identifier] {
+        ATLog(.debug, "AudiobookDownloadCoordinator: Reusing owned session: \(identifier)")
+        return existing
+      }
+      let router = DurableSessionRouterDelegate(sessionIdentifier: identifier)
+      let session = configure(router)
+      ownedSessions[identifier] = session
+      ownedSessionDelegates[identifier] = router
+      ATLog(.debug, "AudiobookDownloadCoordinator: Created owned session: \(identifier)")
+      return session
+    }
+  }
+
+  /// Swaps the current observer the durable router for `identifier` forwards to.
+  /// Called by each download task in `downloadAsset` so the CURRENT player's
+  /// task receives progress/completion, even after a previous task (from a prior
+  /// open) was released. The router holds the observer weakly and guards the
+  /// swap with its own lock, so a released observer simply stops receiving
+  /// callbacks. Safe to call before or after `session(forIdentifier:...)`.
+  func registerObserver(_ observer: DownloadTaskObserver, forIdentifier identifier: String) {
+    let router: DurableSessionRouterDelegate? = queue.sync {
+      ownedSessionDelegates[identifier]
+    }
+    router?.setCurrentObserver(observer)
+  }
+
+  /// Invalidates and forgets the coordinator-owned session for `identifier`,
+  /// cancelling any in-flight task. Call ONLY from explicit-cancel or the
+  /// retry/token-refresh paths that deliberately tear the session down before
+  /// re-fetching — NOT on player close (F2 keeps the session alive there). The
+  /// next `session(forIdentifier:)` for this identifier then creates a fresh
+  /// session, so a stale invalidated session is never reused.
+  func discardOwnedSession(forIdentifier identifier: String) {
+    queue.sync(flags: .barrier) {
+      if let session = ownedSessions.removeValue(forKey: identifier) {
+        session.invalidateAndCancel()
+        ATLog(.debug, "AudiobookDownloadCoordinator: Discarded owned session: \(identifier)")
+      }
+      ownedSessionDelegates.removeValue(forKey: identifier)
+    }
+  }
+
   // MARK: - Download Event Handling
   
   /// Handles a background download completion.
@@ -401,6 +484,15 @@ public final class AudiobookDownloadCoordinator {
       self?.activeDownloads.removeAll()
       self?.reconnectedSessions.removeAll()
       self?.backgroundCompletionHandlers.removeAll()
+
+      // Let owned sessions drain any in-flight tasks rather than cancelling
+      // them (a hard `invalidateAndCancel` would kill a live download — the
+      // exact thing F2 must not do). `finishTasksAndInvalidate` completes
+      // outstanding tasks, then invalidates. We drop our references so the
+      // registry is empty for a fresh start / test isolation.
+      self?.ownedSessions.values.forEach { $0.finishTasksAndInvalidate() }
+      self?.ownedSessions.removeAll()
+      self?.ownedSessionDelegates.removeAll()
       
       if let url = self?.persistenceURL {
         try? FileManager.default.removeItem(at: url)
@@ -417,6 +509,115 @@ public final class AudiobookDownloadCoordinator {
     OpenAccessDownloadTask.migrateFromCachesIfNeeded()
     OverdriveDownloadTask.migrateFromCachesIfNeeded()
     ATLog(.info, "AudiobookDownloadCoordinator: Completed download migration check")
+  }
+}
+
+// MARK: - DownloadTaskObserver (F2)
+
+/// The three `URLSessionDownloadDelegate` callbacks the durable router forwards
+/// to the CURRENT download task. `DownloadTaskURLSessionDelegate` (which holds
+/// all the completion/error/retry/token-refresh/resume-data logic) conforms to
+/// this; the router calls through without duplicating any of that logic.
+///
+/// `AnyObject` so the router can hold the current observer WEAKLY — a task from
+/// a prior audiobook open must be free to deallocate, at which point it simply
+/// stops receiving callbacks (and `didFinishDownloadingTo` falls back to the
+/// coordinator's durable finalization — see the router).
+protocol DownloadTaskObserver: AnyObject {
+  func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?)
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  )
+}
+
+// MARK: - DurableSessionRouterDelegate (F2)
+
+/// The delegate of a coordinator-owned background `URLSession`. It is created
+/// once per identifier and lives for the app's lifetime, forwarding session
+/// callbacks to whichever download task is CURRENTLY observing (the one the
+/// live player just created). Because a `URLSession`'s delegate is fixed at
+/// creation, this indirection is what lets a reopened player receive live
+/// progress on a session that a prior task created.
+///
+/// Thread-safety: `currentObserver` is read on the session's background
+/// delegate queue and written from `downloadAsset`; both go through `lock`.
+/// The observer is held weakly so a released prior task deallocates cleanly.
+final class DurableSessionRouterDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
+  private let sessionIdentifier: String
+  private let lock = NSLock()
+  private weak var currentObserver: DownloadTaskObserver?
+
+  init(sessionIdentifier: String) {
+    self.sessionIdentifier = sessionIdentifier
+    super.init()
+  }
+
+  /// Swaps the observer the router forwards to. Guarded by `lock`.
+  func setCurrentObserver(_ observer: DownloadTaskObserver) {
+    lock.lock()
+    currentObserver = observer
+    lock.unlock()
+  }
+
+  private func snapshotObserver() -> DownloadTaskObserver? {
+    lock.lock()
+    defer { lock.unlock() }
+    return currentObserver
+  }
+
+  // MARK: URLSessionDownloadDelegate
+
+  func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    if let observer = snapshotObserver() {
+      observer.urlSession(session, downloadTask: downloadTask, didFinishDownloadingTo: location)
+      return
+    }
+
+    // REFINEMENT 1: no live observer (the download completed between player
+    // close and reopen). Dropping here would LOSE the finished file — worse
+    // than a frozen bar. Finalize durably via the F1 path, which uses the
+    // `registerActiveDownload` mapping (`downloadAsset` records it) to move the
+    // temp file to its destination. Round-2's load-prune later reaps the entry.
+    guard let originalURL = downloadTask.originalRequest?.url else {
+      ATLog(.error, "DurableSessionRouterDelegate: completed with no observer AND no original URL: \(sessionIdentifier)")
+      return
+    }
+    ATLog(.info, "DurableSessionRouterDelegate: no observer — finalizing via coordinator F1 path: \(sessionIdentifier)")
+    AudiobookDownloadCoordinator.shared.handleBackgroundDownloadCompletion(
+      sessionIdentifier: sessionIdentifier,
+      downloadedFileURL: location,
+      originalURL: originalURL
+    )
+  }
+
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    // No live observer → safe to drop: there is no player to surface the error
+    // to, and no file to finalize (a nil-error completion is handled by
+    // `didFinishDownloadingTo` above; a non-nil error has nothing to move).
+    snapshotObserver()?.urlSession(session, task: task, didCompleteWithError: error)
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  ) {
+    // No live observer → safe to drop: progress with no player to show it is
+    // meaningless, and the reopened player re-derives progress from file state.
+    snapshotObserver()?.urlSession(
+      session,
+      downloadTask: downloadTask,
+      didWriteData: bytesWritten,
+      totalBytesWritten: totalBytesWritten,
+      totalBytesExpectedToWrite: totalBytesExpectedToWrite
+    )
   }
 }
 
