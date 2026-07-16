@@ -564,7 +564,19 @@ final class OpenAccessDownloadTask: DownloadTask {
 // MARK: - DownloadTaskURLSessionDelegate
 
 final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate, DownloadTaskObserver {
-  private let downloadTask: DownloadTask
+  /// WEAK back-reference to the owning download task. The task retains THIS
+  /// delegate strongly (`sessionDelegate`) and the durable router retains the
+  /// delegate only weakly as its current observer — so if this were a strong
+  /// `let`, task⇄delegate would form a self-retaining cycle that never breaks on
+  /// player close (nil'd only on cancel/retry). That cycle would keep the
+  /// delegate alive, so the router's weak `currentObserver` would never nil and
+  /// the F2 no-observer durable-completion fallback would be unreachable via the
+  /// close path. Weak here breaks the cycle: on player close the audiobook graph
+  /// releases the task → this delegate deallocs → `router.currentObserver` nils →
+  /// a completion delivered while closed flows through Refinement 1. While a
+  /// download is genuinely active the audiobook graph keeps the task alive, so
+  /// this reference is non-nil for every callback that needs it.
+  private weak var downloadTask: DownloadTask?
   private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   private let finalURL: URL
   private let trackKey: String
@@ -593,7 +605,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
 
   func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
     guard let httpResponse = downloadTask.response as? HTTPURLResponse else {
-      ATLog(.error, "Response could not be cast to HTTPURLResponse: \(self.downloadTask.key)")
+      ATLog(.error, "Response could not be cast to HTTPURLResponse: \(self.downloadTask?.key ?? self.trackKey)")
       statePublisher.send(.error(nil))
       return
     }
@@ -619,22 +631,24 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
               ATLog(.error, "Could not remove original downloaded file at \(location.absoluteString) Error: \(error)")
             }
           }
-          self.downloadTask.downloadProgress = 1.0
+          self.downloadTask?.downloadProgress = 1.0
           self.statePublisher.send(.completed)
-          NotificationCenter.default.post(name: OpenAccessTaskCompleteNotification, object: self.downloadTask)
+          if let task = self.downloadTask {
+            NotificationCenter.default.post(name: OpenAccessTaskCompleteNotification, object: task)
+          }
         } else {
-          self.downloadTask.downloadProgress = 0.0
+          self.downloadTask?.downloadProgress = 0.0
           self.statePublisher.send(.error(nil))
         }
       }
     } else {
       ATLog(.error, "Download Task failed with server response: \n\(httpResponse.description)")
-      self.downloadTask.downloadProgress = 0.0
+      self.downloadTask?.downloadProgress = 0.0
 
       if httpResponse.statusCode == 401,
          let oaTask = self.downloadTask as? OpenAccessDownloadTask,
          oaTask.attemptTokenRefreshAndRetry() {
-        ATLog(.info, "DownloadTaskDelegate: 401 received, token refresh initiated for: \(self.downloadTask.key)")
+        ATLog(.info, "DownloadTaskDelegate: 401 received, token refresh initiated for: \(self.downloadTask?.key ?? self.trackKey)")
         return
       }
 
@@ -643,7 +657,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       // a DDoS pattern against the content server.
       if httpResponse.statusCode == 403,
          let oaTask = self.downloadTask as? OpenAccessDownloadTask {
-        ATLog(.error, "DownloadTaskDelegate: 403 Forbidden for: \(self.downloadTask.key) — will not retry")
+        ATLog(.error, "DownloadTaskDelegate: 403 Forbidden for: \(self.downloadTask?.key ?? self.trackKey) — will not retry")
         oaTask.isForbidden = true
 
         // Publish a typed error with HTTP status + URL context so the player
@@ -657,7 +671,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
           userInfo: [
             NSLocalizedDescriptionKey: OpenAccessPlayerError.contentForbidden.errorDescription(),
             "httpStatusCode": httpResponse.statusCode,
-            "trackKey": self.downloadTask.key,
+            "trackKey": self.trackKey,
             "url": httpResponse.url?.absoluteString ?? ""
           ]
         )
@@ -681,7 +695,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
           userInfo: [
             NSLocalizedDescriptionKey: "Server returned HTTP \(httpResponse.statusCode)",
             "httpStatusCode": httpResponse.statusCode,
-            "trackKey": self.downloadTask.key,
+            "trackKey": self.trackKey,
             "url": httpResponse.url?.absoluteString ?? ""
           ]
         )
@@ -697,8 +711,8 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       return
     }
 
-    ATLog(.error, "No file URL or response from download task: \(downloadTask.key).", error: error)
-    
+    ATLog(.error, "No file URL or response from download task: \(self.downloadTask?.key ?? self.trackKey).", error: error)
+
     // Try to save resume data for later recovery
     let nsError = error as NSError
     if let resumeData = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
@@ -721,7 +735,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
         // successful completion in `didFinishDownloadingTo`.
         if let oaTask = self.downloadTask as? OpenAccessDownloadTask,
            oaTask.attemptNetworkRetryAfterTransientError() {
-          ATLog(.info, "DownloadTaskDelegate: transient network error (\(code)) for \(self.downloadTask.key) — retry scheduled, suppressing terminal error")
+          ATLog(.info, "DownloadTaskDelegate: transient network error (\(code)) for \(self.downloadTask?.key ?? self.trackKey) — retry scheduled, suppressing terminal error")
           return
         }
         let networkLossError = NSError(
@@ -755,6 +769,12 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
       guard let self = self else {
         return
       }
+
+      // If the owning task has been released (player closed mid-download), skip
+      // the progress update — there is no live player to show it, and the
+      // reopened player re-derives progress from file state. The download itself
+      // continues on the coordinator-owned session regardless.
+      guard let downloadTask = self.downloadTask else { return }
 
       if totalBytesExpectedToWrite == NSURLSessionTransferSizeUnknown || totalBytesExpectedToWrite == 0 {
         downloadTask.downloadProgress = 0.0
