@@ -612,8 +612,20 @@ public class AudiobookPlaybackModel: ObservableObject {
   private func updateLockScreenCoverArtwork(image: UIImage?) {
     DispatchQueue.main.async {
       if let image = image {
-        let itemArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in
-          image
+        // MediaPlayer invokes AND tears down this request handler on its OWN
+        // background queue (it rasterizes lazily via
+        // `-[MPMediaItemArtwork jpegDataWithSize:]` when building the
+        // Now-Playing / lock-screen info). A plain, non-`@Sendable` handler
+        // that closes over `image` gets its captured `UIImage` released from
+        // that off-main block-destroy, racing the main-thread lifetime of the
+        // same image — which trapped in `block_destroy_helper` (Crashlytics
+        // e672637, EXC_BREAKPOINT). Capturing an immutable local and marking
+        // the handler `@Sendable` makes the block's captured state provably
+        // safe to build/destroy off-main. Mirrors the app-side
+        // NowPlayingCoordinator fix (Palace #1218).
+        let artworkImage = image
+        let itemArtwork = MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in
+          artworkImage
         }
 
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
