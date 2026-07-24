@@ -311,3 +311,73 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     return (toc, track)
   }
 }
+
+// MARK: - PP-4873: Findaway now-playing crash (iOS 26)
+//
+// `FindawayPlayer.playbackRate`'s getter used to force-unwrap the persisted /
+// engine-reported rate: `PlaybackRate(rawValue: Int(rate * 100))!`. On iOS 26
+// the Findaway engine reports an idle / out-of-range rate while binding (before
+// playback) whose `Int(rate * 100)` is not an exact `PlaybackRate` case, so
+// `init(rawValue:)` returned nil and the `!` aborted the process when Now
+// Playing was updated (147 events / 11 patrons, Findaway titles only). The fix
+// falls both getters back to `?? .normalTime`.
+//
+// These tests drive the REAL production getter (not a copy of its logic): they
+// seed the persisted rate that the `cachedValue != 0` branch reads from
+// `UserDefaults`, then read `player.playbackRate`. A revert of the production
+// `?? .normalTime` back to `!` traps THIS test. `audioEngine` is
+// `FAEAudioEngine.shared()` with no live `playbackEngine` under test, so the
+// getter takes the cached path deterministically.
+@MainActor
+final class FindawayPlaybackRateResolutionTests: XCTestCase {
+
+  private static let rateKey = "audioPlaybackRateKey"
+  private var savedRate: Any?
+
+  override func setUp() {
+    super.setUp()
+    savedRate = UserDefaults.standard.object(forKey: Self.rateKey)
+  }
+
+  override func tearDown() {
+    if let savedRate {
+      UserDefaults.standard.set(savedRate, forKey: Self.rateKey)
+    } else {
+      UserDefaults.standard.removeObject(forKey: Self.rateKey)
+    }
+    super.tearDown()
+  }
+
+  private func makePlayer() throws -> FindawayPlayer {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: Self.self))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "pp4873-rate", decryptor: nil, token: nil),
+      "Fixture manifest failed to parse"
+    )
+    let toc = audiobook.tableOfContents
+    let track = try XCTUnwrap(toc.allTracks.first)
+    return FindawayPlayer(
+      currentPosition: TrackPosition(track: track, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc
+    )
+  }
+
+  /// Regression gate: an out-of-enum persisted rate must NOT crash the getter.
+  /// 1.11 -> Int(111) is not a `PlaybackRate` case; pre-fix the `!` aborted the
+  /// process here, post-fix it falls back to `.normalTime`. Reverting the
+  /// production fix to `!` traps this test.
+  func testPlaybackRateGetter_outOfEnumRate_fallsBackToNormal_noTrap() throws {
+    let player = try makePlayer()
+    UserDefaults.standard.set(1.11, forKey: Self.rateKey)
+    XCTAssertEqual(player.playbackRate, .normalTime,
+                   "an out-of-enum persisted rate must fall back to normal, never trap")
+  }
+
+  /// A persisted rate that is an exact step still maps through the fixed getter
+  /// (the fallback must not swallow legitimate rates).
+  func testPlaybackRateGetter_validRate_mapsThrough() throws {
+    let player = try makePlayer()
+    UserDefaults.standard.set(2.0, forKey: Self.rateKey)
+    XCTAssertEqual(player.playbackRate, .doubleTime)
+  }
+}

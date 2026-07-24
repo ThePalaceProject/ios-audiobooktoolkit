@@ -314,14 +314,19 @@ class FindawayPlayer: NSObject, Player {
       let cachedValue = UserDefaults.standard.double(forKey: audioPlaybackRateIdentifierKey)
       guard cachedValue != 0 else {
         if let value = audioEngine?.playbackEngine?.currentRate {
-          return PlaybackRate(rawValue: Int(value * 100))!
+          // PP-4873: the Findaway engine can report an idle / out-of-range rate
+          // (e.g. 0.0 while binding, before playback starts) whose Int(rate*100)
+          // is not an exact PlaybackRate case; the force-unwrap crashed the app
+          // when Now Playing was updated on iOS 26. Fall back to normal speed.
+          return PlaybackRate(rawValue: Int(value * 100)) ?? .normalTime
         } else {
           return .normalTime
         }
       }
 
       audioEngine?.playbackEngine?.currentRate = Float(cachedValue)
-      return PlaybackRate(rawValue: Int(cachedValue * 100))!
+      // PP-4873: never force-unwrap a non-exact rate (see above).
+      return PlaybackRate(rawValue: Int(cachedValue * 100)) ?? .normalTime
     }
 
     set(newRate) {
