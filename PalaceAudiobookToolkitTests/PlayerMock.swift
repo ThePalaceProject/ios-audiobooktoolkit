@@ -28,6 +28,13 @@ class PlayerMock: NSObject, Player {
     positionSubject.eraseToAnyPublisher()
   }
 
+  /// Test seam: pump the fast-position stream that AVPlayer's periodic time
+  /// observer feeds in production. Lets a test drive the manager's
+  /// `positionPublisher`-based lock-screen heartbeat deterministically.
+  func _emitPosition(_ position: PalaceAudiobookToolkit.TrackPosition) {
+    positionSubject.send(position)
+  }
+
   required init(tableOfContents: PalaceAudiobookToolkit.AudiobookTableOfContents) {
     self.tableOfContents = tableOfContents
     playbackStatePublisher = PassthroughSubject()

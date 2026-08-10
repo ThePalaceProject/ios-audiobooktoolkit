@@ -325,8 +325,13 @@ final class ManifestOriginHostTests: XCTestCase {
     }
 
     func testOriginHost_noSelfLink_returnsNil() throws {
+        // `dracula_manifest` has an empty `links` array (no `self` relation), so
+        // the token scope host cannot be derived and must be nil. The previous
+        // fixture (`bocas_manifest`) actually carries a `self` link to
+        // catalog.biblioboard.com, so it asserted the opposite of its name and
+        // never exercised the no-self-link path.
         let manifest = try Manifest.from(
-            jsonFileName: "bocas_manifest",
+            jsonFileName: "dracula_manifest",
             bundle: Bundle(for: ManifestOriginHostTests.self)
         )
         XCTAssertNil(manifest.originHost,
