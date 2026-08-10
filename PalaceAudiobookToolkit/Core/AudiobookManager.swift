@@ -323,6 +323,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   private var chapterMonitorTimer: Cancellable?
 
+  /// Last time the player-driven lock-screen heartbeat wrote now-playing info.
+  /// Rate-limits `setupNowPlayingHeartbeat`'s `positionPublisher` sink (which
+  /// fires ~4×/s) to a lock-screen-appropriate cadence. HelpSpot 17865.
+  private var lastNowPlayingHeartbeat: Date = .distantPast
+
   // MARK: - Initialization
 
   public init(
@@ -343,6 +348,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     setupBindings()
     subscribeToPlayer()
     setupNowPlayingInfoTimer()
+    setupNowPlayingHeartbeat()
     setupChapterMonitorTimer()
     subscribeToMediaControlCommands()
     calculateOverallDownloadProgress()
@@ -493,6 +499,38 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   }
 
   // MARK: - Now Playing Info
+
+  /// Player-clock lock-screen heartbeat (HelpSpot 17865 / Crashlytics code 403).
+  ///
+  /// `setupNowPlayingInfoTimer` refreshes MPNowPlayingInfoCenter from a
+  /// main-runloop `Timer.publish(in: .common)`. iOS coalesces and suspends such
+  /// timers during long screen-locked background playback, so the lock screen
+  /// goes dry >30s while audio keeps playing and the ios-core NowPlayingCoordinator
+  /// logs the dry-stream (~23k events through 3.2.3).
+  ///
+  /// `positionPublisher` is fed by the player's AVPlayer periodic-time observer,
+  /// which the OS guarantees to fire while audio is actually playing — including
+  /// backgrounded and locked, because it is driven by the playback clock rather
+  /// than the runloop. Drive the lock-screen writer off it too, so the heartbeat
+  /// survives runloop coalescing. Rate-limited to a lock-screen cadence via
+  /// `lastNowPlayingHeartbeat` (the stream itself fires ~4×/s).
+  ///
+  /// Lock-screen only: the in-app slider already subscribes to `positionPublisher`
+  /// (AudiobookPlaybackModel), so this deliberately does NOT re-publish
+  /// `.positionUpdated` — that avoids perturbing the slider path and the
+  /// foreground resume-jump fix in `setupAppStateObserver`.
+  private func setupNowPlayingHeartbeat() {
+    audiobook.player.positionPublisher
+      .receive(on: RunLoop.main)
+      .sink { [weak self] position in
+        guard let self, self.audiobook.player.isPlaying else { return }
+        let now = Date()
+        guard now.timeIntervalSince(self.lastNowPlayingHeartbeat) >= 2.0 else { return }
+        self.lastNowPlayingHeartbeat = now
+        self.updateNowPlayingInfo(position)
+      }
+      .store(in: &cancellables)
+  }
 
   private func setupNowPlayingInfoTimer() {
     timer?.cancel()

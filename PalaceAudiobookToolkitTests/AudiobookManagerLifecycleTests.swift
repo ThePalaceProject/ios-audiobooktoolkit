@@ -24,6 +24,7 @@
 //
 
 import Combine
+import MediaPlayer
 import XCTest
 @testable import PalaceAudiobookToolkit
 
@@ -167,5 +168,62 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
   //    and skip this test in the toolkit — main-repo coverage compensates."
   func testNowPlayingInfoWrite_isWrappedInBackgroundTask() throws {
     throw XCTSkip("Skipped per contract: toolkit lacks UIApplication shim; main-repo NowPlayingCoordinatorBackgroundTests covers writer-side beginBackgroundTask discipline.")
+  }
+
+  // MARK: - Test 4: player positionPublisher drives the lock screen independently
+  //
+  // HelpSpot 17865 residual (Crashlytics code 403, "NowPlayingCoordinator dry
+  // while isPlaying"): the wall-clock `timer` that refreshes MPNowPlayingInfoCenter
+  // is a main-runloop `.common` timer. iOS coalesces/suspends it during long
+  // screen-locked background playback, so the lock screen goes stale >30s and
+  // the ios-core watchdog logs the dry-stream (~23k events through 3.2.3).
+  //
+  // The player's AVPlayer periodic-time observer (`positionPublisher`) is
+  // OS-guaranteed to fire while audio is actually playing — including
+  // backgrounded/locked — because it is driven by the playback clock, not the
+  // runloop. This test pins that the manager ALSO drives the lock-screen writer
+  // off `positionPublisher`, so a position emission refreshes now-playing even
+  // when the wall-clock timer is not the source (the background case, modeled
+  // here by cancelling `timer` before emitting).
+  func testPositionPublisher_refreshesLockScreen_whenWallClockTimerSilent() throws {
+    let (manager, player) = try makeManager()
+
+    let firstTrack = manager.tableOfContents.allTracks.first
+    XCTAssertNotNil(firstTrack, "Test fixture must have at least one track.")
+    guard let track = firstTrack else { return }
+
+    // Model the background case: the coalescible wall-clock timer is not firing,
+    // so it cannot be the source of any lock-screen refresh.
+    manager.timer?.cancel()
+
+    // Clear the process-wide now-playing info so a non-nil read afterwards can
+    // only have come from the heartbeat we are exercising.
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+
+    let position = TrackPosition(track: track, timestamp: 42.0, tracks: manager.tableOfContents.tracks)
+    player.isPlaying = true
+    player.currentTrackPosition = position
+
+    // The heartbeat delivers on the main runloop; give it a tick to settle.
+    let settled = XCTestExpectation(description: "Heartbeat settled")
+    player._emitPosition(position)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { settled.fulfill() }
+    wait(for: [settled], timeout: 2.0)
+
+    let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+    XCTAssertNotNil(
+      info,
+      "positionPublisher emission while playing must refresh MPNowPlayingInfoCenter even with the wall-clock timer cancelled — the lock-screen heartbeat must not depend solely on the coalescible main-runloop timer. HelpSpot 17865 / code 403."
+    )
+
+    let expectedElapsed = (try? manager.tableOfContents.chapterOffset(for: position))
+    if let expectedElapsed, let actualElapsed = info?[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double {
+      XCTAssertEqual(
+        actualElapsed,
+        expectedElapsed,
+        accuracy: 0.001,
+        "The refreshed lock-screen elapsed time must reflect the emitted position."
+      )
+    }
   }
 }
