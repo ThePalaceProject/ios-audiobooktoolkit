@@ -94,8 +94,8 @@ public extension Track {
 
 // MARK: - EmptyTrack
 
-/// The fifth `Track` conformer — easy to miss because it lives here rather than
-/// alongside the others in `Tracks/`. Immutable like the rest.
+/// One of the six `Track` conformers — easy to miss because it lives here
+/// rather than alongside the others in `Tracks/`. Immutable like the rest.
 final class EmptyTrack: Track {
   let key: String
   let downloadTask: (any DownloadTask)?
