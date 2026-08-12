@@ -37,6 +37,15 @@ final class TrackTransitionTests: XCTestCase {
         // throwing. Assert something that can actually be wrong: the resolved
         // chapter must genuinely CONTAIN the position, i.e. start at or before
         // it, and be the last such chapter in the list.
+        //
+        // - Note: measured, not assumed. This discriminates off-by-one chapter
+        //   resolution — mutating the scan to `return toc[max(0, index - 1)]`
+        //   fails it — which is the PP-4948 defect class. It does NOT
+        //   discriminate the boundary TIE-BREAK: it passes with the tie-break
+        //   default flipped, because a track-end position and the next
+        //   chapter's `t=0` start are never equal under `TrackPosition`
+        //   ordering. `testCrossTrackChapterTransition` is what pins the
+        //   tie-break.
         do {
           let resolved = try toc.chapter(forPosition: exactEndPosition)
           guard let index = toc.toc.firstIndex(where: { $0 == resolved }) else {

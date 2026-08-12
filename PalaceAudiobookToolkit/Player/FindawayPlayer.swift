@@ -923,11 +923,25 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       return nil
     }
 
-    return try? tableOfContents.chapter(forPosition: TrackPosition(
-      track: track,
-      timestamp: 0.0,
-      tracks: tableOfContents.tracks
-    ))
+    // `preferChapterEndingHere` because this feeds `.completed(chapter)` from
+    // `audioEnginePlaybackFinished`, and `.completed` is playback control, not
+    // display: it reaches `AudiobookManager.handlePlaybackCompleted`, which
+    // saves the position and puts the app into a paused state. This is the
+    // THIRD producer of that signal — the two in `OpenAccessPlayer` and
+    // `LCPStreamingPlayer` carry the same note. PP-4948 changed how a position
+    // exactly on a chapter boundary resolves, and `timestamp: 0.0` on a
+    // Findaway part/sequence is exactly such a position, so without this the
+    // finished chapter reported here would change for 9 of 10 chapters on a
+    // real Findaway title. That may well be the more correct answer; deciding
+    // it is the follow-up ticket's job, not a table-of-contents fix's.
+    return try? tableOfContents.chapter(
+      forPosition: TrackPosition(
+        track: track,
+        timestamp: 0.0,
+        tracks: tableOfContents.tracks
+      ),
+      preferChapterEndingHere: true
+    )
   }
 
   func audioEnginePlaybackFinished(_: FindawayPlaybackNotificationHandler, for chapter: FAEChapterDescription) {
