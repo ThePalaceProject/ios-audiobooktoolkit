@@ -28,14 +28,15 @@
 //  are not claimed to be — they would catch a broken re-arm or a latched run
 //  flag, not a missing lock.
 //
-//  Deliberately absent: a test for the lazy initialization of
-//  `downloadProgress`. One was written and removed, because it could not be
-//  made to fail. The getter returns early on a cached value, so the window in
-//  which two racers can both resolve is a few instructions wide; even staging a
-//  `.missing` -> `.saved` flip mid-race could not reliably widen it. A test
-//  that cannot fail is worse than no test, since it advertises coverage that
-//  does not exist. The guard itself is exercised indirectly by the concurrent
-//  publish test and reviewed by inspection.
+//  `downloadProgress`'s lazy initialization is covered *deterministically*
+//  rather than as a race. A concurrent version was written and deleted: it
+//  could not be made to fail, because the getter early-returns on a cached
+//  value so the window in which two racers both resolve is a few instructions
+//  wide, and staging a `.missing` -> `.saved` flip mid-race did not widen it.
+//  What IS testable is the resolution itself — that it maps disk state to a
+//  value, and that it caches, so a later change on disk cannot retroactively
+//  alter an already-observed progress. Both assertions kill mutants; the race
+//  around them does not, and is not claimed to.
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
@@ -46,7 +47,76 @@ import XCTest
 @testable import PalaceAudiobookToolkit
 
 final class DownloadConcurrencyContractTests: XCTestCase {
+  /// Asset files staged on disk by the lazy-initialization tests.
+  private var stagedAssetURLs: [URL] = []
+
+  override func tearDown() {
+    for url in stagedAssetURLs {
+      try? FileManager.default.removeItem(at: url)
+    }
+    stagedAssetURLs.removeAll()
+    super.tearDown()
+  }
+
   // MARK: - Fixtures
+
+  /// Resolves the on-disk location a task maps to, and guarantees it is absent
+  /// so each test starts from a known state regardless of execution order.
+  private func clearedAssetURL(for task: OpenAccessDownloadTask) throws -> URL {
+    let candidates: [URL]
+    switch task.assetFileStatus() {
+    case let .missing(urls), let .saved(urls):
+      candidates = urls
+    case .unknown:
+      candidates = []
+    }
+    guard let assetURL = candidates.first else {
+      throw XCTSkip("Could not resolve the task's local asset URL.")
+    }
+    try FileManager.default.createDirectory(
+      at: assetURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try? FileManager.default.removeItem(at: assetURL)
+    stagedAssetURLs.append(assetURL)
+    return assetURL
+  }
+
+  // MARK: - downloadProgress lazy initialization (deterministic)
+
+  /// Resolution maps "no file on disk" to 0, and — the part that matters —
+  /// *caches* it. A later appearance of the file must not retroactively change
+  /// a value callers have already observed, or the progress bar jumps.
+  ///
+  /// Kills a mutant that drops the cached early-return: without it the second
+  /// read re-resolves and returns 1.0.
+  func testDownloadProgress_WhenAssetMissing_ResolvesToZeroAndStaysCached() throws {
+    let task = makeOpenAccessTask()
+    let assetURL = try clearedAssetURL(for: task)
+
+    XCTAssertEqual(task.downloadProgress, 0.0, "A track with no file on disk starts at zero.")
+
+    FileManager.default.createFile(atPath: assetURL.path, contents: Data("audio".utf8))
+
+    XCTAssertEqual(
+      task.downloadProgress, 0.0,
+      "Resolution must be cached: a file appearing later cannot retroactively change "
+        + "progress a caller has already observed."
+    )
+  }
+
+  /// Resolution maps "file already on disk" to 1. Kills a mutant that inverts
+  /// or drops the `.saved` arm.
+  func testDownloadProgress_WhenAssetAlreadySaved_ResolvesToOne() throws {
+    let probe = makeOpenAccessTask()
+    let assetURL = try clearedAssetURL(for: probe)
+    FileManager.default.createFile(atPath: assetURL.path, contents: Data("audio".utf8))
+
+    // A fresh task, so the first read happens with the file already present.
+    let task = makeOpenAccessTask()
+
+    XCTAssertEqual(task.downloadProgress, 1.0, "An already-downloaded track reports complete.")
+  }
 
   /// - Note: the download URL points at the discard port on loopback rather
   ///   than a real host. `attemptNetworkRetryAfterTransientError` schedules a

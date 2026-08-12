@@ -243,15 +243,17 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   private func updateOverallProgress() {
     // Snapshot the inputs under a plain concurrent read. This does NOT need a
     // barrier: it only reads, and the read-modify-write that genuinely needs
-    // atomicity is the `lastPublishedOverallProgress` gate below, which has its
-    // own lock.
+    // atomicity is the publish gate below, which has its own lock.
     //
-    // A `.barrier` sync here would be atomic but costly in the wrong place:
-    // both callers run on main, and a barrier waits out the whole queue
-    // backlog — including `fillDownloadSlots`, whose barrier block reads
-    // `downloadTask?.downloadProgress` per track and therefore does file-system
-    // work in the LCP case. That would park the main thread behind disk I/O on
-    // every progress tick.
+    // Note what this does and does not buy. It removes the *barrier* — this
+    // call no longer forces exclusivity against the whole queue, and it no
+    // longer serialises behind reads submitted after it. It does NOT fully
+    // decouple main from the queue: GCD still orders a submission behind any
+    // `.barrier` block already pending, so if `fillDownloadSlots` (which reads
+    // `downloadTask?.downloadProgress` per track, and therefore does
+    // file-system work in the LCP case) is in flight, main still waits for it.
+    // Eliminating that would mean not touching the queue from main at all,
+    // which is a larger restructuring than this migration should carry.
     let snapshot: (values: [Float], trackCount: Int)? = queue.sync {
       guard !progressDictionary.isEmpty else {
         return nil

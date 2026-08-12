@@ -507,9 +507,16 @@ public final class DownloadWatchdog: @unchecked Sendable {
       
       guard self.isRunning, !Task.isCancelled else { return }
       
-      // Clean up the tracked task
-      self.queue.async(flags: .barrier) {
-        self.retryTasks.removeValue(forKey: trackKey)
+      // Clean up the tracked task.
+      //
+      // `[weak self]`, deliberately: a strong capture here means the last
+      // release of the watchdog can land *on* `queue` when this block runs,
+      // which puts `deinit` — and therefore `stop()`, which takes
+      // `queue.sync(flags: .barrier)` — on the very queue it is trying to
+      // barrier against. That deadlocks. Every other block on this queue is
+      // already weak for the same reason.
+      self.queue.async(flags: .barrier) { [weak self] in
+        self?.retryTasks.removeValue(forKey: trackKey)
       }
       
       self.retryDownload(trackKey: trackKey)
