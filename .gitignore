@@ -33,3 +33,6 @@ AudioEngine.json
 
 # Local heka governance ledger — never belongs in the product repo
 .heka/
+
+# Python bytecode from repo scripts
+__pycache__/

@@ -279,16 +279,39 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     return toc[index - 1]
   }
 
+  /// Returns the chapter containing `position`.
+  ///
+  /// Chapter ranges are half-open: a chapter owns `[start, end)`, and the
+  /// position exactly on a boundary belongs to the chapter that BEGINS there,
+  /// not the one that ends there. That is what "skip to the next chapter" means
+  /// — the seek lands precisely on the boundary, and the patron expects to be
+  /// in the chapter they skipped to.
+  ///
+  /// This used to be the other way round, and not only for the exact boundary.
+  /// The end-of-chapter test was applied to every chapter with a 0.5s
+  /// tolerance, and because `calculateEndPosition` sets each chapter's end to
+  /// exactly the next chapter's start, the scan matched the PREVIOUS chapter
+  /// first for anything within half a second of a boundary. So the first half
+  /// second of every chapter was attributed to the chapter before it: Now
+  /// Playing and CarPlay showed the title the patron had just left, with time
+  /// remaining pinned at zero, and `chapterOffset` returned the previous
+  /// chapter's full duration instead of ~0. `testPP3518_ChapterBoundaryOnSameTrack`
+  /// pins both the boundary itself and the 0.5s window after it.
+  ///
+  /// The tolerance is still applied to the LAST chapter, which has no successor
+  /// to hand the boundary to — there, a position at the very end of the book
+  /// must still resolve to something.
   func chapter(forPosition position: TrackPosition) throws -> Chapter {
     for (index, chapter) in toc.enumerated() {
       let chapterStart = chapter.position
       let chapterDuration = chapter.duration ?? chapter.position.track.duration
+      let isLastChapter = index + 1 >= toc.count
 
       let chapterEndPosition: TrackPosition
       if let endPos = chapter.endPosition {
         chapterEndPosition = endPos
       } else {
-        if index + 1 < toc.count {
+        if !isLastChapter {
           let nextChapter = toc[index + 1]
           chapterEndPosition = nextChapter.position
         } else {
@@ -298,13 +321,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
       let isAfterStart = position >= chapterStart
       let isBeforeEnd = position < chapterEndPosition
-      // Check if position is exactly at THIS chapter's end (not just any track end)
-      // This handles the case where position is at exact chapter boundary
-      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key && 
+      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
                             abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
 
-      // Match if within chapter bounds OR if exactly at this chapter's end boundary
-      if isAfterStart && (isBeforeEnd || isAtChapterEnd) {
+      if isAfterStart && (isBeforeEnd || (isLastChapter && isAtChapterEnd)) {
         return chapter
       }
     }

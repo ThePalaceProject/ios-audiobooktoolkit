@@ -106,14 +106,26 @@ final class ManifestFormatTests: XCTestCase {
   }
   
   /// Tests Open Access manifest with many chapters (Snowcrash).
+  ///
+  /// Snowcrash's manifest lists 72 TOC entries over 24 physical audio files.
+  /// That is a densely-subdivided TOC, so `AudiobookTableOfContents` collapses
+  /// it to one chapter per file — deliberately, via `keepFirstChapterPerTrackKey`
+  /// behind the 1.5x inflation threshold, which is the app's historical
+  /// `ChapterTOCNormalizer` behaviour moved into the toolkit. This test asserted
+  /// the PRE-collapse count of 72 and had never run, so it never noticed.
+  ///
+  /// The expectation is taken from `ManifestJSON.chapterCount` rather than
+  /// written out again here, so there is one place to change when a collapse
+  /// rule changes.
   func testOpenAccessFormat_ManyChapters() throws {
+    let expectedChapters = ManifestJSON.snowcrash.chapterCount
     let manifest = try loadManifest(for: .snowcrash)
     let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
     let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-    
-    // Snowcrash has 72 chapters - stress test navigation
-    XCTAssertEqual(toc.toc.count, 72, "Snowcrash should have 72 chapters")
-    
+
+    XCTAssertEqual(toc.toc.count, expectedChapters, "Snowcrash collapses to one chapter per audio file")
+    XCTAssertEqual(tracks.tracks.count, expectedChapters, "…which is exactly the number of files")
+
     // Navigate forward through all
     var forwardCount = 0
     var currentChapter = toc.toc.first
@@ -121,8 +133,8 @@ final class ManifestFormatTests: XCTestCase {
       forwardCount += 1
       currentChapter = toc.nextChapter(after: chapter)
     }
-    XCTAssertEqual(forwardCount, 72)
-    
+    XCTAssertEqual(forwardCount, expectedChapters)
+
     // Navigate backward through all
     var backwardCount = 0
     currentChapter = toc.toc.last
@@ -130,7 +142,7 @@ final class ManifestFormatTests: XCTestCase {
       backwardCount += 1
       currentChapter = toc.previousChapter(before: chapter)
     }
-    XCTAssertEqual(backwardCount, 72)
+    XCTAssertEqual(backwardCount, expectedChapters)
   }
   
   // MARK: - Chapter Offset Tests Across Formats
@@ -207,14 +219,20 @@ final class ManifestFormatTests: XCTestCase {
   // MARK: - Metadata Validation Tests
   
   /// Tests that essential metadata is present across formats.
+  ///
+  /// `animalFarm_manifest` is excluded because it is not an audiobook manifest
+  /// at all: it is an OverDrive *fulfilment response* (`id`, `reserveId`,
+  /// `crossRefId`, `formatType`, `links`) with no `metadata` block by
+  /// construction. Asserting a title on it was a misreading of the fixture
+  /// rather than a finding about the parser. Everything with playable content
+  /// still has to have a title.
   func testMetadata_AllFormats() throws {
-    for manifestJSON in ManifestJSON.allCases {
+    for manifestJSON in ManifestJSON.allCases where manifestJSON != .animalFarm {
       let manifest = try loadManifest(for: manifestJSON)
-      
-      // Title should exist
+
       XCTAssertNotNil(manifest.metadata?.title,
                       "Manifest should have title in \(manifestJSON.rawValue)")
-      
+
       // Duration should be positive if present
       if let duration = manifest.metadata?.duration {
         XCTAssertGreaterThan(duration, 0,
@@ -245,17 +263,20 @@ final class ManifestFormatTests: XCTestCase {
   }
   
   /// Tests manifest with many chapters (complex structure).
+  ///
+  /// See `testOpenAccessFormat_ManyChapters` for why the count is the collapsed
+  /// one. The indices below were `[0, 10, 25, 50, 71]`, addressing the
+  /// pre-collapse list; three of them are out of bounds against the real one.
   func testLargeChapterCount() throws {
-    // Snowcrash has 72 chapters
     let manifest = try loadManifest(for: .snowcrash)
     let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
     let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-    
-    XCTAssertEqual(toc.toc.count, 72)
-    
-    // Random access should work
-    let randomIndices = [0, 10, 25, 50, 71]
-    for index in randomIndices {
+
+    XCTAssertEqual(toc.toc.count, ManifestJSON.snowcrash.chapterCount)
+
+    // Random access should work — first, last, and points in between.
+    let indices = [0, toc.toc.count / 3, toc.toc.count / 2, toc.toc.count - 1]
+    for index in indices {
       let chapter = toc.toc[index]
       let found = try toc.chapter(forPosition: chapter.position)
       XCTAssertEqual(found.title, chapter.title, "Random access to chapter \(index) should work")

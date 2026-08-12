@@ -8,6 +8,8 @@
 
 import Foundation
 
+@testable import PalaceAudiobookToolkit
+
 extension Manifest {
   static func from(jsonFileName: String, bundle: Bundle = .main) throws -> Manifest {
     guard let url = bundle.url(forResource: jsonFileName, withExtension: "json"),
