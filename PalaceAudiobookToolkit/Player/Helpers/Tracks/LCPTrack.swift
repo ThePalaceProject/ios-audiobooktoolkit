@@ -8,15 +8,24 @@
 
 import Foundation
 
-public class LCPTrack: Track {
-  public var key: String
-  public var downloadTask: (any DownloadTask)?
-  public var title: String?
-  public var index: Int
-  public var duration: TimeInterval
-  public var urls: [URL]?
+public final class LCPTrack: Track {
+  public let key: String
+  public let downloadTask: (any DownloadTask)?
+  public let title: String?
+  public let index: Int
+  public let duration: TimeInterval
+  public let urls: [URL]?
   public let mediaType: TrackMediaType
-  public var streamingResource: URL?
+  /// The one genuinely mutable property on any `Track` conformer: it is
+  /// assigned after construction by `setStreamingResource(_:)` when the LCP
+  /// streaming URL becomes known, and read on the playback path. Lock-guarded
+  /// rather than `let` for exactly that reason — every other property here is
+  /// write-once in `init`.
+  private let _streamingResource = LockIsolated<URL?>(nil)
+  public var streamingResource: URL? {
+    get { _streamingResource.value }
+    set { _streamingResource.value = newValue }
+  }
 
   public required init(
     manifest: Manifest,

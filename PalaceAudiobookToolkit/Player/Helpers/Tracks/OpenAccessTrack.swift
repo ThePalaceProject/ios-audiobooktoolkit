@@ -31,14 +31,14 @@ enum OpenAccessTrackError: Error {
 
 // MARK: - OpenAccessTrack
 
-public class OpenAccessTrack: Track {
-  public var key: String
-  public var downloadTask: DownloadTask?
-  public var title: String?
-  public var index: Int
-  public var duration: Double
-  public var url: URL?
-  public var urls: [URL]?
+public final class OpenAccessTrack: Track {
+  public let key: String
+  public let downloadTask: DownloadTask?
+  public let title: String?
+  public let index: Int
+  public let duration: Double
+  public let url: URL?
+  public let urls: [URL]?
   let mediaType: TrackMediaType
   let urlString: String
   let alternateUrls: [(TrackMediaType, URL)]?

@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - TrackMediaType
 
-public enum TrackMediaType: String {
+public enum TrackMediaType: String, Sendable {
   case audioMPEG = "audio/mpeg"
   case audioMP4 = "audio/mp4"
   case rbDigital = "vnd.librarysimplified/rbdigital-access-document+json"
@@ -20,7 +20,18 @@ public enum TrackMediaType: String {
 
 // MARK: - Track
 
-public protocol Track: class, Identifiable {
+/// Refines `Sendable` so that `TrackPosition` — which carries a track and is
+/// passed between the player, the download scheduler and the UI on different
+/// threads — can be `Sendable` in turn.
+///
+/// This is sound because a track is immutable once constructed: every conformer
+/// declares its stored properties `let`, assigned during `init` and never
+/// reassigned (verified across the whole module). The one piece of genuinely
+/// mutable state a track exposes is `downloadTask`, and that is a reference to
+/// a type which is itself `Sendable` and internally synchronized.
+///
+/// - Note: `AnyObject` replaces the deprecated `class` spelling.
+public protocol Track: AnyObject, Identifiable, Sendable {
   var key: String { get }
   var downloadTask: DownloadTask? { get }
   var title: String? { get }
@@ -67,13 +78,15 @@ public extension Track {
 
 // MARK: - EmptyTrack
 
-class EmptyTrack: Track {
-  var key: String = ""
-  var downloadTask: (any DownloadTask)?
-  var title: String? = ""
-  var index: Int = 0
-  var duration: TimeInterval = 0.0
-  var urls: [URL]?
+/// The fifth `Track` conformer — easy to miss because it lives here rather than
+/// alongside the others in `Tracks/`. Immutable like the rest.
+final class EmptyTrack: Track {
+  let key: String
+  let downloadTask: (any DownloadTask)?
+  let title: String?
+  let index: Int
+  let duration: TimeInterval
+  let urls: [URL]?
   required init(
     manifest _: Manifest,
     urlString _: String?,
@@ -84,10 +97,20 @@ class EmptyTrack: Track {
     token _: String?,
     key _: String?
   ) throws {
+    key = ""
+    downloadTask = nil
+    urls = nil
     self.title = title
     self.duration = duration
     self.index = index
   }
 
-  init() {}
+  init() {
+    key = ""
+    downloadTask = nil
+    urls = nil
+    title = ""
+    index = 0
+    duration = 0.0
+  }
 }
