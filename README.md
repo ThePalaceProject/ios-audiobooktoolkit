@@ -23,6 +23,8 @@ properties across those types are now `public let`.
 
 This is a source break for any consumer outside this repository that
 
+- **declares its own `Track` conformer** — the protocol now requires `Sendable`,
+  so a conformer holding unsynchronised mutable state no longer satisfies it;
 - subclasses one of those conformers, or
 - assigns to one of their properties after construction.
 

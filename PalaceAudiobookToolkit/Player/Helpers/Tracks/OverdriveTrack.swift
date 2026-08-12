@@ -186,14 +186,20 @@ final class OverdriveTrack: Track, @unchecked Sendable {
     // is not the same as bounding the work. When the file does land, the
     // download-completion sink drives resolution.
     //
-    // Note what this check does NOT establish: that the file is COMPLETE.
-    // `MediaProcessor.optimizeQTFile` — which the shared download delegate
-    // routes to via `verifyDownloadAndMove` when a file needs optimizing —
-    // creates a zero-byte file at the FINAL url and then writes it
-    // progressively, so `fileExists` passes throughout. A load started in that
-    // window reads a partial file and can come back with a short-but-finite
-    // duration. `noteDownloadCompleted()` is what stops that answer from
-    // becoming permanent.
+    // Note what this check does NOT establish: that the file is COMPLETE. It is
+    // a bare `fileExists`, and a truncated file — an interrupted download, a
+    // half-written one — passes it and can yield a short-but-finite duration.
+    //
+    // One route to a partial file is worth naming because it is not obvious:
+    // `MediaProcessor.optimizeQTFile` creates a ZERO-BYTE file at the FINAL url
+    // and then writes it progressively, so existence holds for the whole write.
+    // The shared `DownloadTaskURLSessionDelegate` routes there from
+    // `verifyDownloadAndMove`, and this class's download task uses that same
+    // delegate. It is NOT reachable here today — `OverdriveDownloadTask.fetch()`
+    // only downloads `.audioMP3`, and `fileNeedsOptimization` needs both `mdat`
+    // and `moov` atoms, which an MP3 has not, so the delegate takes the atomic
+    // `moveItem` branch. Treat the guarding below as defence in depth against a
+    // shared path, not as a fix for a live defect on this one.
     guard let localURL = (downloadTask as? OverdriveDownloadTask)?.localDirectory(),
           FileManager.default.fileExists(atPath: localURL.path)
     else {
@@ -282,6 +288,14 @@ final class OverdriveTrack: Track, @unchecked Sendable {
   private func recordDurationLoadFailure() {
     durationLoad.withValue { state in
       switch state {
+      case .loading(_, supersededByCompletion: true):
+        // The download completed while this attempt was running, so the attempt
+        // failed against a file that is no longer the current one. Charging it
+        // to the budget would consume the completion's re-arm as well as an
+        // attempt: if this was the last permitted try, the machine would refuse
+        // every subsequent claim and a fully-downloaded track would report
+        // duration 0 for the rest of the session. The completion wins.
+        state = .idle
       case let .loading(priorFailures, _):
         state = .failed(attempts: priorFailures + 1)
       case let .failed(attempts):
@@ -292,9 +306,19 @@ final class OverdriveTrack: Track, @unchecked Sendable {
     }
   }
 
-  /// Permits one further resolution now that the real file is on disk and
-  /// complete, and re-arms the retry budget (the earlier failures were against
-  /// a file that was still being written).
+  /// Permits one further resolution because the download reported completion,
+  /// and re-arms the retry budget.
+  ///
+  /// - Important: `.completed` does NOT guarantee a complete file.
+  ///   `OverdriveDownloadTask` sends it whenever `assetFileStatus()` is
+  ///   `.saved`, which is itself a bare `fileExists` — and
+  ///   `AudiobookPlaybackModel` calls `networkService.fetch()` on every player
+  ///   open, so a truncated file on disk produces `.completed` on each open.
+  ///   This method therefore means "the download layer believes there is a file
+  ///   now, so look again", not "the bytes are all there". Superseding only
+  ///   protects a load already IN FLIGHT; a load started after a spurious
+  ///   `.completed` over a truncated file will resolve and latch a short
+  ///   duration until the next `.completed` reopens the machine.
   ///
   /// Deliberately does NOT cancel or reset a load already in flight — its write
   /// order against a replacement load would be undefined. Instead it marks the

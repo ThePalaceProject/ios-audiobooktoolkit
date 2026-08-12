@@ -22,9 +22,23 @@
 //       partially-written file. Covered by
 //       `testDownloadCompletingMidLoad_DoesNotLatchThePartialValue`.
 //
-//  All three are mutation-verified — the defect was reintroduced and the test
+//  All are mutation-verified — the defect was reintroduced and the test
 //  confirmed to fail. See the note on each test for what specifically was
 //  reverted and what the test reported.
+//
+//  Honest score: EIGHT mutants are killed, but only SIX of them are reachable
+//  in production. The two that guard `claimDurationLoad`'s `.resolved` refusal
+//  (`M2`, `M7`) die only through a direct `requestDurationUpdate()`, which no
+//  production code calls: the getter early-returns on any non-zero duration and
+//  the completion sink resets to `.idle` first, so `.resolved` is never the
+//  state a real claim meets. They are worth keeping — they pin the claim's own
+//  contract — but "8/8 killed" would overstate the coverage of shipping paths.
+//
+//  A fourth defect was found by review AFTER these tests were written, in the
+//  transition they introduced: a completion arriving during the final permitted
+//  attempt had its re-arm discarded when that attempt failed, stranding a
+//  fully-downloaded track at duration 0. Covered by
+//  `testCompletionDuringTheFinalAttempt_DoesNotStrandTheTrack`.
 //
 //  Testing any of this at all required a seam: `updateDuration` used to build
 //  its `AVURLAsset` inline, so there was no way to make a load fail, hang, or
@@ -57,6 +71,7 @@ final class OverdriveTrackDurationTests: XCTestCase {
   private final class LoaderSpy: @unchecked Sendable {
     private let lock = NSLock()
     private var _calls = 0
+    private var _settled = 0
     private let script: @Sendable (Int) async throws -> TimeInterval
 
     /// - Parameter script: receives the 1-based invocation number.
@@ -64,7 +79,18 @@ final class OverdriveTrackDurationTests: XCTestCase {
       self.script = script
     }
 
+    /// Attempts STARTED.
     var calls: Int { lock.withLock { _calls } }
+
+    /// Attempts that have RETURNED (or thrown).
+    ///
+    /// Distinct from `calls` on purpose. Waiting on `calls` only tells you an
+    /// attempt entered the loader, and a test that then drives the machine is
+    /// racing the attempt still in flight — which is exactly how
+    /// `testDownloadCompleting_ReArmsAnExhaustedRetryBudget` could send
+    /// `.completed` underneath its own final attempt and go red on a loaded
+    /// machine while passing on an idle one.
+    var settled: Int { lock.withLock { _settled } }
 
     var loader: TrackDurationLoader {
       { [self] _ in
@@ -72,6 +98,7 @@ final class OverdriveTrackDurationTests: XCTestCase {
           _calls += 1
           return _calls
         }
+        defer { lock.withLock { _settled += 1 } }
         return try await script(n)
       }
     }
@@ -359,9 +386,14 @@ final class OverdriveTrackDurationTests: XCTestCase {
     let track = try makeTrack(loader: spy.loader)
     try stageAsset(for: track)
 
+    // Gate on attempts that have RETURNED, not merely started. Waiting on
+    // `calls` lets `.completed` be sent while the third attempt is still in
+    // flight, which is a different scenario entirely (see
+    // `testCompletionDuringTheFinalAttempt_DoesNotStrandTheTrack`) and made
+    // this test's outcome depend on machine load.
     XCTAssertTrue(
-      pumpDuration(track, until: { spy.calls >= 3 }),
-      "Expected the budget to be spent first, saw \(spy.calls)."
+      pumpDuration(track, until: { spy.settled >= 3 }),
+      "Expected the budget to be spent first, saw \(spy.settled) settled of \(spy.calls) started."
     )
     XCTAssertEqual(track.duration, 0, "Precondition: the budget is exhausted and nothing resolved.")
 
@@ -370,6 +402,61 @@ final class OverdriveTrackDurationTests: XCTestCase {
     XCTAssertTrue(
       pumpDuration(track, until: { track.duration == 555.0 }),
       "A completed download must re-arm the budget; duration is \(track.duration), calls \(spy.calls)."
+    )
+  }
+
+  /// A completion arriving DURING the final permitted attempt, where that
+  /// attempt then fails, must not strand the track.
+  ///
+  /// This is the interleaving that `.completed`-marks-superseded created and
+  /// that nothing covered. `noteDownloadCompleted` converts `.loading(2, false)`
+  /// into `.loading(2, true)` — the completion's re-arm is now carried by the
+  /// flag rather than by a state change, and the sink's own `updateDuration()`
+  /// is refused because a load is already in flight. If the failure handler then
+  /// charges that attempt to the budget, the flag is discarded, the budget
+  /// reaches its limit, and every later claim is refused: a fully-downloaded
+  /// track reports duration 0 for the rest of the session. The completion has to
+  /// win over the failure.
+  ///
+  /// Mutation-verified: replacing the `supersededByCompletion: true` arm of
+  /// `recordDurationLoadFailure` with the ordinary
+  /// `state = .failed(attempts: priorFailures + 1)` strands the track — it
+  /// reports duration 0.0 with the loader never asked a fourth time.
+  func testCompletionDuringTheFinalAttempt_DoesNotStrandTheTrack() throws {
+    let finalAttemptEntered = expectation(description: "final permitted attempt started")
+    let releaseFinalAttempt = expectation(description: "final permitted attempt released")
+
+    let spy = LoaderSpy(script: { n in
+      if n < 3 {
+        throw LoadFailed()
+      }
+      if n == 3 {
+        // The last attempt the budget permits. Hold it open so completion lands
+        // underneath it, then fail it.
+        finalAttemptEntered.fulfill()
+        await Self.awaitFulfillment(of: releaseFinalAttempt)
+        throw LoadFailed()
+      }
+      return 777.0
+    })
+
+    let track = try makeTrack(loader: spy.loader)
+    try stageAsset(for: track)
+
+    XCTAssertTrue(
+      pumpDuration(track, until: { spy.calls >= 3 }, timeout: 10.0),
+      "Expected to reach the final permitted attempt, saw \(spy.calls)."
+    )
+    wait(for: [finalAttemptEntered], timeout: 5.0)
+
+    // Completion lands while that attempt is still running.
+    (track.downloadTask as? OverdriveDownloadTask)?.statePublisher.send(.completed)
+    releaseFinalAttempt.fulfill()
+
+    XCTAssertTrue(
+      pumpDuration(track, until: { track.duration == 777.0 }, timeout: 10.0),
+      "A completion during the final attempt must survive that attempt's failure; "
+        + "duration is \(track.duration) after \(spy.calls) calls."
     )
   }
 
