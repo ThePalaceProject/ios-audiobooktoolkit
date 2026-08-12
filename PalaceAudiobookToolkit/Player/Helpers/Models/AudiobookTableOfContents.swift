@@ -353,10 +353,29 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///   reported for a completed Findaway chapter is the one BEFORE it (measured
   ///   during review: 9 of 10 chapters on a real title), so `saveLocation`
   ///   stores the previous chapter's start and the patron's place moves
-  ///   backwards at every chapter boundary. The corrected tie-break would fix
-  ///   it — and would simultaneously make `.completed` fire per chapter on the
-  ///   AVPlayer paths, where it pauses playback. The two cannot be separated by
-  ///   this parameter; separating them is the ticket's job.
+  ///   backwards at every chapter boundary.
+  ///
+  ///   - Warning: flipping this parameter does NOT fix that, and believing it
+  ///     does is the trap here. `handlePlaybackCompleted` saves
+  ///     `chapter.position`, which is the chapter's START. So on completing
+  ///     chapter N the save goes from "start of N−1" to "start of N" — from
+  ///     roughly two chapters behind to roughly one. The residual rewind lives
+  ///     in WHAT is saved, not in which chapter is named, and the periodic
+  ///     timer does not help: it only publishes `.positionUpdated` and never
+  ///     calls `saveLocation`. Eliminating the rewind means changing
+  ///     `handlePlaybackCompleted`, not this flag.
+  ///
+  ///   Nor is the pausing an AVPlayer-only, future consequence. The consumer —
+  ///   the app's `.playbackCompleted` handler — is player-agnostic, so Findaway
+  ///   already flips the app to paused at every chapter today, normally masked
+  ///   by the `.playbackBegan` that follows. Because the Findaway chapter
+  ///   notification is documented in this repo as arriving late (sometimes
+  ///   seconds), that masking is an ordering assumption rather than a
+  ///   guarantee. And note the corrected tie-break would not change WHETHER
+  ///   `.completed` fires on Findaway — that is notification-driven — only
+  ///   which chapter it names. What the flip WOULD newly cause is per-chapter
+  ///   firing on the AVPlayer paths. Separating all of this is the ticket's
+  ///   job, not this parameter's.
   ///
   ///   It is a playback-control change with its own blast radius and no test
   ///   coverage — the end-of-track handlers are untested in all three players —
