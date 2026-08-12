@@ -62,10 +62,46 @@ public protocol AudiobookNetworkService: AnyObject {
 
 // MARK: - DefaultAudiobookNetworkService
 
+/// - Note: This type is deliberately **not** declared `Sendable`, and the
+///   closure-capture warnings that remain on it are load-bearing rather than
+///   noise. Its own storage is fully accounted for — every stored property below
+///   is either a `let` or guarded (by `queue`, with `.barrier` on every write, or
+///   by a lock) — but three of those `let`s point at referents that are
+///   themselves unsynchronized mutable state:
+///
+///   * `tracks` — `Track` is a non-`Sendable` class protocol whose conformers
+///     (`OpenAccessTrack`, `LCPTrack`, `OverdriveTrack`, `FindawayTrack`) are
+///     non-final classes of plain `public var` storage.
+///   * `decryptor` — `DRMDecryptor` is an `@objc` protocol implemented app-side.
+///   * `reachability` — `Reachability` mutates `isConnected` and `retriesCounter`
+///     from `NWPathMonitor`'s queue and from main with no synchronization.
+///
+///   Declaring `@unchecked Sendable` here would assert that those referents are
+///   safe to hand across isolation domains, which this file cannot prove; the
+///   claim would silence the diagnostics that currently point at the real
+///   hazard. Once the `Track` conformers and `Reachability` are migrated the
+///   conformance becomes a one-line change, and the list above is its checklist.
 public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
-  public var downloadStatePublisher = PassthroughSubject<DownloadState, Never>()
+  /// Assigned once and only read (and `send`-ed to) afterwards — the protocol
+  /// exposes it get-only — so `let` proves the invariant for free.
+  public let downloadStatePublisher = PassthroughSubject<DownloadState, Never>()
   public let tracks: [any Track]
+
+  /// Guarded by `cancellablesLock` rather than by `queue`, for two reasons:
+  /// `deinit` calls `cleanupSubscriptions()`, and `deinit` can run *on* `queue`
+  /// (the barrier blocks in `updateProgress`/`updateDownloadStatus` capture
+  /// `self` strongly, so the final release may happen inside one of them) — a
+  /// `queue.sync(flags: .barrier)` from there would deadlock. And `LockIsolated`
+  /// is unavailable because it requires a `Sendable` payload, which
+  /// `AnyCancellable` is not.
+  private let cancellablesLock = NSLock()
   private var cancellables: Set<AnyCancellable> = []
+
+  /// `progressDictionary`, `downloadStatus`, `activeDownloadIndices` and
+  /// `lastPublishedOverallProgress` are all guarded by `queue`: reads go through
+  /// `queue.sync`, and **every** write goes through a `.barrier` block. `queue`
+  /// is `.concurrent`, so a non-barrier write is not serialized against anything
+  /// — the barrier is what makes this a lock rather than decoration.
   private var progressDictionary: [String: Float] = [:]
   private var downloadStatus: [String: DownloadTaskState] = [:]
   private let queue = DispatchQueue(label: "com.palace.downloadProgressQueue", attributes: .concurrent)
@@ -74,11 +110,29 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   public let decryptor: DRMDecryptor?
 
   /// When `true`, track downloads are only started on Wi-Fi connections.
-  public var downloadOnlyOnWiFi: Bool = false
+  ///
+  /// Lock-guarded: the app writes this from the main thread just after
+  /// construction while `fillDownloadSlots` reads it from a `queue` barrier block
+  /// on a background thread. `Bool` is not exempt from the rule — an
+  /// unsynchronized concurrent read/write is undefined behaviour regardless of
+  /// width. The public name stays a settable `var` so call sites are untouched.
+  private let _downloadOnlyOnWiFi = LockIsolated(false)
+  public var downloadOnlyOnWiFi: Bool {
+    get { _downloadOnlyOnWiFi.value }
+    set { _downloadOnlyOnWiFi.value = newValue }
+  }
+
   private let reachability = Reachability()
-  
-  /// Cached overall progress to avoid redundant main-thread dispatches
-  private var lastPublishedOverallProgress: Float = -1
+
+  /// Last overall progress published, used to keep the bar monotonic and to
+  /// avoid redundant main-thread dispatches.
+  ///
+  /// Deliberately guarded by its own lock rather than by `queue`. The gate is a
+  /// read-modify-write, so it needs mutual exclusion — but taking that
+  /// exclusion on `queue` would mean a barrier, and both callers run on main,
+  /// so main would wait out the queue's backlog (which includes per-track file
+  /// I/O) on every progress tick. A dedicated lock is atomic and uncoupled.
+  private let publishGate = LockIsolated<Float>(-1)
 
   public init(tracks: [any Track], decryptor: DRMDecryptor? = nil) {
     self.tracks = tracks
@@ -127,6 +181,11 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   }
 
   private func setupDownloadTasks() {
+    // Collect locally, then merge under the lock: a subscription can start
+    // delivering on a background thread as soon as it is made (a background
+    // `URLSession` may already be mid-download), so the store must not be a
+    // series of unguarded mutations of the shared set.
+    var collected: Set<AnyCancellable> = []
     tracks.forEach { track in
       guard let downloadTask = track.downloadTask else {
         return
@@ -138,8 +197,9 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
           }
           handleDownloadState(state, for: track)
         }
-        .store(in: &self.cancellables)
+        .store(in: &collected)
     }
+    cancellablesLock.withLock { cancellables.formUnion(collected) }
   }
 
   private func handleDownloadState(_ state: DownloadTaskState, for track: any Track) {
@@ -181,34 +241,62 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   }
 
   private func updateOverallProgress() {
-    queue.sync {
+    // Snapshot the inputs under a plain concurrent read. This does NOT need a
+    // barrier: it only reads, and the read-modify-write that genuinely needs
+    // atomicity is the publish gate below, which has its own lock.
+    //
+    // Note what this does and does not buy. It removes the *barrier* — this
+    // call no longer forces exclusivity against the whole queue, and it no
+    // longer serialises behind reads submitted after it. It does NOT fully
+    // decouple main from the queue: GCD still orders a submission behind any
+    // `.barrier` block already pending, so if `fillDownloadSlots` (which reads
+    // `downloadTask?.downloadProgress` per track, and therefore does
+    // file-system work in the LCP case) is in flight, main still waits for it.
+    // Eliminating that would mean not touching the queue from main at all,
+    // which is a larger restructuring than this migration should carry.
+    let snapshot: (values: [Float], trackCount: Int)? = queue.sync {
       guard !progressDictionary.isEmpty else {
-        return
+        return nil
       }
+      return (Array(progressDictionary.values), tracks.count)
+    }
+    guard let snapshot, snapshot.trackCount > 0 else {
+      return
+    }
 
-      let totalProgress = progressDictionary.values.reduce(0, +)
-      let overallProgress = totalProgress / Float(tracks.count)
-      
+    let overallProgress = snapshot.values.reduce(0, +) / Float(snapshot.trackCount)
+
+    // Compare-and-publish must be one atomic step, or two concurrent ticks can
+    // both pass the monotonic guard and both publish. Its own lock keeps that
+    // atomic without coupling it to the download-bookkeeping queue.
+    let shouldPublish = publishGate.withValue { lastPublished -> Bool in
       // Enforce monotonic overall progress: never publish a value lower than
       // what we've already published. This prevents the overall progress bar
       // from jittering backwards when individual track progress fluctuates.
-      guard overallProgress >= lastPublishedOverallProgress else { return }
-      
+      guard overallProgress >= lastPublished else { return false }
+
       // Only dispatch to main thread if progress changed meaningfully (>0.5%)
       // This prevents excessive main-thread work during large audiobook downloads
-      let delta = overallProgress - lastPublishedOverallProgress
-      guard delta > 0.005 || overallProgress >= 1.0 else { return }
-      lastPublishedOverallProgress = overallProgress
-      
-      DispatchQueue.main.async {
-        self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
-      }
+      guard overallProgress - lastPublished > 0.005 || overallProgress >= 1.0 else { return false }
+
+      lastPublished = overallProgress
+      return true
+    }
+    guard shouldPublish else {
+      return
+    }
+
+    DispatchQueue.main.async {
+      self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
     }
   }
 
   private func updateDownloadStatus(for track: any Track, state: DownloadTaskState) {
+    // Read the key on the caller's thread so the barrier block carries a
+    // `String` across the boundary instead of the whole non-`Sendable` track.
+    let key = track.key
     queue.async(flags: .barrier) {
-      self.downloadStatus[track.key] = state
+      self.downloadStatus[key] = state
     }
   }
 
@@ -289,9 +377,12 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   
   /// Releases a download slot when a track completes or errors.
   private func releaseDownloadSlot(for track: any Track) {
+    // Read the key on the caller's thread so the barrier block carries a
+    // `String` across the boundary instead of the whole non-`Sendable` track.
+    let key = track.key
     queue.async(flags: .barrier) { [weak self] in
       guard let self else { return }
-      if let index = tracks.firstIndex(where: { $0.key == track.key }) {
+      if let index = tracks.firstIndex(where: { $0.key == key }) {
         activeDownloadIndices.remove(index)
       }
     }
@@ -352,36 +443,37 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
 
     let total = missingPairs.count
-    // Thread-safe counter for concurrent decryption callbacks.
-    // Using NSLock instead of OSAllocatedUnfairLock to support iOS 13+ deployment target.
-    let lock = NSLock()
-    var completedCount = 0
-    var hasErrored = false
+    // Thread-safe counters for concurrent decryption callbacks: one `decrypt` is
+    // in flight per missing pair and the decryptor invokes each completion on a
+    // queue of its own choosing, so both of these are touched concurrently.
+    //
+    // `LockIsolated` replaces the hand-rolled `NSLock` + captured local `var`s.
+    // The discipline is the same — this is a 1:1 translation, deliberately
+    // including the two-phase test-then-set on `hasErrored` — but the compiler
+    // can see it, and a mutable local captured by an escaping closure becomes a
+    // hard error the moment `DRMDecryptor`'s completion is made `@Sendable`.
+    let completedCount = LockIsolated(0)
+    let hasErrored = LockIsolated(false)
 
     for (src, dst) in missingPairs {
       decryptor.decrypt(url: src, to: dst) { [weak self] error in
         guard let self else { return }
-        
-        lock.lock()
+
         // Bail early if we already reported an error for this track
-        let alreadyErrored = hasErrored
-        lock.unlock()
-        guard !alreadyErrored else { return }
-        
+        guard !hasErrored.value else { return }
+
         if let error {
-          lock.lock()
-          hasErrored = true
-          lock.unlock()
+          hasErrored.value = true
           downloadStatePublisher.send(.error(track: track, error: error))
           updateDownloadStatus(for: track, state: .error(error))
           releaseDownloadSlot(for: track)
           fillDownloadSlots(startingFrom: trackIndex + 1)
         } else {
-          lock.lock()
-          completedCount += 1
-          let newCount = completedCount
-          lock.unlock()
-          
+          let newCount = completedCount.withValue { count -> Int in
+            count += 1
+            return count
+          }
+
           let progress = Float(newCount) / Float(total)
           task.downloadProgress = progress
           updateProgress(progress, for: track)
@@ -407,8 +499,16 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   /// Cleans up Combine subscriptions without cancelling downloads.
   /// Downloads continue in the background via URLSession background sessions.
   public func cleanupSubscriptions() {
-    cancellables.forEach { $0.cancel() }
-    cancellables.removeAll()
+    // Take the subscriptions out under the lock, then cancel outside it:
+    // `cancel()` runs foreign Combine code, which must not run while a lock is
+    // held. Nothing else reads `cancellables`, so draining before cancelling
+    // rather than after is not observable.
+    let subscriptions = cancellablesLock.withLock { () -> Set<AnyCancellable> in
+      let current = cancellables
+      cancellables.removeAll()
+      return current
+    }
+    subscriptions.forEach { $0.cancel() }
     ATLog(.debug, "🎵 [NetworkService] Cleaned up subscriptions, downloads continue in background")
   }
   

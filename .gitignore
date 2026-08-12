@@ -30,3 +30,6 @@ NYPLAEToolkit.framework/
 
 #binary spec for carthage
 AudioEngine.json
+
+# Local heka governance ledger — never belongs in the product repo
+.heka/

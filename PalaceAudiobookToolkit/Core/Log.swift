@@ -2,11 +2,15 @@ import Foundation
 import os.log
 import UIKit
 
-public typealias LogHandler = (LogLevel, String, NSError?) -> Void
+/// `@Sendable` because the handler is installed once at launch and then invoked
+/// from `ATLog` on whichever thread emitted the log — it genuinely crosses
+/// isolation domains, so the annotation documents an existing requirement
+/// rather than imposing a new one.
+public typealias LogHandler = @Sendable (LogLevel, String, NSError?) -> Void
 
 // MARK: - LogLevel
 
-@objc public enum LogLevel: Int {
+@objc public enum LogLevel: Int, Sendable {
   case debug
   case info
   case warn

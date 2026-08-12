@@ -11,7 +11,27 @@ import UIKit
 /// Persists download state to disk so downloads can be resumed after app restart.
 /// Stores information about active downloads, completed downloads, and partially
 /// downloaded files.
-public final class DownloadPersistenceStore {
+///
+/// - Note: `@unchecked Sendable` is justified by construction rather than by
+///   assertion. Every stored property is either a `let` (`fileManager`, `queue`)
+///   or guarded by `queue`'s reader/writer discipline (`cache`):
+///
+///   * every mutation of `cache` runs inside `queue.async(flags: .barrier)` or
+///     `queue.sync(flags: .barrier)`. A barrier block is exclusive of all other
+///     work on the queue, so no read can observe a half-applied mutation.
+///   * every read of `cache` runs inside `queue.sync`. Reads may overlap each
+///     other — that is the point of the `.concurrent` queue — but never overlap
+///     a barrier.
+///   * the single access outside the queue is `loadFromDisk()` called from
+///     `init`. That is ordered before every other access: `init` is `private`,
+///     the only instance is the `static let shared` singleton, and the one-time
+///     initialisation of a `static let` happens-before any use of it.
+///
+///   `loadFromDisk()` and `saveToDisk()` touch `cache` directly, so they may
+///   only be called from inside a barrier block (or from `init`, per above).
+///   Adding an unguarded `var` stored property, or reaching `cache` from
+///   outside the queue, invalidates this reasoning and the conformance with it.
+public final class DownloadPersistenceStore: @unchecked Sendable {
   
   // MARK: - Singleton
   
@@ -19,8 +39,13 @@ public final class DownloadPersistenceStore {
   
   // MARK: - Types
   
-  /// Represents a persisted download's state
-  public struct PersistedDownload: Codable, Equatable {
+  /// Represents a persisted download's state.
+  ///
+  /// `Sendable` is safe by construction: every stored property is a value type
+  /// with no reference payload (`String`, `URL`, `Int64`, `Date`, and the
+  /// payload-free `DownloadState`). The conformance is spelled explicitly
+  /// because implicit `Sendable` inference is not applied to `public` types.
+  public struct PersistedDownload: Codable, Equatable, Sendable {
     public let bookID: String
     public let trackKey: String
     public let remoteURL: URL
@@ -31,7 +56,7 @@ public final class DownloadPersistenceStore {
     public let createdAt: Date
     public var updatedAt: Date
     
-    public enum DownloadState: String, Codable {
+    public enum DownloadState: String, Codable, Sendable {
       case pending
       case inProgress
       case paused
@@ -49,8 +74,11 @@ public final class DownloadPersistenceStore {
     }
   }
   
-  /// All downloads for a specific audiobook
-  public struct BookDownloads: Codable {
+  /// All downloads for a specific audiobook.
+  ///
+  /// `Sendable` by construction, as for `PersistedDownload`: `String`, `Date`,
+  /// and a dictionary of `Sendable` values.
+  public struct BookDownloads: Codable, Sendable {
     public let bookID: String
     public var tracks: [String: PersistedDownload]
     public var lastAccessedAt: Date
@@ -73,7 +101,20 @@ public final class DownloadPersistenceStore {
   // MARK: - Properties
   
   private let fileManager = FileManager.default
+
+  /// Reader/writer queue guarding `cache` and serialising the resume-data files.
+  ///
+  /// It is `.concurrent`, so it only provides mutual exclusion for work
+  /// submitted with `.barrier`. Every mutating entry point below must use a
+  /// barrier; reads use a plain `sync`.
   private let queue = DispatchQueue(label: "com.palace.downloadPersistenceStore", attributes: .concurrent)
+
+  /// In-memory mirror of the on-disk store.
+  ///
+  /// Guarded by `queue`: mutate only from a barrier block, read only from a
+  /// `queue.sync` block. See the type-level note on the `Sendable` conformance
+  /// for the full invariant — this is the one stored property that is not a
+  /// `let`, so the conformance rests entirely on that discipline.
   private var cache: [String: BookDownloads] = [:]
   
   private var storeURL: URL? {
@@ -95,8 +136,11 @@ public final class DownloadPersistenceStore {
   // MARK: - Initialization
   
   private init() {
+    // Safe to touch `cache` off-queue here, and only here: `init` is private and
+    // the sole instance is the `static let shared` singleton, whose one-time
+    // initialisation happens-before every other access to this object.
     loadFromDisk()
-    
+
     // Set up low memory warning handling
     NotificationCenter.default.addObserver(
       self,
@@ -111,8 +155,18 @@ public final class DownloadPersistenceStore {
   }
   
   @objc private func handleMemoryWarning() {
-    // Save to disk and clear memory cache
-    saveToDisk()
+    // Flush the in-memory state to disk while the system is under pressure.
+    //
+    // `saveToDisk()` encodes `cache`, so it has to run under the write barrier
+    // like every other reader of `cache` — calling it directly from here raced
+    // every in-flight barrier mutation, because NotificationCenter delivers on
+    // the posting thread (the main thread for a memory warning), never on
+    // `queue`. That same fact is why the synchronous barrier below cannot
+    // deadlock, and `sync` rather than `async` preserves the original timing:
+    // the save is still complete before this handler returns.
+    queue.sync(flags: .barrier) {
+      saveToDisk()
+    }
   }
   
   // MARK: - Public API
@@ -418,6 +472,7 @@ public final class DownloadPersistenceStore {
   
   // MARK: - Persistence
   
+  /// - Important: writes `cache`. Call only from `init` or a barrier block.
   private func loadFromDisk() {
     guard let url = storeURL,
           fileManager.fileExists(atPath: url.path) else {
@@ -435,6 +490,8 @@ public final class DownloadPersistenceStore {
     }
   }
   
+  /// - Important: reads `cache`. Call only from a barrier block, so the encoded
+  ///   snapshot cannot be taken while a mutation is partway through.
   private func saveToDisk() {
     guard let url = storeURL else {
       ATLog(.error, "DownloadPersistenceStore: Cannot get store URL")

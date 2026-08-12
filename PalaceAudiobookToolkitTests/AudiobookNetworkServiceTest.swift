@@ -113,17 +113,44 @@ extension AudiobookNetworkServiceTest {
     }
   }
 
-  class DownloadTaskMock: DownloadTask {
-    var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
-    var downloadProgress: Float
-    var key: String
-    var fetchClosure: ((DownloadTaskMock) -> Void)?
-    var needsRetry: Bool = false
+  /// - Note: `DownloadTask` refines `Sendable`, so this double must satisfy that
+  ///   contract like any production conformer. The race is not hypothetical
+  ///   here: `testDownloadProgressWithTwoTracks` drives `simulateProgressUpdate`
+  ///   from `DispatchQueue.global().async` while
+  ///   `DefaultAudiobookNetworkService.initializeProgressFromCurrentState` reads
+  ///   `downloadTask.downloadProgress` from a background barrier block.
+  ///
+  ///   `@unchecked Sendable` is justified by construction: `key` and
+  ///   `statePublisher` are `let`, and both mutable properties are reached only
+  ///   under `lock`.
+  final class DownloadTaskMock: DownloadTask, @unchecked Sendable {
+    let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+    let key: String
+
+    private let lock = NSLock()
+    private var _downloadProgress: Float
+    private var _needsRetry = false
+    private var _fetchClosure: ((DownloadTaskMock) -> Void)?
+
+    var downloadProgress: Float {
+      get { lock.withLock { _downloadProgress } }
+      set { lock.withLock { _downloadProgress = newValue } }
+    }
+
+    var needsRetry: Bool {
+      get { lock.withLock { _needsRetry } }
+      set { lock.withLock { _needsRetry = newValue } }
+    }
+
+    var fetchClosure: ((DownloadTaskMock) -> Void)? {
+      get { lock.withLock { _fetchClosure } }
+      set { lock.withLock { _fetchClosure = newValue } }
+    }
 
     init(progress: Float, key: String, fetchClosure: ((DownloadTaskMock) -> Void)?) {
-      downloadProgress = progress
+      _downloadProgress = progress
       self.key = key
-      self.fetchClosure = fetchClosure
+      _fetchClosure = fetchClosure
     }
 
     func fetch() {

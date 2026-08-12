@@ -16,9 +16,29 @@ public enum AssetResult {
 
 // MARK: - OpenAccessDownloadTask
 
-final class OpenAccessDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
-  var key: String
+/// - Note: `@unchecked Sendable` is justified by construction rather than by
+///   assertion. Every stored property is either
+///   * a `let` — `statePublisher`, `key`, `urlMediaType`, `alternateLinks`,
+///     `feedbooksProfile`, `bookID`, `downloadURL`, `urlString`; or
+///   * a lock-guarded box — `_token`, `_tokenScopeHost`, `_fulfillURL`,
+///     `_hasAttemptedTokenRefresh`, `_hasAttemptedNetworkRetry`,
+///     `_isForbidden`, `_session`, `_downloadTask`, `_sessionDelegate`,
+///     `_backgroundSessionIdentifier`, `_downloadProgress`.
+///
+///   There is no unsynchronized mutable state left, which is what lets this
+///   type cross isolation domains — and it genuinely does: it is constructed on
+///   the manifest-parsing path, mutated from `URLSession`'s delegate queue
+///   (`delegateQueue: nil`, so callbacks land on a queue of URLSession's
+///   choosing) and from bare `URLSession.shared` completion handlers, and read
+///   by the UI for the progress bar and by `AudiobookNetworkService` for
+///   `isForbidden`/`needsRetry`.
+///
+///   Adding a plain `var` stored property here would invalidate that reasoning.
+final class OpenAccessDownloadTask: DownloadTask, @unchecked Sendable {
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  /// Assigned once in `init` and only read afterwards (the `DownloadTask`
+  /// protocol exposes it get-only), so `let` proves the invariant for free.
+  let key: String
   var needsRetry: Bool {
     switch assetFileStatus() {
     case .missing, .unknown:
@@ -31,21 +51,54 @@ final class OpenAccessDownloadTask: DownloadTask {
   let urlMediaType: TrackMediaType
   let alternateLinks: [(TrackMediaType, URL)]?
   let feedbooksProfile: String?
-  var token: String?
+  /// Lock-guarded: replaced from the token-refresh completion handler (a bare
+  /// `URLSession.shared` callback, so an arbitrary queue) while the fetch path
+  /// reads it in `downloadAsset` to build the `Authorization` header.
+  private let _token: LockIsolated<String?>
+  var token: String? {
+    get { _token.value }
+    set { _token.value = newValue }
+  }
+
   /// Host from the manifest's self link. When set, the bearer token is only
   /// sent to chapter URLs whose host matches, preventing credential leakage
   /// to unrelated domains.
-  var tokenScopeHost: String?
+  ///
+  /// Lock-guarded: written by `OpenAccessTrack.init` (and tests) after this
+  /// task is constructed, read by `shouldSendToken(to:)` on the fetch path.
+  private let _tokenScopeHost = LockIsolated<String?>(nil)
+  var tokenScopeHost: String? {
+    get { _tokenScopeHost.value }
+    set { _tokenScopeHost.value = newValue }
+  }
+
   /// The CM fulfill URL for refreshing expired bearer tokens.
-  var fulfillURL: URL?
-  private var hasAttemptedTokenRefresh = false
+  ///
+  /// Lock-guarded: written by `Tracks.fulfillURL`'s `didSet` (player setup)
+  /// and read by `attemptTokenRefreshAndRetry()`, which runs from the
+  /// URLSession delegate queue on a 401.
+  private let _fulfillURL = LockIsolated<URL?>(nil)
+  var fulfillURL: URL? {
+    get { _fulfillURL.value }
+    set { _fulfillURL.value = newValue }
+  }
+
+  /// Once-per-task budget for the bearer-token-refresh retry. Lock-guarded and
+  /// consumed with an atomic test-and-set (`withValue`) rather than a separate
+  /// read then write: a 401 can be delivered for several chapters at once on
+  /// the session's delegate queue, and a get-then-set would let two callers
+  /// both observe "not yet attempted" and both fire a refresh.
+  private let _hasAttemptedTokenRefresh = LockIsolated(false)
 
   /// Once-per-task guard for the transient-network-error retry. Re-armed on
   /// successful download completion in `didFinishDownloadingTo`. Prevents an
   /// infinite retry loop while still recovering from a single transient blip
   /// (server returns no HTTP response, idle stall, dropped TCP mid-transfer).
   /// Helpspot 17725 (audiobook reaches halfway, then "error 914").
-  private var hasAttemptedNetworkRetry = false
+  ///
+  /// Same atomic test-and-set discipline as `_hasAttemptedTokenRefresh` — this
+  /// is a budget, and a torn check-then-set bypasses it.
+  private let _hasAttemptedNetworkRetry = LockIsolated(false)
 
   /// Delay before retrying after a transient network failure. Mirrors
   /// `DownloadWatchdog.Configuration.default.retryDelay` (5s) so behaviour is
@@ -55,7 +108,16 @@ final class OpenAccessDownloadTask: DownloadTask {
 
   /// Set when the server returns 403 Forbidden. Prevents infinite retry loops
   /// that effectively DDoS the content server.
-  var isForbidden = false
+  ///
+  /// Lock-guarded: written from the URLSession delegate queue on a 403 and read
+  /// on the main-ish retry-sweep path in `AudiobookNetworkService` as well as by
+  /// `needsRetry`. `Bool` is not exempt from the rule — an unsynchronized
+  /// concurrent read/write is undefined behaviour regardless of width.
+  private let _isForbidden = LockIsolated(false)
+  var isForbidden: Bool {
+    get { _isForbidden.value }
+    set { _isForbidden.value = newValue }
+  }
 
   /// The audiobook identifier this track belongs to. Threaded through from
   /// `OpenAccessTrack` (mirroring how `OverdriveTrack` passes `audiobookID` to
@@ -64,10 +126,26 @@ final class OpenAccessDownloadTask: DownloadTask {
   let bookID: String
 
   private static let DownloadTaskTimeoutValue: TimeInterval = 60
-  private var downloadURL: URL
-  private var urlString: String
-  private var session: URLSession?
-  private var downloadTask: URLSessionDownloadTask?
+  /// Assigned once in `init` and only read afterwards (by `fetch()`), so `let`
+  /// proves the invariant instead of paying for a lock.
+  private let downloadURL: URL
+  /// Assigned once in `init`; read on the fetch path to mint the Feedbooks JWT.
+  private let urlString: String
+
+  /// Lock-guarded: assigned on the fetch path and cleared from the cancel and
+  /// both retry paths, which run on the URLSession delegate queue.
+  private let _session = LockIsolated<URLSession?>(nil)
+  private var session: URLSession? {
+    get { _session.value }
+    set { _session.value = newValue }
+  }
+
+  /// Lock-guarded, same reasoning as `_session`.
+  private let _downloadTask = LockIsolated<URLSessionDownloadTask?>(nil)
+  private var downloadTask: URLSessionDownloadTask? {
+    get { _downloadTask.value }
+    set { _downloadTask.value = newValue }
+  }
 
   /// Strong reference to this task's session delegate. F2: the coordinator-owned
   /// session's delegate is the durable router, which holds the observer WEAKLY,
@@ -75,33 +153,64 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// to stay alive and keep receiving forwarded callbacks. Released when the task
   /// deallocates (player close) — at which point the router's weak ref goes nil
   /// and the durable-completion fallback takes over.
-  private var sessionDelegate: DownloadTaskURLSessionDelegate?
+  ///
+  /// Lock-guarded, and deliberately STRONG: this is the retaining half of the
+  /// F2 ownership pair (the delegate's back-reference is the weak half).
+  private let _sessionDelegate = LockIsolated<DownloadTaskURLSessionDelegate?>(nil)
+  private var sessionDelegate: DownloadTaskURLSessionDelegate? {
+    get { _sessionDelegate.value }
+    set { _sessionDelegate.value = newValue }
+  }
 
   /// The background-session identifier this task last created/reused, so the
   /// cancel/retry paths can evict the coordinator-owned session for it. (F2)
-  private var backgroundSessionIdentifier: String?
+  ///
+  /// Lock-guarded, same reasoning as `_session`.
+  private let _backgroundSessionIdentifier = LockIsolated<String?>(nil)
+  private var backgroundSessionIdentifier: String? {
+    get { _backgroundSessionIdentifier.value }
+    set { _backgroundSessionIdentifier.value = newValue }
+  }
 
   /// Progress should be set to 1 if the file already exists.
   /// Lazily initialized based on actual file status to avoid showing 0% for downloaded files.
-  private var _downloadProgress: Float?
+  /// Lock-guarded: written from the URLSession delegate queue (`delegateQueue:
+  /// nil`, so callbacks land on a queue of URLSession's choosing) and read by
+  /// the UI for the progress bar. Plain stored access raced on every read as
+  /// well as every write, since the getter mutates on first use.
+  private let _downloadProgress = LockIsolated<Float?>(nil)
   var downloadProgress: Float {
     get {
-      if _downloadProgress == nil {
-        // Initialize based on actual file status
-        switch assetFileStatus() {
-        case .saved:
-          _downloadProgress = 1.0
-        case .missing, .unknown:
-          _downloadProgress = 0.0
-        }
+      if let cached = _downloadProgress.value {
+        return cached
       }
-      return _downloadProgress ?? 0.0
+      // Resolve the initial value OUTSIDE the lock: assetFileStatus() touches
+      // the file system, which must not run while the lock is held.
+      let initial: Float
+      switch assetFileStatus() {
+      case .saved:
+        initial = 1.0
+      case .missing, .unknown:
+        initial = 0.0
+      }
+      return _downloadProgress.withValue { stored in
+        // Another thread may have resolved it while we were off the lock; its
+        // value wins so all callers observe the same progress.
+        if let existing = stored {
+          return existing
+        }
+        stored = initial
+        return initial
+      }
     }
     set {
-      let oldValue = _downloadProgress
-      _downloadProgress = newValue
+      let didChange = _downloadProgress.withValue { stored -> Bool in
+        let oldValue = stored
+        stored = newValue
+        return oldValue != newValue
+      }
       // Only publish if value changed to avoid duplicate events
-      if oldValue != newValue {
+      if didChange {
         DispatchQueue.main.async { [weak self] in
           guard let self else { return }
           self.statePublisher.send(.progress(newValue))
@@ -127,7 +236,7 @@ final class OpenAccessDownloadTask: DownloadTask {
     self.urlMediaType = urlMediaType
     self.alternateLinks = alternateLinks
     self.feedbooksProfile = feedbooksProfile
-    self.token = token
+    _token = LockIsolated(token)
   }
 
   /// If the asset is already downloaded and verified, return immediately and
@@ -335,9 +444,15 @@ final class OpenAccessDownloadTask: DownloadTask {
       finalDirectory: finalURL,
       trackKey: key
     )
-    // Retain the delegate strongly: the coordinator-owned session's delegate is
-    // the durable router, which holds this observer weakly. (F2)
-    sessionDelegate = delegate
+    // NOTE: `delegate` is deliberately NOT stored yet. The local binding keeps
+    // it alive across the coordinator calls below, and storing it here would
+    // publish a half-installed task — a concurrent `cancel()` could observe a
+    // delegate with no session. It is stored together with the session and the
+    // identifier once all three are known, mirroring `OverdriveDownloadTask`.
+    //
+    // The three still live in separate boxes, so the install is ordered rather
+    // than atomic; making it a single critical section (as the OverDrive
+    // sibling does) is tracked as follow-up rather than restructured here.
 
     // Record the download with the coordinator so a background completion that
     // iOS delivers after the app is killed can be finalized to `finalURL` on
@@ -364,6 +479,9 @@ final class OpenAccessDownloadTask: DownloadTask {
       URLSession(configuration: config, delegate: router, delegateQueue: nil)
     }
     AudiobookDownloadCoordinator.shared.registerObserver(delegate, forIdentifier: backgroundIdentifier)
+    // Retain the delegate strongly: the coordinator-owned session's delegate is
+    // the durable router, which holds this observer weakly. (F2)
+    sessionDelegate = delegate
     session = ownedSession
     backgroundSessionIdentifier = backgroundIdentifier
 
@@ -449,11 +567,23 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// Attempts to refresh the bearer token from the stored CM fulfill URL and retry the download.
   /// Returns `true` if a refresh attempt was initiated, `false` if refresh is not possible.
   func attemptTokenRefreshAndRetry() -> Bool {
-    guard let fulfillURL, !hasAttemptedTokenRefresh else {
+    guard let fulfillURL else {
       return false
     }
 
-    hasAttemptedTokenRefresh = true
+    // Atomic test-and-set: consume the once-per-task refresh budget in a single
+    // locked read-modify-write. A separate read then write would let two 401
+    // callbacks (different chapters, same session delegate queue) both see
+    // "not yet attempted" and both fire a refresh.
+    let claimedBudget = _hasAttemptedTokenRefresh.withValue { attempted -> Bool in
+      guard !attempted else { return false }
+      attempted = true
+      return true
+    }
+    guard claimedBudget else {
+      return false
+    }
+
     ATLog(.info, "OpenAccessDownloadTask: Attempting bearer token refresh for: \(key)")
 
     // F2: evict the coordinator-owned session before re-fetching so the retry
@@ -494,7 +624,7 @@ final class OpenAccessDownloadTask: DownloadTask {
 
       ATLog(.info, "OpenAccessDownloadTask: Token refreshed successfully for: \(self.key)")
       self.token = accessToken
-      self.hasAttemptedTokenRefresh = false
+      self._hasAttemptedTokenRefresh.value = false
       self.fetch()
     }
     task.resume()
@@ -523,8 +653,15 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// outages while recovering the dominant case (single transient blip
   /// during a long chunk download).
   func attemptNetworkRetryAfterTransientError() -> Bool {
-    guard !hasAttemptedNetworkRetry else { return false }
-    hasAttemptedNetworkRetry = true
+    // Atomic test-and-set: see `_hasAttemptedNetworkRetry`. Transient errors
+    // arrive per-URLSessionTask on the delegate queue, so two chapters failing
+    // together must not both claim the single retry.
+    let claimedBudget = _hasAttemptedNetworkRetry.withValue { attempted -> Bool in
+      guard !attempted else { return false }
+      attempted = true
+      return true
+    }
+    guard claimedBudget else { return false }
 
     ATLog(.info, "OpenAccessDownloadTask: Scheduling network-retry in \(Self.NetworkRetryDelay)s for: \(key)")
 
@@ -551,13 +688,13 @@ final class OpenAccessDownloadTask: DownloadTask {
   /// single-retry budget. Internal-by-default; tests bypass through
   /// `@testable import` and call this to reset state between assertions.
   func resetNetworkRetryBudget() {
-    hasAttemptedNetworkRetry = false
+    _hasAttemptedNetworkRetry.value = false
   }
 
   /// Test seam — read-only view of the once-per-task retry guard. Used by
   /// unit tests to assert state without poking private storage.
   var hasUsedNetworkRetry: Bool {
-    hasAttemptedNetworkRetry
+    _hasAttemptedNetworkRetry.value
   }
 
   /// Test seam — installs `delegate` as this task's strongly-held session
@@ -586,8 +723,30 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   /// a completion delivered while closed flows through Refinement 1. While a
   /// download is genuinely active the audiobook graph keeps the task alive, so
   /// this reference is non-nil for every callback that needs it.
-  private weak var downloadTask: DownloadTask?
-  private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  ///
+  /// Stored in a `WeakLockIsolated` box rather than as a plain `weak var`:
+  /// `URLSessionDelegate` is `NS_SWIFT_SENDABLE`, so this class carries a
+  /// checked `Sendable` conformance and a mutable stored property is a
+  /// diagnostic. The box keeps the reference WEAK (moving it into a plain
+  /// `LockIsolated` would make it strong and reintroduce the F2 retain cycle
+  /// described above) while adding the lock the compiler needs to see —
+  /// which is real, not ceremonial: the referent is read from the session's
+  /// background delegate queue and from a `DispatchQueue.main.async` hop.
+  ///
+  /// The box itself is a `let`: the back-reference is assigned exactly once,
+  /// in `init`, and is never reseated — only nilled implicitly by ARC when the
+  /// task deallocates. `WeakLockIsolated` is a reference type, so `let` storage
+  /// still permits that (and forbids the reseating nobody wants).
+  ///
+  /// Typed `AnyObject` because Swift will not bind a class-constrained
+  /// *existential* (`any DownloadTask`) to a `Value: AnyObject` generic
+  /// parameter; the accessor below restores the `DownloadTask` view.
+  private let _downloadTask: WeakLockIsolated<AnyObject>
+  private var downloadTask: DownloadTask? {
+    _downloadTask.value as? DownloadTask
+  }
+
+  private let statePublisher: PassthroughSubject<DownloadTaskState, Never>
   private let finalURL: URL
   private let trackKey: String
 
@@ -607,7 +766,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
     finalDirectory: URL,
     trackKey: String
   ) {
-    self.downloadTask = downloadTask
+    _downloadTask = WeakLockIsolated(downloadTask)
     self.statePublisher = statePublisher
     self.finalURL = finalDirectory
     self.trackKey = trackKey

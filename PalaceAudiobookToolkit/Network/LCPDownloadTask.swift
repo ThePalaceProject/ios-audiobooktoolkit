@@ -17,29 +17,54 @@ let LCPDownloadTaskCompleteNotification = NSNotification.Name(rawValue: "LCPDown
  This file is created for protocol conformance.
  All audio files are embedded into LCP-protected audiobook file.
  */
-final class LCPDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+/// - Note: `@unchecked Sendable` is justified by construction rather than by
+///   assertion: every stored property is either a `let` (`key`, `urls`,
+///   `decryptedUrls`, `urlMediaType`, `statePublisher`) or lock-guarded
+///   (`_downloadProgress`). There is no unsynchronized mutable state left, so
+///   the type may cross isolation domains — which it does, being read by the UI
+///   while the decryption path drives it. Adding a plain `var` stored property
+///   here would invalidate that reasoning.
+final class LCPDownloadTask: DownloadTask, @unchecked Sendable {
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   
-  /// For LCP we decrypt locally into cache; lazily initialized based on file status
-  private var _downloadProgress: Float?
+  /// For LCP we decrypt locally into cache; lazily initialized based on file status.
+  ///
+  /// Lock-guarded: written from the decryption/progress path and read by the UI
+  /// for the progress bar, so plain stored access was a data race on every read
+  /// as well as every write — the getter itself mutates on first use.
+  private let _downloadProgress = LockIsolated<Float?>(nil)
   var downloadProgress: Float {
     get {
-      if _downloadProgress == nil {
-        // Initialize based on actual decrypted file status
-        switch assetFileStatus() {
-        case .saved:
-          _downloadProgress = 1.0
-        case .missing, .unknown:
-          _downloadProgress = 0.0
-        }
+      if let cached = _downloadProgress.value {
+        return cached
       }
-      return _downloadProgress ?? 0.0
+      // Resolve the initial value OUTSIDE the lock: assetFileStatus() touches
+      // the file system, which must not run while the lock is held.
+      let initial: Float
+      switch assetFileStatus() {
+      case .saved:
+        initial = 1.0
+      case .missing, .unknown:
+        initial = 0.0
+      }
+      return _downloadProgress.withValue { stored in
+        // Another thread may have resolved it while we were off the lock; its
+        // value wins so all callers observe the same progress.
+        if let existing = stored {
+          return existing
+        }
+        stored = initial
+        return initial
+      }
     }
     set {
-      let oldValue = _downloadProgress
-      _downloadProgress = newValue
+      let didChange = _downloadProgress.withValue { stored -> Bool in
+        let oldValue = stored
+        stored = newValue
+        return oldValue != newValue
+      }
       // Only publish if value changed
-      if oldValue != newValue {
+      if didChange {
         DispatchQueue.main.async { [weak self] in
           guard let self else { return }
           self.statePublisher.send(.progress(newValue))
@@ -51,8 +76,10 @@ final class LCPDownloadTask: DownloadTask {
   let key: String
   /// URL of a file inside the audiobook archive (e.g., `media/sound.mp3`)
   let urls: [URL]
-  /// URL for decrypted audio file
-  var decryptedUrls: [URL]? = []
+  /// URL for decrypted audio file. Assigned once during `init` and only read
+  /// afterwards (by `AudiobookNetworkService`, `LCPTrack` and `delete()`), so
+  /// it is immutable — which is what lets this type claim `Sendable` honestly.
+  let decryptedUrls: [URL]?
   let urlMediaType: TrackMediaType
 
   var needsRetry: Bool { false }
@@ -61,21 +88,29 @@ final class LCPDownloadTask: DownloadTask {
     self.key = key
     self.urls = urls ?? []
     urlMediaType = mediaType
-    decryptedUrls = self.urls.compactMap { decryptedFileURL(for: $0) }
+    decryptedUrls = self.urls.compactMap { Self.decryptedFileURL(for: $0) }
     // Note: downloadProgress is lazily initialized based on assetFileStatus()
   }
 
   /// URL for decryption delegate to store decrypted file.
+  ///
+  /// Static because it runs while `decryptedUrls` is still being initialized,
+  /// and `let` storage forbids touching `self` until every member is assigned.
+  ///
+  /// The two failure paths previously also emitted `statePublisher.send(.error(nil))`.
+  /// Those sends were unreachable as events: this is only ever called from
+  /// `init`, so no subscriber can exist yet and `PassthroughSubject` does not
+  /// replay. The diagnostics that carried the real information — the `ATLog`
+  /// lines — are retained.
+  ///
   /// - Parameter url: Internal file URL (e.g., `media/sound.mp3`).
   /// - Returns: `URL` to store decrypted file.
-  private func decryptedFileURL(for url: URL) -> URL? {
+  private static func decryptedFileURL(for url: URL) -> URL? {
     guard let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-      statePublisher.send(.error(nil))
       ATLog(.error, "Could not find caches directory.")
       return nil
     }
     guard let hashedUrl = url.path.sha256?.hexString else {
-      statePublisher.send(.error(nil))
       ATLog(.error, "Could not create a valid hash from download task ID.")
       return nil
     }

@@ -5,8 +5,18 @@ let OverdriveTaskCompleteNotification = NSNotification.Name(rawValue: "Overdrive
 
 // MARK: - OverdriveDownloadTask
 
-final class OverdriveDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+/// - Note: `@unchecked Sendable` is justified by construction rather than by
+///   assertion: every stored property is either a `let` (`statePublisher`,
+///   `sessionLock`, `key`, `url`, `urlMediaType`, `bookID`, and the
+///   `_downloadProgress` box), lock-guarded by the `LockIsolated` box
+///   (`downloadProgress`), or one of the three session properties below, which
+///   are read and written only while `sessionLock` is held. No unsynchronized
+///   mutable state remains, so the type may cross isolation domains — which it
+///   does: the UI reads progress while the URLSession delegate queue
+///   (`delegateQueue: nil`, i.e. an OS-owned queue) drives it. Adding a plain
+///   `var` stored property here would invalidate that reasoning.
+final class OverdriveDownloadTask: DownloadTask, @unchecked Sendable {
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
 
   var needsRetry: Bool {
     switch assetFileStatus() {
@@ -19,20 +29,50 @@ final class OverdriveDownloadTask: DownloadTask {
 
   private static let DownloadTaskTimeoutValue = 60.0
 
-  private var urlSession: URLSession?
+  /// Serializes the three session properties below. They are installed together
+  /// by `downloadAsset(...)` (player/UI thread) and torn down together by
+  /// `cancel()`, while the session they describe delivers its callbacks on an
+  /// OS-owned queue (`delegateQueue: nil`) — so plain stored access was an
+  /// unsynchronized cross-thread read/write, not merely an unproven one.
+  ///
+  /// One lock covers all three rather than three independent boxes because they
+  /// are a single unit: an identifier without its session cannot be evicted, and
+  /// a session without its delegate stops routing progress.
+  ///
+  /// Nothing that can block or re-enter this type runs while the lock is held:
+  /// every coordinator call, file-system touch and `URLSession` call is made
+  /// outside it, and the outgoing delegate is released outside it too.
+  private let sessionLock = NSLock()
+
+  private var _urlSession: URLSession?
 
   /// Strong reference to this task's session delegate. F2: the coordinator-owned
   /// session's delegate is the durable router, which holds the observer WEAKLY,
   /// so the task must retain its `DownloadTaskURLSessionDelegate` for it to stay
-  /// alive and keep receiving forwarded callbacks.
-  private var sessionDelegate: DownloadTaskURLSessionDelegate?
+  /// alive and keep receiving forwarded callbacks. Still strong — the lock adds
+  /// synchronization, it does not change ownership.
+  private var _sessionDelegate: DownloadTaskURLSessionDelegate?
 
   /// The background-session identifier this task last created/reused, so the
   /// cancel path can evict the coordinator-owned session for it. (F2)
-  private var backgroundSessionIdentifier: String?
+  private var _backgroundSessionIdentifier: String?
 
-  var downloadProgress: Float = 0 {
-    didSet {
+  /// The session installed by the most recent `downloadAsset(...)`, or `nil`
+  /// once `cancel()` has torn it down.
+  private var urlSession: URLSession? {
+    sessionLock.withLock { _urlSession }
+  }
+
+  /// Lock-guarded: written from the URLSession delegate queue and read by the
+  /// UI for the progress bar, so plain stored access was a data race.
+  /// Publishing still happens on main and still re-reads the current value
+  /// there, preserving the previous `didSet` semantics (every set publishes,
+  /// even when the value is unchanged).
+  private let _downloadProgress = LockIsolated<Float>(0)
+  var downloadProgress: Float {
+    get { _downloadProgress.value }
+    set {
+      _downloadProgress.value = newValue
       DispatchQueue.main.async { [weak self] in
         guard let self else {
           return
@@ -168,9 +208,11 @@ final class OverdriveDownloadTask: DownloadTask {
       finalDirectory: finalURL,
       trackKey: key
     )
-    // Retain the delegate strongly: the coordinator-owned session's delegate is
-    // the durable router, which holds this observer weakly. (F2)
-    sessionDelegate = delegate
+    // The local `delegate` binding retains it strongly for the whole of this
+    // method, so it cannot dealloc before it is handed to `_sessionDelegate`
+    // under the lock at the end. (F2: the coordinator-owned session's delegate
+    // is the durable router, which holds this observer weakly, so the task must
+    // own the strong reference.)
 
     // Record the download with the coordinator so a background completion that
     // iOS delivers after the app is killed can be finalized to `finalURL` on the
@@ -192,11 +234,24 @@ final class OverdriveDownloadTask: DownloadTask {
     // treats as undefined behavior and which froze the reopened progress bar.
     // Re-register THIS task's delegate as the current observer so the live
     // player sees progress. No invalidate on reuse (would kill the download).
-    urlSession = AudiobookDownloadCoordinator.shared.session(forIdentifier: backgroundIdentifier) { router in
+    let session = AudiobookDownloadCoordinator.shared.session(forIdentifier: backgroundIdentifier) { router in
       URLSession(configuration: config, delegate: router, delegateQueue: nil)
     }
     AudiobookDownloadCoordinator.shared.registerObserver(delegate, forIdentifier: backgroundIdentifier)
-    backgroundSessionIdentifier = backgroundIdentifier
+
+    // Install the trio in one lock acquisition, after the coordinator calls
+    // above rather than during them, so no other thread can observe this task
+    // half-installed (a session with no identifier to evict, say). The outgoing
+    // delegate — from a previous open of the same task — is released off the
+    // lock; the router already points at `delegate` by this line, so the swap
+    // is not observable from outside.
+    _ = sessionLock.withLock { () -> DownloadTaskURLSessionDelegate? in
+      let outgoing = _sessionDelegate
+      _urlSession = session
+      _sessionDelegate = delegate
+      _backgroundSessionIdentifier = backgroundIdentifier
+      return outgoing // released by this statement, after the lock is dropped
+    }
 
     // Check for resume data from a previous interrupted download
     if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
@@ -247,11 +302,20 @@ final class OverdriveDownloadTask: DownloadTask {
     // F2: the session is coordinator-owned. Explicit user cancel is the one case
     // where tearing it down is correct — evict it so a later re-fetch creates a
     // fresh session rather than reusing an invalidated one.
-    if let identifier = backgroundSessionIdentifier {
+    if let identifier = sessionLock.withLock({ _backgroundSessionIdentifier }) {
       AudiobookDownloadCoordinator.shared.discardOwnedSession(forIdentifier: identifier)
     }
-    urlSession = nil
-    sessionDelegate = nil
+    // Drop the strong session refs, in the same order and at the same point as
+    // before. The outgoing delegate is returned out of the critical section so
+    // its release runs off the lock. `_backgroundSessionIdentifier` is
+    // deliberately left in place, exactly as before — the coordinator has
+    // already evicted the session it names.
+    _ = sessionLock.withLock { () -> DownloadTaskURLSessionDelegate? in
+      let outgoing = _sessionDelegate
+      _urlSession = nil
+      _sessionDelegate = nil
+      return outgoing // released by this statement, after the lock is dropped
+    }
 
     downloadProgress = 0.0
     statePublisher.send(.error(nil))

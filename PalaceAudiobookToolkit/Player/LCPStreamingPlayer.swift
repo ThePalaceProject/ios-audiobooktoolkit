@@ -21,7 +21,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   private weak var streamingProvider: StreamingResourceProvider?
   private let resourceLoaderQueue = DispatchQueue(label: "com.palace.lcp-streaming-loader", qos: .userInitiated)
-  private static var resourceLoaderAssocKey: UInt8 = 0
+  /// Replaces a `private static var … : UInt8 = 0` passed as `&Self…`, which
+  /// strict concurrency checking diagnoses as global mutable state.
+  private static let resourceLoaderAssocKey = AssociatedObjectKey()
   private let decryptionDelegate: DRMDecryptor?
 
   public var decryptor: DRMDecryptor? {
@@ -568,7 +570,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     if let sharedResourceLoader = sharedResourceLoader {
       objc_setAssociatedObject(
         asset,
-        &Self.resourceLoaderAssocKey,
+        Self.resourceLoaderAssocKey.rawValue,
         sharedResourceLoader,
         .OBJC_ASSOCIATION_RETAIN_NONATOMIC
       )
