@@ -35,7 +35,12 @@ final class OverdriveTrack: Track, @unchecked Sendable {
     case idle
     case loading
     case resolved
+    /// Bounded so a file that cannot be read (truncated, wrong codec) does not
+    /// let every subsequent `duration` read start another load forever.
+    case failed(attempts: Int)
   }
+
+  private static let maxDurationLoadAttempts = 3
 
   /// Combine subscriptions, guarded by a raw lock rather than `LockIsolated`:
   /// `AnyCancellable` is not `Sendable`, so it cannot be a `LockIsolated`
@@ -112,19 +117,33 @@ final class OverdriveTrack: Track, @unchecked Sendable {
   }
 
   func updateDuration() {
-    // Claim the load atomically. Without this, every `duration` read before
-    // resolution started another `AVURLAsset` load.
-    let mayLoad = durationLoad.withValue { state -> Bool in
-      guard case .idle = state else { return false }
-      state = .loading
-      return true
-    }
-    guard mayLoad else {
+    // Check the file BEFORE claiming the load. `localDirectory()` returns a
+    // path whether or not anything exists there, so without this the entire
+    // pre-download window behaves exactly like the bug this is meant to fix:
+    // every read claims, builds an `AVURLAsset` on a nonexistent path, throws,
+    // releases the claim, and the next read claims again. Bounding concurrency
+    // is not the same as bounding the work. When the file does land, the
+    // download-completion sink drives resolution.
+    guard let localURL = (downloadTask as? OverdriveDownloadTask)?.localDirectory(),
+          FileManager.default.fileExists(atPath: localURL.path)
+    else {
       return
     }
 
-    guard let localURL = (downloadTask as? OverdriveDownloadTask)?.localDirectory() else {
-      durationLoad.value = .idle
+    // Claim the load atomically, and only from a state that permits one.
+    let mayLoad = durationLoad.withValue { state -> Bool in
+      switch state {
+      case .idle:
+        state = .loading
+        return true
+      case let .failed(attempts) where attempts < Self.maxDurationLoadAttempts:
+        state = .loading
+        return true
+      case .loading, .resolved, .failed:
+        return false
+      }
+    }
+    guard mayLoad else {
       return
     }
 
@@ -137,14 +156,55 @@ final class OverdriveTrack: Track, @unchecked Sendable {
         // Replaces the iOS 16-deprecated `loadValuesAsynchronously` +
         // `statusOfValue` + `asset.duration` trio.
         let loaded = try await asset.load(.duration)
-        self._duration.value = CMTimeGetSeconds(loaded)
-        self.durationLoad.value = .resolved
+        let seconds = CMTimeGetSeconds(loaded)
+        // A load can SUCCEED and still yield nothing usable — `CMTime`
+        // `.indefinite` gives NaN, and a zero-length or still-being-written
+        // file gives 0. Marking that `.resolved` would latch the track at
+        // duration 0 permanently: the getter sees `<= 0`, asks again, and the
+        // state machine refuses. The pre-existing code self-healed because it
+        // retried on every read; that recovery must not be traded away for the
+        // reload-storm fix. Treat it as a bounded failure instead.
+        guard seconds.isFinite, seconds > 0 else {
+          self.recordDurationLoadFailure()
+          ATLog(.warn, "OverdriveTrack: duration load produced \(seconds) for \(self.key)")
+          return
+        }
+        // Publish the value and the terminal state in one critical section so a
+        // concurrent reset cannot interleave between them.
+        self.durationLoad.withValue { state in
+          self._duration.value = seconds
+          state = .resolved
+        }
       } catch {
-        // Allow a later attempt (e.g. after the download completes) rather than
-        // latching a failure forever.
-        self.durationLoad.value = .idle
+        self.recordDurationLoadFailure()
         ATLog(.warn, "OverdriveTrack: could not load duration for \(self.key)", error: error as NSError)
       }
+    }
+  }
+
+  private func recordDurationLoadFailure() {
+    durationLoad.withValue { state in
+      if case let .failed(attempts) = state {
+        state = .failed(attempts: attempts + 1)
+      } else {
+        state = .failed(attempts: 1)
+      }
+    }
+  }
+
+  /// Permits exactly one further resolution attempt, used when a download
+  /// completes and the real file supersedes whatever the manifest claimed.
+  ///
+  /// Deliberately does NOT disturb a load already in flight: that load is
+  /// reading the same finished file and will publish the same answer, and
+  /// resetting under it would allow a second concurrent load whose write order
+  /// against the first is undefined.
+  private func allowOneMoreResolution() {
+    durationLoad.withValue { state in
+      if case .loading = state {
+        return
+      }
+      state = .idle
     }
   }
 

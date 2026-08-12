@@ -16,11 +16,16 @@ public final class LCPTrack: Track {
   public let duration: TimeInterval
   public let urls: [URL]?
   public let mediaType: TrackMediaType
-  /// The one genuinely mutable property on any `Track` conformer: it is
-  /// assigned after construction by `setStreamingResource(_:)` when the LCP
-  /// streaming URL becomes known, and read on the playback path. Lock-guarded
-  /// rather than `let` for exactly that reason — every other property here is
-  /// write-once in `init`.
+  /// Assigned after construction by `setStreamingResource(_:)`, so lock-guarded
+  /// rather than `let` — every other property on this type is write-once in
+  /// `init`. (`OverdriveTrack` has mutable members of its own; this is not the
+  /// only one in the module.)
+  ///
+  /// - Warning: `setStreamingResource(_:)` has **zero callers** and this
+  ///   property has **zero readers**, in the toolkit and in ios-core. It is
+  ///   dead API that was carried through this migration rather than removed,
+  ///   because deleting public surface is not a concurrency change. Tracked in
+  ///   `docs/followups.md`.
   private let _streamingResource = LockIsolated<URL?>(nil)
   public var streamingResource: URL? {
     get { _streamingResource.value }
