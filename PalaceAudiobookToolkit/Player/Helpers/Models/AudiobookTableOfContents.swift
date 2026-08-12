@@ -341,46 +341,27 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///
   ///   * On the **AVPlayer paths** (open-access, LCP streaming) it never fires
   ///     mid-book, because the same-chapter check above always says "continue"
-  ///     while a next track exists. So no chapter-completion save happens there
-  ///     at all.
-  ///   * On **Findaway** it fires at EVERY chapter, and always has:
-  ///     `audioEnginePlaybackFinished` is driven by the audio engine's
-  ///     per-chapter `FAEPlaybackChapterComplete` notification, with
-  ///     `FAEPlaybackAudiobookComplete` a separate end-of-book event.
+  ///     while a next track exists.
+  ///   * On **Findaway** it fires at EVERY chapter and always has, driven by the
+  ///     audio engine's per-chapter `FAEPlaybackChapterComplete` notification
+  ///     (`FAEPlaybackAudiobookComplete` is the separate end-of-book event). So
+  ///     the flip would not change WHETHER it fires there — only which chapter
+  ///     it names.
   ///
-  ///   That second case is a live defect on shipping DRM titles, and this pin
-  ///   preserves it rather than causing it: with the old tie-break the chapter
-  ///   reported for a completed Findaway chapter is the one BEFORE it (measured
-  ///   during review: 9 of 10 chapters on a real title), so `saveLocation`
-  ///   stores the previous chapter's start and the patron's place moves
-  ///   backwards at every chapter boundary.
+  ///   With the old tie-break a completed Findaway chapter resolves to the one
+  ///   BEFORE it (measured in review: 9 of 10 chapters on a real title), so
+  ///   `handlePlaybackCompleted` saves that earlier chapter's start. This pin
+  ///   preserves that rather than causing it.
   ///
-  ///   - Warning: flipping this parameter does NOT fix that, and believing it
-  ///     does is the trap here. `handlePlaybackCompleted` saves
-  ///     `chapter.position`, which is the chapter's START. So on completing
-  ///     chapter N the save goes from "start of N−1" to "start of N" — from
-  ///     roughly two chapters behind to roughly one. The residual rewind lives
-  ///     in WHAT is saved, not in which chapter is named, and the periodic
-  ///     timer does not help: it only publishes `.positionUpdated` and never
-  ///     calls `saveLocation`. Eliminating the rewind means changing
-  ///     `handlePlaybackCompleted`, not this flag.
-  ///
-  ///   Nor is the pausing an AVPlayer-only, future consequence. The consumer —
-  ///   the app's `.playbackCompleted` handler — is player-agnostic, so Findaway
-  ///   already flips the app to paused at every chapter today, normally masked
-  ///   by the `.playbackBegan` that follows. Because the Findaway chapter
-  ///   notification is documented in this repo as arriving late (sometimes
-  ///   seconds), that masking is an ordering assumption rather than a
-  ///   guarantee. And note the corrected tie-break would not change WHETHER
-  ///   `.completed` fires on Findaway — that is notification-driven — only
-  ///   which chapter it names. What the flip WOULD newly cause is per-chapter
-  ///   firing on the AVPlayer paths. Separating all of this is the ticket's
-  ///   job, not this parameter's.
-  ///
-  ///   It is a playback-control change with its own blast radius and no test
-  ///   coverage — the end-of-track handlers are untested in all three players —
-  ///   so it does not belong in a table-of-contents fix. Tracked as PP-4951;
-  ///   this parameter keeps the two decisions independent until then.
+  ///   - Warning: flipping this parameter does not fix that, and assuming it
+  ///     does is the trap. `handlePlaybackCompleted` saves `chapter.position`,
+  ///     the chapter's START, so the save moves from "start of N−1" to "start
+  ///     of N" — still behind the real listening position. The rest depends on
+  ///     a separate periodic save and on what the app does with `.completed`,
+  ///     neither of which this parameter reaches. The full picture, including
+  ///     what has and has not been measured, is `docs/followups.md` item 21;
+  ///     the decision is PP-4951. Do not act on this comment alone.
+
   func chapter(
     forPosition position: TrackPosition,
     preferChapterEndingHere: Bool = false
