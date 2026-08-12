@@ -32,10 +32,39 @@ final class TrackTransitionTests: XCTestCase {
           tracks: tracks
         )
         
-        // Should find a chapter and not throw
+        // `XCTAssertNotNil` on a non-optional return asserted nothing — the call
+        // either returns a `Chapter` or throws, and the `catch` already covers
+        // throwing. Assert something that can actually be wrong: the resolved
+        // chapter must genuinely CONTAIN the position, i.e. start at or before
+        // it, and be the last such chapter in the list.
+        //
+        // - Note: measured, not assumed. This discriminates off-by-one chapter
+        //   resolution — mutating the scan to `return toc[max(0, index - 1)]`
+        //   fails it — which is the PP-4948 defect class. It does NOT
+        //   discriminate the boundary TIE-BREAK: it passes with the tie-break
+        //   default flipped, because a track-end position and the next
+        //   chapter's `t=0` start are never equal under `TrackPosition`
+        //   ordering. `testCrossTrackChapterTransition` is what pins the
+        //   tie-break.
         do {
-          let chapter = try toc.chapter(forPosition: exactEndPosition)
-          XCTAssertNotNil(chapter, "Should find chapter at end of track \(track.index) in \(manifestJSON.rawValue)")
+          let resolved = try toc.chapter(forPosition: exactEndPosition)
+          guard let index = toc.toc.firstIndex(where: { $0 == resolved }) else {
+            XCTFail("Resolved a chapter that is not in the TOC for \(manifestJSON.rawValue)")
+            continue
+          }
+          XCTAssertLessThanOrEqual(
+            resolved.position, exactEndPosition,
+            "Chapter '\(resolved.title)' resolved for a position BEFORE it starts, "
+              + "track \(track.index) in \(manifestJSON.rawValue)"
+          )
+          if index + 1 < toc.toc.count {
+            XCTAssertGreaterThan(
+              toc.toc[index + 1].position, exactEndPosition,
+              "A later chapter ('\(toc.toc[index + 1].title)') also starts at or before this "
+                + "position, so '\(resolved.title)' is not the containing chapter — "
+                + "track \(track.index) in \(manifestJSON.rawValue)"
+            )
+          }
         } catch {
           XCTFail("Failed to find chapter at end of track \(track.index) in \(manifestJSON.rawValue): \(error)")
         }
@@ -43,6 +72,57 @@ final class TrackTransitionTests: XCTestCase {
     }
   }
   
+  /// The very end of the book must resolve to the final chapter.
+  ///
+  /// - Note: this test does NOT pin the `isLastChapter` clause, and it would be
+  ///   dishonest to claim it does — it was written to and then measured. With
+  ///   `(isLastChapter && isAtChapterEnd)` deleted this test still PASSES,
+  ///   because a position at the end of the book falls through the scan onto
+  ///   the closest-chapter fallback, which selects by distance and therefore
+  ///   picks the same final chapter. The clause is behaviourally equivalent to
+  ///   the fallback within its own domain: its mutant survives by equivalence,
+  ///   not because the suite is weak. It is kept because it states the intent
+  ///   locally rather than relying on a fallback several branches away.
+  ///
+  ///   What DOES pin the boundary rule is
+  ///   `testCrossTrackChapterTransition`, whose `preferChapterEndingHere`
+  ///   assertions fail when the end-clause is removed.
+  ///
+  /// The assertion below is still worth having: it is the end-of-book contract
+  /// that Now Playing renders, and it would catch a fallback that stopped
+  /// selecting by distance.
+  func testEndOfBook_ResolvesToTheFinalChapter() throws {
+    for manifestJSON in ManifestJSON.allCases {
+      let manifest = try loadManifest(for: manifestJSON)
+      let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
+      let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+
+      guard let lastChapter = toc.toc.last, let lastTrack = tracks.tracks.last else { continue }
+
+      let endOfBook = TrackPosition(track: lastTrack, timestamp: lastTrack.duration, tracks: tracks)
+      let resolved = try toc.chapter(forPosition: endOfBook)
+
+      XCTAssertEqual(
+        resolved, lastChapter,
+        "The end of the book must resolve to the final chapter ('\(lastChapter.title)'), "
+          + "got '\(resolved.title)' in \(manifestJSON.rawValue)"
+      )
+
+      // And the offset there must be the chapter's full length, not a clamp to
+      // some other chapter's duration — this is what Now Playing renders as
+      // "time remaining: 0" at the end of a book.
+      if let duration = lastChapter.duration, duration > 0 {
+        let offset = try toc.chapterOffset(for: endOfBook)
+        XCTAssertGreaterThan(
+          offset, 0,
+          "At the end of the book the elapsed time within the final chapter must be "
+            + "non-zero in \(manifestJSON.rawValue)"
+        )
+        XCTAssertLessThanOrEqual(offset, duration, "…and must not exceed it")
+      }
+    }
+  }
+
   /// Tests track transition from one track to the next across all manifests.
   func testTrackTransition_ToNextTrack() throws {
     for manifestJSON in ManifestJSON.allCases {
@@ -201,10 +281,36 @@ final class TrackTransitionTests: XCTestCase {
     // Start of Chapter 3's track
     let track004 = chapter3.position.track
     let startOfTrack004 = TrackPosition(track: track004, timestamp: 0.0, tracks: tracks)
-    
+
     // At end of track 003, should still be in Chapter 2
     let chapterAtTrack003End = try toc.chapter(forPosition: endOfTrack003)
     XCTAssertEqual(chapterAtTrack003End.title, "Chapter 2")
+
+    // `startOfTrack004` was computed and never used. Note it is NOT where
+    // Chapter 3 begins — chapters in this fixture start partway into a track —
+    // so t=0 of that track is still inside Chapter 2. Asserting "Chapter 3"
+    // here was a guess about the fixture, and the fixture disagreed.
+    XCTAssertEqual(
+      try toc.chapter(forPosition: startOfTrack004).title, "Chapter 2",
+      "The start of a track is not a chapter boundary unless a chapter begins there."
+    )
+
+    // The actual boundary is Chapter 3's own start position, and THAT is what
+    // PP-4948 flipped: it belongs to the chapter that begins there.
+    XCTAssertEqual(
+      try toc.chapter(forPosition: chapter3.position).title, "Chapter 3",
+      "A position exactly at a chapter's start is in that chapter."
+    )
+
+    // …unless the caller explicitly asks for the pre-PP-4948 tie-break, which
+    // the players' end-of-track handlers do so their control flow is unchanged.
+    // If this stops holding, `.completed` goes live at every chapter boundary
+    // and playback pauses there.
+    XCTAssertEqual(
+      try toc.chapter(forPosition: chapter3.position, preferChapterEndingHere: true).title,
+      "Chapter 2",
+      "With the end-preferring tie-break, a boundary belongs to the chapter ending there."
+    )
     
     // Next chapter after Chapter 2 should be Chapter 3
     let nextChapter = toc.nextChapter(after: chapterAtTrack003End)

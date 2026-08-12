@@ -696,11 +696,16 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
 
     let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
-    let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+    // See `OpenAccessPlayer.playerItemDidReachEnd` — same handler, same reason.
+    let currentChapter = try? tableOfContents.chapter(
+      forPosition: endedPosition, preferChapterEndingHere: true
+    )
 
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-      let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+      let nextChapter = try? tableOfContents.chapter(
+        forPosition: nextStart, preferChapterEndingHere: true
+      )
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
         // Same chapter continues on next track - navigate explicitly

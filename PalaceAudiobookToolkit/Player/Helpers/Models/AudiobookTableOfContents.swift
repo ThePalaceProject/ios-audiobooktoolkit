@@ -279,16 +279,102 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     return toc[index - 1]
   }
 
-  func chapter(forPosition position: TrackPosition) throws -> Chapter {
+  /// Returns the chapter containing `position`.
+  ///
+  /// Chapter ranges are half-open: a chapter owns `[start, end)`, and the
+  /// position exactly on a boundary belongs to the chapter that BEGINS there,
+  /// not the one that ends there. That is what "skip to the next chapter" means
+  /// — the seek lands precisely on the boundary, and the patron expects to be
+  /// in the chapter they skipped to.
+  ///
+  /// This used to be the other way round, and not only for the exact boundary.
+  /// The end-of-chapter test was applied to every chapter with a 0.5s
+  /// tolerance, and because `calculateEndPosition` sets each chapter's end to
+  /// exactly the next chapter's start, the scan matched the PREVIOUS chapter
+  /// first for anything within half a second of a boundary. So the first half
+  /// second of every chapter was attributed to the chapter before it: Now
+  /// Playing and CarPlay showed the title the patron had just left, with time
+  /// remaining pinned at zero, and `chapterOffset` returned the previous
+  /// chapter's full duration instead of ~0. `testPP3518_ChapterBoundaryOnSameTrack`
+  /// pins both the boundary itself and the 0.5s window after it.
+  ///
+  /// The tolerance is still applied to the LAST chapter, which has no successor
+  /// to hand the boundary to — there, a position at the very end of the book
+  /// must still resolve to something.
+  ///
+  /// - Parameter preferChapterEndingHere: resolves a boundary position to the
+  ///   chapter that ENDS there rather than the one that begins. This is the
+  ///   pre-PP-4948 tie-break, retained for the resolution sites that feed the
+  ///   `.completed(chapter)` playback signal.
+  ///
+  ///   **The full census, because getting it wrong twice is how this parameter
+  ///   came to exist.** `.completed` is emitted from THREE places —
+  ///   `OpenAccessPlayer.playerItemDidReachEnd`, and `FindawayPlayer`'s
+  ///   `audioEnginePlaybackFinished` and `handlePlaybackEnd`.
+  ///   `LCPStreamingPlayer` does not emit it: it resolves chapters only to
+  ///   decide whether to continue in-place or delegate to `super`, which then
+  ///   emits. That makes SIX resolution call sites feeding those three
+  ///   emissions — two in `OpenAccessPlayer`, two in `LCPStreamingPlayer`, and
+  ///   two in `FindawayPlayer` — and all six pass `true`.
+  ///
+  ///   Note the Findaway helper `chapter(for findawayChapter:)` also feeds
+  ///   `.started` and `.stopped`, so those are held on the old tie-break as
+  ///   well. That is deliberate: this parameter preserves the status quo
+  ///   wholesale rather than selectively.
+  ///
+  ///   They ask "does the next track continue the same chapter?" by resolving
+  ///   the ended track's end and the next track's start and comparing. Under the
+  ///   old tie-break both sides resolved to the chapter ending at the boundary,
+  ///   so the answer was always "yes" whenever a next track existed, and the
+  ///   `.completed(chapter)` branch below them was reachable only at end of
+  ///   book. Flipping the tie-break makes that branch live at EVERY chapter
+  ///   boundary — and `.completed` is not a display signal: it reaches
+  ///   `AudiobookManager.handlePlaybackCompleted`, which calls
+  ///   `saveLocation(chapter.position)` — the START of the chapter that just
+  ///   finished — and the app's session manager sets `isPlaying = false` and
+  ///   `.paused`. So the boundary correction would pause playback at every
+  ///   chapter and rewind the saved position by a whole chapter.
+  ///
+  ///   Whether `.completed` SHOULD fire per chapter is a real question, and the
+  ///   answer differs by playback path — a distinction an earlier version of
+  ///   this comment flattened, wrongly:
+  ///
+  ///   * On the **AVPlayer paths** (open-access, LCP streaming) it never fires
+  ///     mid-book, because the same-chapter check above always says "continue"
+  ///     while a next track exists.
+  ///   * On **Findaway** it fires at EVERY chapter and always has, driven by the
+  ///     audio engine's per-chapter `FAEPlaybackChapterComplete` notification
+  ///     (`FAEPlaybackAudiobookComplete` is the separate end-of-book event). So
+  ///     the flip would not change WHETHER it fires there — only which chapter
+  ///     it names.
+  ///
+  ///   With the old tie-break a completed Findaway chapter resolves to the one
+  ///   BEFORE it (measured in review: 9 of 10 chapters on a real title), so
+  ///   `handlePlaybackCompleted` saves that earlier chapter's start. This pin
+  ///   preserves that rather than causing it.
+  ///
+  ///   - Warning: flipping this parameter does not fix that, and assuming it
+  ///     does is the trap. `handlePlaybackCompleted` saves `chapter.position`,
+  ///     the chapter's START, so the save moves from "start of N−1" to "start
+  ///     of N" — still behind the real listening position. The rest depends on
+  ///     a separate periodic save and on what the app does with `.completed`,
+  ///     neither of which this parameter reaches. The full picture, including
+  ///     what has and has not been measured, is `docs/followups.md` item 21;
+  ///     the decision is PP-4951. Do not act on this comment alone.
+  func chapter(
+    forPosition position: TrackPosition,
+    preferChapterEndingHere: Bool = false
+  ) throws -> Chapter {
     for (index, chapter) in toc.enumerated() {
       let chapterStart = chapter.position
       let chapterDuration = chapter.duration ?? chapter.position.track.duration
+      let isLastChapter = index + 1 >= toc.count
 
       let chapterEndPosition: TrackPosition
       if let endPos = chapter.endPosition {
         chapterEndPosition = endPos
       } else {
-        if index + 1 < toc.count {
+        if !isLastChapter {
           let nextChapter = toc[index + 1]
           chapterEndPosition = nextChapter.position
         } else {
@@ -298,13 +384,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
       let isAfterStart = position >= chapterStart
       let isBeforeEnd = position < chapterEndPosition
-      // Check if position is exactly at THIS chapter's end (not just any track end)
-      // This handles the case where position is at exact chapter boundary
-      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key && 
+      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
                             abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
 
-      // Match if within chapter bounds OR if exactly at this chapter's end boundary
-      if isAfterStart && (isBeforeEnd || isAtChapterEnd) {
+      if isAfterStart && (isBeforeEnd || ((isLastChapter || preferChapterEndingHere) && isAtChapterEnd)) {
         return chapter
       }
     }

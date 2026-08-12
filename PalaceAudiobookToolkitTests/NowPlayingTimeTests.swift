@@ -17,39 +17,50 @@ class NowPlayingTimeTests: XCTestCase {
   // MARK: - Chapter Offset Tests
 
   /// Tests that chapterOffset returns a value clamped to [0, chapterDuration]
+  /// **of the chapter the position actually falls in**.
+  ///
+  /// The original version of this test compared the offset against the FIRST
+  /// chapter's duration while walking timestamps well past that chapter — up to
+  /// ten times its length. Those positions are in a later chapter, and
+  /// `chapterOffset` clamps to the duration of the chapter it resolves, so the
+  /// comparison was against the wrong chapter and failed by construction (e.g.
+  /// offset 27.0 vs. a first-chapter duration of 3.0 in Alice). The invariant
+  /// worth pinning is the one Now Playing depends on: whatever chapter you land
+  /// in, elapsed time within it is in `[0, that chapter's duration]`.
   func testChapterOffset_NeverExceedsDuration() throws {
     for manifestJSON in ManifestJSON.allCases {
       let manifest = try loadManifest(for: manifestJSON)
       let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
       let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-      
+
       guard let firstChapter = toc.toc.first,
-            let chapterDuration = firstChapter.duration else { continue }
-      
-      // Test position at various points within and beyond the chapter
-      let testTimestamps = [0.0, chapterDuration / 2, chapterDuration, chapterDuration * 2, chapterDuration * 10]
-      
+            let firstDuration = firstChapter.duration else { continue }
+
+      let testTimestamps = [0.0, firstDuration / 2, firstDuration, firstDuration * 2, firstDuration * 10]
+
       for timestamp in testTimestamps {
         let position = TrackPosition(
           track: firstChapter.position.track,
           timestamp: timestamp,
           tracks: tracks
         )
-        
-        if let offset = try? toc.chapterOffset(for: position) {
-          // Offset should never exceed chapter duration
-          XCTAssertLessThanOrEqual(
-            offset,
-            chapterDuration,
-            "Chapter offset (\(offset)) should not exceed duration (\(chapterDuration)) for timestamp \(timestamp) in \(manifestJSON.rawValue)"
-          )
-          // Offset should never be negative
-          XCTAssertGreaterThanOrEqual(
-            offset,
-            0,
-            "Chapter offset (\(offset)) should not be negative for timestamp \(timestamp) in \(manifestJSON.rawValue)"
-          )
-        }
+
+        guard let offset = try? toc.chapterOffset(for: position),
+              let resolved = try? toc.chapter(forPosition: position)
+        else { continue }
+
+        let resolvedDuration = resolved.duration ?? position.track.duration
+        XCTAssertLessThanOrEqual(
+          offset,
+          resolvedDuration,
+          "Offset (\(offset)) exceeds the duration (\(resolvedDuration)) of the chapter it resolved to "
+            + "('\(resolved.title)') for timestamp \(timestamp) in \(manifestJSON.rawValue)"
+        )
+        XCTAssertGreaterThanOrEqual(
+          offset,
+          0,
+          "Chapter offset (\(offset)) should not be negative for timestamp \(timestamp) in \(manifestJSON.rawValue)"
+        )
       }
     }
   }
@@ -108,35 +119,49 @@ class NowPlayingTimeTests: XCTestCase {
 
   // MARK: - Time Remaining Calculation Tests
 
-  /// Tests that time remaining (duration - elapsed) is never negative
+  /// Tests that time remaining (duration - elapsed) is never negative.
+  ///
+  /// This is the CarPlay invariant: the lock screen and the car display both
+  /// render `duration - elapsed`, and a negative value there is visible and
+  /// wrong. It has to be computed from ONE chapter — the one the position
+  /// resolves to. The original version took `elapsed` from `chapterOffset` (the
+  /// resolved chapter) and `duration` from the chapter being iterated, which are
+  /// not the same chapter once a timestamp runs past the end of the one it
+  /// started in; that produced arithmetic like `1141.0 - 1142.0` between two
+  /// unrelated chapters.
   func testTimeRemaining_NeverNegative() throws {
     for manifestJSON in ManifestJSON.allCases {
       let manifest = try loadManifest(for: manifestJSON)
       let tracks = Tracks(manifest: manifest, audiobookID: testID, token: nil)
       let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
-      
+
       for chapter in toc.toc {
         guard let chapterDuration = chapter.duration, chapterDuration > 0 else { continue }
-        
+
         // Test at various positions
         let testTimestamps = [0.0, chapterDuration / 2, chapterDuration, chapterDuration + 100]
-        
+
         for timestamp in testTimestamps {
           let position = TrackPosition(
             track: chapter.position.track,
             timestamp: timestamp,
             tracks: tracks
           )
-          
-          if let elapsed = try? toc.chapterOffset(for: position) {
-            let timeRemaining = chapterDuration - elapsed
-            
-            XCTAssertGreaterThanOrEqual(
-              timeRemaining,
-              0,
-              "Time remaining should never be negative. Duration: \(chapterDuration), Elapsed: \(elapsed), Remaining: \(timeRemaining) for chapter '\(chapter.title)' in \(manifestJSON.rawValue)"
-            )
-          }
+
+          guard let elapsed = try? toc.chapterOffset(for: position),
+                let resolved = try? toc.chapter(forPosition: position)
+          else { continue }
+
+          let resolvedDuration = resolved.duration ?? position.track.duration
+          let timeRemaining = resolvedDuration - elapsed
+
+          XCTAssertGreaterThanOrEqual(
+            timeRemaining,
+            0,
+            "Time remaining should never be negative. Duration: \(resolvedDuration), "
+              + "Elapsed: \(elapsed), Remaining: \(timeRemaining) for chapter "
+              + "'\(resolved.title)' in \(manifestJSON.rawValue)"
+          )
         }
       }
     }
