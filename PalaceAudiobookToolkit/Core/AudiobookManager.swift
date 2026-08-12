@@ -108,7 +108,16 @@ public enum BookmarkError: Error {
   }
 }
 
-var sharedLogHandler: LogHandler?
+/// Installed once at launch via `DefaultAudiobookManager.setLogHandler` and read
+/// from `ATLog` on whatever thread emitted the log, so the storage lives in a
+/// `LockIsolated` box rather than a bare module-level `var` (which strict
+/// concurrency checking diagnoses as nonisolated global shared mutable state).
+private let _sharedLogHandler = LockIsolated<LogHandler?>(nil)
+
+var sharedLogHandler: LogHandler? {
+  get { _sharedLogHandler.value }
+  set { _sharedLogHandler.value = newValue }
+}
 
 // MARK: - AudiobookPositionCalculator
 

@@ -14,7 +14,7 @@ public final class DownloadWatchdog {
   
   // MARK: - Configuration
   
-  public struct Configuration {
+  public struct Configuration: Sendable {
     /// Time without progress before a download is considered stalled
     public let stallTimeout: TimeInterval
     

@@ -12,7 +12,7 @@ import Foundation
 
 // MARK: - PlaybackRate
 
-public enum PlaybackRate: Int, CaseIterable {
+public enum PlaybackRate: Int, CaseIterable, Sendable {
   // Core preset cases (used for cycling, CarPlay, remote controls)
   case threeQuartersTime = 75
   case normalTime = 100

@@ -9,15 +9,18 @@
 import AVFoundation
 import ObjectiveC
 
-private var trackKey: UInt8 = 0
+/// Replaces the classic `private var trackKey: UInt8 = 0` + `&trackKey` idiom,
+/// which strict concurrency checking diagnoses as global mutable state. See
+/// `AssociatedObjectKey` for why an identity-only pointer is safe to share.
+private let trackKey = AssociatedObjectKey()
 
 extension AVPlayerItem {
   var trackIdentifier: String? {
     get {
-      objc_getAssociatedObject(self, &trackKey) as? String
+      objc_getAssociatedObject(self, trackKey.rawValue) as? String
     }
     set {
-      objc_setAssociatedObject(self, &trackKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+      objc_setAssociatedObject(self, trackKey.rawValue, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
   }
 }
