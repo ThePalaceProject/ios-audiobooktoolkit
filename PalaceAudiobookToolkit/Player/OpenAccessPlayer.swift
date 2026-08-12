@@ -1440,12 +1440,21 @@ extension OpenAccessPlayer {
     }
 
     let endedPosition = TrackPosition(track: endedTrack, timestamp: endedTrack.duration, tracks: tableOfContents.tracks)
-    let currentChapter = try? tableOfContents.chapter(forPosition: endedPosition)
+    // `preferChapterEndingHere` keeps this handler's decision exactly as it was
+    // before PP-4948 flipped the boundary tie-break. See the note on
+    // `chapter(forPosition:preferChapterEndingHere:)`: without it, `.completed`
+    // below becomes reachable at every chapter boundary, which pauses playback
+    // and rewinds the saved position by a chapter.
+    let currentChapter = try? tableOfContents.chapter(
+      forPosition: endedPosition, preferChapterEndingHere: true
+    )
 
     // Check if next track is in the same chapter - if so, navigate explicitly
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-      let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
+      let nextChapter = try? tableOfContents.chapter(
+        forPosition: nextStart, preferChapterEndingHere: true
+      )
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
         // Same chapter continues on next track - navigate explicitly

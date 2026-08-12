@@ -301,7 +301,35 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   /// The tolerance is still applied to the LAST chapter, which has no successor
   /// to hand the boundary to — there, a position at the very end of the book
   /// must still resolve to something.
-  func chapter(forPosition position: TrackPosition) throws -> Chapter {
+  ///
+  /// - Parameter preferChapterEndingHere: resolves a boundary position to the
+  ///   chapter that ENDS there rather than the one that begins. This is the
+  ///   pre-PP-4948 tie-break, and it is retained for ONE caller: the players'
+  ///   end-of-track handlers.
+  ///
+  ///   They ask "does the next track continue the same chapter?" by resolving
+  ///   the ended track's end and the next track's start and comparing. Under the
+  ///   old tie-break both sides resolved to the chapter ending at the boundary,
+  ///   so the answer was always "yes" whenever a next track existed, and the
+  ///   `.completed(chapter)` branch below them was reachable only at end of
+  ///   book. Flipping the tie-break makes that branch live at EVERY chapter
+  ///   boundary — and `.completed` is not a display signal: it reaches
+  ///   `AudiobookManager.handlePlaybackCompleted`, which calls
+  ///   `saveLocation(chapter.position)` — the START of the chapter that just
+  ///   finished — and the app's session manager sets `isPlaying = false` and
+  ///   `.paused`. So the boundary correction would pause playback at every
+  ///   chapter and rewind the saved position by a whole chapter.
+  ///
+  ///   Whether `.completed` SHOULD fire per chapter is a real question — today
+  ///   it never fires mid-book, so no chapter-completion save ever happens —
+  ///   but it is a playback-control change with its own blast radius and no
+  ///   test coverage (`playerItemDidReachEnd` is untested in both players). It
+  ///   does not belong in a table-of-contents fix. Ticketed separately; this
+  ///   parameter keeps the two decisions independent until then.
+  func chapter(
+    forPosition position: TrackPosition,
+    preferChapterEndingHere: Bool = false
+  ) throws -> Chapter {
     for (index, chapter) in toc.enumerated() {
       let chapterStart = chapter.position
       let chapterDuration = chapter.duration ?? chapter.position.track.duration
@@ -324,7 +352,7 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
                             abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
 
-      if isAfterStart && (isBeforeEnd || (isLastChapter && isAtChapterEnd)) {
+      if isAfterStart && (isBeforeEnd || ((isLastChapter || preferChapterEndingHere) && isAtChapterEnd)) {
         return chapter
       }
     }
