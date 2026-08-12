@@ -88,8 +88,18 @@ final class DownloadConcurrencyContractTests: XCTestCase {
   /// *caches* it. A later appearance of the file must not retroactively change
   /// a value callers have already observed, or the progress bar jumps.
   ///
-  /// Kills a mutant that drops the cached early-return: without it the second
-  /// read re-resolves and returns 1.0.
+  /// Mutation-verified: dropping the `stored = initial` write makes the second
+  /// read return 1.0 and this test fails.
+  ///
+  /// - Note: it does NOT cover the outer early-return. Removing that was tried
+  ///   and the test still passed, because the inner double-check re-reads
+  ///   `stored` under the lock and the already-cached 0.0 wins — so the value
+  ///   stays correct without it. The early-return is therefore a *performance*
+  ///   guard, not a correctness one: it is what keeps every progress-bar read
+  ///   off the file system, since `assetFileStatus()` stats the asset. That is
+  ///   the same disk-on-a-hot-path hazard fixed in `updateOverallProgress`, and
+  ///   no correctness assertion can catch its removal. Do not delete it on the
+  ///   strength of a green suite.
   func testDownloadProgress_WhenAssetMissing_ResolvesToZeroAndStaysCached() throws {
     let task = makeOpenAccessTask()
     let assetURL = try clearedAssetURL(for: task)
@@ -105,8 +115,8 @@ final class DownloadConcurrencyContractTests: XCTestCase {
     )
   }
 
-  /// Resolution maps "file already on disk" to 1. Kills a mutant that inverts
-  /// or drops the `.saved` arm.
+  /// Resolution maps "file already on disk" to 1. Mutation-verified: kills a
+  /// mutant that inverts or drops the `.saved` arm.
   func testDownloadProgress_WhenAssetAlreadySaved_ResolvesToOne() throws {
     let probe = makeOpenAccessTask()
     let assetURL = try clearedAssetURL(for: probe)
