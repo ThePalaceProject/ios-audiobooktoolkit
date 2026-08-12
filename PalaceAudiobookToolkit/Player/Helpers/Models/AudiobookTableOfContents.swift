@@ -335,12 +335,33 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///   `.paused`. So the boundary correction would pause playback at every
   ///   chapter and rewind the saved position by a whole chapter.
   ///
-  ///   Whether `.completed` SHOULD fire per chapter is a real question — today
-  ///   it never fires mid-book, so no chapter-completion save ever happens —
-  ///   but it is a playback-control change with its own blast radius and no
-  ///   test coverage (`playerItemDidReachEnd` is untested in both players). It
-  ///   does not belong in a table-of-contents fix. Ticketed separately; this
-  ///   parameter keeps the two decisions independent until then.
+  ///   Whether `.completed` SHOULD fire per chapter is a real question, and the
+  ///   answer differs by playback path — a distinction an earlier version of
+  ///   this comment flattened, wrongly:
+  ///
+  ///   * On the **AVPlayer paths** (open-access, LCP streaming) it never fires
+  ///     mid-book, because the same-chapter check above always says "continue"
+  ///     while a next track exists. So no chapter-completion save happens there
+  ///     at all.
+  ///   * On **Findaway** it fires at EVERY chapter, and always has:
+  ///     `audioEnginePlaybackFinished` is driven by the audio engine's
+  ///     per-chapter `FAEPlaybackChapterComplete` notification, with
+  ///     `FAEPlaybackAudiobookComplete` a separate end-of-book event.
+  ///
+  ///   That second case is a live defect on shipping DRM titles, and this pin
+  ///   preserves it rather than causing it: with the old tie-break the chapter
+  ///   reported for a completed Findaway chapter is the one BEFORE it (measured
+  ///   during review: 9 of 10 chapters on a real title), so `saveLocation`
+  ///   stores the previous chapter's start and the patron's place moves
+  ///   backwards at every chapter boundary. The corrected tie-break would fix
+  ///   it — and would simultaneously make `.completed` fire per chapter on the
+  ///   AVPlayer paths, where it pauses playback. The two cannot be separated by
+  ///   this parameter; separating them is the ticket's job.
+  ///
+  ///   It is a playback-control change with its own blast radius and no test
+  ///   coverage — the end-of-track handlers are untested in all three players —
+  ///   so it does not belong in a table-of-contents fix. Tracked as PP-4951;
+  ///   this parameter keeps the two decisions independent until then.
   func chapter(
     forPosition position: TrackPosition,
     preferChapterEndingHere: Bool = false
