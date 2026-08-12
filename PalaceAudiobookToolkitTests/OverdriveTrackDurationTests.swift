@@ -26,13 +26,21 @@
 //  confirmed to fail. See the note on each test for what specifically was
 //  reverted and what the test reported.
 //
-//  Honest score: EIGHT mutants are killed, but only SIX of them are reachable
+//  Honest score: NINE mutants are killed, but only SEVEN of them are reachable
 //  in production. The two that guard `claimDurationLoad`'s `.resolved` refusal
 //  (`M2`, `M7`) die only through a direct `requestDurationUpdate()`, which no
 //  production code calls: the getter early-returns on any non-zero duration and
 //  the completion sink resets to `.idle` first, so `.resolved` is never the
 //  state a real claim meets. They are worth keeping — they pin the claim's own
-//  contract — but "8/8 killed" would overstate the coverage of shipping paths.
+//  contract — but "9/9 killed" would overstate the coverage of shipping paths.
+//
+//  The ninth arrived the way the others should have. A reviewer generated a
+//  mutant this file did not have — keeping `.resolved` in `noteDownloadCompleted`'s
+//  `else` arm — and it SURVIVED all eight. That arm is the only route by which a
+//  duration read from a truncated file is ever corrected. It was a missing cell
+//  rather than a wrong line, which is the class of defect a mutation score
+//  cannot see: there is no mutant for a case nobody wrote. Covered now by
+//  `testCompletionAfterResolution_ReReadsTheFinishedFile`.
 //
 //  A fourth defect was found by review AFTER these tests were written, in the
 //  transition they introduced: a completion arriving during the final permitted
@@ -458,6 +466,48 @@ final class OverdriveTrackDurationTests: XCTestCase {
       "A completion during the final attempt must survive that attempt's failure; "
         + "duration is \(track.duration) after \(spy.calls) calls."
     )
+  }
+
+  /// A completion arriving AFTER a duration has already resolved must reopen the
+  /// machine and re-read the file.
+  ///
+  /// This is the `.resolved` route through `noteDownloadCompleted`'s `else`
+  /// arm, and it is the ONLY way a latched duration is ever corrected. It
+  /// matters because `.completed` does not mean "the file is complete" — it is
+  /// sent whenever `assetFileStatus()` is `.saved`, a bare `fileExists`, and
+  /// `AudiobookPlaybackModel` calls `networkService.fetch()` on every player
+  /// open. So a duration read from a truncated file resolves, and the next
+  /// player open is what replaces it with the real one. Without this arm the
+  /// wrong duration stands for the life of the process, which is exactly the
+  /// promise `noteDownloadCompleted`'s documentation makes.
+  ///
+  /// Found by a reviewer's mutation, not by the eight that shipped with this
+  /// file: keeping `.resolved` in that arm passed all of them. A missing cell,
+  /// not a wrong line — which is the class of defect a mutation score cannot
+  /// see, because there is no mutant for a case nobody wrote.
+  ///
+  /// Mutation-verified: preserving `.resolved` instead of reopening leaves the
+  /// duration at 100.0 with the loader never asked a second time.
+  func testCompletionAfterResolution_ReReadsTheFinishedFile() throws {
+    let spy = LoaderSpy(script: { n in n == 1 ? 100.0 : 200.0 })
+    let track = try makeTrack(loader: spy.loader)
+    try stageAsset(for: track)
+
+    XCTAssertTrue(
+      pumpDuration(track, until: { track.duration == 100.0 }),
+      "Precondition: a first read resolves, duration is \(track.duration)."
+    )
+    XCTAssertEqual(spy.calls, 1)
+
+    // The player being opened again reports the asset as present.
+    (track.downloadTask as? OverdriveDownloadTask)?.statePublisher.send(.completed)
+
+    XCTAssertTrue(
+      pumpDuration(track, until: { track.duration == 200.0 }),
+      "A completion after resolution must re-read the file; duration is "
+        + "\(track.duration) after \(spy.calls) calls."
+    )
+    XCTAssertEqual(spy.calls, 2, "Exactly one further read, not a loop.")
   }
 
   // MARK: - Helpers
