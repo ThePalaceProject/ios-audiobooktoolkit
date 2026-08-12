@@ -481,7 +481,15 @@ class FindawayPlayer: NSObject, Player {
       tracks: currentTrackPosition.tracks
     )
 
-    if let completedChapter = try? tableOfContents.chapter(forPosition: endPosition) {
+    // Pinned to the pre-PP-4948 tie-break like the other five resolution sites
+    // that feed `.completed`. Here it is provably a no-op: this branch runs only
+    // when there is no next track, so `endPosition` is the end of the BOOK, and
+    // the last chapter keeps the end tolerance under either tie-break. It is
+    // pinned anyway, because a lone unpinned site reads as an oversight — and in
+    // this case it twice WAS one: two reviewers had to point at it.
+    if let completedChapter = try? tableOfContents.chapter(
+      forPosition: endPosition, preferChapterEndingHere: true
+    ) {
       playbackStatePublisher.send(.completed(completedChapter))
     }
 
@@ -923,16 +931,18 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       return nil
     }
 
-    // `preferChapterEndingHere` because this feeds `.completed(chapter)` from
-    // `audioEnginePlaybackFinished`, and `.completed` is playback control, not
+    // `preferChapterEndingHere` keeps every caller of this helper on the
+    // pre-PP-4948 tie-break. The one that matters is `.completed(chapter)` from
+    // `audioEnginePlaybackFinished`, which is playback control rather than
     // display: it reaches `AudiobookManager.handlePlaybackCompleted`, which
-    // saves the position and puts the app into a paused state. This is the
-    // THIRD producer of that signal — the two in `OpenAccessPlayer` and
-    // `LCPStreamingPlayer` carry the same note. PP-4948 changed how a position
-    // exactly on a chapter boundary resolves, and `timestamp: 0.0` on a
-    // Findaway part/sequence is exactly such a position, so without this the
-    // finished chapter reported here would change for 9 of 10 chapters on a
-    // real Findaway title. That may well be the more correct answer; deciding
+    // saves the position and puts the app into a paused state. But note this
+    // helper ALSO feeds `.started` and `.stopped`, so the pin holds those on the
+    // old behaviour too — status-quo-preserving, and deliberate.
+    //
+    // PP-4948 changed how a position exactly on a chapter boundary resolves, and
+    // `timestamp: 0.0` on a Findaway part/sequence IS such a position: measured
+    // on `secret_lives_manifest`, the resolved chapter changes for 9 of its 10
+    // chapters without this. That may well be the more correct answer; deciding
     // it is the follow-up ticket's job, not a table-of-contents fix's.
     return try? tableOfContents.chapter(
       forPosition: TrackPosition(

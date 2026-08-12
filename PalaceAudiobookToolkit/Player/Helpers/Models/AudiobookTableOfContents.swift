@@ -304,8 +304,23 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///
   /// - Parameter preferChapterEndingHere: resolves a boundary position to the
   ///   chapter that ENDS there rather than the one that begins. This is the
-  ///   pre-PP-4948 tie-break, and it is retained for ONE caller: the players'
-  ///   end-of-track handlers.
+  ///   pre-PP-4948 tie-break, retained for the resolution sites that feed the
+  ///   `.completed(chapter)` playback signal.
+  ///
+  ///   **The full census, because getting it wrong twice is how this parameter
+  ///   came to exist.** `.completed` is emitted from THREE places —
+  ///   `OpenAccessPlayer.playerItemDidReachEnd`, and `FindawayPlayer`'s
+  ///   `audioEnginePlaybackFinished` and `handlePlaybackEnd`.
+  ///   `LCPStreamingPlayer` does not emit it: it resolves chapters only to
+  ///   decide whether to continue in-place or delegate to `super`, which then
+  ///   emits. That makes SIX resolution call sites feeding those three
+  ///   emissions — two in `OpenAccessPlayer`, two in `LCPStreamingPlayer`, and
+  ///   two in `FindawayPlayer` — and all six pass `true`.
+  ///
+  ///   Note the Findaway helper `chapter(for findawayChapter:)` also feeds
+  ///   `.started` and `.stopped`, so those are held on the old tie-break as
+  ///   well. That is deliberate: this parameter preserves the status quo
+  ///   wholesale rather than selectively.
   ///
   ///   They ask "does the next track continue the same chapter?" by resolving
   ///   the ended track's end and the next track's start and comparing. Under the
