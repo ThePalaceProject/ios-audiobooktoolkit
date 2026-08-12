@@ -38,11 +38,25 @@ public enum DownloadTaskState: @unchecked Sendable {
 ///
 /// This refinement is what allows `Track` — and therefore `TrackPosition` — to
 /// become `Sendable` in turn, so it is the root of that chain rather than a
-/// local tidy-up. It is only sound because all four conformers
-/// (`LCPDownloadTask`, `OpenAccessDownloadTask`, `OverdriveDownloadTask`,
-/// `FindawayDownloadTask`) have had every stored property made immutable or
-/// lock-guarded first; each carries a by-construction justification on its
-/// declaration. A new conformer must do the same before it compiles.
+/// local tidy-up. It is only sound because every conformer has had its stored
+/// properties made immutable or lock-guarded first, each carrying a
+/// by-construction justification on its declaration: `LCPDownloadTask`,
+/// `OpenAccessDownloadTask`, `OverdriveDownloadTask`, `FindawayDownloadTask`,
+/// and the test double `DownloadTaskMock`.
+///
+/// - Important: the bar is **not** "every stored property is a `let`" — it is
+///   "every stored property is a `let` *whose referent is itself thread-safe*,
+///   or is lock-guarded". A `let` pointing at unsynchronized mutable state
+///   proves nothing. That distinction is the whole reason
+///   `AudiobookNetworkService` correctly refuses this conformance: all of its
+///   own properties are `let` or guarded, but three of those `let`s reference
+///   types that are not.
+///
+/// - Important: adding a conformer does NOT force this check automatically. The
+///   test target has no `SWIFT_STRICT_CONCURRENCY` setting, so a conformer
+///   declared there can violate the contract silently — which
+///   `DownloadTaskMock` did until it was audited. Verify new conformers by
+///   hand.
 public protocol DownloadTask: AnyObject, Sendable {
   var statePublisher: PassthroughSubject<DownloadTaskState, Never> { get }
   var downloadProgress: Float { get set }

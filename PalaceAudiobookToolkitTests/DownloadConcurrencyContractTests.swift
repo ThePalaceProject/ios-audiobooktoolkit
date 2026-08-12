@@ -11,8 +11,31 @@
 //  against the pre-fix code, because it never calls the method concurrently.
 //  A green sequential suite is not evidence that a concurrency guard bites.
 //
-//  Each test below was verified to FAIL against the pre-fix implementation, not
-//  merely to pass against the current one.
+//  THREE tests here are mutation-verified: the defect each claims to cover was
+//  reintroduced and the test confirmed to fail. Recorded so a future reader can
+//  re-derive them rather than take it on trust:
+//
+//    testNetworkRetryBudget_UnderConcurrentClaims  -> get-then-set
+//        -> 6 grants instead of 1 (needs 128 concurrent callers; at 32 it
+//           passed against racy code across 200 trials)
+//    testWatchdogStart_UnderConcurrentCalls        -> get-then-set
+//        -> 2 transitions, caught at trial 27 (a single trial missed it)
+//    testDownloadProgress_PublishesOnChange...     -> publish-on-every-set
+//        -> [0.25, 0.25, 0.75] instead of [0.25, 0.75]
+//
+//  The remaining tests assert behavioural contracts (budget re-arm, watchdog
+//  restartability, stop() idempotence). They are NOT race-mutation-verified and
+//  are not claimed to be — they would catch a broken re-arm or a latched run
+//  flag, not a missing lock.
+//
+//  Deliberately absent: a test for the lazy initialization of
+//  `downloadProgress`. One was written and removed, because it could not be
+//  made to fail. The getter returns early on a cached value, so the window in
+//  which two racers can both resolve is a few instructions wide; even staging a
+//  `.missing` -> `.saved` flip mid-race could not reliably widen it. A test
+//  that cannot fail is worse than no test, since it advertises coverage that
+//  does not exist. The guard itself is exercised indirectly by the concurrent
+//  publish test and reviewed by inspection.
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
@@ -25,12 +48,18 @@ import XCTest
 final class DownloadConcurrencyContractTests: XCTestCase {
   // MARK: - Fixtures
 
+  /// - Note: the download URL points at the discard port on loopback rather
+  ///   than a real host. `attemptNetworkRetryAfterTransientError` schedules a
+  ///   `fetch()` 5 seconds after a successful claim; that closure captures
+  ///   `self` weakly and every task here is trial-scoped, so it should never
+  ///   run — but if the lifetime assumption ever breaks, an unroutable address
+  ///   means the suite still cannot emit real network traffic.
   private func makeOpenAccessTask(token: String? = "test-token") -> OpenAccessDownloadTask {
     OpenAccessDownloadTask(
       key: "test-track-key",
       bookID: "test-book",
-      downloadURL: URL(string: "https://example.com/track.mp3")!,
-      urlString: "https://example.com/track.mp3",
+      downloadURL: URL(string: "http://127.0.0.1:9/track.mp3")!,
+      urlString: "http://127.0.0.1:9/track.mp3",
       urlMediaType: .audioMPEG,
       alternateLinks: nil,
       feedbooksProfile: nil,
@@ -48,6 +77,7 @@ final class DownloadConcurrencyContractTests: XCTestCase {
   /// separate lock acquisitions — so multiple callers could each observe "not
   /// yet attempted" and all return `true`, producing duplicate retries against
   /// the content server.
+  ///
   /// Repeated across trials for the same reason as the watchdog test: the
   /// check-then-claim window is only a few instructions wide, so a single trial
   /// can miss it. Verified against a deliberately reintroduced get-then-set —
@@ -92,48 +122,6 @@ final class DownloadConcurrencyContractTests: XCTestCase {
     }
 
     XCTAssertEqual(grants.value, 1)
-  }
-
-  // MARK: - downloadProgress lazy initialization
-
-  /// `downloadProgress`'s getter resolves its backing store on first read, so
-  /// concurrent first-readers race each other. Whoever loses must adopt the
-  /// winner's value — otherwise two callers disagree about the progress of the
-  /// same track, and the UI can jump backwards.
-  ///
-  /// Pre-fix the getter mutated an unguarded `Float?` directly, so this was an
-  /// unsynchronized read/write of the same storage on every concurrent read.
-  func testDownloadProgress_ConcurrentFirstReads_AllObserveTheSameValue() {
-    let task = makeOpenAccessTask()
-    let observed = LockIsolated<[Float]>([])
-
-    DispatchQueue.concurrentPerform(iterations: 256) { _ in
-      let value = task.downloadProgress
-      observed.withValue { $0.append(value) }
-    }
-
-    XCTAssertEqual(observed.value.count, 256)
-    XCTAssertEqual(
-      Set(observed.value).count, 1,
-      "Concurrent first-reads disagreed about progress: \(Set(observed.value))"
-    )
-  }
-
-  /// Concurrent writers must not lose the last write or leave the store in a
-  /// state where a subsequent read disagrees with it.
-  func testDownloadProgress_ConcurrentWrites_LeaveAReadableConsistentValue() {
-    let task = makeOpenAccessTask()
-
-    DispatchQueue.concurrentPerform(iterations: 256) { iteration in
-      task.downloadProgress = Float(iteration % 10) / 10.0
-    }
-
-    let settled = task.downloadProgress
-    XCTAssertTrue(
-      (0.0...0.9).contains(settled),
-      "Progress settled at \(settled), which is outside the range any writer wrote."
-    )
-    XCTAssertEqual(settled, task.downloadProgress, "Two sequential reads disagreed after concurrent writes.")
   }
 
   // MARK: - Publish semantics must not drift

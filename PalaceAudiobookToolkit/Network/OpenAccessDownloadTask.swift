@@ -444,9 +444,15 @@ final class OpenAccessDownloadTask: DownloadTask, @unchecked Sendable {
       finalDirectory: finalURL,
       trackKey: key
     )
-    // Retain the delegate strongly: the coordinator-owned session's delegate is
-    // the durable router, which holds this observer weakly. (F2)
-    sessionDelegate = delegate
+    // NOTE: `delegate` is deliberately NOT stored yet. The local binding keeps
+    // it alive across the coordinator calls below, and storing it here would
+    // publish a half-installed task — a concurrent `cancel()` could observe a
+    // delegate with no session. It is stored together with the session and the
+    // identifier once all three are known, mirroring `OverdriveDownloadTask`.
+    //
+    // The three still live in separate boxes, so the install is ordered rather
+    // than atomic; making it a single critical section (as the OverDrive
+    // sibling does) is tracked as follow-up rather than restructured here.
 
     // Record the download with the coordinator so a background completion that
     // iOS delivers after the app is killed can be finalized to `finalURL` on
@@ -473,6 +479,9 @@ final class OpenAccessDownloadTask: DownloadTask, @unchecked Sendable {
       URLSession(configuration: config, delegate: router, delegateQueue: nil)
     }
     AudiobookDownloadCoordinator.shared.registerObserver(delegate, forIdentifier: backgroundIdentifier)
+    // Retain the delegate strongly: the coordinator-owned session's delegate is
+    // the durable router, which holds this observer weakly. (F2)
+    sessionDelegate = delegate
     session = ownedSession
     backgroundSessionIdentifier = backgroundIdentifier
 

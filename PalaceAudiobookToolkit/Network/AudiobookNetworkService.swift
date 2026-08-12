@@ -124,10 +124,15 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
 
   private let reachability = Reachability()
 
-  /// Cached overall progress to avoid redundant main-thread dispatches.
-  /// Guarded by `queue`; `updateOverallProgress()` read-modify-writes it and so
-  /// must run under a barrier.
-  private var lastPublishedOverallProgress: Float = -1
+  /// Last overall progress published, used to keep the bar monotonic and to
+  /// avoid redundant main-thread dispatches.
+  ///
+  /// Deliberately guarded by its own lock rather than by `queue`. The gate is a
+  /// read-modify-write, so it needs mutual exclusion — but taking that
+  /// exclusion on `queue` would mean a barrier, and both callers run on main,
+  /// so main would wait out the queue's backlog (which includes per-track file
+  /// I/O) on every progress tick. A dedicated lock is atomic and uncoupled.
+  private let publishGate = LockIsolated<Float>(-1)
 
   public init(tracks: [any Track], decryptor: DRMDecryptor? = nil) {
     self.tracks = tracks
@@ -236,34 +241,51 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
   }
 
   private func updateOverallProgress() {
-    // `.barrier`, not a plain `sync`: the body read-modify-writes
-    // `lastPublishedOverallProgress`, and `queue` is `.concurrent`, so two plain
-    // `sync` blocks run at the same time and can interleave the compare with the
-    // store — two progress ticks would both pass the `>= last` guard and both
-    // publish. Both call sites hop to main before calling this, so it never runs
-    // *on* `queue` and the barrier cannot deadlock.
-    queue.sync(flags: .barrier) {
+    // Snapshot the inputs under a plain concurrent read. This does NOT need a
+    // barrier: it only reads, and the read-modify-write that genuinely needs
+    // atomicity is the `lastPublishedOverallProgress` gate below, which has its
+    // own lock.
+    //
+    // A `.barrier` sync here would be atomic but costly in the wrong place:
+    // both callers run on main, and a barrier waits out the whole queue
+    // backlog — including `fillDownloadSlots`, whose barrier block reads
+    // `downloadTask?.downloadProgress` per track and therefore does file-system
+    // work in the LCP case. That would park the main thread behind disk I/O on
+    // every progress tick.
+    let snapshot: (values: [Float], trackCount: Int)? = queue.sync {
       guard !progressDictionary.isEmpty else {
-        return
+        return nil
       }
+      return (Array(progressDictionary.values), tracks.count)
+    }
+    guard let snapshot, snapshot.trackCount > 0 else {
+      return
+    }
 
-      let totalProgress = progressDictionary.values.reduce(0, +)
-      let overallProgress = totalProgress / Float(tracks.count)
-      
+    let overallProgress = snapshot.values.reduce(0, +) / Float(snapshot.trackCount)
+
+    // Compare-and-publish must be one atomic step, or two concurrent ticks can
+    // both pass the monotonic guard and both publish. Its own lock keeps that
+    // atomic without coupling it to the download-bookkeeping queue.
+    let shouldPublish = publishGate.withValue { lastPublished -> Bool in
       // Enforce monotonic overall progress: never publish a value lower than
       // what we've already published. This prevents the overall progress bar
       // from jittering backwards when individual track progress fluctuates.
-      guard overallProgress >= lastPublishedOverallProgress else { return }
-      
+      guard overallProgress >= lastPublished else { return false }
+
       // Only dispatch to main thread if progress changed meaningfully (>0.5%)
       // This prevents excessive main-thread work during large audiobook downloads
-      let delta = overallProgress - lastPublishedOverallProgress
-      guard delta > 0.005 || overallProgress >= 1.0 else { return }
-      lastPublishedOverallProgress = overallProgress
-      
-      DispatchQueue.main.async {
-        self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
-      }
+      guard overallProgress - lastPublished > 0.005 || overallProgress >= 1.0 else { return false }
+
+      lastPublished = overallProgress
+      return true
+    }
+    guard shouldPublish else {
+      return
+    }
+
+    DispatchQueue.main.async {
+      self.downloadStatePublisher.send(.overallProgress(progress: overallProgress))
     }
   }
 
