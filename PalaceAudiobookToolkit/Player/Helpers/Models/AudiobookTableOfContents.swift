@@ -361,7 +361,6 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///     neither of which this parameter reaches. The full picture, including
   ///     what has and has not been measured, is `docs/followups.md` item 21;
   ///     the decision is PP-4951. Do not act on this comment alone.
-
   func chapter(
     forPosition position: TrackPosition,
     preferChapterEndingHere: Bool = false
