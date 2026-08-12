@@ -30,7 +30,12 @@ import Foundation
 /// - Important: Never call `perform` from the gate's own queue; the SDK calls
 ///   routed through it do not re-enter the gate, so this cannot happen in
 ///   normal use.
-final class FindawayDownloadEngineGate {
+/// - Note: `@unchecked Sendable` is justified by construction: the type has a
+///   single stored property, `queue`, which is a `let`. It holds no mutable
+///   state of its own — it exists purely to serialize access to the Findaway
+///   engine — so sharing it via `static let shared` is sound. Adding stored
+///   state would invalidate this.
+final class FindawayDownloadEngineGate: @unchecked Sendable {
   static let shared = FindawayDownloadEngineGate()
 
   private let queue = DispatchQueue(

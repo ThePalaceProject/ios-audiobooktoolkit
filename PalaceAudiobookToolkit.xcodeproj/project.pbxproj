@@ -18,6 +18,7 @@
 		3243173178F87A550EB31653 /* dune_oversubdivided_manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 8E13C49FB5EE117E6C20A818 /* dune_oversubdivided_manifest.json */; };
 		51A60E3AFDF6482AB2FECA5A /* ChunkStallRetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0BA890FAA749DAA0A58139 /* ChunkStallRetryTests.swift */; };
 		56E55E478FF5A2201284A576 /* FindawayDownloadEngineGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED08DDCBC8158591177047B /* FindawayDownloadEngineGate.swift */; };
+		5894CDCBD1F302C6DF3A49B2 /* WeakLockIsolated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01E087E9ED55ACB14C0910DF /* WeakLockIsolated.swift */; };
 		64EF6FD2B05B1F3409967F5B /* FindawayDownloadEngineGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0873ED7E066863822184CA2A /* FindawayDownloadEngineGateTests.swift */; };
 		799DB3A728A05389544BDFC2 /* AssociatedObjectKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 999B4D7FDE238E1FE12426E6 /* AssociatedObjectKey.swift */; };
 		7B3BD9CC2011848B002C5416 /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7B5441F3200FB3EE0047B6C6 /* Media.xcassets */; };
@@ -197,6 +198,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		01E087E9ED55ACB14C0910DF /* WeakLockIsolated.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WeakLockIsolated.swift; sourceTree = "<group>"; };
 		0873ED7E066863822184CA2A /* FindawayDownloadEngineGateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FindawayDownloadEngineGateTests.swift; sourceTree = "<group>"; };
 		17576CAB248E89DE00E18B4C /* OverdriveDownloadTask.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OverdriveDownloadTask.swift; sourceTree = "<group>"; };
 		178707C724DA505700649567 /* RSAUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSAUtils.swift; sourceTree = "<group>"; };
@@ -570,6 +572,7 @@
 				E51919DA2B50924000C08E86 /* URLRequest+Extensions.swift */,
 				3687D5D297D9E69B1855B5AD /* LockIsolated.swift */,
 				999B4D7FDE238E1FE12426E6 /* AssociatedObjectKey.swift */,
+				01E087E9ED55ACB14C0910DF /* WeakLockIsolated.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -950,6 +953,7 @@
 				56E55E478FF5A2201284A576 /* FindawayDownloadEngineGate.swift in Sources */,
 				C55CA0DFBA7F3756278DC4CF /* LockIsolated.swift in Sources */,
 				799DB3A728A05389544BDFC2 /* AssociatedObjectKey.swift in Sources */,
+				5894CDCBD1F302C6DF3A49B2 /* WeakLockIsolated.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

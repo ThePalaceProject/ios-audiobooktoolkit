@@ -11,7 +11,32 @@ import Combine
 /// Singleton manager for audiobook download sessions.
 /// Persists across audiobook opens to maintain download state and handle
 /// background session reconnection.
-public final class AudiobookDownloadCoordinator {
+///
+/// - Note: `@unchecked Sendable` is justified by construction rather than by
+///   assertion. The type already owns a reader/writer discipline — a
+///   `.concurrent` queue whose every mutation is a `.barrier` — and every
+///   stored property is covered by it:
+///   * `queue` and `downloadStatePublisher` are `let`. `DispatchQueue` is
+///     `Sendable`; the publisher is a Combine subject that is only ever `send`
+///     to (never replaced), and Combine subjects synchronize their subscriber
+///     list internally.
+///   * `backgroundCompletionHandlers`, `reconnectedSessions`, `ownedSessions`,
+///     `ownedSessionDelegates` and `activeDownloads` are mutated ONLY inside
+///     `queue.async(flags: .barrier)` / `queue.sync(flags: .barrier)` and read
+///     ONLY inside `queue.sync`, so the concurrent queue serializes every
+///     writer against every reader. This was verified call site by call site,
+///     not assumed from the presence of the queue.
+///   * The two private helpers that touch `activeDownloads` without taking the
+///     queue themselves are safe by their call graph: `persistState()` is
+///     called only from inside a barrier block, and `loadPersistedState()` only
+///     from `init`, where nothing else can yet reference the instance.
+///   * `backgroundCompletionHandlers` stores a `BackgroundCompletionHandlerBox`
+///     rather than a bare closure so the payload crossing the queue is itself
+///     `Sendable` (see that type for its own justification).
+///   A stored property that is read or written off this queue — or a
+///   `persistState()` call from outside a barrier block — invalidates the
+///   reasoning above and must not be added.
+public final class AudiobookDownloadCoordinator: @unchecked Sendable {
   
   // MARK: - Singleton
   
@@ -19,8 +44,12 @@ public final class AudiobookDownloadCoordinator {
   
   // MARK: - Properties
   
-  /// Completion handlers waiting to be called for background sessions
-  private var backgroundCompletionHandlers: [String: () -> Void] = [:]
+  /// Completion handlers waiting to be called for background sessions.
+  /// Boxed (see `BackgroundCompletionHandlerBox`) so the value crossing the
+  /// coordinator's queue is `Sendable`; the public API still takes a plain
+  /// closure, because the two background listeners forward iOS's own
+  /// non-`@Sendable` handler straight through.
+  private var backgroundCompletionHandlers: [String: BackgroundCompletionHandlerBox] = [:]
   
   /// Reconnected URLSessions that must be kept alive
   private var reconnectedSessions: [String: URLSession] = [:]
@@ -53,8 +82,13 @@ public final class AudiobookDownloadCoordinator {
   
   // MARK: - Types
   
-  /// Information about an active download
-  public struct DownloadInfo {
+  /// Information about an active download.
+  ///
+  /// `Sendable` is spelled out because implicit conformance is not inferred for
+  /// `public` types: this value is handed out of `queue.sync` to callers on
+  /// other threads, and every stored property is itself a value type
+  /// (`String`, `URL`, `Float`, and the `DownloadState` enum below).
+  public struct DownloadInfo: Sendable {
     public let sessionIdentifier: String
     public let bookID: String
     public let trackKey: String
@@ -63,7 +97,7 @@ public final class AudiobookDownloadCoordinator {
     public var progress: Float
     public var state: DownloadState
     
-    public enum DownloadState: String, Codable {
+    public enum DownloadState: String, Codable, Sendable {
       case downloading
       case completed
       case failed
@@ -95,8 +129,13 @@ public final class AudiobookDownloadCoordinator {
   ///   - handler: The completion handler provided by iOS
   ///   - identifier: The background session identifier
   public func registerBackgroundCompletionHandler(_ handler: @escaping () -> Void, forSessionIdentifier identifier: String) {
+    // Box OUTSIDE the barrier block: the box is `Sendable`, the bare closure is
+    // not, so boxing here is what lets the handler reach the queue without
+    // widening the parameter to `@Sendable` (which would ripple into both
+    // background listeners and, from there, into the app's app-delegate hop).
+    let box = BackgroundCompletionHandlerBox(handler)
     queue.async(flags: .barrier) { [weak self] in
-      self?.backgroundCompletionHandlers[identifier] = handler
+      self?.backgroundCompletionHandlers[identifier] = box
       ATLog(.debug, "AudiobookDownloadCoordinator: Registered completion handler for session: \(identifier)")
     }
   }
@@ -107,14 +146,14 @@ public final class AudiobookDownloadCoordinator {
   /// - Parameter identifier: The background session identifier
   public func callCompletionHandler(forSessionIdentifier identifier: String) {
     queue.async(flags: .barrier) { [weak self] in
-      guard let handler = self?.backgroundCompletionHandlers.removeValue(forKey: identifier) else {
+      guard let box = self?.backgroundCompletionHandlers.removeValue(forKey: identifier) else {
         ATLog(.warn, "AudiobookDownloadCoordinator: No completion handler found for session: \(identifier)")
         return
       }
       
       DispatchQueue.main.async {
         ATLog(.info, "AudiobookDownloadCoordinator: Calling completion handler for session: \(identifier)")
-        handler()
+        box.callOnMainQueue()
       }
       
       // Clean up the reconnected session
@@ -545,29 +584,47 @@ protocol DownloadTaskObserver: AnyObject {
 /// progress on a session that a prior task created.
 ///
 /// Thread-safety: `currentObserver` is read on the session's background
-/// delegate queue and written from `downloadAsset`; both go through `lock`.
-/// The observer is held weakly so a released prior task deallocates cleanly.
+/// delegate queue and written from `downloadAsset`; both go through the lock
+/// inside `WeakLockIsolated`. The observer is held weakly so a released prior
+/// task deallocates cleanly.
 final class DurableSessionRouterDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
   private let sessionIdentifier: String
-  private let lock = NSLock()
-  private weak var currentObserver: DownloadTaskObserver?
+
+  /// The task currently observing this session, held WEAKLY and behind a lock
+  /// the compiler can see.
+  ///
+  /// `URLSessionDelegate` is `Sendable` in the SDK, so conforming to it makes
+  /// this class `Sendable`-conforming and a bare `weak var` is diagnosed as
+  /// mutable state — even though `setCurrentObserver`/`snapshotObserver`
+  /// already serialized every access with an `NSLock`. `WeakLockIsolated` keeps
+  /// exactly that discipline (same `NSLock`, same weakness) while making it
+  /// legible to the checker; it holds no unguarded storage of its own.
+  ///
+  /// It must NOT become a strong reference: the F2 fallback in
+  /// `didFinishDownloadingTo` below is reachable only because this nils out
+  /// when a closed player's download task deallocates.
+  ///
+  /// The box is parameterised on `AnyObject` rather than on the protocol
+  /// because `WeakLockIsolated`'s `Value: AnyObject` requirement is not
+  /// satisfied by a class-bound *existential* (`any DownloadTaskObserver` is
+  /// not itself a class type). `setCurrentObserver` only ever stores a
+  /// `DownloadTaskObserver`, so the downcast in `snapshotObserver` cannot fail
+  /// for a live referent — it yields `nil` exactly when the weak reference has
+  /// already been cleared, which is the behaviour the fallback keys off.
+  private let currentObserver = WeakLockIsolated<AnyObject>()
 
   init(sessionIdentifier: String) {
     self.sessionIdentifier = sessionIdentifier
     super.init()
   }
 
-  /// Swaps the observer the router forwards to. Guarded by `lock`.
+  /// Swaps the observer the router forwards to. Guarded by the box's lock.
   func setCurrentObserver(_ observer: DownloadTaskObserver) {
-    lock.lock()
-    currentObserver = observer
-    lock.unlock()
+    currentObserver.value = observer
   }
 
   private func snapshotObserver() -> DownloadTaskObserver? {
-    lock.lock()
-    defer { lock.unlock() }
-    return currentObserver
+    currentObserver.value as? DownloadTaskObserver
   }
 
   // MARK: URLSessionDownloadDelegate
@@ -618,6 +675,40 @@ final class DurableSessionRouterDelegate: NSObject, URLSessionDelegate, URLSessi
       totalBytesWritten: totalBytesWritten,
       totalBytesExpectedToWrite: totalBytesExpectedToWrite
     )
+  }
+}
+
+// MARK: - Background Completion Handler Box
+
+/// Carries iOS's background-session completion handler across the coordinator's
+/// queue.
+///
+/// - Note: `@unchecked Sendable` is justified by construction. The box holds a
+///   single `let` — there is no mutable state to race on — and the closure it
+///   carries is *transferred*, never shared: UIKit hands it to the app delegate
+///   on the main thread, `registerBackgroundCompletionHandler` boxes it and
+///   stores it under a barrier write, `callCompletionHandler` removes it under
+///   a barrier write (so exactly one caller can ever obtain it), and the only
+///   invocation hops to `DispatchQueue.main` first. The handler is therefore
+///   only ever *executed* on the thread that created it, and never by two
+///   threads at once.
+///
+///   This box exists so the public API can keep taking a plain
+///   `@escaping () -> Void`: the callers are `OpenAccessBackgroundListener` /
+///   `OverdriveBackgroundListener`, which forward the non-`@Sendable` handler
+///   that `UIApplicationDelegate` gave them. Marking the parameter `@Sendable`
+///   would push the conversion warning into those files and up into the app.
+private struct BackgroundCompletionHandlerBox: @unchecked Sendable {
+  private let handler: () -> Void
+
+  init(_ handler: @escaping () -> Void) {
+    self.handler = handler
+  }
+
+  /// Invokes the handler. Callers MUST already be on the main queue — that is
+  /// the precondition the `@unchecked Sendable` justification above rests on.
+  func callOnMainQueue() {
+    handler()
   }
 }
 
