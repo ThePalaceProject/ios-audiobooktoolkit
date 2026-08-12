@@ -98,6 +98,53 @@ class SleepTimerTests: XCTestCase {
     wait(for: [expectTimeToDecreaseFrom59Minutes], timeout: 4)
   }
 
+  /// The 45-minute option has to schedule sleep 45 minutes out — not 30, not 60.
+  /// Paused is the deterministic way to read the scheduled interval back
+  /// without racing a countdown.
+  func testFortyFiveMinutes_SchedulesSleepFortyFiveMinutesOut() {
+    let player = PlayerMock(tableOfContents: tableOfContents)
+    player.isPlaying = false
+    let sleepTimer = SleepTimer(player: player)
+
+    sleepTimer.setTimerTo(trigger: .fortyFiveMinutes)
+
+    XCTAssertTrue(sleepTimer.isActive)
+    XCTAssertEqual(sleepTimer.timeRemaining, 60 * 45)
+  }
+
+  /// While playing, the 45-minute timer counts down from 45 minutes — proving the
+  /// trigger arms a real deadline rather than parking a static interval.
+  func testFortyFiveMinutes_CountsDownWhilePlaying() {
+    let expectTimeToDecrease = expectation(description: "time to decrease from 45 minutes")
+    let player = PlayerMock(tableOfContents: tableOfContents)
+    player.isPlaying = true
+    let sleepTimer = SleepTimer(player: player)
+
+    sleepTimer.setTimerTo(trigger: .fortyFiveMinutes)
+
+    let fortyFourMinutesAndFiftyEightSeconds: TimeInterval = (60 * 44) + 58
+    asyncCheckFor(
+      sleepTimer: sleepTimer,
+      untilTime: fortyFourMinutesAndFiftyEightSeconds,
+      theExpectation: expectTimeToDecrease
+    )
+    wait(for: [expectTimeToDecrease], timeout: 4)
+    XCTAssertGreaterThan(sleepTimer.timeRemaining, 60 * 44)
+  }
+
+  /// Both sleep-timer menus — the sheet player's action sheet and the in-app
+  /// player's `Menu` — are built by iterating `allCases` and labelling each case
+  /// with `displayTitle`, so this is literally the list of options a patron sees,
+  /// in order. Pinning it catches a case appended to the end of the enum (which
+  /// would list "45 Minutes" after "End of Chapter" yet still keep a
+  /// duration-only test green) as well as a mislabelled option.
+  func testSleepTimerMenu_OffersAscendingDurationsThenEndOfChapter() {
+    XCTAssertEqual(
+      SleepTimerTriggerAt.allCases.map(\.displayTitle),
+      ["Off", "15 Minutes", "30 Minutes", "45 Minutes", "60 Minutes", "End of Chapter"]
+    )
+  }
+
   func testOnlyCountsDownWhilePlaying() {
     let player = PlayerMock(tableOfContents: tableOfContents)
     player.isPlaying = false
