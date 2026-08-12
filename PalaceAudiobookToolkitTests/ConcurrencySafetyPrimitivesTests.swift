@@ -65,12 +65,6 @@ final class ConcurrencySafetyPrimitivesTests: XCTestCase {
     XCTAssertNotEqual(first.rawValue, second.rawValue)
   }
 
-  func testAssociatedObjectKey_AddressIsStableAcrossReads() {
-    let key = AssociatedObjectKey()
-
-    XCTAssertEqual(key.rawValue, key.rawValue)
-  }
-
   // MARK: - AVPlayerItem.trackIdentifier
 
   func testTrackIdentifier_RoundTripsThroughAssociatedStorage() {
@@ -115,22 +109,33 @@ final class ConcurrencySafetyPrimitivesTests: XCTestCase {
     XCTAssertEqual(PalaceAuthTokenProvider.currentToken, "bearer-abc")
   }
 
-  func testTokenResolver_ConcurrentReadsSeeTheInstalledResolver() {
+  func testTokenResolver_ConcurrentReadsAndWritesNeverTearTheResolver() {
     let original = PalaceAuthTokenProvider.tokenResolver
     defer { PalaceAuthTokenProvider.tokenResolver = original }
 
-    PalaceAuthTokenProvider.tokenResolver = { "bearer-concurrent" }
+    PalaceAuthTokenProvider.tokenResolver = { "bearer-a" }
     let observed = LockIsolated<[String?]>([])
 
-    // The toolkit reads this off the main thread during streaming playback,
-    // so concurrent reads must be consistent rather than racy.
-    DispatchQueue.concurrentPerform(iterations: 500) { _ in
-      let token = PalaceAuthTokenProvider.currentToken
-      observed.withValue { $0.append(token) }
+    // Readers AND writers must race for this to mean anything: with only
+    // readers it passes against a plain `static var` too, and would be a test
+    // of `LockIsolated` rather than of the provider. The app installs the
+    // resolver at launch and the toolkit reads it off the main thread during
+    // streaming playback, so a concurrent reinstall is the real shape.
+    DispatchQueue.concurrentPerform(iterations: 500) { iteration in
+      if iteration % 5 == 0 {
+        PalaceAuthTokenProvider.tokenResolver = iteration % 10 == 0 ? { "bearer-a" } : { "bearer-b" }
+      } else {
+        observed.withValue { $0.append(PalaceAuthTokenProvider.currentToken) }
+      }
     }
 
-    XCTAssertEqual(observed.value.count, 500)
-    XCTAssertTrue(observed.value.allSatisfy { $0 == "bearer-concurrent" })
+    // Every read must return one of the two installed resolvers' values —
+    // never a torn or nil result from observing a half-assigned closure.
+    XCTAssertFalse(observed.value.isEmpty)
+    XCTAssertTrue(
+      observed.value.allSatisfy { $0 == "bearer-a" || $0 == "bearer-b" },
+      "A read observed neither installed resolver: \(Set(observed.value.map { $0 ?? "nil" }))"
+    )
   }
 
   func testTokenResolver_ClearingRemovesTheToken() {

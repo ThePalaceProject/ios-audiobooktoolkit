@@ -188,7 +188,14 @@ public final class DownloadWatchdog: @unchecked Sendable {
   // MARK: - Public API
   
   /// Starts monitoring downloads using AsyncStream for periodic checks.
-  public func start() {
+  ///
+  /// - Returns: `true` if this call transitioned the watchdog from stopped to
+  ///   running, `false` if it was already running. Exactly one of any number of
+  ///   concurrent calls can return `true`; that is the invariant which keeps a
+  ///   second monitoring task from being installed and orphaned. Marked
+  ///   `@discardableResult` so existing callers are unaffected.
+  @discardableResult
+  public func start() -> Bool {
     // Atomic test-and-set. `guard !isRunning` followed by `isRunning = true` is
     // two separate lock acquisitions, so two concurrent `start()` calls could
     // both observe `false` and both proceed. Each would then install a
@@ -201,7 +208,7 @@ public final class DownloadWatchdog: @unchecked Sendable {
       state.isRunning = true
       return true
     }
-    guard didStart else { return }
+    guard didStart else { return false }
 
     ATLog(.info, "DownloadWatchdog: Starting with stallTimeout=\(configuration.stallTimeout)s, maxRetries=\(configuration.maxRetries)")
 
@@ -235,8 +242,9 @@ public final class DownloadWatchdog: @unchecked Sendable {
     if !installed {
       task.cancel()
     }
+    return true
   }
-  
+
   /// Creates an AsyncStream that emits at regular intervals.
   private static func timerStream(interval: TimeInterval) -> AsyncStream<Date> {
     AsyncStream { continuation in
