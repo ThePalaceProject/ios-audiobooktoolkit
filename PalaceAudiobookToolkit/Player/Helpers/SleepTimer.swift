@@ -11,10 +11,15 @@ import UIKit
 
 // MARK: - SleepTimerTriggerAt
 
+/// Declaration order is menu order: both the sheet player's sleep-timer action
+/// sheet and the in-app player's sleep-timer menu are built by iterating
+/// `allCases`, so the durations stay ascending between `never` and
+/// `endOfChapter`.
 @objc public enum SleepTimerTriggerAt: Int, CaseIterable {
   case never
   case fifteenMinutes
   case thirtyMinutes
+  case fortyFiveMinutes
   case oneHour
   case endOfChapter
 }
@@ -30,6 +35,7 @@ public extension SleepTimerTriggerAt {
     switch self {
     case .endOfChapter: return S.endOfChapter
     case .oneHour: return S.oneHour
+    case .fortyFiveMinutes: return S.fortyFiveMinutes
     case .thirtyMinutes: return S.thirtyMinutes
     case .fifteenMinutes: return S.fifteenMinutes
     case .never: return S.off
@@ -180,6 +186,8 @@ private enum TimerState {
       sleepIn(secondsFromNow: minutes(15))
     case .thirtyMinutes:
       sleepIn(secondsFromNow: minutes(30))
+    case .fortyFiveMinutes:
+      sleepIn(secondsFromNow: minutes(45))
     case .oneHour:
       sleepIn(secondsFromNow: minutes(60))
     case .endOfChapter:

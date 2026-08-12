@@ -50,6 +50,7 @@ enum Strings {
     static let cancel = NSLocalizedString("Cancel", value: "Cancel", comment: "Cancel")
     static let endOfChapter = NSLocalizedString("End of Chapter", value: "End of Chapter", comment: "End of Chapter")
     static let oneHour = NSLocalizedString("60 Minutes", value: "60 Minutes", comment: "60 Minutes")
+    static let fortyFiveMinutes = NSLocalizedString("45 Minutes", value: "45 Minutes", comment: "45 Minutes")
     static let thirtyMinutes = NSLocalizedString("30 Minutes", value: "30 Minutes", comment: "30 Minutes")
     static let fifteenMinutes = NSLocalizedString("15 Minutes", value: "15 Minutes", comment: "15 Minutes")
     static let off = NSLocalizedString("Off", value: "Off", comment: "Off")

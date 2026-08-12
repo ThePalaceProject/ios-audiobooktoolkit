@@ -686,6 +686,7 @@ public struct AudiobookPlayerView: View {
     switch sleepTimer {
     case .endOfChapter: DisplayStrings.endOfChapter
     case .oneHour: DisplayStrings.oneHour
+    case .fortyFiveMinutes: DisplayStrings.fortyFiveMinutes
     case .thirtyMinutes: DisplayStrings.thirtyMinutes
     case .fifteenMinutes: DisplayStrings.fifteenMinutes
     case .never: DisplayStrings.off
