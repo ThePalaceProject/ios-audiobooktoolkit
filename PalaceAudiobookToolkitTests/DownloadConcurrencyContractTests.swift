@@ -11,7 +11,7 @@
 //  against the pre-fix code, because it never calls the method concurrently.
 //  A green sequential suite is not evidence that a concurrency guard bites.
 //
-//  THREE tests here are mutation-verified: the defect each claims to cover was
+//  FIVE tests here are mutation-verified: the defect each claims to cover was
 //  reintroduced and the test confirmed to fail. Recorded so a future reader can
 //  re-derive them rather than take it on trust:
 //
@@ -22,6 +22,10 @@
 //        -> 2 transitions, caught at trial 27 (a single trial missed it)
 //    testDownloadProgress_PublishesOnChange...     -> publish-on-every-set
 //        -> [0.25, 0.25, 0.75] instead of [0.25, 0.75]
+//    testDownloadProgress_WhenAssetMissing_...     -> drop `stored = initial`
+//        -> second read returns 1.0 instead of the cached 0.0
+//    testDownloadProgress_WhenAssetAlreadySaved... -> `.saved` arm -> 0.0
+//        -> 0.0 instead of 1.0
 //
 //  The remaining tests assert behavioural contracts (budget re-arm, watchdog
 //  restartability, stop() idempotence). They are NOT race-mutation-verified and

@@ -8,15 +8,29 @@
 
 import Foundation
 
-public class LCPTrack: Track {
-  public var key: String
-  public var downloadTask: (any DownloadTask)?
-  public var title: String?
-  public var index: Int
-  public var duration: TimeInterval
-  public var urls: [URL]?
+public final class LCPTrack: Track {
+  public let key: String
+  public let downloadTask: (any DownloadTask)?
+  public let title: String?
+  public let index: Int
+  public let duration: TimeInterval
+  public let urls: [URL]?
   public let mediaType: TrackMediaType
-  public var streamingResource: URL?
+  /// Assigned after construction by `setStreamingResource(_:)`, so lock-guarded
+  /// rather than `let` — every other property on this type is write-once in
+  /// `init`. (`OverdriveTrack` has mutable members of its own; this is not the
+  /// only one in the module.)
+  ///
+  /// - Warning: `setStreamingResource(_:)` has **zero callers** and this
+  ///   property has **zero readers**, in the toolkit and in ios-core. It is
+  ///   dead API that was carried through this migration rather than removed,
+  ///   because deleting public surface is not a concurrency change. Tracked in
+  ///   `docs/followups.md`.
+  private let _streamingResource = LockIsolated<URL?>(nil)
+  public var streamingResource: URL? {
+    get { _streamingResource.value }
+    set { _streamingResource.value = newValue }
+  }
 
   public required init(
     manifest: Manifest,
