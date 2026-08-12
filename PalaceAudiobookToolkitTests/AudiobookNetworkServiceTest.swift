@@ -80,15 +80,31 @@ class AudiobookNetworkServiceTest: XCTestCase {
 }
 
 extension AudiobookNetworkServiceTest {
-  class TrackMock: Track {
-    var key: String
-    var downloadTask: DownloadTask?
-    var title: String?
-    var index: Int = 0
-    var duration: TimeInterval = 0
-    var partNumber: Int?
-    var chapterNumber: Int?
-    var urls: [URL]?
+  /// - Note: `Track` refines `Sendable` as of wave 3, so this double owes the
+  ///   same contract as any production conformer — and the race is real, not
+  ///   notional: `testDownloadProgressWithTwoTracks` drives
+  ///   `simulateProgressUpdate` from `DispatchQueue.global().async` while
+  ///   `initializeProgressFromCurrentState` reads the track from a background
+  ///   barrier block.
+  ///
+  ///   `@unchecked Sendable` is justified by construction: everything is a
+  ///   `let` except `downloadTask`, which the tests reassign, and which is
+  ///   therefore lock-guarded.
+  final class TrackMock: Track, @unchecked Sendable {
+    let key: String
+    let title: String? = nil
+    let index: Int = 0
+    let duration: TimeInterval = 0
+    let partNumber: Int? = nil
+    let chapterNumber: Int? = nil
+    let urls: [URL]? = nil
+
+    private let lock = NSLock()
+    private var _downloadTask: DownloadTask?
+    var downloadTask: DownloadTask? {
+      get { lock.withLock { _downloadTask } }
+      set { lock.withLock { _downloadTask = newValue } }
+    }
 
     required convenience init(
       manifest _: PalaceAudiobookToolkit.Manifest,
@@ -105,7 +121,7 @@ extension AudiobookNetworkServiceTest {
 
     init(progress: Float, key: String) {
       self.key = key
-      downloadTask = DownloadTaskMock(progress: progress, key: key, fetchClosure: nil)
+      _downloadTask = DownloadTaskMock(progress: progress, key: key, fetchClosure: nil)
     }
 
     func simulateProgressUpdate(_ progress: Float) {

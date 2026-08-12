@@ -37,25 +37,29 @@ public class FindawayTrackFactory: NSObject, TrackFactoryProtocol {
 
 // MARK: - `FindawayTrack`
 
-public class FindawayTrack: Track {
+public final class FindawayTrack: Track {
   enum InitializationError: Error {
     case missingPartOrSequenceInfo
     case missingSessionKeyOrLicenseID
   }
 
-  public var downloadTask: (any DownloadTask)?
-  public var title: String?
-  public var index: Int
-  public var duration: TimeInterval
-  public var partNumber: Int?
-  public var chapterNumber: Int?
-  public var urls: [URL]?
+  public let downloadTask: (any DownloadTask)?
+  public let title: String?
+  public let index: Int
+  public let duration: TimeInterval
+  public let partNumber: Int?
+  public let chapterNumber: Int?
+  /// Always `nil`: Findaway content is fetched through the AudioEngine SDK by
+  /// (audiobookID, part, chapter) rather than by URL. This was previously an
+  /// unassigned `var` relying on the implicit `nil` default; as a `let` the
+  /// absence has to be stated, which is the point.
+  public let urls: [URL]? = nil
   public let mediaType: TrackMediaType
 
-  public var sessionKey: String
-  public var licenseID: String
-  public var audiobookID: String
-  public var key: String
+  public let sessionKey: String
+  public let licenseID: String
+  public let audiobookID: String
+  public let key: String
 
   public required init(
     manifest: PalaceAudiobookToolkit.Manifest,
