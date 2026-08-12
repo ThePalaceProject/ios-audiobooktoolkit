@@ -6,7 +6,7 @@ let OverdriveTaskCompleteNotification = NSNotification.Name(rawValue: "Overdrive
 // MARK: - OverdriveDownloadTask
 
 final class OverdriveDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
 
   var needsRetry: Bool {
     switch assetFileStatus() {
@@ -31,8 +31,16 @@ final class OverdriveDownloadTask: DownloadTask {
   /// cancel path can evict the coordinator-owned session for it. (F2)
   private var backgroundSessionIdentifier: String?
 
-  var downloadProgress: Float = 0 {
-    didSet {
+  /// Lock-guarded: written from the URLSession delegate queue and read by the
+  /// UI for the progress bar, so plain stored access was a data race.
+  /// Publishing still happens on main and still re-reads the current value
+  /// there, preserving the previous `didSet` semantics (every set publishes,
+  /// even when the value is unchanged).
+  private let _downloadProgress = LockIsolated<Float>(0)
+  var downloadProgress: Float {
+    get { _downloadProgress.value }
+    set {
+      _downloadProgress.value = newValue
       DispatchQueue.main.async { [weak self] in
         guard let self else {
           return

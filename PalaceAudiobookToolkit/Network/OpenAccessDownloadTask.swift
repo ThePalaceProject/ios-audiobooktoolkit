@@ -17,7 +17,7 @@ public enum AssetResult {
 // MARK: - OpenAccessDownloadTask
 
 final class OpenAccessDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   var key: String
   var needsRetry: Bool {
     switch assetFileStatus() {
@@ -83,25 +83,43 @@ final class OpenAccessDownloadTask: DownloadTask {
 
   /// Progress should be set to 1 if the file already exists.
   /// Lazily initialized based on actual file status to avoid showing 0% for downloaded files.
-  private var _downloadProgress: Float?
+  /// Lock-guarded: written from the URLSession delegate queue (`delegateQueue:
+  /// nil`, so callbacks land on a queue of URLSession's choosing) and read by
+  /// the UI for the progress bar. Plain stored access raced on every read as
+  /// well as every write, since the getter mutates on first use.
+  private let _downloadProgress = LockIsolated<Float?>(nil)
   var downloadProgress: Float {
     get {
-      if _downloadProgress == nil {
-        // Initialize based on actual file status
-        switch assetFileStatus() {
-        case .saved:
-          _downloadProgress = 1.0
-        case .missing, .unknown:
-          _downloadProgress = 0.0
-        }
+      if let cached = _downloadProgress.value {
+        return cached
       }
-      return _downloadProgress ?? 0.0
+      // Resolve the initial value OUTSIDE the lock: assetFileStatus() touches
+      // the file system, which must not run while the lock is held.
+      let initial: Float
+      switch assetFileStatus() {
+      case .saved:
+        initial = 1.0
+      case .missing, .unknown:
+        initial = 0.0
+      }
+      return _downloadProgress.withValue { stored in
+        // Another thread may have resolved it while we were off the lock; its
+        // value wins so all callers observe the same progress.
+        if let existing = stored {
+          return existing
+        }
+        stored = initial
+        return initial
+      }
     }
     set {
-      let oldValue = _downloadProgress
-      _downloadProgress = newValue
+      let didChange = _downloadProgress.withValue { stored -> Bool in
+        let oldValue = stored
+        stored = newValue
+        return oldValue != newValue
+      }
       // Only publish if value changed to avoid duplicate events
-      if oldValue != newValue {
+      if didChange {
         DispatchQueue.main.async { [weak self] in
           guard let self else { return }
           self.statePublisher.send(.progress(newValue))
@@ -587,7 +605,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   /// download is genuinely active the audiobook graph keeps the task alive, so
   /// this reference is non-nil for every callback that needs it.
   private weak var downloadTask: DownloadTask?
-  private var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  private let statePublisher: PassthroughSubject<DownloadTaskState, Never>
   private let finalURL: URL
   private let trackKey: String
 

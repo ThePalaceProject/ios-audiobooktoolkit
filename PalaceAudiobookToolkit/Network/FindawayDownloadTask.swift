@@ -13,7 +13,7 @@ import UIKit
 // MARK: - FindawayDownloadTask
 
 final class FindawayDownloadTask: DownloadTask {
-  var statePublisher = PassthroughSubject<DownloadTaskState, Never>()
+  let statePublisher = PassthroughSubject<DownloadTaskState, Never>()
   var key: String
   var needsRetry: Bool {
     switch downloadStatus {
@@ -28,8 +28,16 @@ final class FindawayDownloadTask: DownloadTask {
   private var session: URLSession?
   private var downloadTask: DownloadTask?
 
-  var downloadProgress: Float = 0 {
-    didSet {
+  /// Lock-guarded: written from the Findaway engine's progress callbacks and
+  /// read by the UI for the progress bar, so plain stored access was a data
+  /// race. Publishing still happens on main and still re-reads the current
+  /// value there, preserving the previous `didSet` semantics (every set
+  /// publishes, even when the value is unchanged).
+  private let _downloadProgress = LockIsolated<Float>(0)
+  var downloadProgress: Float {
+    get { _downloadProgress.value }
+    set {
+      _downloadProgress.value = newValue
       DispatchQueue.main.async { [weak self] in
         guard let self else {
           return
