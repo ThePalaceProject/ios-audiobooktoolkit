@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - TrackPositionError
 
-public enum TrackPositionError: Error, Equatable {
+public enum TrackPositionError: Error, Equatable, Sendable {
   case outOfBounds
   case tracksOutOfOrder
   case differentTracks
@@ -19,7 +19,19 @@ public enum TrackPositionError: Error, Equatable {
 
 // MARK: - TrackPosition
 
-public struct TrackPosition: Equatable, Comparable {
+/// A point inside an audiobook: which file, how far into it, and the collection
+/// the file belongs to.
+///
+/// `Sendable` because it is a value type whose every stored property is
+/// `Sendable`: `any Track` (the protocol refines `Sendable`), `Tracks`
+/// (a `Sendable` final class), a `Double` and two `String`s. The `var`s stay
+/// `var` — mutating a struct produces a new value, so it does not weaken the
+/// claim, and narrowing them would break `TrackPosition+Annotations` in the app.
+///
+/// This is what the wave was for: a `TrackPosition` crosses from the player to
+/// the download scheduler, the bookmark store and the UI, and until now every
+/// one of those hops was a strict-concurrency diagnostic.
+public struct TrackPosition: Equatable, Comparable, Sendable {
   public var track: any Track
   public var timestamp: Double
   public var tracks: Tracks

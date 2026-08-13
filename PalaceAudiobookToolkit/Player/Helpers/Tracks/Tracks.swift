@@ -93,21 +93,75 @@ class TrackFactory: TrackFactoryProtocol {
 
 // MARK: - Tracks
 
-public class Tracks {
-  var manifest: Manifest
-  public var audiobookID: String
-  public var tracks: [any Track] = []
+/// The ordered set of audio files behind one audiobook.
+///
+/// # Why this is `Sendable`
+///
+/// `TrackPosition` carries a `Tracks` reference, and a `TrackPosition` travels
+/// between the player, the download scheduler, the bookmark store and the UI,
+/// each on a different thread. `TrackPosition` cannot be `Sendable` until this
+/// type is, so this is the gate for the whole model layer.
+///
+/// The claim is a plain `Sendable` conformance, not `@unchecked`, and it rests
+/// on the compiler checking every stored property:
+///
+/// - `manifest`, `audiobookID`, `tracks` are `let`. The track array used to be
+///   built by appending to `self.tracks` from inside `init`; it is now produced
+///   whole by the `static` builders below and assigned once, so there is no
+///   window in which it changes.
+/// - `_token` and `_fulfillURL` are `let` boxes. Both properties they back are
+///   written AFTER construction — `token` by `OpenAccessPlayer`'s bearer-token
+///   refresh, `fulfillURL` by `Audiobook.setFulfillURL(_:)` during player setup
+///   — which is exactly why neither could be a plain `var`. All mutation goes
+///   through `LockIsolated`.
+///
+/// - Important: `token` deliberately does NOT propagate to the already-built
+///   tracks. Each track captured the token it was constructed with; refreshing
+///   it here only affects readers of `tracks.token` (the player). That was the
+///   behaviour before this change and it is preserved, not fixed, here.
+public final class Tracks: Sendable {
+  let manifest: Manifest
+  public let audiobookID: String
+  public let tracks: [any Track]
   public var totalDuration: Double { tracks.reduce(0) { $0 + $1.duration } }
 
-  public var token: String?
+  private let _token: LockIsolated<String?>
+
+  /// The bearer token most recently obtained for this audiobook.
+  public var token: String? {
+    get { _token.value }
+    set { _token.value = newValue }
+  }
+
+  private let _fulfillURL = LockIsolated<URL?>(nil)
 
   /// The CM fulfill URL for refreshing expired bearer tokens.
-  /// Setting this propagates the URL to all OpenAccessDownloadTask instances.
+  ///
+  /// Setting this propagates the URL to every `OpenAccessDownloadTask` behind
+  /// these tracks. That propagation used to be a `didSet`; a computed property
+  /// has no `didSet`, so the loop is written out by hand. Dropping it would
+  /// leave the download tasks with no fulfill URL, `refreshTokenAndRetry` would
+  /// bail at its `guard let fulfillURL`, and a download whose bearer token
+  /// expired mid-flight would fail permanently instead of refreshing — silently,
+  /// because nothing else reads the URL. `BearerTokenRefreshTests`'
+  /// propagation tests exist to make that removal loud.
+  ///
+  /// - Important: the store and the propagation happen under this box's lock so
+  ///   that two concurrent writers cannot leave the tasks holding a different
+  ///   URL from the one `fulfillURL` reports. That nests
+  ///   `OpenAccessDownloadTask._fulfillURL`'s lock inside this one. The reverse
+  ///   order does not exist: `OpenAccessDownloadTask` holds no reference to
+  ///   `Tracks` (it only names it in a comment), so there is no path that takes
+  ///   a task's lock and then this one. Do not add one.
   public var fulfillURL: URL? {
-    didSet {
-      for track in tracks {
-        if let oaTask = track.downloadTask as? OpenAccessDownloadTask {
-          oaTask.fulfillURL = fulfillURL
+    get { _fulfillURL.value }
+    set {
+      _fulfillURL.withValue { stored in
+        stored = newValue
+        for track in tracks {
+          if let oaTask = track.downloadTask as? OpenAccessDownloadTask {
+            oaTask.fulfillURL = newValue
+          }
         }
       }
     }
@@ -116,8 +170,8 @@ public class Tracks {
   init(manifest: Manifest, audiobookID: String, token: String?) {
     self.manifest = manifest
     self.audiobookID = audiobookID
-    self.token = token
-    initializeTracks()
+    _token = LockIsolated(token)
+    tracks = Tracks.buildTracks(manifest: manifest, audiobookID: audiobookID, token: token)
   }
 
   public subscript(index: Int) -> (any Track)? {
@@ -135,21 +189,30 @@ public class Tracks {
     tracks.first
   }
 
-  private func initializeTracks() {
+  /// Builds the whole track array before it is assigned, so `tracks` can be a
+  /// `let`. Every helper below is `static` for the same reason: an instance
+  /// method cannot run before all stored properties are initialised.
+  private static func buildTracks(
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) -> [any Track] {
+    var tracks: [any Track] = []
+
     if let spine = manifest.spine, !spine.isEmpty {
       ATLog(.debug, "Tracks: Initializing \(spine.count) tracks from spine")
-      addTracksFromSpine(spine)
+      addTracksFromSpine(spine, into: &tracks, manifest: manifest, audiobookID: audiobookID, token: token)
     } else if let readingOrder = manifest.readingOrder, !readingOrder.isEmpty {
       ATLog(.debug, "Tracks: Initializing \(readingOrder.count) tracks from readingOrder")
-      addTracksFromReadingOrder(readingOrder)
+      addTracksFromReadingOrder(readingOrder, into: &tracks, manifest: manifest, audiobookID: audiobookID, token: token)
     } else if let linksDict = manifest.linksDictionary, let contentLinks = linksDict.contentLinks,
               !contentLinks.isEmpty
     {
       ATLog(.debug, "Tracks: Initializing \(contentLinks.count) tracks from contentLinks")
-      addTracksFromLinks(contentLinks)
+      addTracksFromLinks(contentLinks, into: &tracks, manifest: manifest, audiobookID: audiobookID, token: token)
     } else if let linksArray = manifest.links, !linksArray.isEmpty {
       ATLog(.debug, "Tracks: Initializing \(linksArray.count) tracks from links")
-      addTracksFromLinks(linksArray)
+      addTracksFromLinks(linksArray, into: &tracks, manifest: manifest, audiobookID: audiobookID, token: token)
     } else {
       ATLog(.error, "Tracks: No spine, readingOrder, contentLinks, or links found in manifest for audiobook \(audiobookID)")
     }
@@ -158,11 +221,19 @@ public class Tracks {
     if tracks.isEmpty {
       ATLog(.error, "Tracks: Zero tracks created - manifest may be malformed. Keys: \(manifest.metadata?.title ?? "unknown title")")
     }
+
+    return tracks
   }
 
-  private func addTracksFromReadingOrder(_ readingOrder: [Manifest.ReadingOrderItem]) {
+  private static func addTracksFromReadingOrder(
+    _ readingOrder: [Manifest.ReadingOrderItem],
+    into tracks: inout [any Track],
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) {
     for (index, item) in readingOrder.enumerated() {
-      if let track = createTrack(from: item, index: index) {
+      if let track = createTrack(from: item, index: index, manifest: manifest, audiobookID: audiobookID, token: token) {
         tracks.append(track)
       } else {
         ATLog(.warn, "Tracks: Failed to create track \(index) from readingOrder (href: \(item.href ?? "nil"), duration: \(item.duration))")
@@ -170,15 +241,27 @@ public class Tracks {
     }
   }
 
-  private func addTracksFromLinks(_ links: [Manifest.Link]) {
+  private static func addTracksFromLinks(
+    _ links: [Manifest.Link],
+    into tracks: inout [any Track],
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) {
     for (index, link) in links.enumerated() {
-      if let track = createTrack(from: link, index: index) {
+      if let track = createTrack(from: link, index: index, manifest: manifest, audiobookID: audiobookID, token: token) {
         tracks.append(track)
       }
     }
   }
 
-  private func createTrack(from item: Manifest.ReadingOrderItem, index: Int) -> (any Track)? {
+  private static func createTrack(
+    from item: Manifest.ReadingOrderItem,
+    index: Int,
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) -> (any Track)? {
     let urlString = item.href
 
     return TrackFactory.createTrack(
@@ -193,7 +276,13 @@ public class Tracks {
     )
   }
 
-  private func createTrack(from link: Manifest.Link, index: Int) -> (any Track)? {
+  private static func createTrack(
+    from link: Manifest.Link,
+    index: Int,
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) -> (any Track)? {
     let title = link.title?.localizedTitle() ?? ""
     let bitrate = (link.bitrate ?? 64) * 1024
     var duration: Double
@@ -271,15 +360,27 @@ public class Tracks {
     }
   }
 
-  private func addTracksFromSpine(_ spine: [Manifest.SpineItem]) {
+  private static func addTracksFromSpine(
+    _ spine: [Manifest.SpineItem],
+    into tracks: inout [any Track],
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) {
     for (index, item) in spine.enumerated() {
-      if let track = createTrack(from: item, index: index) {
+      if let track = createTrack(from: item, index: index, manifest: manifest, audiobookID: audiobookID, token: token) {
         tracks.append(track)
       }
     }
   }
 
-  private func createTrack(from item: Manifest.SpineItem, index: Int) -> (any Track)? {
+  private static func createTrack(
+    from item: Manifest.SpineItem,
+    index: Int,
+    manifest: Manifest,
+    audiobookID: String,
+    token: String?
+  ) -> (any Track)? {
     TrackFactory.createTrack(
       from: manifest,
       title: item.title,
