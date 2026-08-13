@@ -8,7 +8,6 @@
 
 import AVKit
 import MediaPlayer
-import PalaceUIKit
 import SwiftUI
 
 // MARK: - AudiobookPlayerView
