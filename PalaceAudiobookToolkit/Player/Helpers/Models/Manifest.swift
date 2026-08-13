@@ -10,7 +10,7 @@ import Foundation
 
 // MARK: - ManifestContext
 
-public enum ManifestContext: Codable {
+public enum ManifestContext: Codable, Sendable {
   case uri(URL)
   case object([String: String])
   case other(String)
@@ -46,7 +46,7 @@ public enum ManifestContext: Codable {
 
 // MARK: - Manifest
 
-public struct Manifest: Codable {
+public struct Manifest: Codable, Sendable {
   let context: [ManifestContext]
   let id: String?
   let reserveId: String?
@@ -175,7 +175,7 @@ public struct Manifest: Codable {
     return decoder
   }
 
-  public struct ReadingOrderItem: Codable {
+  public struct ReadingOrderItem: Codable, Sendable {
     public let title: String?
     let type: String
     let duration: Double
@@ -232,11 +232,11 @@ public struct Manifest: Codable {
     }
   }
 
-  public struct Author: Codable {
+  public struct Author: Codable, Sendable {
     let name: String
   }
 
-  public struct Link: Codable {
+  public struct Link: Codable, Sendable {
     let rel: [String]?
     let href: String
     let type: String?
@@ -250,7 +250,7 @@ public struct Manifest: Codable {
     let alternates: [Link]?
 
     // Nested struct for localized title
-    struct LocalizedString: Codable {
+    struct LocalizedString: Codable, Sendable {
       let values: [String: String]
 
       func localizedTitle() -> String {
@@ -261,10 +261,10 @@ public struct Manifest: Codable {
     }
 
     // Add a placeholder for `Properties` struct
-    struct Properties: Codable {
+    struct Properties: Codable, Sendable {
       let encrypted: Encrypted?
 
-      struct Encrypted: Codable {
+      struct Encrypted: Codable, Sendable {
         let algorithm: String?
         let profile: String?
         let scheme: String?
@@ -302,7 +302,7 @@ public struct Manifest: Codable {
     }
   }
 
-  struct LinksDictionary: Codable {
+  struct LinksDictionary: Codable, Sendable {
     var contentLinks: [Link]?
     var selfLink: Link?
 
@@ -325,7 +325,7 @@ public struct Manifest: Codable {
     return nil
   }
 
-  public struct SpineItem: Codable {
+  public struct SpineItem: Codable, Sendable {
     let title: String?
     let href: String
     let type: String
@@ -335,7 +335,7 @@ public struct Manifest: Codable {
     let alternates: [Link]?
   }
 
-  public struct Properties: Codable {
+  public struct Properties: Codable, Sendable {
     let encrypted: Encrypted?
     public let lcpStreamingUrl: String?
 
@@ -345,7 +345,7 @@ public struct Manifest: Codable {
     }
   }
 
-  public struct Encrypted: Codable {
+  public struct Encrypted: Codable, Sendable {
     let scheme: String?
     let profile: String?
     let algorithm: String?
@@ -354,7 +354,7 @@ public struct Manifest: Codable {
 
 // MARK: - TOCItem
 
-public struct TOCItem: Codable {
+public struct TOCItem: Codable, Sendable {
   let href: String?
   let title: String?
   let children: [TOCItem]?
@@ -378,7 +378,7 @@ extension Manifest {
 }
 
 public extension Manifest {
-  enum AudiobookType {
+  enum AudiobookType: Sendable {
     case findaway
     case overdrive
     case lcp

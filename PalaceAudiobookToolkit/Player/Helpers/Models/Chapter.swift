@@ -8,7 +8,12 @@
 
 import Foundation
 
-public struct Chapter: Identifiable, Equatable {
+/// A titled span of an audiobook.
+///
+/// `Sendable` follows from `TrackPosition` being `Sendable`; the remaining
+/// stored properties are a `String`, an optional `Double` and an optional
+/// `TrackPosition`.
+public struct Chapter: Identifiable, Equatable, Sendable {
   public var id: String = UUID().uuidString
 
   public var title: String

@@ -18,6 +18,15 @@ import XCTest
 final class TracksFulfillURLTests: XCTestCase {
 
     /// Verifies that setting fulfillURL on Tracks propagates to all OpenAccessDownloadTask instances.
+    ///
+    /// The propagation used to be a `didSet` on a stored `var`. `Tracks` is now
+    /// `Sendable`, so `fulfillURL` is a computed property over a lock-guarded
+    /// box and the loop had to be written out by hand — this test is what makes
+    /// losing it loud rather than silent.
+    ///
+    /// The `if let` means an empty track list, or a manifest that produced no
+    /// open-access tasks, would pass this vacuously, so the count is asserted
+    /// too.
     func testSetFulfillURL_propagatesToAllDownloadTasks() {
         let manifest = Manifest.mockManifest
         let tracks = Tracks(manifest: manifest, audiobookID: "test-book", token: "initial-token")
@@ -25,11 +34,48 @@ final class TracksFulfillURLTests: XCTestCase {
         let fulfillURL = URL(string: "https://cm.example.com/fulfill/book-123")!
         tracks.fulfillURL = fulfillURL
 
+        var checked = 0
         for track in tracks.tracks {
             if let oaTask = track.downloadTask as? OpenAccessDownloadTask {
+                checked += 1
                 XCTAssertEqual(
                     oaTask.fulfillURL, fulfillURL,
                     "Track \(track.key) should have fulfillURL propagated"
+                )
+            }
+        }
+        XCTAssertGreaterThan(
+            checked, 0,
+            "Fixture produced no OpenAccessDownloadTask, so this test asserted nothing"
+        )
+    }
+
+    /// The setter stores the URL and propagates it to the download tasks. Those
+    /// two steps happen under one lock, so concurrent writers cannot leave
+    /// `tracks.fulfillURL` reporting one URL while the tasks that actually use
+    /// it hold another — which is the state that would make a bearer-token
+    /// refresh call the wrong endpoint.
+    ///
+    /// Under a setter that stores and then propagates outside the lock this
+    /// fails probabilistically, not every run; see the header note in
+    /// `Tracks.fulfillURL`.
+    func testSetFulfillURL_concurrentWriters_leaveEveryTaskAgreeingWithTracks() {
+        let manifest = Manifest.mockManifest
+        let tracks = Tracks(manifest: manifest, audiobookID: "test-book", token: "tok")
+
+        let urls = (0..<8).map { URL(string: "https://cm.example.com/fulfill/v\($0)")! }
+
+        for _ in 0..<200 {
+            DispatchQueue.concurrentPerform(iterations: urls.count) { index in
+                tracks.fulfillURL = urls[index]
+            }
+
+            let settled = tracks.fulfillURL
+            for track in tracks.tracks {
+                guard let oaTask = track.downloadTask as? OpenAccessDownloadTask else { continue }
+                XCTAssertEqual(
+                    oaTask.fulfillURL, settled,
+                    "Task \(track.key) disagrees with tracks.fulfillURL after concurrent writes"
                 )
             }
         }
