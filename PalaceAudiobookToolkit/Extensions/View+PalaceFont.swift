@@ -10,13 +10,26 @@
 //  and declares them under `UIAppFonts` in `PalaceAudiobookToolkit/Info.plist`, so
 //  nothing outside this repository is needed to render them.
 //
+//  Callers, so a future audit does not repeat the one that missed a file: THIRTEEN
+//  sites across THREE files — `AudiobookPlayerView` (6), `AudiobookNavigationView`
+//  (5) and `ChapterCell` (2). The first audit named only the two files that carried
+//  `import PalaceUIKit`; `ChapterCell` compiled anyway because Swift leaks an
+//  import's visibility across files in the same module. Vendoring removes that
+//  fragility — the extension is now genuinely module-wide — but it is exactly why
+//  "grep the files that import it" is not a complete census.
+//
 //  The sizes, weights and font name below are a verbatim copy of the PalaceUIKit
 //  implementation. Keep them in step with ios-core if the shared style guide moves:
 //  https://www.figma.com/file/BxLs5QNmU5tCIKhO9ccAyh/TPP-UI---Style-Guidelines
 //
-//  Deliberately `internal`. PalaceUIKit vends a `public` `View.palaceFont(_:)` to the
-//  host app, and app code that imports both modules would hit an ambiguous-member
-//  error if this one were public too.
+//  Deliberately `internal`, for minimal surface: nothing outside this module needs
+//  it, and PalaceUIKit already vends a `public` `View.palaceFont(_:)` to the host app.
+//
+//  The original justification given for `internal` was that app code importing BOTH
+//  modules would hit an ambiguous-member error. Review checked it and that is NOT
+//  true — no ios-core file imports both, and `TPPAppDelegate`'s `palaceFont` is a
+//  different symbol (`UIFont.palaceFont(ofSize:)`). The decision stands; the reason
+//  it was made did not, and is corrected here rather than left to mislead.
 //
 
 import SwiftUI
