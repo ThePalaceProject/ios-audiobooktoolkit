@@ -6,7 +6,6 @@
 //  Copyright © 2023 The Palace Project. All rights reserved.
 //
 
-import PalaceUIKit
 import SwiftUI
 
 // MARK: - AudiobookNavigationView
