@@ -73,8 +73,13 @@ def blocks(section_text: str) -> dict[str, str]:
     return found
 
 
-def target_source_basenames(pbxproj: str) -> set[str]:
-    """Basenames of every source file in the test target's Sources build phase."""
+def target_source_paths(pbxproj: str) -> set[str]:
+    """Group-relative paths of every source file in the TEST target's Sources phase.
+
+    Paths, not basenames. Comparing basenames meant a file in a subdirectory that
+    happened to share a name with a registered file passed silently — a FALSE
+    NEGATIVE, which reinstates exactly the hole this check exists to close.
+    """
     file_refs = {}
     for ref_id, body in blocks(section(pbxproj, "PBXFileReference")).items():
         path = re.search(r"\bpath = \"?([^\";]+)\"?;", body)
@@ -111,19 +116,25 @@ def target_source_basenames(pbxproj: str) -> set[str]:
         for build_id in re.findall(r"^\s*([0-9A-Za-z]{24}) /\*", files.group(1), re.MULTILINE):
             ref = build_files.get(build_id)
             if ref and ref in file_refs:
-                names.add(os.path.basename(file_refs[ref]))
+                names.add(file_refs[ref])
         return names
 
     die(f"{TARGET} has no PBXSourcesBuildPhase")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # Reject arguments rather than ignoring them. This check scans the whole
+    # test directory and has no diff mode; silently accepting `--diff` from a
+    # hook would make it look like it had run when it had not.
+    for arg in (argv or [])[1:]:
+        die(f"unexpected argument {arg!r}; this check takes no arguments")
+
     if not os.path.isfile(PBXPROJ):
         die(f"no project file at {PBXPROJ}")
     if not os.path.isdir(TEST_DIR):
         die(f"no test directory at {TEST_DIR}")
 
-    compiled = target_source_basenames(open(PBXPROJ, encoding="utf-8", errors="replace").read())
+    compiled = target_source_paths(open(PBXPROJ, encoding="utf-8", errors="replace").read())
 
     on_disk = []
     for root, _dirs, files in os.walk(TEST_DIR):
@@ -131,9 +142,16 @@ def main() -> int:
             if name.endswith(".swift"):
                 on_disk.append(os.path.relpath(os.path.join(root, name), REPO))
 
+    # A pbxproj path is relative to its group, so compare on the tail that the
+    # group contributes as well as the bare name — but require a PATH match, not
+    # merely a matching basename.
+    def is_registered(repo_rel: str) -> bool:
+        tail = os.path.relpath(repo_rel, TARGET)
+        return tail in compiled or repo_rel in compiled
+
     orphans = [
         path for path in sorted(on_disk)
-        if os.path.basename(path) not in compiled and os.path.basename(path) not in EXEMPT
+        if not is_registered(path) and os.path.basename(path) not in EXEMPT
     ]
 
     if orphans:
@@ -151,4 +169,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
