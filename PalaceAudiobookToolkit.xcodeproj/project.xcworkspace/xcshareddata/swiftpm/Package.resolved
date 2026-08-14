@@ -1,5 +1,5 @@
 {
-  "originHash" : "6bd09d5fe0574eef57d9216c8f078967402efce65b86f5498d5c477191a971bb",
+  "originHash" : "58af6f46fdfaa3a9fad299dae0e528676041d4e4ed865512fcbefc694811933e",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -58,10 +58,9 @@
     {
       "identity" : "swift-toolkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/readium/swift-toolkit.git",
+      "location" : "https://github.com/ThePalaceProject/swift-toolkit.git",
       "state" : {
-        "revision" : "d82f44f4f05d87add9e22a8b75abbd61dce745dd",
-        "version" : "3.11.0"
+        "revision" : "58413f8680a310ed6d98278687ab711e6be639c8"
       }
     },
     {
@@ -69,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/scinfu/SwiftSoup.git",
       "state" : {
-        "revision" : "49dcadd93161f4a44b4994d3a3e8de9f085aface",
-        "version" : "2.13.5"
+        "revision" : "8d6ad267714cac3ae747cefdd21f7a6665006e1f",
+        "version" : "2.13.7"
       }
     },
     {
