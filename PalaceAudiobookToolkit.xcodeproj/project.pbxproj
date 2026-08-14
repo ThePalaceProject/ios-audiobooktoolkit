@@ -1329,10 +1329,10 @@
 		};
 		E5F9AD2D2E428FA00092AC59 /* XCRemoteSwiftPackageReference "swift-toolkit" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/readium/swift-toolkit.git";
+			repositoryURL = "https://github.com/ThePalaceProject/swift-toolkit.git";
 			requirement = {
-				kind = exactVersion;
-				version = 3.11.0;
+				kind = revision;
+				revision = 58413f8680a310ed6d98278687ab711e6be639c8;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
