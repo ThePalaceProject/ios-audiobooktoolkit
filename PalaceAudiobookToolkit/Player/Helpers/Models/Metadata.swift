@@ -9,7 +9,7 @@
 import Foundation
 
 public extension Manifest {
-  struct Metadata: Codable {
+  struct Metadata: Codable, Sendable {
     public let type: String?
     public let identifier: String?
     public let title: String?
@@ -31,22 +31,22 @@ public extension Manifest {
       case rights = "http://www.feedbooks.com/audiobooks/rights"
     }
 
-    public struct Signature: Codable {
+    public struct Signature: Codable, Sendable {
       let algorithm: String?
       let value: String?
       let issuer: String?
     }
 
-    public struct Rights: Codable {
+    public struct Rights: Codable, Sendable {
       let start: String?
       let end: String?
     }
 
-    public struct Author: Codable {
+    public struct Author: Codable, Sendable {
       let name: String
     }
 
-    public struct Publisher: Codable {
+    public struct Publisher: Codable, Sendable {
       let name: String
     }
 
@@ -134,7 +134,7 @@ public extension Manifest {
     return nil
   }
 
-  enum DRMType: Codable {
+  enum DRMType: Codable, Sendable {
     case findaway(FindawayDRMInformation)
 
     enum CodingKeys: String, CodingKey {
@@ -187,7 +187,7 @@ public extension Manifest {
     }
   }
 
-  struct FindawayDRMInformation: Codable {
+  struct FindawayDRMInformation: Codable, Sendable {
     // Load-bearing for playback — without these we cannot decrypt anything,
     // so they remain required and any partial response is rejected.
     let licenseId: String
