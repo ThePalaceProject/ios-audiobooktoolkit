@@ -1,0 +1,70 @@
+# This repository had NO continuous integration of any kind. That is not a
+# cosmetic gap: three test files sat in the repository for months with zero
+# project references, so they never compiled and never ran, and every "the
+# audiobook suite is green" statement quietly excluded them. When they were
+# finally registered they produced 178 failing assertions, four of which
+# described a real chapter-navigation defect that patrons could see (PP-4948).
+#
+# This workflow is deliberately STAGE 1: the checks that need nothing but
+# Python. It does not build or test the framework, because it cannot — see
+# "Stage 2" below. It runs in seconds, needs no secrets and no macOS runner,
+# and it catches the specific class of defect that actually happened here: a
+# file that exists but is never executed, and a ledger row that silently
+# vanishes from its table.
+#
+# Stage 2 — compiling and running the 226-test suite — is blocked on three
+# things, all pre-existing:
+#   * `PalaceUIKit` is a target in the SEPARATE `Palace.xcodeproj`, imported
+#     by two UI files here, so this repository cannot be built from a checkout
+#     of itself;
+#   * `AudioEngine.xcframework` resolves to `../Carthage/Build/…`, outside
+#     this repository, and is a licensed binary;
+#   * `PureLayout.xcframework` is referenced by an absolute path into one
+#     developer's home directory.
+# Tracked separately. Do not add a build job here until those are resolved —
+# a red-by-default job teaches everyone to ignore the board, which is worse
+# than no board at all.
+
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Every test file on disk must be a member of the test target. A file's
+      # membership lives in project.pbxproj, not in the file, so no amount of
+      # reading the source can reveal that it never runs.
+      - name: test files are compiled into the test target
+        run: python3 scripts/check-test-target-membership.py
+
+      # GFM splits table cells on '|' before parsing inline spans, so a cell
+      # containing an unescaped pipe drops every cell after the header's width.
+      # The follow-up ledger has been broken this way twice.
+      - name: markdown tables are well formed
+        run: python3 scripts/check-markdown-tables.py
+
+      # The checks are themselves under test. A gate whose own correctness is
+      # unverified is not a gate — the membership check's first draft reported
+      # four already-registered files as orphans, and the table check's first
+      # draft flagged every table header.
+      - name: the checks' own tests
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest scripts/tests/ -q
