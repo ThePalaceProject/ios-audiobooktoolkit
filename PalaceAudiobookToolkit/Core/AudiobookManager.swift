@@ -249,16 +249,35 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     #endif
 
     if let openAccessPlayer = audiobook.player as? OpenAccessPlayer {
+      // This branch needs the hop too, and the reason is easy to miss: it was
+      // assumed safe because open-access titles did not crash. That was an
+      // inference from absence, not a fact. `seekTo` bottoms out in
+      // `performSeekOnItem`, which calls `AVPlayerItem.seek(to:completionHandler:)`
+      // — and AVFoundation documents that handler as running on an ARBITRARY
+      // queue. So this path can hand an off-main callback to a @MainActor caller
+      // exactly like the DRM branch did; it is timing-dependent rather than
+      // deterministic, which is precisely why it went unnoticed.
       openAccessPlayer.seekTo(position: targetPosition) { adjustedPosition in
-        completion(adjustedPosition)
+        Task { await MainActor.run { completion(adjustedPosition) } }
       }
     } else {
+      // Deliver on the main actor. Callers of this public API are `@MainActor`
+      // — `AudiobookSessionManager` is — so the completion closure they pass in
+      // is main-actor-isolated. Calling it from this `Task`'s cooperative
+      // executor makes Swift's isolation check fail the process outright:
+      // `dispatch_assert_queue_fail` -> `EXC_BREAKPOINT`/`SIGTRAP`, no error,
+      // no chance to save the patron's place. That is PP-4955, reproduced on
+      // device by scrubbing a Findaway title.
+      //
+      // Note the asymmetry that hid it: the `OpenAccessPlayer` branch above
+      // completes on main already, so open-access audiobooks never trip it and
+      // routine testing never saw it. This branch is the DRM one.
       Task {
         do {
           try await audiobook.player.play(at: targetPosition)
-          completion(targetPosition)
+          await MainActor.run { completion(targetPosition) }
         } catch {
-          completion(nil)
+          await MainActor.run { completion(nil) }
         }
       }
     }
@@ -274,9 +293,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     Task {
       do {
         try await audiobook.player.play(at: position)
-        completion?(nil)
+        await MainActor.run { completion?(nil) }
       } catch {
-        completion?(error)
+        await MainActor.run { completion?(error) }
       }
     }
   }
@@ -286,7 +305,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   public func skipPlayhead(_ interval: TimeInterval, completion: ((TrackPosition?) -> Void)? = nil) {
     Task {
       let result = await audiobook.player.skipPlayhead(interval)
-      completion?(result)
+      await MainActor.run { completion?(result) }
     }
   }
 
