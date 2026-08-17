@@ -38,6 +38,14 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     }
   }
 
+  /// The object that owns the in-flight requests and caches cancels them.
+  /// Previously only `LCPStreamingPlayer.deinit` called `shutdown()`, and that
+  /// cross-object reach from a deinit is what the isolation made illegal.
+  deinit {
+    inflightTasks.values.forEach { $0.cancel() }
+    timeoutGuards.values.forEach { $0.cancel() }
+  }
+
   func shutdown() {
     cancelAllRequests()
     clearCaches()

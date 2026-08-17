@@ -770,13 +770,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
   }
 
-  deinit {
-    observerQueue.async { [observedItems] in
-      // Observer cleanup happens automatically when items are deallocated
-    }
-    // Encourage cache cleanup between audiobook sessions
-    (sharedResourceLoader as? LCPResourceLoaderDelegate)?.shutdown()
-  }
+  // No `deinit`. `LCPResourceLoaderDelegate` now cancels its own in-flight
+  // requests and timeout guards when it deallocates, so there is nothing here
+  // to reach across for.
 
   override func unload() {
     super.unload()

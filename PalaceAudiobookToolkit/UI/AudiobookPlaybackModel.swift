@@ -416,15 +416,8 @@ public class AudiobookPlaybackModel: ObservableObject {
     playbackProgress = offset / duration
   }
 
-  deinit {
-    // Only our own subscriptions. `Reachability` now cancels its own monitor
-    // in its own deinit, and unloading the player is `audiobookManager`'s
-    // business, not ours — reaching across objects into main-actor state while
-    // this one deallocates is what forced an `isolated deinit` here, which
-    // crashed the runner. A model going away must not stop someone else's
-    // playback as a side effect.
-    subscriptions.removeAll()
-  }
+  // No `deinit`. `Set<AnyCancellable>` cancels each subscription when it
+  // deallocates, and everything else this used to do belonged to other objects.
 
   func playPause() {
     suppressPlaybackPollUntil = Date().addingTimeInterval(1.0)

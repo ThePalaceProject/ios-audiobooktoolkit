@@ -17,6 +17,10 @@ public final class AudiobookAccessibilityAnnouncementCenter {
   private let lock = NSLock()
   private var lastProgressBucketByKey: [String: Int] = [:]
 
+  /// `@MainActor` because the default arguments evaluate `UIAccessibility`,
+  /// which is main-actor isolated. Callers passing their own handlers (the
+  /// tests do) are unaffected.
+  @MainActor
   public init(
     postHandler: @escaping PostHandler = { UIAccessibility.post(notification: $0, argument: $1) },
     isVoiceOverRunning: @escaping VoiceOverRunningProvider = { UIAccessibility.isVoiceOverRunning },
