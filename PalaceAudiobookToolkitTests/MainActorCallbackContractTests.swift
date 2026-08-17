@@ -48,6 +48,11 @@ import XCTest
 
 @testable import PalaceAudiobookToolkit
 
+// The contract under test is that these callbacks arrive on the main actor.
+// Now that the playback layer declares that isolation, the test must adopt it
+// too — exercising a @MainActor API from a nonisolated test is what the
+// compiler now rejects.
+@MainActor
 final class MainActorCallbackContractTests: XCTestCase {
 
   /// A manager whose player is NOT an `OpenAccessPlayer`, so the DRM-shaped

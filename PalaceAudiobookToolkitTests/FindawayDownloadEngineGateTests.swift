@@ -8,6 +8,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class FindawayDownloadEngineGateTests: XCTestCase {
   /// The whole point of the gate: concurrent callers must never run their work
   /// closures at the same time. If the underlying queue were `.concurrent` (or

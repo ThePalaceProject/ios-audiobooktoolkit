@@ -11,6 +11,7 @@ import XCTest
 
 /// Tests for track transition edge cases, specifically targeting the PP-3518 bug
 /// where chapters were incorrectly identified at track boundaries.
+@MainActor
 final class TrackTransitionTests: XCTestCase {
   private let testID = "testID"
   

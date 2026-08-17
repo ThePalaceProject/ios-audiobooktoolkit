@@ -15,6 +15,7 @@ import XCTest
 
 // MARK: - Tracks.fulfillURL Propagation Tests
 
+@MainActor
 final class TracksFulfillURLTests: XCTestCase {
 
     /// Verifies that setting fulfillURL on Tracks propagates to all OpenAccessDownloadTask instances.
@@ -120,6 +121,7 @@ final class TracksFulfillURLTests: XCTestCase {
 
 // MARK: - OpenAccessDownloadTask Token Refresh Tests
 
+@MainActor
 final class OpenAccessDownloadTaskTokenRefreshTests: XCTestCase {
 
     private func makeTask(
@@ -231,6 +233,7 @@ final class OpenAccessDownloadTaskTokenRefreshTests: XCTestCase {
 
 // MARK: - Audiobook.setFulfillURL Integration Test
 
+@MainActor
 final class AudiobookFulfillURLTests: XCTestCase {
 
     func testAudiobookFactory_passesFulfillURL() {
@@ -296,6 +299,7 @@ final class AudiobookFulfillURLTests: XCTestCase {
 
 // MARK: - Token Scope Host Tests (PP-3705)
 
+@MainActor
 final class TokenScopeHostTests: XCTestCase {
 
     private func makeTask(
@@ -359,6 +363,7 @@ final class TokenScopeHostTests: XCTestCase {
 
 // MARK: - Manifest.originHost Tests (PP-3705)
 
+@MainActor
 final class ManifestOriginHostTests: XCTestCase {
 
     func testOriginHost_fromSelfLink() throws {
@@ -389,6 +394,7 @@ final class ManifestOriginHostTests: XCTestCase {
 
 /// Regression tests: playbackFailed must carry Error? so the app can detect auth-required
 /// (e.g. SAML + BiblioBoard double-expiration) and trigger re-auth.
+@MainActor
 final class PlaybackFailedErrorAssociationTests: XCTestCase {
 
     func testPlaybackFailed_hasErrorAssociatedValue() {

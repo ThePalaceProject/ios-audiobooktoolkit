@@ -167,6 +167,22 @@ class FeedbookDRMProcessor {
   // Performs asynchronous DRM checks that couldn't be performed statically
   // @param book the audiobook
   // @param drmData the book's DRM data dictionary holding relevant info
+
+  /// Deliver a DRM verdict on the main actor.
+  ///
+  /// `Audiobook.drmStatus`'s setter reaches into `player.isDrmOk`, whose
+  /// `didSet` pauses playback, publishes `.failed` to Combine and unloads the
+  /// player. Every caller below is a `URLSession` completion handler, so before
+  /// this hop those effects ran on a network callback thread — AVPlayer
+  /// manipulation and SwiftUI publishing off the main actor.
+  ///
+  /// This makes the verdict land asynchronously rather than synchronously on
+  /// the callback thread. That is the intended change: the observable effect is
+  /// playback state, which is main-actor owned.
+  private static func deliver(_ status: DRMStatus, to book: Audiobook?) {
+    Task { @MainActor in book?.drmStatus = status }
+  }
+
   class func performAsyncDrm(book: Audiobook, drmData: [String: Any]) {
     if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
       weak var weakBook = book
@@ -175,7 +191,7 @@ class FeedbookDRMProcessor {
         // In practice, network errors should not prevent us from playing a book,
         // especially since the point is to be able to listen offline
         if error != nil {
-          weakBook?.drmStatus = .succeeded
+          Self.deliver(.succeeded, to: weakBook)
           ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck skip due to error: \(error!)")
           return
         }
@@ -193,17 +209,17 @@ class FeedbookDRMProcessor {
               .debug,
               "feedbooks::performAsyncDrm licenseCheck failed: \((try? JSONUtils.canonicalize(jsonObj: jsonObj) as String) ?? "")"
             )
-            weakBook?.drmStatus = .failed
+            Self.deliver(.failed, to: weakBook)
             return
           }
         }
 
         // Fallthrough on all other cases
-        weakBook?.drmStatus = .succeeded
+        Self.deliver(.succeeded, to: weakBook)
         ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck fallthrough")
       }
     } else {
-      book.drmStatus = .succeeded
+      Self.deliver(.succeeded, to: book)
       ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck not needed")
     }
   }
@@ -220,7 +236,7 @@ class FeedbookDRMProcessor {
         // In practice, network errors should not prevent us from playing a book,
         // especially since the point is to be able to listen offline
         if error != nil {
-          weakBook?.drmStatus = .succeeded
+          Self.deliver(.succeeded, to: weakBook)
           ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck skip due to error: \(error!)")
           return
         }
@@ -238,17 +254,17 @@ class FeedbookDRMProcessor {
               .debug,
               "feedbooks::performAsyncDrm licenseCheck failed: \((try? JSONUtils.canonicalize(jsonObj: jsonObj) as String) ?? "")"
             )
-            weakBook?.drmStatus = .failed
+            Self.deliver(.failed, to: weakBook)
             return
           }
         }
 
         // Fallthrough on all other cases
-        weakBook?.drmStatus = .succeeded
+        Self.deliver(.succeeded, to: weakBook)
         ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck fallthrough")
       }
     } else {
-      book.drmStatus = .succeeded
+      Self.deliver(.succeeded, to: book)
       ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck not needed")
     }
   }

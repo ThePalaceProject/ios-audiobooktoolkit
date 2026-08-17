@@ -50,6 +50,7 @@ import XCTest
 
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class DownloadConcurrencyContractTests: XCTestCase {
   /// Asset files staged on disk by the lazy-initialization tests.
   private var stagedAssetURLs: [URL] = []

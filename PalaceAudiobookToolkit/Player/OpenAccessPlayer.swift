@@ -404,9 +404,28 @@ class OpenAccessPlayer: NSObject, Player {
     // open, deactivate when playback genuinely ends) — never by a player's
     // dealloc. Leaving the session active across player transitions is the
     // correct, race-free behavior.
-    unload()
-    removePlayerObservers()
-    clearPositionCache()
+    // Only work that is safe from a nonisolated context AND genuinely necessary
+    // belongs in a deinit. Observer teardown qualifies on both counts:
+    // NotificationCenter removal and KVO invalidation are thread-safe, and a
+    // surviving KVO registration on a deallocating observer crashes.
+    //
+    // `unload()` deliberately does NOT run here any more. It is main-actor
+    // isolated, and what it does during dealloc is meaningless: clearing the
+    // queue on a player that is being freed, and publishing `.unloaded` to a
+    // subject whose subscribers, if any still existed, would be holding this
+    // object alive. Keeping the call by isolating the deinit (SE-0371
+    // `isolated deinit`) was tried and CRASHED the runner with
+    // `malloc: pointer being freed was not allocated`, because it changes when
+    // and on which thread deallocation happens. Player teardown is an explicit
+    // call, not a side effect of dealloc.
+    NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
+    NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
+    if isObservingPlayerStatus {
+      avQueuePlayer.removeObserver(self, forKeyPath: "status")
+      avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+    }
+    currentItemObservation?.invalidate()
+    currentItemStatusObservation?.invalidate()
   }
 
   func clearPositionCache() {

@@ -12,6 +12,7 @@ import XCTest
 
 // MARK: - AudiobookNetworkServiceTest
 
+@MainActor
 class AudiobookNetworkServiceTest: XCTestCase {
   var cancellables: Set<AnyCancellable>!
 
@@ -198,6 +199,7 @@ extension Manifest {
 
 // MARK: - Wi-Fi Only Download Restriction Tests (PP-758)
 
+@MainActor
 final class WiFiOnlyDownloadTests: XCTestCase {
   var cancellables = Set<AnyCancellable>()
 
@@ -267,6 +269,7 @@ final class WiFiOnlyDownloadTests: XCTestCase {
 /// Previously, fillDownloadSlots() would allocate a slot for nil-task tracks
 /// but startDownload() would call nil?.fetch() (no-op), permanently blocking
 /// the slot and eventually stalling all downloads.
+@MainActor
 final class NilDownloadTaskSlotTests: XCTestCase {
   var cancellables = Set<AnyCancellable>()
   
@@ -322,6 +325,7 @@ final class NilDownloadTaskSlotTests: XCTestCase {
 /// URLSession can report lower fractionCompleted on retries/redirects,
 /// and download tasks reset to 0.0 on cancel/error. The service must
 /// clamp progress to max-seen-so-far to prevent jittery progress bars.
+@MainActor
 final class MonotonicProgressTests: XCTestCase {
   var cancellables = Set<AnyCancellable>()
   
@@ -414,6 +418,7 @@ final class MonotonicProgressTests: XCTestCase {
 
 /// Tests for the lazy downloadProgress initialization fix that ensures
 /// progress is correctly calculated when reopening an audiobook mid-download.
+@MainActor
 final class DownloadProgressLazyInitializationTests: XCTestCase {
   var cancellables = Set<AnyCancellable>()
   
@@ -506,6 +511,7 @@ final class DownloadProgressLazyInitializationTests: XCTestCase {
 // MARK: - AudiobookManager Overall Progress Tests
 
 /// Tests that AudiobookManager correctly uses overall progress from the network service
+@MainActor
 final class AudiobookManagerProgressTests: XCTestCase {
   var cancellables = Set<AnyCancellable>()
   

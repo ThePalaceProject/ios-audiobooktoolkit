@@ -17,6 +17,7 @@ import XCTest
 
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class ConcurrencySafetyPrimitivesTests: XCTestCase {
   // MARK: - LockIsolated
 

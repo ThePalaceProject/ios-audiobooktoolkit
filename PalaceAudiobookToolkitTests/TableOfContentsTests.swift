@@ -9,6 +9,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 class TableOfContentsTests: XCTestCase {
   private let testID = "testID"
 

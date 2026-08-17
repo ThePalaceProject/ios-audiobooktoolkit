@@ -19,6 +19,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class OwnedSessionRegistryTests: XCTestCase {
 
   override func setUp() {

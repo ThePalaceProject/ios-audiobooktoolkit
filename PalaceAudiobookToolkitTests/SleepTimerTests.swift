@@ -9,6 +9,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 class SleepTimerTests: XCTestCase {
   lazy var tableOfContents: AudiobookTableOfContents = {
     let manifest = try! loadManifest(for: ManifestJSON.alice)

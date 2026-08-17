@@ -61,6 +61,7 @@ import XCTest
 
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class OverdriveTrackDurationTests: XCTestCase {
   private var stagedAssetURLs: [URL] = []
 

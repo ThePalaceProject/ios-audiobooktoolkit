@@ -40,6 +40,15 @@ public protocol AudiobookBookmarkDelegate {
 
 // MARK: - AudiobookManager
 
+/// Isolated with the playback layer it owns.
+///
+/// This type vends the `Audiobook` and `Player` and forwards to them
+/// constantly. Its own source already documents the assumption — "callers of
+/// this public API are `@MainActor`" — and the app's call sites are all
+/// `@MainActor` types, `View`s or `ObservableObject`s. Declaring it removes the
+/// sync wrappers that existed only to avoid sending a non-Sendable `Player`
+/// across an isolation boundary.
+@MainActor
 public protocol AudiobookManager {
   typealias SaveBookmarkResult = Result<TrackPosition, BookmarkError>
 
@@ -933,7 +942,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           audiobook.player.play()
           if let currentPosition = audiobook.player.currentTrackPosition {
             Task.detached(priority: .utility) { [weak self] in
-              self?.saveLocation(currentPosition)
+              await self?.saveLocation(currentPosition)
               ATLog(.debug, "🔒 Saved position after remote play: \(currentPosition.timestamp)")
             }
           }
@@ -943,7 +952,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           audiobook.player.pause()
           if let currentPosition = currentPosition {
             Task.detached(priority: .utility) { [weak self] in
-              self?.saveLocation(currentPosition)
+              await self?.saveLocation(currentPosition)
               ATLog(.debug, "🔒 Saved position after remote pause: \(currentPosition.timestamp)")
             }
           }
@@ -959,7 +968,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           // Save position asynchronously
           if let currentPosition = currentPosition {
             Task.detached(priority: .utility) { [weak self] in
-              self?.saveLocation(currentPosition)
+              await self?.saveLocation(currentPosition)
               ATLog(.debug, "🔒 Saved position after remote playPause: \(currentPosition.timestamp)")
             }
           }
@@ -972,7 +981,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
               self.updateNowPlayingInfo(newPosition)
             }
             Task.detached(priority: .utility) {
-              self.saveLocation(newPosition)
+              await self.saveLocation(newPosition)
               ATLog(.debug, "🔒 Saved position after remote skip forward: \(newPosition.timestamp)")
             }
           }
@@ -985,7 +994,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
               self.updateNowPlayingInfo(newPosition)
             }
             Task.detached(priority: .utility) {
-              self.saveLocation(newPosition)
+              await self.saveLocation(newPosition)
               ATLog(.debug, "🔒 Saved position after remote skip backward: \(newPosition.timestamp)")
             }
           }

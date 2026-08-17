@@ -67,6 +67,12 @@ private enum TimerState {
 
 // MARK: - SleepTimer
 
+/// Isolated with the playback layer.
+///
+/// This type reads `player.isPlaying`, `player.currentChapter` and
+/// `player.playbackStatePublisher` — all main-actor state backed by AVPlayer —
+/// and previously read them from its own serial queue, off the main actor.
+@MainActor
 @objc public final class SleepTimer: NSObject {
   private let player: Player
   private var cancellables = Set<AnyCancellable>()

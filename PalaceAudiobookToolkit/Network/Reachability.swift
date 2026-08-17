@@ -72,6 +72,14 @@ final class Reachability: ObservableObject {
     connectionMonitor.start(queue: queue)
   }
 
+  /// The object that starts the monitor stops it. Previously only
+  /// `AudiobookPlaybackModel.deinit` called `stopMonitoring()`, so the
+  /// `NWPathMonitor` outlived any other owner — and that cross-object reach
+  /// from a deinit is exactly what the main-actor isolation made illegal.
+  deinit {
+    connectionMonitor.cancel()
+  }
+
   func stopMonitoring() {
     connectionMonitor.cancel()
   }

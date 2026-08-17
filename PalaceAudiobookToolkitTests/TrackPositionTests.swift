@@ -9,6 +9,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 class TrackPositionTests: XCTestCase {
   let testID = "TestID"
   func testTrackPositionAcrossAllManifests() {

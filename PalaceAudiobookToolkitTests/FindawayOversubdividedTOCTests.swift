@@ -17,6 +17,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class FindawayOversubdividedTOCTests: XCTestCase {
   private let testID = "testID"
   private let duneKey = "urn:org.thepalaceproject:findaway:1:3"

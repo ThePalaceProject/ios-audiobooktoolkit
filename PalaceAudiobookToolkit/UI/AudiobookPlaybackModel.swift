@@ -10,6 +10,9 @@ import Combine
 import MediaPlayer
 import SwiftUI
 
+/// Drives SwiftUI and reads main-actor player state; isolated with the
+/// playback layer rather than hopping per-access.
+@MainActor
 public class AudiobookPlaybackModel: ObservableObject {
   @Published private var reachability = Reachability()
   @Published var isWaitingForPlayer = false
@@ -384,8 +387,12 @@ public class AudiobookPlaybackModel: ObservableObject {
   }
 
   deinit {
-    self.reachability.stopMonitoring()
-    self.audiobookManager.audiobook.player.unload()
+    // Only our own subscriptions. `Reachability` now cancels its own monitor
+    // in its own deinit, and unloading the player is `audiobookManager`'s
+    // business, not ours — reaching across objects into main-actor state while
+    // this one deallocates is what forced an `isolated deinit` here, which
+    // crashed the runner. A model going away must not stop someone else's
+    // playback as a side effect.
     subscriptions.removeAll()
   }
 
