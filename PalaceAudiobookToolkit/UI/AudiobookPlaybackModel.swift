@@ -106,6 +106,9 @@ public class AudiobookPlaybackModel: ObservableObject {
     max(duration - offset, 0.0)
   }
 
+  /// Book time left — how much *recording* remains, independent of listening
+  /// speed. Correct for progress arithmetic; NOT the number to show a patron.
+  /// For display use `timeLeftInBookAtCurrentRate` (PP-4971).
   var timeLeftInBook: TimeInterval {
     guard let currentLocation else {
       return audiobookManager.totalDuration
@@ -116,6 +119,33 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
 
     return audiobookManager.totalDuration - currentLocation.durationToSelf()
+  }
+
+  /// PP-4971: what the patron actually has left, in wall-clock time at the speed
+  /// they are listening at. This is the value the "time left in book" label
+  /// shows; `timeLeftInBook` alone told a 2× listener that hours remained on a
+  /// book they were about to finish.
+  var timeLeftInBookAtCurrentRate: TimeInterval {
+    Self.remainingWallClock(
+      bookTimeRemaining: timeLeftInBook,
+      rate: audiobookManager.audiobook.player.playbackRate
+    )
+  }
+
+  /// Converts book time into the wall-clock time a listener spends hearing it.
+  ///
+  /// The `rate` parameter is deliberately non-optional: a caller cannot render
+  /// remaining time without stating a speed, so the rate-unaware defect cannot
+  /// come back by omission. Non-finite and negative input collapse to zero
+  /// rather than reaching the label as "nan" or a negative duration.
+  /// Public so the ios-core in-app player shares this exact rule rather than
+  /// keeping a second copy of the arithmetic — two copies is how this bug got
+  /// into both players in the first place.
+  public static func remainingWallClock(bookTimeRemaining: TimeInterval, rate: PlaybackRate) -> TimeInterval {
+    guard bookTimeRemaining.isFinite, bookTimeRemaining > 0 else { return 0 }
+    let multiplier = Double(PlaybackRate.convert(rate: rate))
+    guard multiplier > 0 else { return bookTimeRemaining }
+    return bookTimeRemaining / multiplier
   }
 
   var currentChapterTitle: String {

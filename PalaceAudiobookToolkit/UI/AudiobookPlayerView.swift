@@ -656,7 +656,8 @@ public struct AudiobookPlayerView: View {
   }
 
   private var timeLeftInBookText: String {
-    let timeLeft = HumanReadableTimestamp(timeInterval: playbackModel.timeLeftInBook).stringDescription
+    // PP-4971: wall-clock at the current speed, not raw book time.
+    let timeLeft = HumanReadableTimestamp(timeInterval: playbackModel.timeLeftInBookAtCurrentRate).stringDescription
     let formatString = Strings.ScrubberView.timeRemaining
     return String(format: formatString, timeLeft)
   }
