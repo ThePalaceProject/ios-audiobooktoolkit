@@ -8,6 +8,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class AudiobookAccessibilityAnnouncementCenterTests: XCTestCase {
 
   /// Regression test for PP-3594: VoiceOver should announce audiobook download progress at throttled intervals.

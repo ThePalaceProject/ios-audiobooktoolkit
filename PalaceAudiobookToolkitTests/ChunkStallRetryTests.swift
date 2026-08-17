@@ -22,6 +22,7 @@ import Combine
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class ChunkStallRetryTests: XCTestCase {
 
     // MARK: - Test fixtures

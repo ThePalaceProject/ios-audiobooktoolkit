@@ -9,6 +9,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class String_sha256Test: XCTestCase {
   func testSHA256results() throws {
     // Test string

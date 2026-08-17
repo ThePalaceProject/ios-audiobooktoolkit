@@ -11,6 +11,7 @@ import XCTest
 
 /// Tests for Now Playing time calculations to ensure time remaining is never negative.
 /// These tests verify the fix for the CarPlay negative time remaining bug.
+@MainActor
 class NowPlayingTimeTests: XCTestCase {
   private let testID = "testID"
 

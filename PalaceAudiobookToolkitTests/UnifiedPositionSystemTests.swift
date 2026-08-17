@@ -13,6 +13,7 @@ import XCTest
 // MARK: - UnifiedPositionCalculatorTests
 
 /// Tests for the UnifiedPositionCalculator - the single source of truth for audiobook position math
+@MainActor
 final class UnifiedPositionCalculatorTests: XCTestCase {
   private let testID = "testID"
   private var calculator: UnifiedPositionCalculator!

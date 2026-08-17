@@ -40,6 +40,8 @@ public enum DRMStatus: Int {
 
 // MARK: - AudiobookFactory
 
+/// Constructs main-actor-isolated `Audiobook`s, so the factory is isolated too.
+@MainActor
 public enum AudiobookFactory {
   public static func audiobookClass(
     for manifest: Manifest
@@ -80,6 +82,19 @@ public enum AudiobookFactory {
 
 // MARK: - Audiobook
 
+/// Audiobook state is main-actor isolated.
+///
+/// `drmStatus`'s setter reaches into `player.isDrmOk`, whose `didSet` pauses
+/// playback, publishes `.failed` to Combine, and unloads the player. Those are
+/// main-actor effects, and every setter of `drmStatus` lives in a URLSession
+/// completion handler in `FeedbookDRMProcessor` — so before this annotation the
+/// DRM-expiry path manipulated AVPlayer and published to SwiftUI from a network
+/// callback thread. Isolating the type is what makes that a compile error
+/// instead of a race.
+///
+/// Isolation also makes this type implicitly `Sendable`, which is what lets the
+/// DRM processor hand the book to the main actor at all.
+@MainActor
 open class Audiobook: NSObject {
   public var uniqueId: String
   public var annotationsId: String { uniqueId }
@@ -132,6 +147,7 @@ open class Audiobook: NSObject {
 
 // MARK: - PlayerFactoryProtocol
 
+@MainActor
 protocol PlayerFactoryProtocol {
   func createPlayer(
     forType type: Manifest.AudiobookType,
@@ -142,6 +158,8 @@ protocol PlayerFactoryProtocol {
 
 // MARK: - DynamicPlayerFactory
 
+/// Builds `Player`s, which are main-actor isolated.
+@MainActor
 class DynamicPlayerFactory: PlayerFactoryProtocol {
   func createPlayer(
     forType type: Manifest.AudiobookType,

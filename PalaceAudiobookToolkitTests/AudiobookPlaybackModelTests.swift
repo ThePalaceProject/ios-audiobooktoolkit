@@ -8,6 +8,8 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+// Exercises @MainActor playback API; isolated to match.
+@MainActor
 final class AudiobookPlaybackModelTests: XCTestCase {
   // MARK: - PP-4156 — download-indicator visibility rule
   //

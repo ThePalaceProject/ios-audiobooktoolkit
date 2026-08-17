@@ -11,6 +11,7 @@ import XCTest
 
 // MARK: - ManifestDecodingTests
 
+@MainActor
 final class ManifestDecodingTests: XCTestCase {
   private let enableDataLogging = true
 

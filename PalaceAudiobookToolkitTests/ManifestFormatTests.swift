@@ -11,6 +11,7 @@ import XCTest
 
 /// Tests for different manifest formats: Findaway, Overdrive, LCP, OpenAccess
 /// Ensures that chapter navigation and track handling work correctly across all formats.
+@MainActor
 final class ManifestFormatTests: XCTestCase {
   private let testID = "testID"
   

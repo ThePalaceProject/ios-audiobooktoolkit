@@ -18,6 +18,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class AudiobookDownloadCoordinatorRenameTests: XCTestCase {
 
   override func setUp() {

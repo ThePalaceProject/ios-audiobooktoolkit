@@ -24,6 +24,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 final class LCPResourceLoaderColdLoadRetryTests: XCTestCase {
 
   private enum FakeReadError: Error, CustomStringConvertible {

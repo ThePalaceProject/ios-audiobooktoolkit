@@ -11,6 +11,7 @@ private let int64Offset1 = Data(bytes: [255, 0, 0, 0, 0, 0, 0, 0, 1])
 
 // MARK: - DataBigEndianTest
 
+@MainActor
 class DataBigEndianTest: XCTestCase {
   func testBigEndianUInt32() {
     var num: UInt32 = 0

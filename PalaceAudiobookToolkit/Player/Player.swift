@@ -122,6 +122,22 @@ public enum PlaybackState {
 
 // MARK: - Player
 
+/// Playback is main-actor isolated.
+///
+/// This is a declaration of what was already true, not a new constraint. Every
+/// consumer of this protocol — in this framework and in the app — already runs
+/// on the main actor: the app's four call sites are all `@MainActor` types,
+/// `View`s or `ObservableObject`s, and `AudiobookManager` already documents
+/// "callers of this public API are `@MainActor`" and carries sync wrappers
+/// written specifically to avoid sending a non-Sendable `Player` across an
+/// isolation boundary. Leaving the isolation undeclared is what forced those
+/// wrappers to exist and what produces the bulk of the strict-concurrency
+/// diagnostics in the player layer.
+///
+/// Callbacks that genuinely originate off-main — Findaway SDK notifications,
+/// AVPlayer KVO — are `nonisolated` at their entry point and hop, which is what
+/// they already did by hand with `DispatchQueue.main.async`.
+@MainActor
 public protocol Player: NSObject {
   var isPlaying: Bool { get }
   var queuesEvents: Bool { get }

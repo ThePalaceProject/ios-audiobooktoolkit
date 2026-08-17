@@ -9,6 +9,7 @@
 import XCTest
 @testable import PalaceAudiobookToolkit
 
+@MainActor
 class CursorTests: XCTestCase {
   func testIndexOutOfBounds() {
     let data: [Int] = []

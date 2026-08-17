@@ -27,6 +27,7 @@ private let obj1: [String: Any?] = [
 
 // MARK: - JSONUtilsTest
 
+@MainActor
 class JSONUtilsTest: XCTestCase {
   func testCanonicalization() {
     XCTAssertNoThrow(try JSONUtils.canonicalize(jsonObj: obj1))
