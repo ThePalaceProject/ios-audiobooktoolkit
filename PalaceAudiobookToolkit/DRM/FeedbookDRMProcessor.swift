@@ -182,11 +182,11 @@ class FeedbookDRMProcessor {
 
         // Explicitly check status value
         if let licenseData = data,
-           let jsonObj = try? JSONSerialization.jsonObject(
+           let jsonObj = (try? JSONSerialization.jsonObject(
              with: licenseData,
              options: JSONSerialization.ReadingOptions()
-           ) as? [String: Any],
-           let statusString = jsonObj?["status"] as? String
+           )) as? [String: Any],
+           let statusString = jsonObj["status"] as? String
         {
           if statusString != "ready" && statusString != "active" {
             ATLog(
@@ -227,11 +227,11 @@ class FeedbookDRMProcessor {
 
         // Explicitly check status value
         if let licenseData = data,
-           let jsonObj = try? JSONSerialization.jsonObject(
+           let jsonObj = (try? JSONSerialization.jsonObject(
              with: licenseData,
              options: JSONSerialization.ReadingOptions()
-           ) as? [String: Any],
-           let statusString = jsonObj?["status"] as? String
+           )) as? [String: Any],
+           let statusString = jsonObj["status"] as? String
         {
           if statusString != "ready" && statusString != "active" {
             ATLog(

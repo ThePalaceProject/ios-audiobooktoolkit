@@ -1179,8 +1179,8 @@ class OpenAccessPlayer: NSObject, Player {
       let statusCode = (response as? HTTPURLResponse)?.statusCode
       guard let data, error == nil,
             statusCode == 200,
-            let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let newToken = dictionary?["access_token"] as? String
+            let dictionary = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            let newToken = dictionary["access_token"] as? String
       else {
         ATLog(.error, "OpenAccessPlayer: Bearer token refresh failed (status: \(statusCode ?? -1), error: \(error?.localizedDescription ?? "none"))")
         DispatchQueue.main.async {
