@@ -52,7 +52,10 @@ enum FindawayPlayerError {
 ///
 /// Marked `final` (no subclassing — value semantics are not desired here;
 /// the lock + ref-typed continuation are the whole point).
-final class SingleResumeContinuationBox<T> {
+/// `T: Sendable` because `resume(returning:)` hands the value across an
+/// isolation boundary — the continuation is resumed from AudioEngine's
+/// threads, not the caller's.
+final class SingleResumeContinuationBox<T: Sendable> {
   private var continuation: CheckedContinuation<T, Never>?
   private let lock = NSLock()
 
