@@ -16,6 +16,8 @@ public protocol StreamingResourceProvider: AnyObject {
 
 // MARK: - StreamingCapablePlayer
 
+/// Isolated with `Player`, which every conformer also adopts.
+@MainActor
 public protocol StreamingCapablePlayer: AnyObject {
   func publicationDidLoad()
   func setStreamingProvider(_ provider: StreamingResourceProvider)
