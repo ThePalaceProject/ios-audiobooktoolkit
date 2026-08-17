@@ -608,8 +608,8 @@ final class OpenAccessDownloadTask: DownloadTask, @unchecked Sendable {
       guard let data, error == nil,
             let httpResponse = response as? HTTPURLResponse,
             httpResponse.statusCode == 200,
-            let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let accessToken = dictionary?["access_token"] as? String
+            let dictionary = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+            let accessToken = dictionary["access_token"] as? String
       else {
         ATLog(.error, "OpenAccessDownloadTask: Token refresh failed for: \(self.key)")
         self.downloadProgress = 0.0

@@ -231,7 +231,7 @@ private extension LCPResourceLoaderDelegate {
       let contentType = Self.utiIdentifier(forHref: finalHref, fallbackMime: validLink.mediaType?.string)
       info.contentType = contentType
       info.isByteRangeAccessSupported = true
-      if let res = resource, let maybeLength = try? await res.estimatedLength().get(), let totalLength = maybeLength {
+      if let res = resource, case let .success(maybeLength) = await res.estimatedLength(), let totalLength = maybeLength {
         info.contentLength = Int64(totalLength)
       }
     }
@@ -249,7 +249,7 @@ private extension LCPResourceLoaderDelegate {
         do {
           let segmentSize = 128 * 1024
           var totalLength: Int?
-          if let length = try? await res.estimatedLength().get(), let l = length {
+          if case let .success(maybeLength) = await res.estimatedLength(), let l = maybeLength {
             totalLength = Int(l)
           }
           ATLog(.debug, "🎵 ResourceLoader: Starting data request for range \(start)..., total length: \(totalLength?.description ?? "unknown")")
