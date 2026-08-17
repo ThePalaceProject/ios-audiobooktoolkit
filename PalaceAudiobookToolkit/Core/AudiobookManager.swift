@@ -212,7 +212,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private let announcementKey: String
   private var didAnnounceDownloadStart: Bool = false
 
-  public static let skipTimeInterval: TimeInterval = 30
+  /// `nonisolated` because it is a constant: callers outside the main actor
+  /// (e.g. `MediaControlPublisher`'s stored defaults) read it without needing
+  /// this type's isolation.
+  public nonisolated static let skipTimeInterval: TimeInterval = 30
 
   /// Patron-configurable skip intervals, defaulting to `skipTimeInterval` (30s).
   /// A host (the Palace app's Playback settings) sets these per manager; they
