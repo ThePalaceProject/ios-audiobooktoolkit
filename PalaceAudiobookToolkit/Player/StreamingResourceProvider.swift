@@ -27,5 +27,9 @@ public protocol StreamingCapablePlayer: AnyObject {
 
 public protocol LCPStreamingProvider: DRMDecryptor, StreamingResourceProvider {
   func supportsStreaming() -> Bool
-  func setupStreamingFor(_ player: Any) -> Bool
+  /// `@MainActor`: it is handed a `StreamingCapablePlayer` and calls
+  /// `setStreamingProvider` on it, which is main-actor state. The only caller,
+  /// `DynamicPlayerFactory`, is already isolated. `supportsStreaming()` stays
+  /// nonisolated — it is a pure capability check.
+  @MainActor func setupStreamingFor(_ player: Any) -> Bool
 }
