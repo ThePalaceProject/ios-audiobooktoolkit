@@ -354,11 +354,14 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   public var needsDownloadRetry: Bool = false
 
-  public private(set) var timer: Cancellable?
+  /// `AnyCancellable`, not bare `Cancellable`, on purpose: the concrete type
+/// guarantees cancellation when it deallocates, which is what lets this type
+/// have no `deinit`.
+  public private(set) var timer: AnyCancellable?
   private var uiUpdateTimer: Cancellable?
   private var lastKnownChapter: Chapter?
 
-  private var chapterMonitorTimer: Cancellable?
+  private var chapterMonitorTimer: AnyCancellable?
 
   /// Last time the player-driven lock-screen heartbeat wrote now-playing info.
   /// Rate-limits `setupNowPlayingHeartbeat`'s `positionPublisher` sink (which
@@ -1007,12 +1010,9 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       .store(in: &cancellables)
   }
 
-  deinit {
-    ATLog(.debug, "DefaultAudiobookManager is deinitializing.")
-    timer?.cancel()
-    timer = nil
-    chapterMonitorTimer?.cancel()
-    chapterMonitorTimer = nil
-    cancellables.removeAll()
-  }
+  // No `deinit`. Everything it used to cancel cancels itself: `AnyCancellable`
+  // — including the two timers, now typed as such — cancels on dealloc, and so
+  // does every element of `Set<AnyCancellable>`. Reaching for those non-Sendable
+  // properties from a nonisolated deinit is an error in the Swift 6 language
+  // mode, and the code was redundant even before that.
 }
