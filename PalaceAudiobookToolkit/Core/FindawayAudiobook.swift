@@ -24,11 +24,13 @@ public final class FindawayAudiobook: Audiobook {
     uniqueId = fulfillmentId
   }
 
-  private class func getFulfillmentId(from manifest: Manifest) -> String? {
+  /// `nonisolated`: a pure read of the manifest, called from the nonisolated
+  /// deletion path.
+  private nonisolated class func getFulfillmentId(from manifest: Manifest) -> String? {
     manifest.metadata?.drmInformation?.fulfillmentId
   }
 
-  override public class func deleteLocalContent(manifest: Manifest, bookIdentifier _: String, token _: String? = nil) {
+  override public nonisolated class func deleteLocalContent(manifest: Manifest, bookIdentifier _: String, token _: String? = nil) {
     guard let fulfillmentId = getFulfillmentId(from: manifest) else {
       return
     }
