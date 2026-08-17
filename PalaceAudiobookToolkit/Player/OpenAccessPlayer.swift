@@ -195,6 +195,13 @@ class OpenAccessPlayer: NSObject, Player {
   /// even if the item's status is still `.unknown` and then transitions to
   /// `.failed` when the underlying HTTP request returns 403/401).
   private var currentItemStatusObservation: NSKeyValueObservation?
+  /// `status` and `rate` on the queue player. Block-based on purpose: an
+  /// `NSKeyValueObservation` invalidates itself when it deallocates, so there is
+  /// nothing for `deinit` to tear down. The string-keyPath API these replaced
+  /// required a matching `removeObserver` or it crashes, which is the only
+  /// reason this type had teardown in `deinit` at all.
+  private var playerStatusObservation: NSKeyValueObservation?
+  private var playerRateObservation: NSKeyValueObservation?
 
   private var playerIsReady: AVPlayerItem.Status = .readyToPlay {
     didSet {
@@ -392,41 +399,19 @@ class OpenAccessPlayer: NSObject, Player {
     return task.assetFileStatus()
   }
 
-  deinit {
-    NotificationCenter.default.removeObserver(self)
-    // PP-4542 (systemic): do NOT deactivate the shared AVAudioSession here.
-    // A new player is created on every open/reopen and ARC deallocates the
-    // PREVIOUS one at a non-deterministic time — often right AFTER the new
-    // player has started. Deactivating the app-wide session in deinit then
-    // yanked it out from under the live player, surfacing as AVError -11849
-    // "Operation Stopped" (+ PlayerRemoteXPC -12860) and a failed AVPlayerItem.
-    // Audio-session lifecycle is owned by the app's playback layer (activate on
-    // open, deactivate when playback genuinely ends) — never by a player's
-    // dealloc. Leaving the session active across player transitions is the
-    // correct, race-free behavior.
-    // Only work that is safe from a nonisolated context AND genuinely necessary
-    // belongs in a deinit. Observer teardown qualifies on both counts:
-    // NotificationCenter removal and KVO invalidation are thread-safe, and a
-    // surviving KVO registration on a deallocating observer crashes.
-    //
-    // `unload()` deliberately does NOT run here any more. It is main-actor
-    // isolated, and what it does during dealloc is meaningless: clearing the
-    // queue on a player that is being freed, and publishing `.unloaded` to a
-    // subject whose subscribers, if any still existed, would be holding this
-    // object alive. Keeping the call by isolating the deinit (SE-0371
-    // `isolated deinit`) was tried and CRASHED the runner with
-    // `malloc: pointer being freed was not allocated`, because it changes when
-    // and on which thread deallocation happens. Player teardown is an explicit
-    // call, not a side effect of dealloc.
-    NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
-    NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
-    if isObservingPlayerStatus {
-      avQueuePlayer.removeObserver(self, forKeyPath: "status")
-      avQueuePlayer.removeObserver(self, forKeyPath: "rate")
-    }
-    currentItemObservation?.invalidate()
-    currentItemStatusObservation?.invalidate()
-  }
+  // No `deinit` teardown by design.
+  //
+  // Every observer this type installs now self-invalidates: the queue-player
+  // `status`/`rate` observations are `NSKeyValueObservation`s, which invalidate
+  // when they deallocate, and `NotificationCenter` has zeroed and removed
+  // observers automatically since iOS 9. The old string-keyPath KVO was the one
+  // registration that crashed if it outlived its observer, and it is gone.
+  //
+  // What used to be here — `unload()`, publishing `.unloaded` to Combine — was
+  // main-actor work reaching across objects during dealloc. Keeping it by
+  // isolating the deinit (SE-0371) crashed the runner with
+  // `malloc: pointer being freed was not allocated`. Player teardown is an
+  // explicit call, not a side effect of dealloc.
 
   func clearPositionCache() {
     lastKnownPosition = nil
@@ -1070,8 +1055,24 @@ class OpenAccessPlayer: NSObject, Player {
       name: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance()
     )
 
-    avQueuePlayer.addObserver(self, forKeyPath: "status", options: [.new, .old], context: nil)
-    avQueuePlayer.addObserver(self, forKeyPath: "rate", options: [.new, .old], context: nil)
+    playerStatusObservation = avQueuePlayer.observe(\.status, options: [.new, .old]) { [weak self] player, _ in
+      let status = player.status
+      Task { @MainActor in
+        guard let self else { return }
+        switch status {
+        case .readyToPlay: self.playerIsReady = .readyToPlay
+        case .failed: self.playerIsReady = .failed
+        default: break
+        }
+      }
+    }
+    playerRateObservation = avQueuePlayer.observe(\.rate, options: [.new, .old]) { [weak self] player, _ in
+      let raw = Int(player.rate)
+      Task { @MainActor in
+        guard let self, let rate = PlaybackRate(rawValue: raw) else { return }
+        self.savePlaybackRate(rate: rate)
+      }
+    }
     isObservingPlayerStatus = true
 
     observeCurrentItemStatus()
@@ -1133,8 +1134,10 @@ class OpenAccessPlayer: NSObject, Player {
     }
     NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
     NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
-    avQueuePlayer.removeObserver(self, forKeyPath: "status")
-    avQueuePlayer.removeObserver(self, forKeyPath: "rate")
+    playerStatusObservation?.invalidate()
+    playerStatusObservation = nil
+    playerRateObservation?.invalidate()
+    playerRateObservation = nil
     isObservingPlayerStatus = false
 
     currentItemObservation?.invalidate()
@@ -1274,29 +1277,6 @@ extension OpenAccessPlayer {
       configure()
     } else {
       DispatchQueue.main.async { configure() }
-    }
-  }
-
-  override func observeValue(
-    forKeyPath keyPath: String?,
-    of object: Any?,
-    change _: [NSKeyValueChangeKey: Any]?,
-    context _: UnsafeMutableRawPointer?
-  ) {
-    if keyPath == "status", let player = object as? AVQueuePlayer {
-      switch player.status {
-      case .readyToPlay:
-        playerIsReady = .readyToPlay
-      case .failed:
-        playerIsReady = .failed
-      default:
-        break
-      }
-    } else if keyPath == "rate", let player = object as? AVQueuePlayer {
-      guard let rate = PlaybackRate(rawValue: Int(player.rate)) else {
-        return
-      }
-      savePlaybackRate(rate: rate)
     }
   }
 
