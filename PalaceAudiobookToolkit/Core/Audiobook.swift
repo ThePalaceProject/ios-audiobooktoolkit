@@ -43,7 +43,10 @@ public enum DRMStatus: Int {
 /// Constructs main-actor-isolated `Audiobook`s, so the factory is isolated too.
 @MainActor
 public enum AudiobookFactory {
-  public static func audiobookClass(
+  /// `nonisolated`: a pure switch on the manifest's type. It touches no
+  /// main-actor state, and callers on the file-deletion path must not be
+  /// forced onto the main actor to ask which class to use.
+  public nonisolated static func audiobookClass(
     for manifest: Manifest
   ) -> Audiobook.Type {
     switch manifest.audiobookType {
@@ -133,7 +136,10 @@ open class Audiobook: NSObject {
     tableOfContents.tracks.fulfillURL = url
   }
 
-  public class func deleteLocalContent(manifest: Manifest, bookIdentifier: String, token: String? = nil) {
+  /// `nonisolated`: deletes files. It builds its own `Tracks` locally and
+  /// touches no main-actor state, and forcing blocking file I/O onto the main
+  /// actor to satisfy the type's isolation would be a regression, not a fix.
+  public nonisolated class func deleteLocalContent(manifest: Manifest, bookIdentifier: String, token: String? = nil) {
     let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
     let tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
     tableOfContents.tracks.deleteTracks()
