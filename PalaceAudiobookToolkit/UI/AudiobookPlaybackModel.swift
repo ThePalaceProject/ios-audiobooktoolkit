@@ -144,7 +144,10 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// Public so the ios-core in-app player shares this exact rule rather than
   /// keeping a second copy of the arithmetic — two copies is how this bug got
   /// into both players in the first place.
-  public static func remainingWallClock(bookTimeRemaining: TimeInterval, rate: PlaybackRate) -> TimeInterval {
+  /// `nonisolated`: pure arithmetic on two values, touching no model state.
+  /// It became main-actor-isolated only because the enclosing type did, which
+  /// broke the app's nonisolated caller in `AudiobookMorphingPlayerView`.
+  public nonisolated static func remainingWallClock(bookTimeRemaining: TimeInterval, rate: PlaybackRate) -> TimeInterval {
     guard bookTimeRemaining.isFinite, bookTimeRemaining > 0 else { return 0 }
     let multiplier = Double(PlaybackRate.convert(rate: rate))
     guard multiplier > 0 else { return bookTimeRemaining }
