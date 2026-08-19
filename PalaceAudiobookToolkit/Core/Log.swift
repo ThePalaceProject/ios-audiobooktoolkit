@@ -232,7 +232,10 @@ public enum AudiobookLog {
 
 // MARK: - AudiobookDebugReporter
 
-public class AudiobookDebugReporter {
+/// Stateless: it has no stored properties, only methods that build a report
+/// from locals. `Sendable` is therefore a fact about the type, not a claim
+/// about discipline — and `final` keeps it that way.
+public final class AudiobookDebugReporter: Sendable {
   public static let shared = AudiobookDebugReporter()
 
   private init() {}
