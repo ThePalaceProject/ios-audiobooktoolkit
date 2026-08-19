@@ -10,6 +10,8 @@ extension AVPlayer.Status {
       s = "readyToPlay"
     case .unknown:
       s = "unknown"
+    @unknown default:
+      s = "unknown(\(rawValue))"
     }
     return s
   }
@@ -25,6 +27,8 @@ extension AVPlayerItem.Status {
       s = "readyToPlay"
     case .unknown:
       s = "unknown"
+    @unknown default:
+      s = "unknown(\(rawValue))"
     }
     return s
   }

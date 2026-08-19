@@ -8,8 +8,12 @@
 import UIKit
 
 public final class AudiobookAccessibilityAnnouncementCenter {
-  public typealias PostHandler = (UIAccessibility.Notification, String) -> Void
-  public typealias VoiceOverRunningProvider = () -> Bool
+  /// `@Sendable` because both are stored and then captured into the
+  /// `DispatchQueue.main.async` hop in `announce`. Without it the capture is
+  /// "task or actor isolated value cannot be sent" under the Swift 6 language
+  /// mode. Both defaults are pure UIKit calls, so neither closes over state.
+  public typealias PostHandler = @Sendable (UIAccessibility.Notification, String) -> Void
+  public typealias VoiceOverRunningProvider = @Sendable () -> Bool
 
   private let postHandler: PostHandler
   private let isVoiceOverRunning: VoiceOverRunningProvider

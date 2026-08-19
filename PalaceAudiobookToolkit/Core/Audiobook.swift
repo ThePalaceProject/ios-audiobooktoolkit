@@ -145,6 +145,20 @@ open class Audiobook: NSObject {
     tableOfContents.tracks.deleteTracks()
   }
 
+  /// Apply a DRM verdict from a nonisolated context.
+  ///
+  /// `drmStatus`'s setter reaches into `player.isDrmOk`, whose `didSet` pauses
+  /// playback, publishes to Combine and unloads — all main-actor work. Every
+  /// caller is a `URLSession` completion handler on a network thread, and an
+  /// `Audiobook` reference cannot be sent from there into a main-actor closure.
+  ///
+  /// So the hop happens HERE instead, inside the isolated type: `self` is
+  /// main-actor isolated and therefore Sendable, so capturing it is legal where
+  /// passing it across as a parameter is not.
+  public nonisolated func applyDRMStatus(_ status: DRMStatus) {
+    Task { @MainActor [weak self, status] in self?.drmStatus = status }
+  }
+
   open func update(manifest: Manifest, bookIdentifier: String, token: String?) {
     let tracks = Tracks(manifest: manifest, audiobookID: bookIdentifier, token: token)
     tableOfContents = AudiobookTableOfContents(manifest: manifest, tracks: tracks)

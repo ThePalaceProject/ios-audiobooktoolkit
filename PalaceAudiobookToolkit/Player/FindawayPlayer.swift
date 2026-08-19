@@ -52,7 +52,10 @@ enum FindawayPlayerError {
 ///
 /// Marked `final` (no subclassing — value semantics are not desired here;
 /// the lock + ref-typed continuation are the whole point).
-final class SingleResumeContinuationBox<T> {
+/// `T: Sendable` because `resume(returning:)` hands the value across an
+/// isolation boundary — the continuation is resumed from AudioEngine's
+/// threads, not the caller's.
+final class SingleResumeContinuationBox<T: Sendable> {
   private var continuation: CheckedContinuation<T, Never>?
   private let lock = NSLock()
 
@@ -923,10 +926,10 @@ extension FindawayPlayer: FindawayDatabaseVerificationDelegate {
 // MARK: FindawayPlaybackNotificationHandlerDelegate
 
 extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
-  private func chapter(for findawayChapter: FAEChapterDescription) -> Chapter? {
+  private func chapter(for findawayChapter: FindawayChapterRef) -> Chapter? {
     guard let track = tableOfContents.tracks.track(
-      forPart: Int(findawayChapter.partNumber),
-      sequence: Int(findawayChapter.chapterNumber)
+      forPart: findawayChapter.partNumber,
+      sequence: findawayChapter.chapterNumber
     ) else {
       return nil
     }
@@ -954,7 +957,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     )
   }
 
-  func audioEnginePlaybackFinished(_: FindawayPlaybackNotificationHandler, for chapter: FAEChapterDescription) {
+  func audioEnginePlaybackFinished(_: FindawayPlaybackNotificationHandler, for chapter: FindawayChapterRef) {
     guard let chapterAtEnd = self.chapter(for: chapter) else {
       return
     }
@@ -963,7 +966,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     }
   }
 
-  func audioEnginePlaybackStarted(_: FindawayPlaybackNotificationHandler, for findawayChapter: FAEChapterDescription) {
+  func audioEnginePlaybackStarted(_: FindawayPlaybackNotificationHandler, for findawayChapter: FindawayChapterRef) {
     queue.async { [weak self] in
       guard let self = self else {
         return
@@ -1005,7 +1008,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     }
   }
 
-  func audioEnginePlaybackPaused(_: FindawayPlaybackNotificationHandler, for findawayChapter: FAEChapterDescription) {
+  func audioEnginePlaybackPaused(_: FindawayPlaybackNotificationHandler, for findawayChapter: FindawayChapterRef) {
     sliderSeekPosition = nil
 
     if let currentTrackPosition = currentTrackPosition ?? chapter(for: findawayChapter)?.position {
@@ -1032,7 +1035,7 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
   func audioEnginePlaybackFailed(
     _: FindawayPlaybackNotificationHandler,
     withError error: NSError?,
-    for chapter: FAEChapterDescription
+    for chapter: FindawayChapterRef
   ) {
     sliderSeekPosition = nil
     // Playback stopped on error — drop play-intent so a retry/seek is not
