@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 
 final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   weak var provider: StreamingResourceProvider?
-  private let httpRangeRetriever = HTTPRangeRetriever()
   private var fullTrackCache = [String: Data]()
   private let maxConcurrentRequests = 8
   private let requestTimeoutSeconds: TimeInterval = 30

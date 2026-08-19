@@ -88,7 +88,18 @@ public func ATLog(
 
 /// Thread-safe log throttling for audiobook toolkit.
 /// Uses a dedicated actor to prevent data races on the message dictionary.
-private actor AudiobookLogThrottle {
+/// Throttles repeated log lines.
+///
+/// A lock, not an actor. The state is a plain dictionary and the algorithm is
+/// synchronous, but making it an actor forced every caller through a blocking
+/// `DispatchSemaphore` wrapper — which stalled the calling thread up to 10ms on
+/// EVERY log call and captured a mutable local across an isolation boundary
+/// (a real race on the result, and an error in the Swift 6 language mode).
+///
+/// - Sendable invariant: `lastLogMessages` is read and written only while
+///   `lock` is held; the other two properties are `let`. `final` keeps it so.
+private final class AudiobookLogThrottle: @unchecked Sendable {
+  private let lock = NSLock()
   private var lastLogMessages: [String: Date] = [:]
   private let throttleInterval: TimeInterval = 0.5 // 500ms throttle
   private let maxTrackedMessages: Int = 100
@@ -98,6 +109,9 @@ private actor AudiobookLogThrottle {
     guard level != .error else {
       return false
     }
+
+    lock.lock()
+    defer { lock.unlock() }
 
     let now = Date()
     let messageKey = String(message.prefix(50))
@@ -122,22 +136,12 @@ private actor AudiobookLogThrottle {
 
 private let audiobookLogThrottle = AudiobookLogThrottle()
 
-/// Synchronous wrapper for the async throttle check.
-/// Uses a blocking semaphore pattern since logging needs to be synchronous.
+/// The throttle check is synchronous, so this is a direct call.
+///
+/// It used to hop to an actor and block on a `DispatchSemaphore` for up to
+/// 10ms, on every log line, to get an answer it could have computed inline.
 private func shouldThrottleLogging(level: LogLevel, message: String) -> Bool {
-  // For performance, use a simple thread-safe check
-  // The actor-based implementation ensures thread safety
-  var result = false
-  let semaphore = DispatchSemaphore(value: 0)
-
-  Task {
-    result = await audiobookLogThrottle.shouldThrottle(level: level, message: message)
-    semaphore.signal()
-  }
-
-  // Wait with timeout to prevent deadlocks
-  _ = semaphore.wait(timeout: .now() + .milliseconds(10))
-  return result
+  audiobookLogThrottle.shouldThrottle(level: level, message: message)
 }
 
 // MARK: - AudiobookLog
