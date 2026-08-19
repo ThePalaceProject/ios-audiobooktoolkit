@@ -171,7 +171,7 @@ class FeedbookDRMProcessor {
   class func performAsyncDrm(book: Audiobook, drmData: [String: Any]) {
     if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
       weak var weakBook = book
-      URLSession.shared.dataTask(with: licenseCheckUrl) { data, _, error in
+      let task = URLSession.shared.dataTask(with: licenseCheckUrl) { data, _, error in
         // Errors automatically mean success
         // In practice, network errors should not prevent us from playing a book,
         // especially since the point is to be able to listen offline
@@ -203,6 +203,9 @@ class FeedbookDRMProcessor {
         weakBook?.applyDRMStatus(.succeeded)
         ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck fallthrough")
       }
+      // Without this the task is never started and the whole closure above is
+      // unreachable — the licence check has never run in production (PP-4981).
+      task.resume()
     } else {
       book.applyDRMStatus(.succeeded)
       ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck not needed")
@@ -216,7 +219,7 @@ class FeedbookDRMProcessor {
   class func performAsyncDrm(book: OpenAccessAudiobook, drmData: [String: Any]) {
     if let licenseCheckUrl = drmData["licenseCheckUrl"] as? URL {
       weak var weakBook = book
-      URLSession.shared.dataTask(with: licenseCheckUrl) { data, _, error in
+      let task = URLSession.shared.dataTask(with: licenseCheckUrl) { data, _, error in
         // Errors automatically mean success
         // In practice, network errors should not prevent us from playing a book,
         // especially since the point is to be able to listen offline
@@ -248,6 +251,9 @@ class FeedbookDRMProcessor {
         weakBook?.applyDRMStatus(.succeeded)
         ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck fallthrough")
       }
+      // Without this the task is never started and the whole closure above is
+      // unreachable — the licence check has never run in production (PP-4981).
+      task.resume()
     } else {
       book.applyDRMStatus(.succeeded)
       ATLog(.debug, "feedbooks::performAsyncDrm licenseCheck not needed")
