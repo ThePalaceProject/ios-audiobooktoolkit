@@ -80,18 +80,22 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
 
   // MARK: - skipPlayhead bounds clamping (Findaway-specific)
 
-  /// FindawayPlayer's skipPlayhead clamps forward overflow into the next
-  /// track when one exists. We verify a forward overflow doesn't return nil
-  /// (Findaway's contract: skip-past-end-of-track must wrap or pin).
+  /// FindawayPlayer's skipPlayhead carries forward overflow into the next
+  /// track when one exists (Findaway's contract: skip-past-end-of-track must
+  /// wrap or pin).
   ///
-  /// Mutant: removing the `handleBeyondCurrentTrackSkip` branch would either
-  /// crash or return a junk TrackPosition with timestamp > track.duration.
-  func testSkipPlayhead_forwardPastTrackEnd_returnsNonNil() async throws {
+  /// This asserted only `XCTAssertNotNil` until a mechanically-derived mutant
+  /// showed what that was worth: flipping the in-range test's `<=` to `>=` — so
+  /// an overflowing skip takes the direct path and returns a position PAST the
+  /// end of the current track — left it green, because a junk position is
+  /// non-nil too. Assert where the playhead actually landed.
+  func testSkipPlayhead_forwardPastTrackEnd_carriesOverflowIntoNextTrack() async throws {
     let (toc, _) = try Self.makeFindawayFixture()
     let player = try XCTUnwrap(SpyFindawayPlayer(tableOfContents: toc))
 
     let firstTrack = try XCTUnwrap(toc.allTracks.first)
-    // Start near the end of the track; +60s should overflow.
+    let nextTrack = try XCTUnwrap(toc.tracks.nextTrack(firstTrack), "Fixture needs a second track")
+    // Start 5s from the end of the track; +60s overflows by 55s.
     let nearEnd = firstTrack.duration - 5
     player.currentTrackPositionOverride = TrackPosition(
       track: firstTrack,
@@ -99,10 +103,24 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
       tracks: toc.tracks
     )
 
-    let result = await player.skipPlayhead(60)
+    let skipped = await player.skipPlayhead(60)
+    let result = try XCTUnwrap(skipped)
 
-    XCTAssertNotNil(result, "Skip past track end must resolve to next-track-or-end")
+    XCTAssertEqual(result.track.key, nextTrack.key, "Overflow must land on the NEXT track")
+    XCTAssertEqual(result.timestamp, 55, accuracy: 0.001,
+                   "The overflow past the track end must carry over, not be dropped")
+    XCTAssertLessThanOrEqual(result.timestamp, result.track.duration,
+                             "A resolved position must never sit past its own track's end")
   }
+
+  // Two sibling mutants on that same condition — `<=` to `<`, and `>=` to `>` —
+  // survive and are EQUIVALENT, not gaps. Both differ only exactly on a bound
+  // (`newTimestamp == duration`, `newTimestamp == 0`), and for the whole
+  // in-range domain the `else` arm's final clause builds
+  // `TrackPosition(track: same, timestamp: max(0, newTimestamp))` — the
+  // identical value the direct arm builds. No input distinguishes them, so
+  // there is no test to write; the note is here so the next reader does not
+  // re-derive it from a 40% kill rate.
 
   /// Negative interval past start clamps to 0. Mutant: dropping `max(0, ...)`
   /// in moveToPreviousTrackOrStart would leave a negative timestamp that
@@ -386,6 +404,47 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     XCTAssertFalse(player.isPlaybackDesired, "play() before verification must not register intent")
   }
 
+  /// The debounced manipulation scheduler, which this change moved off the
+  /// player's private serial queue and onto the main queue, and out of a pair of
+  /// nested functions into methods (a local function cannot be captured by a
+  /// `DispatchWorkItem`'s `@Sendable` body).
+  ///
+  /// Observable without the SDK: `currentTrackPosition` reports the QUEUED
+  /// playhead while a manipulation is pending, and the scheduler sets
+  /// `queuedPlayerState` back to `.none` when it finally runs — at which point,
+  /// with no engine to fall back to, the position reads nil. So "the queued
+  /// position clears" is the scheduler firing.
+  ///
+  /// Mutants this kills: inverting the supersede guard
+  /// (`currentSequence == manipulationSequenceNumber`) makes every work item
+  /// return early, and flipping the debounce comparison (`Date() <`) makes it
+  /// reschedule forever. Both leave the queued position pinned and fail here.
+  ///
+  /// Waits on the CONDITION with a generous ceiling rather than sleeping for the
+  /// debounce, so it asserts a property of the code and not the speed of the
+  /// machine it runs on.
+  func testQueuedManipulation_runsAfterTheDebounceAndClearsTheQueuedState() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let verification = FindawayDatabaseVerification()
+    verification.verified = true
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: verification
+    )
+
+    let target = TrackPosition(track: firstTrack, timestamp: 42, tracks: toc.tracks)
+    try await player.play(at: target)
+
+    XCTAssertEqual(player.currentTrackPosition?.timestamp, 42,
+                   "Precondition: the queued playhead is reported while the manipulation is pending")
+
+    let cleared = await Self.eventually { player.currentTrackPosition == nil }
+
+    XCTAssertTrue(cleared, "The debounced manipulation must run and clear the queued state")
+  }
+
   // MARK: - Test doubles
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
@@ -420,6 +479,23 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
       tableOfContents: toc,
       databaseVerification: FindawayDatabaseVerification()
     )
+  }
+
+  /// Poll `condition` on the main actor until it holds or the ceiling expires.
+  /// The ceiling is far above the 0.5s debounce on purpose: the assertion is
+  /// "this eventually happens", which is a property of the scheduler, where a
+  /// fixed sleep would be a measurement of the host.
+  private static func eventually(
+    within ceiling: TimeInterval = 5.0,
+    _ condition: @MainActor () -> Bool
+  ) async -> Bool {
+    let deadline = Date().addingTimeInterval(ceiling)
+    while Date() < deadline {
+      if condition() { return true }
+      await drainMainQueue()
+      try? await Task.sleep(nanoseconds: 20_000_000)
+    }
+    return condition()
   }
 
   /// Let anything already queued on the main queue run. Enqueueing behind the
