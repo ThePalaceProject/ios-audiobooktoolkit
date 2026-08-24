@@ -445,6 +445,69 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     XCTAssertTrue(cleared, "The debounced manipulation must run and clear the queued state")
   }
 
+  /// The path PP-4990 exists for, driven end to end: a decoded
+  /// `FindawayChapterRef` arrives where the SDK notification used to hand over
+  /// its own `FAEChapterDescription`, and the player resolves it to a real
+  /// chapter and announces the position it was actually asked to start at.
+  ///
+  /// Uses the Findaway-shaped fixture, not the open-access one the older tests
+  /// share: resolution goes through `tracks.track(forPart:sequence:)`, so a
+  /// manifest without `findaway:part` / `findaway:sequence` resolves to nil and
+  /// the whole body is skipped — which is exactly why this line sat uncovered.
+  ///
+  /// Mutant: inverting the `target.track.key == currentChapter.position.track.key`
+  /// comparison drops the pending position and falls back to the engine's
+  /// offset, which is 0 with no engine — the "snaps back to the start of the
+  /// book" regression the fallback comment warns about. Asserting the timestamp,
+  /// not just that something was announced, is what catches it.
+  ///
+  /// Deliberately the FIRST chapter. `chapter(for:)` resolves at `timestamp: 0`
+  /// with `preferChapterEndingHere: true`, the pinned pre-PP-4948 tie-break, and
+  /// for any later chapter that boundary belongs to the chapter BEFORE it — so
+  /// the track keys do not match and the pending position is discarded. Chapter
+  /// zero has no predecessor to hand the boundary to, which is the one case
+  /// where the pinned tie-break and the honest answer agree. That mismatch for
+  /// every OTHER chapter is real, pre-existing, and PP-4951's to resolve; this
+  /// test asserts the behaviour we believe in rather than pinning the debt.
+  func testPlaybackStarted_resolvesTheChapterRefAndAnnouncesThePendingPosition() async throws {
+    let toc = try Self.makeFindawayTOC()
+    let track = try XCTUnwrap(toc.tracks.track(forPart: 0, sequence: 0),
+                              "Fixture must carry findaway part/sequence numbering")
+    // Verification left false on purpose: `play(at:)` still records the pending
+    // start position, and nothing schedules an engine manipulation.
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: track, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: FindawayDatabaseVerification()
+    )
+
+    var announced: [PlaybackState] = []
+    let subscription = player.playbackStatePublisher.sink { announced.append($0) }
+    defer { subscription.cancel() }
+
+    let target = TrackPosition(track: track, timestamp: 17, tracks: toc.tracks)
+    try await player.play(at: target)
+
+    player.audioEnginePlaybackStarted(
+      DefaultFindawayPlaybackNotificationHandler(),
+      for: FindawayChapterRef(partNumber: 0, chapterNumber: 0)
+    )
+
+    let started = await Self.eventually {
+      announced.contains { if case .started = $0 { return true } else { return false } }
+    }
+    XCTAssertTrue(started, "A resolved chapter notification must announce playback started")
+
+    guard case let .started(position)? = announced.last(where: {
+      if case .started = $0 { return true } else { return false }
+    }) else {
+      return XCTFail("Expected a .started event")
+    }
+    XCTAssertEqual(position.track.key, track.key, "Announced position must be on the resolved chapter's track")
+    XCTAssertEqual(position.timestamp, 17, accuracy: 0.001,
+                   "Announced position must be the pending start position, not the engine's offset")
+  }
+
   // MARK: - Test doubles
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
@@ -479,6 +542,18 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
       tableOfContents: toc,
       databaseVerification: FindawayDatabaseVerification()
     )
+  }
+
+  /// A genuinely Findaway-shaped table of contents: `secret_lives_manifest`
+  /// carries `findaway:part` / `findaway:sequence` on all ten entries, which is
+  /// what `tracks.track(forPart:sequence:)` resolves a chapter notification by.
+  private static func makeFindawayTOC() throws -> AudiobookTableOfContents {
+    let manifest = try Manifest.from(
+      jsonFileName: "secret_lives_manifest",
+      bundle: Bundle(for: FindawayPlayerAsyncContractTests.self)
+    )
+    let tracks = Tracks(manifest: manifest, audiobookID: "findaway-notification-test", token: nil)
+    return AudiobookTableOfContents(manifest: manifest, tracks: tracks)
   }
 
   /// Poll `condition` on the main actor until it holds or the ceiling expires.
