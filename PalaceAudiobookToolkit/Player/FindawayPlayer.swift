@@ -11,7 +11,10 @@ import Combine
 import Foundation
 import UIKit
 
-typealias EngineManipulation = () -> Void
+/// Main-actor isolated: a queued manipulation is stored in main-actor state and
+/// executed from the main-actor scheduler, so saying so removes the whole
+/// "concurrently-executed closure" question rather than answering it per site.
+typealias EngineManipulation = @MainActor () -> Void
 typealias FindawayPlayheadManipulation = (previous: TrackPosition?, destination: TrackPosition)
 
 // MARK: - PlayerState
@@ -111,8 +114,86 @@ final class SingleResumeThrowingContinuationBox {
   }
 }
 
+// MARK: - FindawayEngineCommands
+
+/// The AudioEngine calls worth keeping off the thread that draws, and the one
+/// serial queue that orders them.
+///
+/// `FindawayPlayer` conforms to `Player`, which is `@MainActor`, so the player
+/// has been main-actor isolated all along — the compiler inferred it and then
+/// reported forty-two violations, because the player's whole state machine
+/// ran on a private serial queue instead. That queue is gone; the main actor
+/// serialises the state machine now, and it does so for the readers too, which
+/// the queue never did (`isPlaying`, `currentOffset` and the position timer
+/// always read from main while the writes happened elsewhere).
+///
+/// What the queue actually bought is named in the 2018 comment it arrived with:
+/// `FAEPlaybackEngine` manipulations are "potentially very expensive". That
+/// property is preserved, and preserved only here. Playback for this SDK cannot
+/// be exercised outside a device with a fulfilled title, so the SDK keeps the
+/// threading it has always had rather than gaining main-thread calls nobody can
+/// measure.
+///
+/// Nothing non-Sendable crosses: every parameter is a value, and the engine is
+/// re-fetched from its own singleton inside the block rather than captured from
+/// a main-actor property.
+enum FindawayEngineCommands {
+  private static let queue = DispatchQueue(
+    label: "org.nypl.labs.PalaceAudiobookToolkit.FindawayPlayer"
+  )
+
+  /// The expensive one: a full unload/reload cycle inside the SDK.
+  static func load(
+    audiobookID: String,
+    partNumber: UInt,
+    chapterNumber: UInt,
+    offset: UInt,
+    sessionKey: String,
+    licenseID: String
+  ) {
+    queue.async {
+      FAEAudioEngine.shared()?.playbackEngine?.play(
+        forAudiobookID: audiobookID,
+        partNumber: partNumber,
+        chapterNumber: chapterNumber,
+        offset: offset,
+        sessionKey: sessionKey,
+        licenseID: licenseID
+      )
+    }
+  }
+
+  static func resume() {
+    queue.async { FAEAudioEngine.shared()?.playbackEngine?.resume() }
+  }
+
+  static func pause() {
+    queue.async { FAEAudioEngine.shared()?.playbackEngine?.pause() }
+  }
+
+  static func unload() {
+    queue.async { FAEAudioEngine.shared()?.playbackEngine?.unload() }
+  }
+
+  /// Documented by the SDK as cheap, but ordered on the same queue as `load`
+  /// on purpose: a seek that lands between a reload and its offset write must
+  /// not be reordered around it.
+  static func setOffset(_ offset: UInt) {
+    queue.async { FAEAudioEngine.shared()?.playbackEngine?.currentOffset = offset }
+  }
+
+  static func setRate(_ rate: Float) {
+    queue.async { FAEAudioEngine.shared()?.playbackEngine?.currentRate = rate }
+  }
+}
+
 // MARK: - FindawayPlayer
 
+/// Main-actor isolated explicitly. It was already isolated by its conformance
+/// to `Player`; saying so out loud is what keeps a future reader from
+/// reintroducing a background queue for the state machine. See
+/// `FindawayEngineCommands` for the one thing that still runs off-main.
+@MainActor
 class FindawayPlayer: NSObject, Player {
   var playbackStatePublisher = PassthroughSubject<PlaybackState, Never>()
   var queuesEvents: Bool = true
@@ -236,7 +317,6 @@ class FindawayPlayer: NSObject, Player {
   }
 
   private var eventHandler: FindawayPlaybackNotificationHandler
-  private var queue = DispatchQueue(label: "org.nypl.labs.PalaceAudiobookToolkit.FindawayPlayer")
 
   required convenience init?(tableOfContents: AudiobookTableOfContents) {
     guard let firstTrack = tableOfContents.allTracks.first else {
@@ -332,33 +412,27 @@ class FindawayPlayer: NSObject, Player {
 
     set(newRate) {
       UserDefaults.standard.setValue(PlaybackRate.convert(rate: newRate), forKey: audioPlaybackRateIdentifierKey)
-      queue.async(flags: .barrier) {
-        ATLog(.debug, "FindawayPlayer: Setting playback rate to \(PlaybackRate.convert(rate: newRate))")
-        self.audioEngine?.playbackEngine?.currentRate = PlaybackRate.convert(rate: newRate)
-      }
+      ATLog(.debug, "FindawayPlayer: Setting playback rate to \(PlaybackRate.convert(rate: newRate))")
+      FindawayEngineCommands.setRate(PlaybackRate.convert(rate: newRate))
     }
   }
 
   func play() {
-    queue.async { [weak self] in
-      guard let self = self, readyForPlayback else {
-        ATLog(.error, "Player is not ready")
-        return
-      }
-      performPlay()
+    guard readyForPlayback else {
+      ATLog(.error, "Player is not ready")
+      return
     }
+    performPlay()
   }
 
   func pause() {
-    queue.async { [weak self] in
-      self?.performPause()
-    }
+    performPause()
   }
 
   func unload() {
     isPlaybackDesired = false
     stopPositionTimer()
-    audioEngine?.playbackEngine?.unload()
+    FindawayEngineCommands.unload()
     isLoaded = false
     playbackStatePublisher.send(.unloaded)
   }
@@ -396,31 +470,27 @@ class FindawayPlayer: NSObject, Player {
   }
 
   private func performSkipPlayhead(_ timeInterval: TimeInterval, completion: @escaping (TrackPosition?) -> Void) {
-    queue.async { [weak self] in
-      guard let self = self, let currentTrackPosition = currentTrackPosition else {
-        ATLog(.error, "Invalid chapter information required for skip.")
-        DispatchQueue.main.async {
-          completion(nil)
-        }
-        return
-      }
+    guard let currentTrackPosition else {
+      ATLog(.error, "Invalid chapter information required for skip.")
+      completion(nil)
+      return
+    }
 
-      let totalDuration = currentTrackPosition.track.duration
-      let newTimestamp = currentTrackPosition.timestamp + timeInterval
-      if newTimestamp >= 0 && newTimestamp <= totalDuration {
-        let newPosition = TrackPosition(
-          track: currentTrackPosition.track,
-          timestamp: newTimestamp,
-          tracks: currentTrackPosition.tracks
-        )
-        moveToTrackPosition(newPosition, completion: completion)
-      } else {
-        handleBeyondCurrentTrackSkip(
-          newTimestamp: newTimestamp,
-          currentTrackPosition: currentTrackPosition,
-          completion: completion
-        )
-      }
+    let totalDuration = currentTrackPosition.track.duration
+    let newTimestamp = currentTrackPosition.timestamp + timeInterval
+    if newTimestamp >= 0 && newTimestamp <= totalDuration {
+      let newPosition = TrackPosition(
+        track: currentTrackPosition.track,
+        timestamp: newTimestamp,
+        tracks: currentTrackPosition.tracks
+      )
+      moveToTrackPosition(newPosition, completion: completion)
+    } else {
+      handleBeyondCurrentTrackSkip(
+        newTimestamp: newTimestamp,
+        currentTrackPosition: currentTrackPosition,
+        completion: completion
+      )
     }
   }
 
@@ -542,36 +612,24 @@ class FindawayPlayer: NSObject, Player {
 
   private func performPlayAt(_ position: TrackPosition, completion: @escaping (Error?) -> Void) {
     ATLog(.debug, "🎮 [FindawayPlayer] play(at:) CALLED - track=\(position.track.key), timestamp=\(position.timestamp)")
-    queue.async { [weak self] in
-      guard let self = self else {
-        ATLog(.error, "🎮 [FindawayPlayer] play(at:) - self deallocated")
-        completion(NSError(
-          domain: "PlayerError",
-          code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "Player deallocated."]
-        ))
-        return
-      }
+    ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Creating manipulation, readyForPlayback=\(readyForPlayback)")
 
-      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Creating manipulation, readyForPlayback=\(readyForPlayback)")
+    // Set queued state directly to prevent race conditions with initial position
+    isPlaybackDesired = true
+    let manipulation = createManipulation(position)
+    pendingStartPosition = position
+    queuedPlayerState = .play(manipulation)
 
-      // Set queued state directly to prevent race conditions with initial position
-      isPlaybackDesired = true
-      let manipulation = createManipulation(position)
-      pendingStartPosition = position
-      queuedPlayerState = .play(manipulation)
+    ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Set queuedPlayerState to .play, will call playWithCurrentState")
 
-      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Set queuedPlayerState to .play, will call playWithCurrentState")
-
-      if readyForPlayback {
-        playWithCurrentState()
-      } else {
-        ATLog(.debug, "FindawayPlayer: play(at:) - NOT ready for playback, state queued")
-      }
-
-      completion(nil)
-      ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Completion called")
+    if readyForPlayback {
+      playWithCurrentState()
+    } else {
+      ATLog(.debug, "FindawayPlayer: play(at:) - NOT ready for playback, state queued")
     }
+
+    completion(nil)
+    ATLog(.debug, "🎮 [FindawayPlayer] play(at:) - Completion called")
   }
 
   func move(to value: Double) async -> TrackPosition? {
@@ -612,33 +670,45 @@ class FindawayPlayer: NSObject, Player {
   private func moveToTrackPosition(_ position: TrackPosition, completion: @escaping (TrackPosition?) -> Void) {
     completion(position)
 
-    queue.async { [weak self] in
-      guard let self else {
-        return
+    let manipulation = createManipulation(position)
+    pendingStartPosition = position
+
+    // Key the post-reload pause decision off the user's play INTENT, not the
+    // SDK's transient `isPlaying` (false during the buffer window after the
+    // prior seek). Otherwise a reload while the user is actively listening
+    // ends paused, forcing them to tap play again.
+    let pauseAfterReload = Self.shouldPauseAfterReload(playbackDesired: isPlaybackDesired)
+    queuedPlayerState = .play(manipulation)
+
+    // The seek state machine — `queuedPlayerState`, `pendingStartPosition`,
+    // `shouldPauseWhenPlaybackResumes`, `isPlaybackDesired` — is mutated from a
+    // single isolation domain, the main actor, serialised with the SDK
+    // notification handlers that are now delivered there too. The delay is the
+    // debounce and nothing else; it is the one part of the old queue hop that
+    // was load-bearing.
+    mainActorAfter(debounceBufferTime) { [weak self] in
+      guard let self else { return }
+
+      if pauseAfterReload {
+        self.shouldPauseWhenPlaybackResumes = true
       }
-      let manipulation = createManipulation(position)
-      pendingStartPosition = position
 
-      // Key the post-reload pause decision off the user's play INTENT, not the
-      // SDK's transient `isPlaying` (false during the buffer window after the
-      // prior seek). Otherwise a reload while the user is actively listening
-      // ends paused, forcing them to tap play again.
-      let pauseAfterReload = Self.shouldPauseAfterReload(playbackDesired: self.isPlaybackDesired)
-      self.queuedPlayerState = .play(manipulation)
+      self.playWithCurrentState()
+    }
+  }
 
-      // Stay on the player's serial `queue` (not main) so the seek state machine
-      // — `queuedPlayerState`, `pendingStartPosition`, `shouldPauseWhenPlaybackResumes`,
-      // `isPlaybackDesired` — is mutated from a single thread, serialized with the
-      // SDK notification handlers that also run on `queue`.
-      self.queue.asyncAfter(deadline: .now() + self.debounceBufferTime) { [weak self] in
-        guard let self = self else { return }
-
-        if pauseAfterReload {
-          self.shouldPauseWhenPlaybackResumes = true
-        }
-
-        self.playWithCurrentState()
-      }
+  /// Run `body` on the main actor after `delay` seconds.
+  ///
+  /// `DispatchQueue.main.asyncAfter` takes a `@Sendable` closure, which cannot
+  /// capture this main-actor-isolated player. Delivery is on the main queue,
+  /// which IS the main actor's executor, so asserting that is sound rather than
+  /// merely convenient.
+  private nonisolated func mainActorAfter(
+    _ delay: TimeInterval,
+    _ body: @escaping @MainActor @Sendable () -> Void
+  ) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+      MainActor.assumeIsolated { body() }
     }
   }
 
@@ -679,7 +749,7 @@ class FindawayPlayer: NSObject, Player {
 
     if isPlaying {
       queuedPlayerState = .paused(position)
-      audioEngine?.playbackEngine?.pause()
+      FindawayEngineCommands.pause()
       if let currentTrackPosition = currentTrackPosition {
         playbackStatePublisher.send(.stopped(currentTrackPosition))
       }
@@ -733,56 +803,6 @@ class FindawayPlayer: NSObject, Player {
       return result
     }
 
-    /// We queue the playhead move in order to rate limit the expensive
-    /// move operation.
-    func enqueueEngineManipulation() {
-      // Cancel any previously scheduled manipulation to prevent race conditions
-      queuedManipulationWorkItem?.cancel()
-
-      // Increment sequence number to invalidate any in-flight operations
-      manipulationSequenceNumber += 1
-      let currentSequence = manipulationSequenceNumber
-
-      // Helper to reschedule without incrementing sequence number
-      func rescheduleWithSameSequence() {
-        let workItem = DispatchWorkItem { [weak self] in
-          guard let self = self else { return }
-
-          // Check if this operation is still valid (not superseded by a newer one)
-          guard currentSequence == self.manipulationSequenceNumber else {
-            return // This operation has been superseded, skip it
-          }
-
-          guard let manipulationClosure = self.queuedEngineManipulation else {
-            return
-          }
-
-          if Date() < self.willBeReadyToPerformPlayheadManipulation {
-            // Still too soon, reschedule with same sequence number
-            rescheduleWithSameSequence()
-          } else {
-            // Execute the manipulation
-            manipulationClosure()
-            self.queuedEngineManipulation = nil
-            self.queuedPlayerState = .none
-            self.queuedManipulationWorkItem = nil
-          }
-        }
-
-        self.queuedManipulationWorkItem = workItem
-        self.queue.asyncAfter(deadline: self.dispatchDeadline(), execute: workItem)
-      }
-
-      // Start the scheduling chain
-      rescheduleWithSameSequence()
-    }
-
-    func setAndQueueEngineManipulation(manipulationClosure: @escaping EngineManipulation) {
-      willBeReadyToPerformPlayheadManipulation = Date().addingTimeInterval(debounceBufferTime)
-      queuedEngineManipulation = manipulationClosure
-      enqueueEngineManipulation()
-    }
-
     switch queuedPlayerState {
     case .none:
       ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .none - no action")
@@ -798,7 +818,7 @@ class FindawayPlayer: NSObject, Player {
     case .paused:
       ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .paused (loaded) - will resume")
       setAndQueueEngineManipulation {
-        self.audioEngine?.playbackEngine?.resume()
+        FindawayEngineCommands.resume()
       }
     case let .play((previous, position)) where isSameTrackSeek(previous, position):
       // Same track seek - use cheap offset update to avoid unload/reload
@@ -808,8 +828,8 @@ class FindawayPlayer: NSObject, Player {
       ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState: case .play (same track seek) - setting currentOffset to \(safeTimestamp)")
 
       // Update engine offset directly (cheap) and preserve play/pause state
-      if let engine = audioEngine?.playbackEngine {
-        engine.currentOffset = UInt(safeTimestamp)
+      if audioEngine?.playbackEngine != nil {
+        FindawayEngineCommands.setOffset(UInt(safeTimestamp))
       }
 
       // Remember where we intended to start for the next .started event
@@ -827,7 +847,7 @@ class FindawayPlayer: NSObject, Player {
       }
 
       // Clear slider seek preview shortly after applying offset so UI resumes normal updates
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+      mainActorAfter(0.2) { [weak self] in
         self?.sliderSeekPosition = nil
       }
 
@@ -848,13 +868,72 @@ class FindawayPlayer: NSObject, Player {
     ATLog(.debug, "🎮 [FindawayPlayer] playWithCurrentState COMPLETED")
   }
 
+  /// We queue the playhead move in order to rate limit the expensive
+  /// move operation.
+  ///
+  /// Lifted out of `playWithCurrentState` as a pair of methods rather than the
+  /// nested functions they were: the reschedule chain hands itself to a
+  /// `DispatchWorkItem`, whose body is `@Sendable`, and a local function cannot
+  /// be captured there without becoming "concurrently-executed local function
+  /// must be marked '@Sendable'". As methods on a main-actor type they are
+  /// already isolated, and the recursion needs no capture at all. Behaviour is
+  /// unchanged: same cancel, same sequence number, same deadline.
+  private func setAndQueueEngineManipulation(manipulationClosure: @escaping EngineManipulation) {
+    willBeReadyToPerformPlayheadManipulation = Date().addingTimeInterval(debounceBufferTime)
+    queuedEngineManipulation = manipulationClosure
+    enqueueEngineManipulation()
+  }
+
+  private func enqueueEngineManipulation() {
+    // Cancel any previously scheduled manipulation to prevent race conditions
+    queuedManipulationWorkItem?.cancel()
+
+    // Increment sequence number to invalidate any in-flight operations
+    manipulationSequenceNumber += 1
+    scheduleManipulation(sequence: manipulationSequenceNumber)
+  }
+
+  /// Reschedule without incrementing the sequence number.
+  private func scheduleManipulation(sequence currentSequence: Int) {
+    let workItem = DispatchWorkItem { [weak self] in
+      // The item is scheduled on the main queue, which IS the main actor's
+      // executor, so the state it reads is in its own isolation domain.
+      MainActor.assumeIsolated {
+        guard let self else { return }
+
+        // Check if this operation is still valid (not superseded by a newer one)
+        guard currentSequence == self.manipulationSequenceNumber else {
+          return // This operation has been superseded, skip it
+        }
+
+        guard let manipulationClosure = self.queuedEngineManipulation else {
+          return
+        }
+
+        if Date() < self.willBeReadyToPerformPlayheadManipulation {
+          // Still too soon, reschedule with same sequence number
+          self.scheduleManipulation(sequence: currentSequence)
+        } else {
+          // Execute the manipulation
+          manipulationClosure()
+          self.queuedEngineManipulation = nil
+          self.queuedPlayerState = .none
+          self.queuedManipulationWorkItem = nil
+        }
+      }
+    }
+
+    queuedManipulationWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: dispatchDeadline(), execute: workItem)
+  }
+
   private func loadAndRequestPlayback(_ position: TrackPosition) {
     guard let track = position.track as? FindawayTrack else {
       ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - track is not FindawayTrack")
       return
     }
 
-    guard let playbackEngine = audioEngine?.playbackEngine else {
+    guard audioEngine?.playbackEngine != nil else {
       ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - playback engine is nil")
       return
     }
@@ -870,8 +949,8 @@ class FindawayPlayer: NSObject, Player {
     ATLog(.debug, "🎮 [FindawayPlayer] 🚨 loadAndRequestPlayback - CALLING SDK play() - audiobookID=\(audiobookID), part=\(track.partNumber ?? 0), chapter=\(track.chapterNumber ?? 0), offset=\(UInt(position.timestamp))")
     ATLog(.debug, "🎮 [FindawayPlayer] 🚨 This will trigger FULL UNLOAD/RELOAD cycle in Findaway SDK")
 
-    playbackEngine.play(
-      forAudiobookID: audiobookID,
+    FindawayEngineCommands.load(
+      audiobookID: audiobookID,
       partNumber: UInt(track.partNumber ?? 0),
       chapterNumber: UInt(track.chapterNumber ?? 0),
       offset: UInt(position.timestamp),
@@ -912,14 +991,8 @@ class FindawayPlayer: NSObject, Player {
 
 extension FindawayPlayer: FindawayDatabaseVerificationDelegate {
   func findawayDatabaseVerificationDidUpdate(_ findawayDatabaseVerification: FindawayDatabaseVerification) {
-    func handleLifecycleManagerUpdate(hasBeenVerified: Bool) {
-      readyForPlayback = hasBeenVerified
-      playWithCurrentState()
-    }
-
-    queue.async {
-      handleLifecycleManagerUpdate(hasBeenVerified: findawayDatabaseVerification.verified)
-    }
+    readyForPlayback = findawayDatabaseVerification.verified
+    playWithCurrentState()
   }
 }
 
@@ -961,73 +1034,60 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     guard let chapterAtEnd = self.chapter(for: chapter) else {
       return
     }
-    DispatchQueue.main.async { [weak self] in
-      self?.playbackStatePublisher.send(.completed(chapterAtEnd))
-    }
+    playbackStatePublisher.send(.completed(chapterAtEnd))
   }
 
   func audioEnginePlaybackStarted(_: FindawayPlaybackNotificationHandler, for findawayChapter: FindawayChapterRef) {
-    queue.async { [weak self] in
-      guard let self = self else {
-        return
-      }
-
-      if let currentChapter = chapter(for: findawayChapter) {
-        if shouldPauseWhenPlaybackResumes {
-          performPause()
-        } else {
-          let startPosition: TrackPosition = {
-            if let target = self.pendingStartPosition,
-               target.track.key == currentChapter.position.track.key {
-              return target
-            }
-            // Do NOT fall back to the chapter start (timestamp 0). On rapid
-            // same-track skips the engine buffers→resumes repeatedly, firing
-            // this notification after `pendingStartPosition` was already
-            // consumed; emitting position 0 snaps the UI back to the start of
-            // the book/chapter before the progress timer corrects it. Reflect
-            // the engine's actual offset instead.
-            return TrackPosition(
-              track: currentChapter.position.track,
-              timestamp: self.currentOffset,
-              tracks: currentChapter.position.tracks
-            )
-          }()
-
-          self.pendingStartPosition = nil
-
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.sliderSeekPosition = nil
-            if let self = self {
-              self.playbackStatePublisher.send(.started(startPosition))
-            }
+    if let currentChapter = chapter(for: findawayChapter) {
+      if shouldPauseWhenPlaybackResumes {
+        performPause()
+      } else {
+        let startPosition: TrackPosition = {
+          if let target = pendingStartPosition,
+             target.track.key == currentChapter.position.track.key {
+            return target
           }
+          // Do NOT fall back to the chapter start (timestamp 0). On rapid
+          // same-track skips the engine buffers→resumes repeatedly, firing
+          // this notification after `pendingStartPosition` was already
+          // consumed; emitting position 0 snaps the UI back to the start of
+          // the book/chapter before the progress timer corrects it. Reflect
+          // the engine's actual offset instead.
+          return TrackPosition(
+            track: currentChapter.position.track,
+            timestamp: currentOffset,
+            tracks: currentChapter.position.tracks
+          )
+        }()
+
+        pendingStartPosition = nil
+
+        mainActorAfter(0.05) { [weak self] in
+          guard let self else { return }
+          self.sliderSeekPosition = nil
+          self.playbackStatePublisher.send(.started(startPosition))
         }
       }
-      shouldPauseWhenPlaybackResumes = false
     }
+    shouldPauseWhenPlaybackResumes = false
   }
 
   func audioEnginePlaybackPaused(_: FindawayPlaybackNotificationHandler, for findawayChapter: FindawayChapterRef) {
     sliderSeekPosition = nil
 
     if let currentTrackPosition = currentTrackPosition ?? chapter(for: findawayChapter)?.position {
-      DispatchQueue.main.async { [weak self] () in
-        self?.playbackStatePublisher.send(.stopped(currentTrackPosition))
-      }
+      playbackStatePublisher.send(.stopped(currentTrackPosition))
 
-      queue.async(flags: .barrier) {
-        // A genuine SDK pause (user pause already cleared intent via
-        // performPause; reload-pauses too) means audio is stopped — keep
-        // play-intent consistent so a later cross-track skip does not resume
-        // playback the user did not ask for (e.g. after an audio interruption).
-        self.isPlaybackDesired = false
-        switch self.queuedPlayerState {
-        case .none:
-          self.queuedPlayerState = .paused(currentTrackPosition)
-        default:
-          break
-        }
+      // A genuine SDK pause (user pause already cleared intent via
+      // performPause; reload-pauses too) means audio is stopped — keep
+      // play-intent consistent so a later cross-track skip does not resume
+      // playback the user did not ask for (e.g. after an audio interruption).
+      isPlaybackDesired = false
+      switch queuedPlayerState {
+      case .none:
+        queuedPlayerState = .paused(currentTrackPosition)
+      default:
+        break
       }
     }
   }
@@ -1052,20 +1112,16 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
     guard let locationOfError = self.chapter(for: chapter)?.position else {
       ATLog(.error, "  Unable to determine chapter position for error")
       // Still send failure event even if we can't determine position
-      DispatchQueue.main.async {
-        let errorToSend = error ?? NSError(
-          domain: "com.palace.findaway",
-          code: -1,
-          userInfo: [NSLocalizedDescriptionKey: "Findaway playback failed for unknown chapter"]
-        )
-        self.playbackStatePublisher.send(.failed(nil, errorToSend))
-      }
+      let errorToSend = error ?? NSError(
+        domain: "com.palace.findaway",
+        code: -1,
+        userInfo: [NSLocalizedDescriptionKey: "Findaway playback failed for unknown chapter"]
+      )
+      playbackStatePublisher.send(.failed(nil, errorToSend))
       return
     }
 
-    DispatchQueue.main.async {
-      self.playbackStatePublisher.send(.failed(locationOfError, error))
-    }
+    playbackStatePublisher.send(.failed(locationOfError, error))
   }
 
   func audioEngineAudiobookCompleted(_: FindawayPlaybackNotificationHandler, for audiobookID: String) {
@@ -1083,22 +1139,15 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       )
 
       playbackStatePublisher.send(.bookCompleted)
+      playbackStatePublisher.send(.started(beginningPosition))
 
-      DispatchQueue.main.async { [weak self] in
-        self?.playbackStatePublisher.send(.started(beginningPosition))
-      }
-
-      queue.async { [weak self] in
-        guard let self else { return }
-
-        // Book finished: the user is no longer actively listening. Clear intent
-        // so a later same-track scrub of the rewound-to-start book does not
-        // resume audio against this pause.
-        isPlaybackDesired = false
-        shouldPauseWhenPlaybackResumes = true
-        queuedPlayerState = .paused(beginningPosition)
-        loadAndRequestPlayback(beginningPosition)
-      }
+      // Book finished: the user is no longer actively listening. Clear intent
+      // so a later same-track scrub of the rewound-to-start book does not
+      // resume audio against this pause.
+      isPlaybackDesired = false
+      shouldPauseWhenPlaybackResumes = true
+      queuedPlayerState = .paused(beginningPosition)
+      loadAndRequestPlayback(beginningPosition)
     } else {
       ATLog(
         .error,

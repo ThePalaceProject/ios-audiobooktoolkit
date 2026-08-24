@@ -281,6 +281,111 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     XCTAssertFalse(player.isPlaybackDesired, "unload() must clear play-intent")
   }
 
+  // MARK: - Isolation contracts (PP-4990)
+  //
+  // FindawayPlayer conforms to `Player`, which is `@MainActor`, so the player
+  // has always been main-actor isolated — while its state machine ran on a
+  // private serial queue. These pin the contracts that removing that queue
+  // established, and the one the value object was supposed to have all along.
+
+  /// `FindawayChapterRef` exists so the SDK's `FAEChapterDescription` never
+  /// crosses an isolation boundary: the notification is decoded on AudioEngine's
+  /// thread and only these two numbers travel. That requires the type to be
+  /// UNISOLATED — a `@MainActor` initialiser cannot be called from the SDK's
+  /// thread, which is the only place this is ever built.
+  ///
+  /// Honest about what this proves: it is a COMPILE-TIME contract. A stray
+  /// `@MainActor` on the struct (which is exactly what a doc comment between the
+  /// attribute and the delegate protocol once produced) is a warning today and
+  /// an error under the Swift 6 language mode, so this test would stop building
+  /// rather than stop passing. The assertion on the fields is what keeps it from
+  /// being a bare construction test.
+  func testChapterRef_isConstructibleOffTheMainActor() async {
+    let ref = await Task.detached {
+      FindawayChapterRef(partNumber: 2, chapterNumber: 7)
+    }.value
+
+    XCTAssertEqual(ref.partNumber, 2, "Decoded part number must survive the hop")
+    XCTAssertEqual(ref.chapterNumber, 7, "Decoded chapter number must survive the hop")
+  }
+
+  /// The startup race the notify-order change closes. A player reads `verified`
+  /// and registers as two separate statements (`FindawayPlayer.init`), so
+  /// verification landing between them used to take its delegate snapshot before
+  /// the registration existed — the player was never told, and no second event
+  /// was coming. Snapshotting on the far side of the hop instead means a
+  /// delegate that registers before the hop drains still hears about it.
+  ///
+  /// Mutant: moving the `delegates.allObjects` snapshot back into the setter
+  /// (the shape this replaced) makes the delegate miss the update and this fail.
+  func testVerification_notifiesDelegateThatRegisteredBeforeTheHopDrained() async {
+    let verification = FindawayDatabaseVerification()
+    let spy = SpyDatabaseVerificationDelegate()
+
+    // Set first, register second — the order FindawayPlayer.init produces.
+    verification.verified = true
+    verification.registerDelegate(spy)
+
+    await Self.drainMainQueue()
+
+    XCTAssertEqual(spy.updateCount, 1, "A delegate registered before the hop drained must be notified")
+  }
+
+  /// Only a CHANGE notifies. Mutant: dropping the `guard changed` re-notifies
+  /// every delegate on every redundant write, and `playWithCurrentState` runs
+  /// again for no reason on each one.
+  func testVerification_doesNotNotifyWhenValueIsUnchanged() async {
+    let verification = FindawayDatabaseVerification()
+    let spy = SpyDatabaseVerificationDelegate()
+    verification.registerDelegate(spy)
+
+    verification.verified = true
+    await Self.drainMainQueue()
+    XCTAssertEqual(spy.updateCount, 1, "Precondition: the first change notifies")
+
+    verification.verified = true
+    await Self.drainMainQueue()
+
+    XCTAssertEqual(spy.updateCount, 1, "Re-writing the same value must not notify again")
+  }
+
+  /// `pause()` used to hop onto the player's private serial queue, so its effect
+  /// was not visible to the caller on return. It is main-actor now, and callers
+  /// — including `handlePlaybackEnd`, which pauses as part of resolving the end
+  /// of a book — depend on the intent being dropped by the time they continue.
+  ///
+  /// Mutant: dropping `isPlaybackDesired = false` from `performPause`, or
+  /// restoring the async hop, fails this without any waiting.
+  func testPause_dropsPlayIntentSynchronously() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(Self.makeSpy(toc: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    player.currentTrackPositionOverride = TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks)
+    try await player.play(at: TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks))
+    XCTAssertTrue(player.isPlaybackDesired, "Precondition: play(at:) set intent")
+
+    player.pause()
+
+    XCTAssertFalse(player.isPlaybackDesired, "pause() must drop intent by the time it returns")
+  }
+
+  /// `play()` is refused until the AudioEngine database is verified, and it must
+  /// leave no trace when refused — a queued play-intent would resume audio the
+  /// moment verification landed.
+  ///
+  /// Mutant: removing the `readyForPlayback` guard lets `performPlay` set the
+  /// intent, and this fails.
+  func testPlay_whenNotVerified_doesNotRegisterPlayIntent() throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(Self.makeSpy(toc: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    player.currentTrackPositionOverride = TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+
+    player.play()
+
+    XCTAssertFalse(player.isPlaybackDesired, "play() before verification must not register intent")
+  }
+
   // MARK: - Test doubles
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
@@ -291,6 +396,38 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
 
     override var currentTrackPosition: TrackPosition? {
       currentTrackPositionOverride
+    }
+  }
+
+  /// Records delegate callbacks. `@objc` because the protocol is, and the
+  /// hash table that holds it is weak — the caller keeps the strong reference.
+  final class SpyDatabaseVerificationDelegate: NSObject, FindawayDatabaseVerificationDelegate {
+    private(set) var updateCount = 0
+
+    func findawayDatabaseVerificationDidUpdate(_: FindawayDatabaseVerification) {
+      updateCount += 1
+    }
+  }
+
+  /// Build a player against its OWN verification instance rather than the
+  /// process-wide `.shared` one, so these tests neither read nor leave global
+  /// state. `verified` is false on a fresh instance, which is the state the
+  /// "not yet verified" cases need.
+  private static func makeSpy(toc: AudiobookTableOfContents) -> SpyFindawayPlayer? {
+    guard let firstTrack = toc.allTracks.first else { return nil }
+    return SpyFindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: FindawayDatabaseVerification()
+    )
+  }
+
+  /// Let anything already queued on the main queue run. Enqueueing behind the
+  /// pending block and waiting for our own turn is deterministic, where a sleep
+  /// would only be probable.
+  private static func drainMainQueue() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      DispatchQueue.main.async { continuation.resume() }
     }
   }
 

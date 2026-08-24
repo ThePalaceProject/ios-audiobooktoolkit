@@ -14,7 +14,7 @@ import UIKit
 /// actor before notifying, and every conformer (`FindawayPlayer`,
 /// `FindawayDownloadTask`) lives there.
 @MainActor
-@objc protocol FindawayDatabaseVerificationDelegate: class {
+@objc protocol FindawayDatabaseVerificationDelegate: AnyObject {
   func findawayDatabaseVerificationDidUpdate(_ findawayDatabaseVerification: FindawayDatabaseVerification)
 }
 
@@ -54,18 +54,38 @@ import UIKit
       lock.lock()
       let changed = (_verified != newValue)
       _verified = newValue
-      // Snapshot under the lock; notify outside it, so a delegate calling back
-      // into register/removeDelegate cannot deadlock.
-      let targets = delegates.allObjects
       lock.unlock()
 
       guard changed else { return }
+      // Hop first, THEN snapshot. The delegates are main-actor isolated, so the
+      // array of them cannot cross an isolation boundary — capturing it here
+      // was "capture of 'targets' with non-Sendable type
+      // '[any FindawayDatabaseVerificationDelegate]' in an isolated closure",
+      // an error in the Swift 6 language mode. Only `self` crosses now, and
+      // this class is Sendable by the invariant stated above.
+      //
+      // Snapshotting on the far side also closes a startup race the old order
+      // had. A player reads `verified` and registers as two separate steps
+      // (`FindawayPlayer.init`); verification landing between them used to take
+      // its snapshot before the registration and the player was never told,
+      // leaving it stuck not-ready with no second event coming.
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
-          targets.forEach { $0.findawayDatabaseVerificationDidUpdate(self) }
+          self.notifyDelegates()
         }
       }
     }
+  }
+
+  /// Snapshot under the lock, notify outside it, so a delegate calling back
+  /// into register/removeDelegate cannot deadlock.
+  @MainActor
+  private func notifyDelegates() {
+    lock.lock()
+    let targets = delegates.allObjects
+    lock.unlock()
+
+    targets.forEach { $0.findawayDatabaseVerificationDidUpdate(self) }
   }
 
   func registerDelegate(_ delegate: FindawayDatabaseVerificationDelegate) {
