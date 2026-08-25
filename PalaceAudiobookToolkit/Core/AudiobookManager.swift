@@ -915,16 +915,54 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   private func handlePlaybackCompleted(_ chapter: Chapter) {
     waitingForPlayer = false
-    statePublisher.send(.playbackCompleted(chapter.position))
-    
+
+    let positionToSave = Self.positionToSaveOnChapterCompletion(
+      completedChapter: chapter,
+      playerPosition: audiobook.player.currentTrackPosition
+    )
+
+    statePublisher.send(.playbackCompleted(positionToSave))
+
     // Save tracked time when chapter/track completes
     // This is critical for continuous playback - without this call,
     // accumulated time is lost at each track boundary
     playbackTrackerDelegate?.playbackStopped()
-    
-    // Save position when chapter/track completes
-    saveLocation(chapter.position)
-    ATLog(.debug, "🔒 Saved position on playback completed: \(chapter.position.timestamp)")
+
+    saveLocation(positionToSave)
+    ATLog(.debug, "🔒 Saved position on playback completed: \(positionToSave.timestamp)")
+  }
+
+  // MARK: - Pure completion decisions (unit-tested)
+  //
+  // Extracted so what a chapter ending writes to a patron's saved place is
+  // provable without standing up a player or an audio SDK, following the same
+  // pattern as the seek decisions in `FindawayPlayer`.
+
+  /// Where a patron's place should be recorded when a chapter finishes.
+  ///
+  /// This used to be `completedChapter.position` — the START of the chapter
+  /// that just ended, which is a place the patron has already listened all the
+  /// way through. On the Findaway path it is worse than it sounds: that signal
+  /// fires at every chapter, and the chapter it names is resolved from a
+  /// position sitting exactly on a boundary, which the pinned tie-break hands
+  /// to the chapter BEFORE the one that ended. So the saved place moved
+  /// backwards by roughly two chapters, every chapter.
+  ///
+  /// The live player position is the honest answer: by the time a chapter
+  /// completes the patron is at the start of the next one, which is exactly
+  /// where they should resume. It is also correct when the notification arrives
+  /// late — a documented behaviour of the Findaway SDK — because it reports
+  /// where they actually are rather than where a chapter boundary was.
+  ///
+  /// Falls back to the completed chapter's position only when the player can no
+  /// longer say where it is (unloaded, or torn down mid-transition). That is
+  /// the old behaviour, kept for the one case where nothing better exists:
+  /// a stale place is still better than none.
+  static func positionToSaveOnChapterCompletion(
+    completedChapter: Chapter,
+    playerPosition: TrackPosition?
+  ) -> TrackPosition {
+    playerPosition ?? completedChapter.position
   }
 
   private func handlePlayerUnloaded() {
