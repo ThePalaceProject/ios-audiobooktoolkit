@@ -80,18 +80,22 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
 
   // MARK: - skipPlayhead bounds clamping (Findaway-specific)
 
-  /// FindawayPlayer's skipPlayhead clamps forward overflow into the next
-  /// track when one exists. We verify a forward overflow doesn't return nil
-  /// (Findaway's contract: skip-past-end-of-track must wrap or pin).
+  /// FindawayPlayer's skipPlayhead carries forward overflow into the next
+  /// track when one exists (Findaway's contract: skip-past-end-of-track must
+  /// wrap or pin).
   ///
-  /// Mutant: removing the `handleBeyondCurrentTrackSkip` branch would either
-  /// crash or return a junk TrackPosition with timestamp > track.duration.
-  func testSkipPlayhead_forwardPastTrackEnd_returnsNonNil() async throws {
+  /// This asserted only `XCTAssertNotNil` until a mechanically-derived mutant
+  /// showed what that was worth: flipping the in-range test's `<=` to `>=` — so
+  /// an overflowing skip takes the direct path and returns a position PAST the
+  /// end of the current track — left it green, because a junk position is
+  /// non-nil too. Assert where the playhead actually landed.
+  func testSkipPlayhead_forwardPastTrackEnd_carriesOverflowIntoNextTrack() async throws {
     let (toc, _) = try Self.makeFindawayFixture()
     let player = try XCTUnwrap(SpyFindawayPlayer(tableOfContents: toc))
 
     let firstTrack = try XCTUnwrap(toc.allTracks.first)
-    // Start near the end of the track; +60s should overflow.
+    let nextTrack = try XCTUnwrap(toc.tracks.nextTrack(firstTrack), "Fixture needs a second track")
+    // Start 5s from the end of the track; +60s overflows by 55s.
     let nearEnd = firstTrack.duration - 5
     player.currentTrackPositionOverride = TrackPosition(
       track: firstTrack,
@@ -99,10 +103,24 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
       tracks: toc.tracks
     )
 
-    let result = await player.skipPlayhead(60)
+    let skipped = await player.skipPlayhead(60)
+    let result = try XCTUnwrap(skipped)
 
-    XCTAssertNotNil(result, "Skip past track end must resolve to next-track-or-end")
+    XCTAssertEqual(result.track.key, nextTrack.key, "Overflow must land on the NEXT track")
+    XCTAssertEqual(result.timestamp, 55, accuracy: 0.001,
+                   "The overflow past the track end must carry over, not be dropped")
+    XCTAssertLessThanOrEqual(result.timestamp, result.track.duration,
+                             "A resolved position must never sit past its own track's end")
   }
+
+  // Two sibling mutants on that same condition — `<=` to `<`, and `>=` to `>` —
+  // survive and are EQUIVALENT, not gaps. Both differ only exactly on a bound
+  // (`newTimestamp == duration`, `newTimestamp == 0`), and for the whole
+  // in-range domain the `else` arm's final clause builds
+  // `TrackPosition(track: same, timestamp: max(0, newTimestamp))` — the
+  // identical value the direct arm builds. No input distinguishes them, so
+  // there is no test to write; the note is here so the next reader does not
+  // re-derive it from a 40% kill rate.
 
   /// Negative interval past start clamps to 0. Mutant: dropping `max(0, ...)`
   /// in moveToPreviousTrackOrStart would leave a negative timestamp that
@@ -281,6 +299,215 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     XCTAssertFalse(player.isPlaybackDesired, "unload() must clear play-intent")
   }
 
+  // MARK: - Isolation contracts (PP-4990)
+  //
+  // FindawayPlayer conforms to `Player`, which is `@MainActor`, so the player
+  // has always been main-actor isolated — while its state machine ran on a
+  // private serial queue. These pin the contracts that removing that queue
+  // established, and the one the value object was supposed to have all along.
+
+  /// `FindawayChapterRef` exists so the SDK's `FAEChapterDescription` never
+  /// crosses an isolation boundary: the notification is decoded on AudioEngine's
+  /// thread and only these two numbers travel. That requires the type to be
+  /// UNISOLATED — a `@MainActor` initialiser cannot be called from the SDK's
+  /// thread, which is the only place this is ever built.
+  ///
+  /// Honest about what this proves: it is a COMPILE-TIME contract. A stray
+  /// `@MainActor` on the struct (which is exactly what a doc comment between the
+  /// attribute and the delegate protocol once produced) is a warning today and
+  /// an error under the Swift 6 language mode, so this test would stop building
+  /// rather than stop passing. The assertion on the fields is what keeps it from
+  /// being a bare construction test.
+  func testChapterRef_isConstructibleOffTheMainActor() async {
+    let ref = await Task.detached {
+      FindawayChapterRef(partNumber: 2, chapterNumber: 7)
+    }.value
+
+    XCTAssertEqual(ref.partNumber, 2, "Decoded part number must survive the hop")
+    XCTAssertEqual(ref.chapterNumber, 7, "Decoded chapter number must survive the hop")
+  }
+
+  /// The startup race the notify-order change closes. A player reads `verified`
+  /// and registers as two separate statements (`FindawayPlayer.init`), so
+  /// verification landing between them used to take its delegate snapshot before
+  /// the registration existed — the player was never told, and no second event
+  /// was coming. Snapshotting on the far side of the hop instead means a
+  /// delegate that registers before the hop drains still hears about it.
+  ///
+  /// Mutant: moving the `delegates.allObjects` snapshot back into the setter
+  /// (the shape this replaced) makes the delegate miss the update and this fail.
+  func testVerification_notifiesDelegateThatRegisteredBeforeTheHopDrained() async {
+    let verification = FindawayDatabaseVerification()
+    let spy = SpyDatabaseVerificationDelegate()
+
+    // Set first, register second — the order FindawayPlayer.init produces.
+    verification.verified = true
+    verification.registerDelegate(spy)
+
+    await Self.drainMainQueue()
+
+    XCTAssertEqual(spy.updateCount, 1, "A delegate registered before the hop drained must be notified")
+  }
+
+  /// Only a CHANGE notifies. Mutant: dropping the `guard changed` re-notifies
+  /// every delegate on every redundant write, and `playWithCurrentState` runs
+  /// again for no reason on each one.
+  func testVerification_doesNotNotifyWhenValueIsUnchanged() async {
+    let verification = FindawayDatabaseVerification()
+    let spy = SpyDatabaseVerificationDelegate()
+    verification.registerDelegate(spy)
+
+    verification.verified = true
+    await Self.drainMainQueue()
+    XCTAssertEqual(spy.updateCount, 1, "Precondition: the first change notifies")
+
+    verification.verified = true
+    await Self.drainMainQueue()
+
+    XCTAssertEqual(spy.updateCount, 1, "Re-writing the same value must not notify again")
+  }
+
+  /// `pause()` used to hop onto the player's private serial queue, so its effect
+  /// was not visible to the caller on return. It is main-actor now, and callers
+  /// — including `handlePlaybackEnd`, which pauses as part of resolving the end
+  /// of a book — depend on the intent being dropped by the time they continue.
+  ///
+  /// Mutant: dropping `isPlaybackDesired = false` from `performPause`, or
+  /// restoring the async hop, fails this without any waiting.
+  func testPause_dropsPlayIntentSynchronously() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(Self.makeSpy(toc: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    player.currentTrackPositionOverride = TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks)
+    try await player.play(at: TrackPosition(track: firstTrack, timestamp: 10, tracks: toc.tracks))
+    XCTAssertTrue(player.isPlaybackDesired, "Precondition: play(at:) set intent")
+
+    player.pause()
+
+    XCTAssertFalse(player.isPlaybackDesired, "pause() must drop intent by the time it returns")
+  }
+
+  /// `play()` is refused until the AudioEngine database is verified, and it must
+  /// leave no trace when refused — a queued play-intent would resume audio the
+  /// moment verification landed.
+  ///
+  /// Mutant: removing the `readyForPlayback` guard lets `performPlay` set the
+  /// intent, and this fails.
+  func testPlay_whenNotVerified_doesNotRegisterPlayIntent() throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let player = try XCTUnwrap(Self.makeSpy(toc: toc))
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    player.currentTrackPositionOverride = TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+
+    player.play()
+
+    XCTAssertFalse(player.isPlaybackDesired, "play() before verification must not register intent")
+  }
+
+  /// The debounced manipulation scheduler, which this change moved off the
+  /// player's private serial queue and onto the main queue, and out of a pair of
+  /// nested functions into methods (a local function cannot be captured by a
+  /// `DispatchWorkItem`'s `@Sendable` body).
+  ///
+  /// Observable without the SDK: `currentTrackPosition` reports the QUEUED
+  /// playhead while a manipulation is pending, and the scheduler sets
+  /// `queuedPlayerState` back to `.none` when it finally runs — at which point,
+  /// with no engine to fall back to, the position reads nil. So "the queued
+  /// position clears" is the scheduler firing.
+  ///
+  /// Mutants this kills: inverting the supersede guard
+  /// (`currentSequence == manipulationSequenceNumber`) makes every work item
+  /// return early, and flipping the debounce comparison (`Date() <`) makes it
+  /// reschedule forever. Both leave the queued position pinned and fail here.
+  ///
+  /// Waits on the CONDITION with a generous ceiling rather than sleeping for the
+  /// debounce, so it asserts a property of the code and not the speed of the
+  /// machine it runs on.
+  func testQueuedManipulation_runsAfterTheDebounceAndClearsTheQueuedState() async throws {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let verification = FindawayDatabaseVerification()
+    verification.verified = true
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: verification
+    )
+
+    let target = TrackPosition(track: firstTrack, timestamp: 42, tracks: toc.tracks)
+    try await player.play(at: target)
+
+    XCTAssertEqual(player.currentTrackPosition?.timestamp, 42,
+                   "Precondition: the queued playhead is reported while the manipulation is pending")
+
+    let cleared = await Self.eventually { player.currentTrackPosition == nil }
+
+    XCTAssertTrue(cleared, "The debounced manipulation must run and clear the queued state")
+  }
+
+  /// The path PP-4990 exists for, driven end to end: a decoded
+  /// `FindawayChapterRef` arrives where the SDK notification used to hand over
+  /// its own `FAEChapterDescription`, and the player resolves it to a real
+  /// chapter and announces the position it was actually asked to start at.
+  ///
+  /// Uses the Findaway-shaped fixture, not the open-access one the older tests
+  /// share: resolution goes through `tracks.track(forPart:sequence:)`, so a
+  /// manifest without `findaway:part` / `findaway:sequence` resolves to nil and
+  /// the whole body is skipped — which is exactly why this line sat uncovered.
+  ///
+  /// Mutant: inverting the `target.track.key == currentChapter.position.track.key`
+  /// comparison drops the pending position and falls back to the engine's
+  /// offset, which is 0 with no engine — the "snaps back to the start of the
+  /// book" regression the fallback comment warns about. Asserting the timestamp,
+  /// not just that something was announced, is what catches it.
+  ///
+  /// Deliberately the FIRST chapter. `chapter(for:)` resolves at `timestamp: 0`
+  /// with `preferChapterEndingHere: true`, the pinned pre-PP-4948 tie-break, and
+  /// for any later chapter that boundary belongs to the chapter BEFORE it — so
+  /// the track keys do not match and the pending position is discarded. Chapter
+  /// zero has no predecessor to hand the boundary to, which is the one case
+  /// where the pinned tie-break and the honest answer agree. That mismatch for
+  /// every OTHER chapter is real, pre-existing, and PP-4951's to resolve; this
+  /// test asserts the behaviour we believe in rather than pinning the debt.
+  func testPlaybackStarted_resolvesTheChapterRefAndAnnouncesThePendingPosition() async throws {
+    let toc = try Self.makeFindawayTOC()
+    let track = try XCTUnwrap(toc.tracks.track(forPart: 0, sequence: 0),
+                              "Fixture must carry findaway part/sequence numbering")
+    // Verification left false on purpose: `play(at:)` still records the pending
+    // start position, and nothing schedules an engine manipulation.
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: track, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: FindawayDatabaseVerification()
+    )
+
+    var announced: [PlaybackState] = []
+    let subscription = player.playbackStatePublisher.sink { announced.append($0) }
+    defer { subscription.cancel() }
+
+    let target = TrackPosition(track: track, timestamp: 17, tracks: toc.tracks)
+    try await player.play(at: target)
+
+    player.audioEnginePlaybackStarted(
+      DefaultFindawayPlaybackNotificationHandler(),
+      for: FindawayChapterRef(partNumber: 0, chapterNumber: 0)
+    )
+
+    let started = await Self.eventually {
+      announced.contains { if case .started = $0 { return true } else { return false } }
+    }
+    XCTAssertTrue(started, "A resolved chapter notification must announce playback started")
+
+    guard case let .started(position)? = announced.last(where: {
+      if case .started = $0 { return true } else { return false }
+    }) else {
+      return XCTFail("Expected a .started event")
+    }
+    XCTAssertEqual(position.track.key, track.key, "Announced position must be on the resolved chapter's track")
+    XCTAssertEqual(position.timestamp, 17, accuracy: 0.001,
+                   "Announced position must be the pending start position, not the engine's offset")
+  }
+
   // MARK: - Test doubles
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
@@ -291,6 +518,67 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
 
     override var currentTrackPosition: TrackPosition? {
       currentTrackPositionOverride
+    }
+  }
+
+  /// Records delegate callbacks. `@objc` because the protocol is, and the
+  /// hash table that holds it is weak — the caller keeps the strong reference.
+  final class SpyDatabaseVerificationDelegate: NSObject, FindawayDatabaseVerificationDelegate {
+    private(set) var updateCount = 0
+
+    func findawayDatabaseVerificationDidUpdate(_: FindawayDatabaseVerification) {
+      updateCount += 1
+    }
+  }
+
+  /// Build a player against its OWN verification instance rather than the
+  /// process-wide `.shared` one, so these tests neither read nor leave global
+  /// state. `verified` is false on a fresh instance, which is the state the
+  /// "not yet verified" cases need.
+  private static func makeSpy(toc: AudiobookTableOfContents) -> SpyFindawayPlayer? {
+    guard let firstTrack = toc.allTracks.first else { return nil }
+    return SpyFindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: FindawayDatabaseVerification()
+    )
+  }
+
+  /// A genuinely Findaway-shaped table of contents: `secret_lives_manifest`
+  /// carries `findaway:part` / `findaway:sequence` on all ten entries, which is
+  /// what `tracks.track(forPart:sequence:)` resolves a chapter notification by.
+  private static func makeFindawayTOC() throws -> AudiobookTableOfContents {
+    let manifest = try Manifest.from(
+      jsonFileName: "secret_lives_manifest",
+      bundle: Bundle(for: FindawayPlayerAsyncContractTests.self)
+    )
+    let tracks = Tracks(manifest: manifest, audiobookID: "findaway-notification-test", token: nil)
+    return AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+  }
+
+  /// Poll `condition` on the main actor until it holds or the ceiling expires.
+  /// The ceiling is far above the 0.5s debounce on purpose: the assertion is
+  /// "this eventually happens", which is a property of the scheduler, where a
+  /// fixed sleep would be a measurement of the host.
+  private static func eventually(
+    within ceiling: TimeInterval = 5.0,
+    _ condition: @MainActor () -> Bool
+  ) async -> Bool {
+    let deadline = Date().addingTimeInterval(ceiling)
+    while Date() < deadline {
+      if condition() { return true }
+      await drainMainQueue()
+      try? await Task.sleep(nanoseconds: 20_000_000)
+    }
+    return condition()
+  }
+
+  /// Let anything already queued on the main queue run. Enqueueing behind the
+  /// pending block and waiting for our own turn is deterministic, where a sleep
+  /// would only be probable.
+  private static func drainMainQueue() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      DispatchQueue.main.async { continuation.resume() }
     }
   }
 

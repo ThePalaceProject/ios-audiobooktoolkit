@@ -7,14 +7,10 @@
 //
 
 import AudioEngine
-import PalaceAudiobookToolkit
 import UIKit
 
-// MARK: - FindawayPlaybackNotificationHandlerDelegate
+// MARK: - FindawayChapterRef
 
-/// Main-actor isolated: every implementation drives playback state, and the
-/// handler now guarantees delivery on the main queue.
-@MainActor
 /// The part of an AudioEngine chapter notification we actually use.
 ///
 /// `FAEChapterDescription` is an SDK type with no Sendable guarantee, and it
@@ -26,6 +22,15 @@ import UIKit
 /// Every consumer only ever reads these two numbers (a track lookup and one log
 /// line), so the notification is decoded on the SDK's thread and this crosses
 /// instead.
+///
+/// This type must stay UNISOLATED, and that is the whole point of it: it is
+/// built on AudioEngine's thread, which is the one place a main-actor
+/// initialiser cannot be called. A doc comment once separated the delegate
+/// protocol's `@MainActor` from the protocol, so the attribute landed here and
+/// silently made the value object main-actor — "call to main actor-isolated
+/// initializer 'init(partNumber:chapterNumber:)' in a synchronous nonisolated
+/// context". A warning today; in the Swift 6 language mode it is the error that
+/// stops the decode from compiling at all.
 public struct FindawayChapterRef: Sendable, Equatable {
   public let partNumber: Int
   public let chapterNumber: Int
@@ -36,8 +41,12 @@ public struct FindawayChapterRef: Sendable, Equatable {
   }
 }
 
+// MARK: - FindawayPlaybackNotificationHandlerDelegate
+
+/// Main-actor isolated: every implementation drives playback state, and the
+/// handler now guarantees delivery on the main queue.
 @MainActor
-protocol FindawayPlaybackNotificationHandlerDelegate: class {
+protocol FindawayPlaybackNotificationHandlerDelegate: AnyObject {
   func audioEnginePlaybackStarted(
     _ notificationHandler: FindawayPlaybackNotificationHandler,
     for chapter: FindawayChapterRef
@@ -141,7 +150,7 @@ class DefaultFindawayPlaybackNotificationHandler: NSObject, FindawayPlaybackNoti
   /// `queue: .main` guarantees the block runs on the main thread.
   private func observe(
     _ name: Notification.Name,
-    _ body: @escaping @MainActor (FindawayChapterRef, NSError?) -> Void
+    _ body: @escaping @MainActor @Sendable (FindawayChapterRef, NSError?) -> Void
   ) {
     let token = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { notification in
       // Decode OUTSIDE the isolated closure. `Notification` is not Sendable, so
