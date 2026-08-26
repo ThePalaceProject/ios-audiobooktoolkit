@@ -137,6 +137,39 @@ final class ChapterCompletionSaveTests: XCTestCase {
                       "The old answer and the honest answer are on different chapters entirely")
   }
 
+  // MARK: - End of book, pinned as a contract for the app side
+  //
+  // Raised in review by another session working the ios-core half, and it was a
+  // real gap: this change was reasoned through for a MID-BOOK boundary, where
+  // the patron is at the start of the next chapter and the live position is
+  // plainly right. End of book was not thought through, and the value there
+  // changes too — it used to be the start of the final chapter, and is now
+  // wherever playback actually finished.
+  //
+  // That reads as more truthful: somebody who finished a book is at the end of
+  // it, not at the start of its last chapter. But what the APP should do with a
+  // position sitting at the final track's duration — resume there, treat the
+  // book as finished, or replay the last chapter — is an app-side decision and
+  // is not settled here. This pins what the toolkit emits so that decision has a
+  // fixed contract to be written against rather than a moving one.
+
+  func testEndOfBook_savesWherePlaybackFinished_notTheLastChaptersStart() throws {
+    let toc = try Self.makeTOC()
+    let lastChapter = try XCTUnwrap(toc.toc.last)
+    let lastTrack = try XCTUnwrap(toc.allTracks.last)
+    let endOfBook = TrackPosition(track: lastTrack, timestamp: lastTrack.duration, tracks: toc.tracks)
+
+    let saved = DefaultAudiobookManager.positionToSaveOnChapterCompletion(
+      completedChapter: lastChapter,
+      playerPosition: endOfBook
+    )
+
+    XCTAssertEqual(saved.timestamp, lastTrack.duration, accuracy: 0.001,
+                   "End of book records where playback actually finished")
+    XCTAssertNotEqual(saved.timestamp, lastChapter.position.timestamp,
+                      "…which is deliberately NOT the last chapter's start, the previous behaviour")
+  }
+
   // MARK: - Fixtures
 
   private static func makeTOC() throws -> AudiobookTableOfContents {

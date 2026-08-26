@@ -212,6 +212,12 @@ class FindawayPlayer: NSObject, Player {
   private let positionSubject = PassthroughSubject<TrackPosition, Never>()
   private var positionTimerCancellable: AnyCancellable?
 
+  /// Observer for the SDK's progress notification, which replaced the
+  /// main-run-loop timer this path used to report position from (PP-4954).
+  /// Block-based observers are not removed automatically, so this is held and
+  /// torn down in `stopPositionTimer`.
+  private var positionObserverToken: NSObjectProtocol?
+
   var positionPublisher: AnyPublisher<TrackPosition, Never> {
     positionSubject.eraseToAnyPublisher()
   }
@@ -372,24 +378,53 @@ class FindawayPlayer: NSObject, Player {
       .store(in: &cancellables)
   }
 
+  /// Start reporting position from the SDK's own progress notification (PP-4954).
+  ///
+  /// This used to be `Timer.publish(every: 0.25, on: .main, in: .common)` — a
+  /// main-run-loop timer, which is precisely the kind iOS suspends and coalesces
+  /// once the screen has been off for a while.
+  ///
+  /// That mattered far beyond a stale scrubber. The lock-screen heartbeat fix
+  /// shipped for the Now Playing display going stale during long sessions moved
+  /// that refresh onto `positionPublisher` specifically because it is fed by the
+  /// audio player's own clock and therefore survives the screen locking. That
+  /// reasoning is written into the code as justification and it is true of
+  /// `OpenAccessPlayer`, where the feed is `AVPlayer.addPeriodicTimeObserver`.
+  /// On this path the same publisher was a timer, so the fix moved the refresh
+  /// from one suspendable timer onto another — and every other position
+  /// mechanism here was the same suspendable kind, leaving no clock-driven
+  /// source to fall back on.
+  ///
+  /// `FAEPlaybackProgressUpdateNotification` is the SDK's own progress signal
+  /// and is the Findaway analogue of the periodic time observer: it is driven by
+  /// playback rather than by a run loop, so it keeps arriving while audio plays
+  /// with the screen locked. It carries the current offset directly, which is
+  /// decoded on the SDK's thread before crossing — the same rule the chapter
+  /// notifications follow, for the same reason.
   private func startPositionTimer() {
     stopPositionTimer()
 
-    // 0.25s interval for smooth UI updates
-    positionTimerCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
-      .autoconnect()
-      .compactMap { [weak self] _ -> TrackPosition? in
-        guard let self = self, isPlaying else { return nil }
-        return currentTrackPosition
+    positionObserverToken = NotificationCenter.default.addObserver(
+      forName: .FAEPlaybackProgressUpdate, object: nil, queue: .main
+    ) { [weak self] _ in
+      // `queue: .main` guarantees the main thread, which IS the main actor's
+      // executor. Nothing from the notification crosses — the offset is read
+      // back from the engine by `currentTrackPosition`, exactly as the timer
+      // did, so this changes only WHAT DRIVES the tick, not what it reports.
+      MainActor.assumeIsolated {
+        guard let self, self.isPlaying, let position = self.currentTrackPosition else { return }
+        self.positionSubject.send(position)
       }
-      .sink { [weak self] position in
-        self?.positionSubject.send(position)
-      }
+    }
   }
 
   private func stopPositionTimer() {
     positionTimerCancellable?.cancel()
     positionTimerCancellable = nil
+    if let positionObserverToken {
+      NotificationCenter.default.removeObserver(positionObserverToken)
+      self.positionObserverToken = nil
+    }
   }
 
   var playbackRate: PlaybackRate {
