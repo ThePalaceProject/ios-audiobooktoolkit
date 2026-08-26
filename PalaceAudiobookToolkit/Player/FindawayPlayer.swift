@@ -212,6 +212,12 @@ class FindawayPlayer: NSObject, Player {
   private let positionSubject = PassthroughSubject<TrackPosition, Never>()
   private var positionTimerCancellable: AnyCancellable?
 
+  /// Observer for the SDK's progress notification, which replaced the
+  /// main-run-loop timer this path used to report position from (PP-4954).
+  /// Block-based observers are not removed automatically, so this is held and
+  /// torn down in `stopPositionTimer`.
+  private var positionObserverToken: NSObjectProtocol?
+
   var positionPublisher: AnyPublisher<TrackPosition, Never> {
     positionSubject.eraseToAnyPublisher()
   }
@@ -372,24 +378,53 @@ class FindawayPlayer: NSObject, Player {
       .store(in: &cancellables)
   }
 
+  /// Start reporting position from the SDK's own progress notification (PP-4954).
+  ///
+  /// This used to be `Timer.publish(every: 0.25, on: .main, in: .common)` — a
+  /// main-run-loop timer, which is precisely the kind iOS suspends and coalesces
+  /// once the screen has been off for a while.
+  ///
+  /// That mattered far beyond a stale scrubber. The lock-screen heartbeat fix
+  /// shipped for the Now Playing display going stale during long sessions moved
+  /// that refresh onto `positionPublisher` specifically because it is fed by the
+  /// audio player's own clock and therefore survives the screen locking. That
+  /// reasoning is written into the code as justification and it is true of
+  /// `OpenAccessPlayer`, where the feed is `AVPlayer.addPeriodicTimeObserver`.
+  /// On this path the same publisher was a timer, so the fix moved the refresh
+  /// from one suspendable timer onto another — and every other position
+  /// mechanism here was the same suspendable kind, leaving no clock-driven
+  /// source to fall back on.
+  ///
+  /// `FAEPlaybackProgressUpdateNotification` is the SDK's own progress signal
+  /// and is the Findaway analogue of the periodic time observer: it is driven by
+  /// playback rather than by a run loop, so it keeps arriving while audio plays
+  /// with the screen locked. It carries the current offset directly, which is
+  /// decoded on the SDK's thread before crossing — the same rule the chapter
+  /// notifications follow, for the same reason.
   private func startPositionTimer() {
     stopPositionTimer()
 
-    // 0.25s interval for smooth UI updates
-    positionTimerCancellable = Timer.publish(every: 0.25, on: .main, in: .common)
-      .autoconnect()
-      .compactMap { [weak self] _ -> TrackPosition? in
-        guard let self = self, isPlaying else { return nil }
-        return currentTrackPosition
+    positionObserverToken = NotificationCenter.default.addObserver(
+      forName: .FAEPlaybackProgressUpdate, object: nil, queue: .main
+    ) { [weak self] _ in
+      // `queue: .main` guarantees the main thread, which IS the main actor's
+      // executor. Nothing from the notification crosses — the offset is read
+      // back from the engine by `currentTrackPosition`, exactly as the timer
+      // did, so this changes only WHAT DRIVES the tick, not what it reports.
+      MainActor.assumeIsolated {
+        guard let self, self.isPlaying, let position = self.currentTrackPosition else { return }
+        self.positionSubject.send(position)
       }
-      .sink { [weak self] position in
-        self?.positionSubject.send(position)
-      }
+    }
   }
 
   private func stopPositionTimer() {
     positionTimerCancellable?.cancel()
     positionTimerCancellable = nil
+    if let positionObserverToken {
+      NotificationCenter.default.removeObserver(positionObserverToken)
+      self.positionObserverToken = nil
+    }
   }
 
   var playbackRate: PlaybackRate {
@@ -1007,26 +1042,31 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       return nil
     }
 
-    // `preferChapterEndingHere` keeps every caller of this helper on the
-    // pre-PP-4948 tie-break. The one that matters is `.completed(chapter)` from
-    // `audioEnginePlaybackFinished`, which is playback control rather than
-    // display: it reaches `AudiobookManager.handlePlaybackCompleted`, which
-    // saves the position and puts the app into a paused state. But note this
-    // helper ALSO feeds `.started` and `.stopped`, so the pin holds those on the
-    // old behaviour too — status-quo-preserving, and deliberate.
+    // UNPINNED as of PP-4951. This asks "which chapter does the SDK's
+    // notification refer to?", and the answer is the chapter that BEGINS at the
+    // start of that part/sequence — not the one that ends there.
     //
-    // PP-4948 changed how a position exactly on a chapter boundary resolves, and
-    // `timestamp: 0.0` on a Findaway part/sequence IS such a position: measured
-    // on `secret_lives_manifest`, the resolved chapter changes for 9 of its 10
-    // chapters without this. That may well be the more correct answer; deciding
-    // it is the follow-up ticket's job, not a table-of-contents fix's.
+    // The pin was PP-4948's status-quo hold, and it was wrong for every caller
+    // of this helper. `timestamp: 0.0` on a Findaway part/sequence is exactly a
+    // boundary position, so pinned it resolved to the PRECEDING chapter for 9 of
+    // the 10 chapters of `secret_lives_manifest`. That fed three signals:
+    //
+    //   * `.completed`, where it named the chapter before the one that ended,
+    //     and the handler then saved that chapter's start — a place the patron
+    //     had finished two chapters ago.
+    //   * `.started`, where it paired the previous chapter's TRACK with the
+    //     current chapter's OFFSET, so the two halves of an announcement came
+    //     from different chapters.
+    //   * `.stopped`, the same way.
+    //
+    // Only the first chapter ever escaped, because it has no predecessor for the
+    // boundary to be handed to.
     return try? tableOfContents.chapter(
       forPosition: TrackPosition(
         track: track,
         timestamp: 0.0,
         tracks: tableOfContents.tracks
-      ),
-      preferChapterEndingHere: true
+      )
     )
   }
 

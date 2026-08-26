@@ -461,17 +461,19 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
   /// book" regression the fallback comment warns about. Asserting the timestamp,
   /// not just that something was announced, is what catches it.
   ///
-  /// Deliberately the FIRST chapter. `chapter(for:)` resolves at `timestamp: 0`
-  /// with `preferChapterEndingHere: true`, the pinned pre-PP-4948 tie-break, and
-  /// for any later chapter that boundary belongs to the chapter BEFORE it — so
-  /// the track keys do not match and the pending position is discarded. Chapter
-  /// zero has no predecessor to hand the boundary to, which is the one case
-  /// where the pinned tie-break and the honest answer agree. That mismatch for
-  /// every OTHER chapter is real, pre-existing, and PP-4951's to resolve; this
-  /// test asserts the behaviour we believe in rather than pinning the debt.
+  /// Uses a MID-BOOK chapter, and that is the point. This test was originally
+  /// written against part 1 / chapter 1 and failed: the pinned tie-break
+  /// resolved a boundary position to the chapter BEFORE it, so the announcement
+  /// paired the previous chapter's track with the current chapter's offset. It
+  /// had to be written against chapter zero — the only chapter with no
+  /// predecessor for the boundary to be handed to — and the debt recorded on
+  /// PP-4951.
+  ///
+  /// PP-4951 unpinned that resolution, so the honest case now holds for every
+  /// chapter and this asserts it where it used to fail.
   func testPlaybackStarted_resolvesTheChapterRefAndAnnouncesThePendingPosition() async throws {
     let toc = try Self.makeFindawayTOC()
-    let track = try XCTUnwrap(toc.tracks.track(forPart: 0, sequence: 0),
+    let track = try XCTUnwrap(toc.tracks.track(forPart: 1, sequence: 4),
                               "Fixture must carry findaway part/sequence numbering")
     // Verification left false on purpose: `play(at:)` still records the pending
     // start position, and nothing schedules an engine manipulation.
@@ -490,7 +492,7 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
 
     player.audioEnginePlaybackStarted(
       DefaultFindawayPlaybackNotificationHandler(),
-      for: FindawayChapterRef(partNumber: 0, chapterNumber: 0)
+      for: FindawayChapterRef(partNumber: 1, chapterNumber: 4)
     )
 
     let started = await Self.eventually {

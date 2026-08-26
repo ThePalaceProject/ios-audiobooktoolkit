@@ -1451,9 +1451,17 @@ extension OpenAccessPlayer {
     // Check if next track is in the same chapter - if so, navigate explicitly
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-      let nextChapter = try? tableOfContents.chapter(
-        forPosition: nextStart, preferChapterEndingHere: true
-      )
+      // UNPINNED, unlike the `endedPosition` resolution above, and the
+      // asymmetry is the whole mechanism. Both sides pinned resolve to the same
+      // chapter at a boundary, so the comparison below always said "the chapter
+      // continues" and `.completed` was unreachable anywhere but the end of a
+      // book. Resolving the ended side to the chapter that ENDS at the boundary
+      // and the upcoming side to the chapter that BEGINS there makes them
+      // differ exactly when a chapter really has finished — and keeps
+      // `.completed` naming the chapter that actually ended rather than the one
+      // about to start. Unpinning BOTH would fire the signal with the wrong
+      // chapter attached. Measured in `ChapterBoundaryResolutionTests`.
+      let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
         // Same chapter continues on next track - navigate explicitly

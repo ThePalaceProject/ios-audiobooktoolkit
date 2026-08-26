@@ -703,9 +703,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
     if let nextTrack = tableOfContents.tracks.nextTrack(endedTrack) {
       let nextStart = TrackPosition(track: nextTrack, timestamp: 0.0, tracks: tableOfContents.tracks)
-      let nextChapter = try? tableOfContents.chapter(
-        forPosition: nextStart, preferChapterEndingHere: true
-      )
+      // Unpinned while the ended side stays pinned — see the note in
+      // `OpenAccessPlayer`'s end-of-track handler. The asymmetry is what makes
+      // a real chapter ending distinguishable from a chapter that merely spans
+      // two tracks.
+      let nextChapter = try? tableOfContents.chapter(forPosition: nextStart)
 
       if let cur = currentChapter, let nxt = nextChapter, cur == nxt {
         // Same chapter continues on next track - navigate explicitly
