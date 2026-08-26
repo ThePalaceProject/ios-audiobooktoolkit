@@ -261,12 +261,22 @@ public class AudiobookPlaybackModel: ObservableObject {
           isWaitingForPlayer = false
           // During a skip burst the SDK can emit a chapter-`.completed` at the
           // chapter END as it tears down to reload — which would slam the
-          // progress bar to the end and the button to paused. Ignore it while
-          // the skip is settling; a real end-of-chapter resolves after the
-          // window via the subsequent `.playbackBegan` for the next chapter.
+          // progress bar to the end. Ignore it while the skip is settling; a
+          // real end-of-chapter resolves after the window via the subsequent
+          // `.playbackBegan` for the next chapter.
           if !isSuppressingPositionUpdates {
             currentLocation = position
-            _isPlaying = false
+            // NOT `_isPlaying = false`. A chapter ending is not a pause — audio
+            // continues straight into the next chapter, and this signal now
+            // fires at EVERY chapter rather than only at the end of a book
+            // (PP-4951, piece 1). Marking the player stopped here made the
+            // button flicker to paused on every boundary, and left it stuck
+            // there whenever the Findaway notification arrived late enough to
+            // land after the next chapter's `.playbackBegan` — documented in
+            // this repository as arriving several seconds late.
+            //
+            // The end of a BOOK has its own signal, `.bookCompleted`, which is
+            // where stopping belongs and where it still happens.
             updateProgress()
           }
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {

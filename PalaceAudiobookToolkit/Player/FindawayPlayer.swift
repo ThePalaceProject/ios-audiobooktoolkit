@@ -1007,26 +1007,31 @@ extension FindawayPlayer: FindawayPlaybackNotificationHandlerDelegate {
       return nil
     }
 
-    // `preferChapterEndingHere` keeps every caller of this helper on the
-    // pre-PP-4948 tie-break. The one that matters is `.completed(chapter)` from
-    // `audioEnginePlaybackFinished`, which is playback control rather than
-    // display: it reaches `AudiobookManager.handlePlaybackCompleted`, which
-    // saves the position and puts the app into a paused state. But note this
-    // helper ALSO feeds `.started` and `.stopped`, so the pin holds those on the
-    // old behaviour too — status-quo-preserving, and deliberate.
+    // UNPINNED as of PP-4951. This asks "which chapter does the SDK's
+    // notification refer to?", and the answer is the chapter that BEGINS at the
+    // start of that part/sequence — not the one that ends there.
     //
-    // PP-4948 changed how a position exactly on a chapter boundary resolves, and
-    // `timestamp: 0.0` on a Findaway part/sequence IS such a position: measured
-    // on `secret_lives_manifest`, the resolved chapter changes for 9 of its 10
-    // chapters without this. That may well be the more correct answer; deciding
-    // it is the follow-up ticket's job, not a table-of-contents fix's.
+    // The pin was PP-4948's status-quo hold, and it was wrong for every caller
+    // of this helper. `timestamp: 0.0` on a Findaway part/sequence is exactly a
+    // boundary position, so pinned it resolved to the PRECEDING chapter for 9 of
+    // the 10 chapters of `secret_lives_manifest`. That fed three signals:
+    //
+    //   * `.completed`, where it named the chapter before the one that ended,
+    //     and the handler then saved that chapter's start — a place the patron
+    //     had finished two chapters ago.
+    //   * `.started`, where it paired the previous chapter's TRACK with the
+    //     current chapter's OFFSET, so the two halves of an announcement came
+    //     from different chapters.
+    //   * `.stopped`, the same way.
+    //
+    // Only the first chapter ever escaped, because it has no predecessor for the
+    // boundary to be handed to.
     return try? tableOfContents.chapter(
       forPosition: TrackPosition(
         track: track,
         timestamp: 0.0,
         tracks: tableOfContents.tracks
-      ),
-      preferChapterEndingHere: true
+      )
     )
   }
 
