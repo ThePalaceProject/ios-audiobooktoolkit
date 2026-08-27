@@ -368,10 +368,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         guard let self = self else {
           return false
         }
-        if let currentLocation = currentLocation {
-          return abs(currentLocation.timestamp - position.timestamp) > 2.0
-        }
-        return true
+        return Self.shouldSaveOnDrift(from: currentLocation, to: position)
       }
       .sink { [weak self] _ in
         self?.saveLocation()
@@ -465,6 +462,47 @@ public class AudiobookPlaybackModel: ObservableObject {
     persistLocation()
     audiobookManager.unload()
     subscriptions.removeAll()
+  }
+
+  /// Whether a newly reported position has moved far enough from the last saved
+  /// one to be worth writing.
+  ///
+  /// Extracted as a pure decision rather than left inline in the Combine filter,
+  /// following the seek decisions in `FindawayPlayer`, so what gates a patron's
+  /// saved place is provable without standing up a player, a manager or a
+  /// subscription.
+  ///
+  /// This used to subtract the two `timestamp` values directly. Each is measured
+  /// from the start of its OWN audio file, so that is only meaningful when both
+  /// positions are in the same file. Across a boundary it compares unrelated
+  /// numbers: a patron one second into chapter one and two seconds into chapter
+  /// two differs by "one second" while having travelled the whole remainder of a
+  /// chapter, so the save was discarded as no movement — at exactly the moment a
+  /// save matters most, because the end of a chapter is where people stop
+  /// listening.
+  ///
+  /// `TrackPosition.-` already accumulates correctly across intervening tracks.
+  /// The bug was that this one site bypassed it, so the fix changes NOTHING
+  /// shared: no other caller of that operator is touched. That distinction is
+  /// deliberate — CLAUDE.md records a chapter-boundary fix in this same helper
+  /// family that was correct in isolation, had 225 green tests, and would have
+  /// paused playback at every chapter, because two players compared the helper's
+  /// results across a boundary to decide whether to keep playing.
+  ///
+  /// Fails TOWARD saving. The operator throws when the two positions belong to
+  /// unrelated track lists, and an uncomparable pair is treated as movement: the
+  /// cost of being wrong that way is one redundant write, against losing a
+  /// patron's place.
+  ///
+  /// - Parameter threshold: seconds of real movement required to justify a write.
+  static func shouldSaveOnDrift(
+    from lastSaved: TrackPosition?,
+    to candidate: TrackPosition,
+    threshold: TimeInterval = 2.0
+  ) -> Bool {
+    guard let lastSaved else { return true }
+    guard let movement = try? candidate - lastSaved else { return true }
+    return abs(movement) > threshold
   }
 
   private func saveLocation() {
