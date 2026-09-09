@@ -60,7 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ThePalaceProject/swift-toolkit.git",
       "state" : {
-        "revision" : "58413f8680a310ed6d98278687ab711e6be639c8"
+        "revision" : "58413f8680a310ed6d98278687ab711e6be639c8",
+        "version" : "3.11.0-palace.1"
       }
     },
     {
