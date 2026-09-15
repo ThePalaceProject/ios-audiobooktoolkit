@@ -55,7 +55,7 @@ class HumanReadableTimestamp {
     var timeString = String(format: formatStringWithoutHours, minutes)
     if hours > 0 {
       let formatStringWithHours = NSLocalizedString(
-        "%02d hr %02 dmin",
+        "%02d hr %02d min",
         bundle: Bundle.audiobookToolkit()!,
         value: "%02d hr %02d min",
         comment: "The number of hours and minutes"
