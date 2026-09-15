@@ -1,0 +1,95 @@
+/* Hours and minutes, compact */
+"%02d hr %02d min" = "%02d h %02d min";
+
+/* Hours and minutes left in a chapter */
+"%02d hr, %02d min remaining" = "%02d h, %02d min rimanenti";
+
+/* Minutes left in a chapter */
+"%02d min remaining" = "%02d min rimanenti";
+
+/* Minutes and seconds timecode */
+"%02d:%02d" = "%02d:%02d";
+
+/* Hours, minutes and seconds timecode */
+"%02d:%02d:%02d" = "%02d:%02d:%02d";
+
+/* Minutes, compact */
+"%02dmin" = "%02d min";
+
+/* VoiceOver: playback speed above 1.0x */
+"%@ speed. Faster than normal." = "Velocità %@. Più veloce del normale.";
+
+/* VoiceOver: playback speed below 1.0x */
+"%@ speed. Slower than normal." = "Velocità %@. Più lenta del normale.";
+
+/* Duration, singular hour and minute */
+"%d hour and %d minute" = "%1$d ora e %2$d minuto";
+
+/* Duration, singular hour and plural minutes */
+"%d hour and %d minutes" = "%1$d ora e %2$d minuti";
+
+/* Duration, plural hours and singular minute */
+"%d hours and %d minute" = "%1$d ore e %2$d minuto";
+
+/* Duration, plural hours and minutes */
+"%d hours and %d minutes" = "%1$d ore e %2$d minuti";
+
+/* VoiceOver duration with hours */
+"%d hours, %d minutes and %d seconds" = "%1$d ore, %2$d minuti e %3$d secondi";
+
+/* Duration, one minute */
+"%d minute" = "%d minuto";
+
+/* Duration, minutes */
+"%d minutes" = "%d minuti";
+
+/* VoiceOver duration without hours */
+"%d minutes and %d seconds" = "%1$d minuti e %2$d secondi";
+
+/* Duration, one second */
+"%d second" = "%d secondo";
+
+/* Duration, seconds */
+"%d seconds" = "%d secondi";
+
+/* Playback speed value */
+"1.0×" = "1×";
+
+/* Playback speed value, normal */
+"1.0× (Normal)" = "1× (normale)";
+
+/* Button on the audiobook player */
+"Decrease speed" = "Riduci la velocità";
+
+/* VoiceOver hint for the slower button */
+"Decreases playback speed by 0.05 times" = "Riduce la velocità di riproduzione di 0,05";
+
+/* Button on the audiobook player */
+"Increase speed" = "Aumenta la velocità";
+
+/* VoiceOver hint for the faster button */
+"Increases playback speed by 0.05 times" = "Aumenta la velocità di riproduzione di 0,05";
+
+/* Chapter nearly finished */
+"Less than 1 min remaining" = "Meno di 1 minuto rimanente";
+
+/* VoiceOver: playback speed is 1.0x */
+"Normal speed." = "Velocità normale.";
+
+/* VoiceOver label for the speed control */
+"Sets playback speed" = "Imposta la velocità di riproduzione";
+
+/* Section heading in the speed picker */
+"Speed presets" = "Preimpostazioni di velocità";
+
+/* VoiceOver hint for an adjustable control */
+"Swipe up or down with one finger to adjust" = "Scorra verso l’alto o verso il basso con un dito per regolare il valore";
+
+/* VoiceOver: 0.75x */
+"Three quarters of normal speed. Slower." = "Tre quarti della velocità normale. L’opzione più lenta.";
+
+/* VoiceOver: 3.0x */
+"Three times normal speed. Fastest." = "Tre volte la velocità normale. La più veloce.";
+
+/* VoiceOver: 2.0x */
+"Two times normal speed." = "Due volte la velocità normale.";
