@@ -163,6 +163,24 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // call site is fire-at-most-once and thread-safe.
     let onceCompletion = Self.makeOnceCompletion(completion)
 
+    // PP-5205: publish the TARGET position immediately, before any queue work.
+    //
+    // `currentTrackPosition` already prefers `queuedTrackPosition` when a seek is in
+    // flight (OpenAccessPlayer:91-94) precisely so the UI can render where the patron
+    // is GOING rather than where the audio still is. The base class sets it on its own
+    // seek path (:270); this override replaced that path wholesale and never did, so
+    // for LCP the UI fell through to `avQueuePlayer.currentItem` — the PREVIOUS track.
+    //
+    // Symptom, reported on build 509: tap a chapter, the TOC dismisses, and the player
+    // renders the chapter you just left for about a second before switching. The
+    // full-screen "Downloading…" panel used to cover that second, so removing the panel
+    // exposed it rather than caused it.
+    //
+    // Cleared when the new item actually starts (`timeControlStatus == .playing`) and
+    // on every failure exit, so a stale optimistic position can never outlive the seek
+    // that set it.
+    queuedTrackPosition = position
+
     var needsRebuild = avQueuePlayer.items().isEmpty
 
     if !needsRebuild {
@@ -201,8 +219,32 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     avQueuePlayer.pause()
     (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
     
-    // Only show loading state for heavy operations (rebuilds or track changes)
-    if !isSeekWithinSameTrack {
+    // PP-5205: a seek to a chapter whose audio is ALREADY ON DISK is not a wait.
+    //
+    // The loading state used to be gated on `!isSeekWithinSameTrack` alone, which is
+    // false for ANY track change — so choosing a later chapter muted the player and
+    // published `isLoaded = false` even when every byte of that chapter was local.
+    // Palace turned that into a full-screen "Downloading…" panel over a playing book
+    // (PP-5205): a download announced for content already downloaded, with the audio
+    // stopping while it was on screen.
+    //
+    // The common path is worse than it looks. With streaming ON the queue is built
+    // from REMOTE assets before anything is local, and nothing re-queues when the
+    // archive lands — `needsRebuild` is only ever evaluated here, inside
+    // `playCallback(at:)`. So the first cross-track seek after a download completes
+    // discovers the streaming/local mismatch and rebuilds. That rebuild is worth
+    // doing, but over local file assets it is fast and needs no network: there is
+    // nothing for the patron to wait ON, and so nothing to announce.
+    //
+    // Locality is the right question, not track identity. A seek to a track still
+    // being STREAMED keeps the previous behaviour exactly — that one is a real wait,
+    // and the mute is what stops the previous chapter bleeding over the buffer.
+    let targetIsLocallyPlayable: Bool = {
+      guard let lcpTrack = position.track as? LCPTrack else { return false }
+      return lcpTrack.hasLocalFiles() && !forceStreamingTrackKeys.contains(lcpTrack.key)
+    }()
+
+    if !isSeekWithinSameTrack && !targetIsLocallyPlayable {
       isLoaded = false
       suppressAudibleUntilPlaying = true
       avQueuePlayer.isMuted = true
@@ -229,11 +271,29 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           code: -1,
           userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
         )
+        // PP-5205: the seek never landed, so the optimistic position must not
+        // outlive it. Leaving it set would have the UI — and position reporting,
+        // which drives bookmarks and progress sync — claim a chapter that never
+        // started playing.
+        self.queuedTrackPosition = nil
         self.playbackStatePublisher.send(.failed(timeoutPosition, timeoutError))
         onceCompletion(timeoutError)
       }
       loadTimeoutWorkItem = workItem
       DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: workItem)
+    } else if !isSeekWithinSameTrack {
+      // PP-5205: a local cross-track seek arms NO load timeout — there is no load to
+      // time out. But a timer armed by an EARLIER streaming seek may still be in
+      // flight, and letting it fire here would surface "Audiobook Unavailable" over a
+      // book that is playing fine from disk. Cancel it, and make sure the audible
+      // suppression from that earlier seek cannot outlive it either.
+      loadTimeoutWorkItem?.cancel()
+      loadTimeoutWorkItem = nil
+      if suppressAudibleUntilPlaying {
+        suppressAudibleUntilPlaying = false
+        avQueuePlayer.isMuted = false
+      }
+      isLoaded = true
     }
 
     if !needsRebuild {
@@ -631,6 +691,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           }
           if let currentKey = avQueuePlayer.currentItem?.trackIdentifier, lastStartedItemKey != currentKey {
             lastStartedItemKey = currentKey
+            // PP-5205: the real item is now playing, so the optimistic position has
+            // served its purpose — drop it and let `currentTrackPosition` derive from
+            // the live queue again.
+            queuedTrackPosition = nil
             if let pos = currentTrackPosition {
               playbackStatePublisher.send(.started(pos))
             }
