@@ -85,7 +85,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     super.removePlayerObservers()
   }
 
-  override func buildPlayerQueue() {
+  override func buildPlayerQueue() { // no-override-state: the base resets lastKnownPosition to first-track-at-0.0 (OpenAccessPlayer:587); LCP must PRESERVE a restored position, so not assigning it is the correct behaviour here, not a dropped one
     resetPlayerQueue()
     isLoaded = false
   }
@@ -180,6 +180,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // instead of merely fixed. The timeout path keeps its own explicit clear because
     // it publishes `.failed` BEFORE completing and must not do so with a stale
     // optimistic position still readable.
+    // The clear sits OUTSIDE the once-gate on purpose. A superseded seek's late
+    // callback therefore clears a NEWER seek's optimistic position — and that is the
+    // right direction to fail: nil means "read the live player", which is at worst a
+    // moment of truth. Moving it inside the gate would restore the freeze this exists
+    // to prevent, so do not "tidy" it there.
     let onceCompletion: (Error?) -> Void = { [weak self] error in
       self?.queuedTrackPosition = nil
       rawOnceCompletion(error)
@@ -263,7 +268,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // and the mute is what stops the previous chapter bleeding over the buffer.
     let targetIsLocallyPlayable: Bool = {
       guard let lcpTrack = position.track as? LCPTrack else { return false }
-      return lcpTrack.hasLocalFiles() && !forceStreamingTrackKeys.contains(lcpTrack.key)
+      return Self.trackIsLocallyPlayable(
+        hasLocalFiles: lcpTrack.hasLocalFiles(),
+        isForcedToStream: forceStreamingTrackKeys.contains(lcpTrack.key)
+      )
     }()
 
     if !isSeekWithinSameTrack && !targetIsLocallyPlayable {
@@ -549,6 +557,19 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// async bridge resumes a CheckedContinuation and traps on a second resume.
   /// Returns a non-optional closure so call sites stay simple even when the
   /// caller passed `nil`.
+  /// Whether a seek target can be played from disk RIGHT NOW — the predicate that
+  /// decides whether a chapter change is a wait worth announcing (PP-5205).
+  ///
+  /// Extracted from the call site and made static so it can be table-tested: it
+  /// carries the headline behaviour of this ticket and needs no AVFoundation, unlike
+  /// the rest of `playCallback`. Having the bytes is necessary but not sufficient —
+  /// a track in `forceStreamingTrackKeys` has been deliberately pushed onto the
+  /// streaming path (a failed local open, say) and must keep the streaming
+  /// behaviour, mute included, even though its files are present.
+  nonisolated static func trackIsLocallyPlayable(hasLocalFiles: Bool, isForcedToStream: Bool) -> Bool {
+    hasLocalFiles && !isForcedToStream
+  }
+
   static func makeOnceCompletion(_ completion: ((Error?) -> Void)?) -> (Error?) -> Void {
     let lock = NSLock()
     var fired = false
