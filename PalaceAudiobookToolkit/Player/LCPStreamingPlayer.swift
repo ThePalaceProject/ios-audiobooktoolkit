@@ -346,16 +346,32 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       // failed rebuild is indistinguishable from success: no alert, no Retry, and
       // the host's open lock never released.
       //
-      // Keyed on `lastStartedItemKey`, NOT `isLoaded`. The streaming branch's timer
-      // guards on `!isLoaded`, and this path sets `isLoaded = true` up front on
-      // purpose — so an isLoaded-keyed guard could never fire here. The question is
-      // whether the TARGET ITEM ever started.
+      // NOT keyed on `isLoaded`: the streaming branch's timer guards on `!isLoaded`,
+      // and this path sets `isLoaded = true` up front on purpose, so an
+      // isLoaded-keyed guard could never fire here.
+      //
+      // Nor keyed on playback having STARTED, which was the first attempt. Nothing
+      // cancels this work item on pause — there is no `pause` override, `unload()`
+      // does not touch it, and the only cancel is in the `.playing` observer
+      // (:778). So a patron who taps a chapter and pauses within the window never
+      // reaches `.playing`, and a started-keyed backstop would publish `.failed`
+      // thirty seconds later: "Audiobook Unavailable" over a book they had simply
+      // paused. That is a worse defect than the one this guards.
+      //
+      // The rebuild is judged by what it PRODUCED — a target item that is current
+      // and ready to play — not by whether audio is coming out of it. Playback
+      // having started is kept as a second sufficient signal, since it implies the
+      // first.
       if needsRebuild {
         let targetKey = position.track.key
         let backstopPosition = position
         let backstop = DispatchWorkItem { [weak self] in
-          guard let self = self, self.lastStartedItemKey != targetKey else { return }
-          ATLog(.warn, "LCPStreamingPlayer: local-seek rebuild never started the target item — surfacing failure")
+          guard let self = self else { return }
+          let item = self.avQueuePlayer.currentItem
+          let rebuildLanded = (item?.trackIdentifier == targetKey && item?.status == .readyToPlay)
+            || self.lastStartedItemKey == targetKey
+          guard !rebuildLanded else { return }
+          ATLog(.warn, "LCPStreamingPlayer: local-seek rebuild never produced a playable target item — surfacing failure")
           let error = NSError(
             domain: "LCPStreamingPlayer",
             code: -1,
