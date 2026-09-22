@@ -107,4 +107,137 @@ final class AudiobookPlaybackModelTests: XCTestCase {
     XCTAssertEqual(AudiobookPlaybackModel.remainingWallClock(bookTimeRemaining: .nan, rate: .doubleTime), 0)
     XCTAssertEqual(AudiobookPlaybackModel.remainingWallClock(bookTimeRemaining: -60, rate: .doubleTime), 0)
   }
+
+  // MARK: - PP-5205 — a chapter selection is not undone by the old playhead
+  //
+  // Choosing a chapter writes `currentLocation` immediately, and
+  // `currentChapterTitle` reads it. But the item the patron is LEAVING keeps
+  // emitting periodic positions while the seek settles, and every one of those
+  // used to overwrite `currentLocation` — so the title snapped back to the
+  // chapter just left, while the duration and remaining-time labels (which read
+  // the PLAYER's position, and that already prefers the seek target) showed the
+  // one chosen. Reported on build 509: "you land on the previous chapter and
+  // then it switches."
+  //
+  // The rule is content-keyed, not timed: a seek that takes longer than the
+  // skip-suppression window must still not be dragged backwards.
+
+  func test_positionUpdateIsForNavigationTarget_withNoTargetAcceptsAnyTrack() {
+    XCTAssertTrue(AudiobookPlaybackModel.positionUpdateIsForNavigationTarget(
+      incomingTrackKey: "track-a", navigationTargetTrackKey: nil
+    ), "with nothing in flight every position is authoritative")
+  }
+
+  func test_positionUpdateIsForNavigationTarget_acceptsTheTargetsOwnTrack() {
+    XCTAssertTrue(AudiobookPlaybackModel.positionUpdateIsForNavigationTarget(
+      incomingTrackKey: "track-b", navigationTargetTrackKey: "track-b"
+    ), "the seek landing is exactly the position that must be shown")
+  }
+
+  func test_positionUpdateIsForNavigationTarget_rejectsTheTrackBeingLeft() {
+    XCTAssertFalse(AudiobookPlaybackModel.positionUpdateIsForNavigationTarget(
+      incomingTrackKey: "track-a", navigationTargetTrackKey: "track-b"
+    ), "the old item's periodic tick must not move the display off the target")
+  }
+
+  /// End-to-end wiring: the gate is actually consulted by the fast-position
+  /// subscription, and it releases once the target's own position arrives.
+  ///
+  /// The wait is deliberate. `selectedLocation` also opens the 1.5s skip
+  /// suppression window, which would reject the foreign position on its own —
+  /// so the assertion is made AFTER that window expires, where only the
+  /// content-keyed hold can still be responsible. Without the hold this test
+  /// fails: the foreign tick lands and `currentLocation` reverts to track A.
+  ///
+  /// `isLoaded = false` is load-bearing, not incidental. It routes the selection
+  /// down the `pendingLocation` branch, so the mock never receives `play(at:)`,
+  /// never reports `isPlaying`, and `DefaultAudiobookManager`'s 1-second
+  /// now-playing poll therefore cannot re-publish the mock's static
+  /// `currentTrackPosition` as a `.positionUpdated` in between the emits. With
+  /// `isLoaded = true` that poll races every assertion here and the test measures
+  /// the timer rather than the gate. The hold is armed BEFORE the branch, so the
+  /// rule under test is identical on both.
+  func test_chapterSelection_holdsDisplayedLocationAgainstTheTrackBeingLeft() async throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "pp5205-nav-hold", decryptor: nil, token: nil)
+    )
+    let player = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    player.isLoaded = false
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Nav Hold", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    let model = AudiobookPlaybackModel(audiobookManager: manager)
+
+    let tracks = audiobook.tableOfContents.allTracks
+    let leavingTrack = try XCTUnwrap(tracks.first)
+    let targetTrack = try XCTUnwrap(tracks.dropFirst().first)
+    XCTAssertNotEqual(leavingTrack.key, targetTrack.key, "fixture must supply two distinct tracks")
+
+    let allTracks = audiobook.tableOfContents.tracks
+    model.selectedLocation = TrackPosition(track: targetTrack, timestamp: 0, tracks: allTracks)
+    XCTAssertEqual(model.currentLocation?.track.key, targetTrack.key,
+                   "the selection must be shown immediately")
+
+    // Past the 1.5s skip-suppression window: only the content-keyed hold is left.
+    try await Task.sleep(nanoseconds: 1_600_000_000)
+
+    player._emitPosition(TrackPosition(track: leavingTrack, timestamp: 12, tracks: allTracks))
+    try await Task.sleep(nanoseconds: 150_000_000)
+    XCTAssertEqual(model.currentLocation?.track.key, targetTrack.key,
+                   "a tick from the track being left must not move the display")
+
+    // The seek lands: the target's own position is applied and the hold releases.
+    player._emitPosition(TrackPosition(track: targetTrack, timestamp: 3, tracks: allTracks))
+    try await Task.sleep(nanoseconds: 150_000_000)
+    XCTAssertEqual(model.currentLocation?.track.key, targetTrack.key)
+    XCTAssertEqual(model.currentLocation?.timestamp ?? -1, 3, accuracy: 0.001,
+                   "the target's own position must be applied, not swallowed")
+
+    // Hold released — an ordinary rollover to the next track is honoured again.
+    player._emitPosition(TrackPosition(track: leavingTrack, timestamp: 42, tracks: allTracks))
+    try await Task.sleep(nanoseconds: 150_000_000)
+    XCTAssertEqual(model.currentLocation?.track.key, leavingTrack.key,
+                   "the hold must not outlive the seek that set it")
+  }
+
+  /// PP-5205: the chapter NAME must move on the tap, not on the audio.
+  ///
+  /// `currentChapterTitle` derives from `currentLocation`, which `selectedLocation`
+  /// writes synchronously — so the name is correct before any seek has been issued,
+  /// let alone completed. The ios-core player mirrors this exact string onto the
+  /// same tick as its chapter timecodes; it previously rendered a separate cache
+  /// that only position events wrote, which left the name a seek behind the times
+  /// printed beside it.
+  func test_currentChapterTitle_followsASelectionImmediately() throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "pp5205-title", decryptor: nil, token: nil)
+    )
+    let player = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    player.isLoaded = false
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Title Follows", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    let model = AudiobookPlaybackModel(audiobookManager: manager)
+
+    let toc = audiobook.tableOfContents.toc
+    let first = try XCTUnwrap(toc.first)
+    let later = try XCTUnwrap(toc.dropFirst(2).first)
+    XCTAssertNotEqual(first.title, later.title, "fixture must supply two distinctly-titled chapters")
+    XCTAssertEqual(model.currentChapterTitle, first.title, "premise: the model starts on the first chapter")
+
+    model.selectedLocation = later.position
+
+    XCTAssertEqual(model.currentChapterTitle, later.title,
+                   "the name must be the chapter the patron chose, with no seek having run yet")
+    XCTAssertTrue(player.playAtCalls.isEmpty,
+                  "premise: `isLoaded` is false, so nothing has been asked to play — the title moved on the tap alone")
+  }
 }

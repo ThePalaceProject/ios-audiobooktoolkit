@@ -52,18 +52,75 @@ public class AudiobookPlaybackModel: ObservableObject {
     suppressPlaybackPollUntil = until
   }
 
+  /// PP-5205: the track the patron explicitly navigated to, held until a position
+  /// on that track actually arrives.
+  ///
+  /// Chapter selection is the only navigation that crosses tracks, and the item the
+  /// patron is leaving keeps emitting periodic positions while the seek settles.
+  /// Each of those used to overwrite `currentLocation`, which is what
+  /// `currentChapterTitle` reads — so the title snapped back to the chapter just
+  /// left while the duration and remaining-time labels (which read the PLAYER's
+  /// position, and that already prefers the seek target) showed the new one.
+  /// Reported on build 509 as "you land on the previous chapter and then it
+  /// switches"; the full-screen "Downloading…" panel used to cover the window.
+  private var navigationTargetTrackKey: String?
+
+  /// Whether an incoming position may move the displayed location, given an
+  /// in-flight navigation target.
+  ///
+  /// A `nil` target means nothing is in flight and every position is authoritative.
+  /// The time-based skip suppression is deliberately NOT folded in here: that one
+  /// is a window, this one is a fact about the content, and a seek that takes
+  /// longer than the window must still not be dragged backwards.
+  ///
+  /// Public for the same reason `remainingWallClock` is: the ios-core in-app
+  /// player keeps its OWN chapter cache (`AudiobookSessionManager.currentChapter`)
+  /// and has to answer this exact question on the same seek. Two copies of the
+  /// rule is how this defect reached both players in the first place.
+  /// `nonisolated`: pure comparison of two values, touching no model state.
+  public nonisolated static func positionUpdateIsForNavigationTarget(
+    incomingTrackKey: String,
+    navigationTargetTrackKey: String?
+  ) -> Bool {
+    guard let target = navigationTargetTrackKey else { return true }
+    return incomingTrackKey == target
+  }
+
+  /// Applies both gates to an incoming position and clears the navigation hold once
+  /// the target's own position arrives. Returns whether the caller may publish it.
+  private func acceptPositionUpdate(_ position: TrackPosition) -> Bool {
+    if isSuppressingPositionUpdates { return false }
+    guard Self.positionUpdateIsForNavigationTarget(
+      incomingTrackKey: position.track.key,
+      navigationTargetTrackKey: navigationTargetTrackKey
+    ) else {
+      return false
+    }
+    navigationTargetTrackKey = nil
+    return true
+  }
+
   var selectedLocation: TrackPosition? {
     didSet {
       guard let selectedLocation else {
         return
       }
       isNavigating = true
+      // PP-5205: hold the display on the chapter the patron chose until a position
+      // for it actually arrives — see `navigationTargetTrackKey`. The window-based
+      // suppression covers the same-track case, where the key gate cannot tell the
+      // old playhead from the new one.
+      navigationTargetTrackKey = selectedLocation.track.key
+      suppressTransientPlaybackUpdates(for: 1.5)
 
       DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
         if self.isNavigating {
           print("Navigation timeout reached - clearing navigation state")
           self.isNavigating = false
         }
+        // Bounded by the same timeout: a seek that never lands must not freeze the
+        // title on a chapter that is not playing.
+        self.navigationTargetTrackKey = nil
       }
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
@@ -154,7 +211,15 @@ public class AudiobookPlaybackModel: ObservableObject {
     return bookTimeRemaining / multiplier
   }
 
-  var currentChapterTitle: String {
+  /// The chapter title the toolkit player renders.
+  ///
+  /// Public because the ios-core in-app player renders its own view and must show
+  /// the SAME string as the toolkit's table of contents, from the SAME source. It
+  /// was deriving the title from a separate cache updated only by position events,
+  /// which left it a seek behind the chapter-scoped timecodes printed beside it
+  /// (PP-5205). Derived from `currentLocation`, which a selection sets on the tap,
+  /// so it moves with the patron rather than with the audio.
+  public var currentChapterTitle: String {
     if let currentLocation,
        let title = try? audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation).title
     {
@@ -228,7 +293,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           guard let position else {
             return
           }
-          if isSuppressingPositionUpdates { break }
+          if !acceptPositionUpdate(position) { break }
 
           currentLocation = position
           updateProgress()
@@ -243,7 +308,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           // `.playbackBegan` fires on every buffer→resume during a skip burst,
           // often carrying the chapter-start position; keep the play-state flags
           // but don't let it yank the displayed location off the skip target.
-          if !isSuppressingPositionUpdates {
+          if acceptPositionUpdate(position) {
             currentLocation = position
             updateProgress()
           }
@@ -264,7 +329,7 @@ public class AudiobookPlaybackModel: ObservableObject {
           // progress bar to the end. Ignore it while the skip is settling; a
           // real end-of-chapter resolves after the window via the subsequent
           // `.playbackBegan` for the next chapter.
-          if !isSuppressingPositionUpdates {
+          if acceptPositionUpdate(position) {
             currentLocation = position
             // NOT `_isPlaying = false`. A chapter ending is not a pause — audio
             // continues straight into the next chapter, and this signal now
@@ -383,7 +448,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         guard let self = self else { return }
         // Hold the user's skip target while the seek settles; ignore the
         // transient positions the SDK emits during the buffer→resume.
-        if isSuppressingPositionUpdates { return }
+        if !acceptPositionUpdate(position) { return }
         currentLocation = position
         updateProgress()
       }
