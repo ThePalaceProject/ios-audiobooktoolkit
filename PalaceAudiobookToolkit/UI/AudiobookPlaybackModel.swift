@@ -211,7 +211,15 @@ public class AudiobookPlaybackModel: ObservableObject {
     return bookTimeRemaining / multiplier
   }
 
-  var currentChapterTitle: String {
+  /// The chapter title the toolkit player renders.
+  ///
+  /// Public because the ios-core in-app player renders its own view and must show
+  /// the SAME string as the toolkit's table of contents, from the SAME source. It
+  /// was deriving the title from a separate cache updated only by position events,
+  /// which left it a seek behind the chapter-scoped timecodes printed beside it
+  /// (PP-5205). Derived from `currentLocation`, which a selection sets on the tap,
+  /// so it moves with the patron rather than with the audio.
+  public var currentChapterTitle: String {
     if let currentLocation,
        let title = try? audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation).title
     {

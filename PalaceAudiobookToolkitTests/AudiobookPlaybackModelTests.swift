@@ -203,4 +203,41 @@ final class AudiobookPlaybackModelTests: XCTestCase {
     XCTAssertEqual(model.currentLocation?.track.key, leavingTrack.key,
                    "the hold must not outlive the seek that set it")
   }
+
+  /// PP-5205: the chapter NAME must move on the tap, not on the audio.
+  ///
+  /// `currentChapterTitle` derives from `currentLocation`, which `selectedLocation`
+  /// writes synchronously — so the name is correct before any seek has been issued,
+  /// let alone completed. The ios-core player mirrors this exact string onto the
+  /// same tick as its chapter timecodes; it previously rendered a separate cache
+  /// that only position events wrote, which left the name a seek behind the times
+  /// printed beside it.
+  func test_currentChapterTitle_followsASelectionImmediately() throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "pp5205-title", decryptor: nil, token: nil)
+    )
+    let player = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    player.isLoaded = false
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Title Follows", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    let model = AudiobookPlaybackModel(audiobookManager: manager)
+
+    let toc = audiobook.tableOfContents.toc
+    let first = try XCTUnwrap(toc.first)
+    let later = try XCTUnwrap(toc.dropFirst(2).first)
+    XCTAssertNotEqual(first.title, later.title, "fixture must supply two distinctly-titled chapters")
+    XCTAssertEqual(model.currentChapterTitle, first.title, "premise: the model starts on the first chapter")
+
+    model.selectedLocation = later.position
+
+    XCTAssertEqual(model.currentChapterTitle, later.title,
+                   "the name must be the chapter the patron chose, with no seek having run yet")
+    XCTAssertTrue(player.playAtCalls.isEmpty,
+                  "premise: `isLoaded` is false, so nothing has been asked to play — the title moved on the tap alone")
+  }
 }
