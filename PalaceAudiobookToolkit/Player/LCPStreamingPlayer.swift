@@ -346,44 +346,23 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       // failed rebuild is indistinguishable from success: no alert, no Retry, and
       // the host's open lock never released.
       //
-      // NOT keyed on `isLoaded`: the streaming branch's timer guards on `!isLoaded`,
-      // and this path sets `isLoaded = true` up front on purpose, so an
-      // isLoaded-keyed guard could never fire here.
+      // NO failure backstop on this path, and that is a KNOWN GAP, not an oversight.
       //
-      // Nor keyed on playback having STARTED, which was the first attempt. Nothing
-      // cancels this work item on pause — there is no `pause` override, `unload()`
-      // does not touch it, and the only cancel is in the `.playing` observer
-      // (:778). So a patron who taps a chapter and pauses within the window never
-      // reaches `.playing`, and a started-keyed backstop would publish `.failed`
-      // thirty seconds later: "Audiobook Unavailable" over a book they had simply
-      // paused. That is a worse defect than the one this guards.
+      // The streaming branch above arms a 30s timer; this branch does not, so if the
+      // queue rebuild below fails, nothing surfaces it: the rebuild publishes
+      // `.started` even when its seek fails (:484-489), so a failed rebuild is
+      // indistinguishable from a successful one — no alert, no Retry, and the host's
+      // open lock is never released.
       //
-      // The rebuild is judged by what it PRODUCED — a target item that is current
-      // and ready to play — not by whether audio is coming out of it. Playback
-      // having started is kept as a second sufficient signal, since it implies the
-      // first.
-      if needsRebuild {
-        let targetKey = position.track.key
-        let backstopPosition = position
-        let backstop = DispatchWorkItem { [weak self] in
-          guard let self = self else { return }
-          let item = self.avQueuePlayer.currentItem
-          let rebuildLanded = (item?.trackIdentifier == targetKey && item?.status == .readyToPlay)
-            || self.lastStartedItemKey == targetKey
-          guard !rebuildLanded else { return }
-          ATLog(.warn, "LCPStreamingPlayer: local-seek rebuild never produced a playable target item — surfacing failure")
-          let error = NSError(
-            domain: "LCPStreamingPlayer",
-            code: -1,
-            userInfo: [NSLocalizedDescriptionKey: "Timed out rebuilding the queue for a local seek"]
-          )
-          self.queuedTrackPosition = nil
-          self.playbackStatePublisher.send(.failed(backstopPosition, error))
-          onceCompletion(error)
-        }
-        loadTimeoutWorkItem = backstop
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: backstop)
-      }
+      // A guard was attempted three times (#228, #229) and was wrong three times, each
+      // time on a predicate ADJACENT to the one that matters: playback state where the
+      // question was queue state, then queue CONTENTS where the question was whether
+      // NAVIGATION landed — the rebuild inserts the target item first (:455), so
+      // `currentItem == target && readyToPlay` is already true before the seek runs.
+      // It was reverted rather than attempted a fourth time on a release candidate.
+      //
+      // The right signal is the rebuild's own seek completion, which is where a guard
+      // belongs when this is done properly. See PP-5211.
     }
 
     if !needsRebuild {
