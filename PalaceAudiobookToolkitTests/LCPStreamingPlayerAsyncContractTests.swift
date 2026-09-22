@@ -300,4 +300,26 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
       XCTAssertEqual(error.code, -1)
     }
   }
+
+  // MARK: - PP-5205 — locality decides whether a chapter change is a WAIT
+
+  /// The loading state used to be gated on `!isSeekWithinSameTrack` alone, which is
+  /// true of ANY track change — so choosing a later chapter muted the player and
+  /// published `isLoaded = false` even when every byte of that chapter was already
+  /// on disk. Palace turned that into a full-screen "Downloading…" panel over a
+  /// playing book: a download announced for content already downloaded.
+  ///
+  /// All four cells, because the interesting one is not the obvious one. A track
+  /// whose files are present but which has been pushed onto the streaming path
+  /// (`forceStreamingTrackKeys` — a failed local open, say) is still a real wait and
+  /// must keep the streaming behaviour, mute included.
+  func test_trackIsLocallyPlayable_tableOfAllFourCells() {
+    XCTAssertTrue(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: true, isForcedToStream: false),
+                  "bytes on disk and no override: nothing to wait for, so nothing to announce")
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: true, isForcedToStream: true),
+                   "forced to stream OVERRIDES having the files — this is the cell a `hasLocalFiles`-only check gets wrong")
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: false, isForcedToStream: false),
+                   "no local files is a genuine wait; the previous behaviour, mute included, must be kept")
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: false, isForcedToStream: true))
+  }
 }
