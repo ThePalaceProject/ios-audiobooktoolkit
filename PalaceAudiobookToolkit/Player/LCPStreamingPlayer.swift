@@ -161,7 +161,29 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // `play(at:) async` bridge resumes its continuation twice and traps with
     // SWIFT TASK CONTINUATION MISUSE. Wrap once at entry so every downstream
     // call site is fire-at-most-once and thread-safe.
-    let onceCompletion = Self.makeOnceCompletion(completion)
+    let rawOnceCompletion = Self.makeOnceCompletion(completion)
+
+    // PP-5205: ONE funnel for dropping the optimistic position, rather than a clear
+    // at each exit.
+    //
+    // The first version of this fix cleared at the exits it could see: the timeout,
+    // the two seek completions, the target-not-found branch. It missed the case it
+    // was itself modelling — a seek to a chapter INSIDE the current track. That
+    // changes no item, so the `.playing` observer's clear (gated on the current item
+    // changing) never opened, and `currentTrackPosition` — which prefers this value —
+    // froze at the target until the next track boundary, taking the timecodes and the
+    // SAVED position with it. A frozen saved position is lost progress and lost
+    // bookmarks, which is worse than the label lag this whole changeset is about.
+    //
+    // Every exit from `playCallback` already funnels through the fire-at-most-once
+    // completion, so clearing here makes "an exit that forgets" unrepresentable
+    // instead of merely fixed. The timeout path keeps its own explicit clear because
+    // it publishes `.failed` BEFORE completing and must not do so with a stale
+    // optimistic position still readable.
+    let onceCompletion: (Error?) -> Void = { [weak self] error in
+      self?.queuedTrackPosition = nil
+      rawOnceCompletion(error)
+    }
 
     // PP-5205: publish the TARGET position immediately, before any queue work.
     //
