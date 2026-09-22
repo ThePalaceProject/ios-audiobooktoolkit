@@ -266,10 +266,18 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // Locality is the right question, not track identity. A seek to a track still
     // being STREAMED keeps the previous behaviour exactly — that one is a real wait,
     // and the mute is what stops the previous chapter bleeding over the buffer.
+    // Asks the question `buildPlayerItem` asks, not a neighbouring one. It was fed
+    // `hasLocalFiles()` — "the decrypted URLs exist on disk" — while the builder
+    // gates on `assetFileStatus() == .saved(urls)` with a non-empty list (:630-634).
+    // Two predicates over the same fact disagree eventually, and here the
+    // disagreement would declare a wait over before the item that serves it exists.
     let targetIsLocallyPlayable: Bool = {
-      guard let lcpTrack = position.track as? LCPTrack else { return false }
+      guard let lcpTrack = position.track as? LCPTrack,
+            let task = lcpTrack.downloadTask as? LCPDownloadTask,
+            case let .saved(urls) = task.assetFileStatus()
+      else { return false }
       return Self.trackIsLocallyPlayable(
-        hasLocalFiles: lcpTrack.hasLocalFiles(),
+        hasSavedAssets: !urls.isEmpty,
         isForcedToStream: forceStreamingTrackKeys.contains(lcpTrack.key)
       )
     }()
@@ -324,6 +332,42 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         avQueuePlayer.isMuted = false
       }
       isLoaded = true
+
+      // PP-5205 round 3: a LOCAL seek that still needs a queue rebuild is not a
+      // no-wait, and the first version of this branch left it with no failure path
+      // at all.
+      //
+      // `needsRebuild` is decided by the SAME locality expression (:222-226), so the
+      // streaming→local transition — the common path this whole change is about —
+      // always lands here AND rebuilds. The rebuild can still produce a streaming
+      // item: `buildPlayerItem` falls back to one when a multi-URL composition
+      // fails, which `assetFileStatus()` cannot predict. Its seek completion
+      // publishes `.started` on failure, never `.failed`. So without a backstop a
+      // failed rebuild is indistinguishable from success: no alert, no Retry, and
+      // the host's open lock never released.
+      //
+      // Keyed on `lastStartedItemKey`, NOT `isLoaded`. The streaming branch's timer
+      // guards on `!isLoaded`, and this path sets `isLoaded = true` up front on
+      // purpose — so an isLoaded-keyed guard could never fire here. The question is
+      // whether the TARGET ITEM ever started.
+      if needsRebuild {
+        let targetKey = position.track.key
+        let backstopPosition = position
+        let backstop = DispatchWorkItem { [weak self] in
+          guard let self = self, self.lastStartedItemKey != targetKey else { return }
+          ATLog(.warn, "LCPStreamingPlayer: local-seek rebuild never started the target item — surfacing failure")
+          let error = NSError(
+            domain: "LCPStreamingPlayer",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Timed out rebuilding the queue for a local seek"]
+          )
+          self.queuedTrackPosition = nil
+          self.playbackStatePublisher.send(.failed(backstopPosition, error))
+          onceCompletion(error)
+        }
+        loadTimeoutWorkItem = backstop
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: backstop)
+      }
     }
 
     if !needsRebuild {
@@ -550,6 +594,24 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   // MARK: - Helpers
 
+  /// Whether a seek target can be played from disk RIGHT NOW — the predicate that
+  /// decides whether a chapter change is a wait worth announcing (PP-5205).
+  ///
+  /// Extracted from the call site and made static so it can be table-tested: it
+  /// carries the headline behaviour of this ticket and needs no AVFoundation, unlike
+  /// the rest of `playCallback`. Having the assets is necessary but not sufficient —
+  /// a track in `forceStreamingTrackKeys` has been deliberately pushed onto the
+  /// streaming path (a failed local open, say) and must keep the streaming
+  /// behaviour, mute included, even though its files are present.
+  ///
+  /// NOT sufficient on its own for "no wait": `buildPlayerItem` can still fall back
+  /// to a streaming item when a multi-URL composition fails, which no predicate over
+  /// file state can foresee. The `needsRebuild` backstop in `playCallback` covers
+  /// that residue.
+  nonisolated static func trackIsLocallyPlayable(hasSavedAssets: Bool, isForcedToStream: Bool) -> Bool {
+    hasSavedAssets && !isForcedToStream
+  }
+
   /// Wraps an optional `(Error?) -> Void` completion in a thread-safe,
   /// fire-at-most-once closure. Required because `playCallback` has multiple
   /// racing async paths (timeout work item, seek callback, rebuild fallback)
@@ -557,19 +619,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// async bridge resumes a CheckedContinuation and traps on a second resume.
   /// Returns a non-optional closure so call sites stay simple even when the
   /// caller passed `nil`.
-  /// Whether a seek target can be played from disk RIGHT NOW — the predicate that
-  /// decides whether a chapter change is a wait worth announcing (PP-5205).
-  ///
-  /// Extracted from the call site and made static so it can be table-tested: it
-  /// carries the headline behaviour of this ticket and needs no AVFoundation, unlike
-  /// the rest of `playCallback`. Having the bytes is necessary but not sufficient —
-  /// a track in `forceStreamingTrackKeys` has been deliberately pushed onto the
-  /// streaming path (a failed local open, say) and must keep the streaming
-  /// behaviour, mute included, even though its files are present.
-  nonisolated static func trackIsLocallyPlayable(hasLocalFiles: Bool, isForcedToStream: Bool) -> Bool {
-    hasLocalFiles && !isForcedToStream
-  }
-
   static func makeOnceCompletion(_ completion: ((Error?) -> Void)?) -> (Error?) -> Void {
     let lock = NSLock()
     var fired = false

@@ -314,12 +314,12 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
   /// (`forceStreamingTrackKeys` — a failed local open, say) is still a real wait and
   /// must keep the streaming behaviour, mute included.
   func test_trackIsLocallyPlayable_tableOfAllFourCells() {
-    XCTAssertTrue(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: true, isForcedToStream: false),
+    XCTAssertTrue(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: true, isForcedToStream: false),
                   "bytes on disk and no override: nothing to wait for, so nothing to announce")
-    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: true, isForcedToStream: true),
-                   "forced to stream OVERRIDES having the files — this is the cell a `hasLocalFiles`-only check gets wrong")
-    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: false, isForcedToStream: false),
-                   "no local files is a genuine wait; the previous behaviour, mute included, must be kept")
-    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasLocalFiles: false, isForcedToStream: true))
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: true, isForcedToStream: true),
+                   "forced to stream OVERRIDES having the assets — this is the cell a saved-assets-only check gets wrong")
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: false),
+                   "no saved assets is a genuine wait; the previous behaviour, mute included, must be kept")
+    XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: true))
   }
 }
