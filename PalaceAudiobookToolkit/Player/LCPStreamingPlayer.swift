@@ -333,36 +333,26 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       }
       isLoaded = true
 
-      // PP-5205 round 3: a LOCAL seek that still needs a queue rebuild is not a
-      // no-wait, and the first version of this branch left it with no failure path
-      // at all.
+      // NO failure backstop on this path, and that is a KNOWN GAP (PP-5213), not an
+      // oversight.
       //
       // `needsRebuild` is decided by the SAME locality expression (:222-226), so the
-      // streaming→local transition — the common path this whole change is about —
-      // always lands here AND rebuilds. The rebuild can still produce a streaming
-      // item: `buildPlayerItem` falls back to one when a multi-URL composition
-      // fails, which `assetFileStatus()` cannot predict. Its seek completion
-      // publishes `.started` on failure, never `.failed`. So without a backstop a
-      // failed rebuild is indistinguishable from success: no alert, no Retry, and
-      // the host's open lock never released.
+      // streaming→local transition always lands here AND still rebuilds. The rebuild
+      // publishes `.started` even when its seek FAILS (:484-489), so a failed rebuild
+      // is indistinguishable from a successful one: no alert, no Retry, and the
+      // host's open lock never released.
       //
-      // NO failure backstop on this path, and that is a KNOWN GAP, not an oversight.
+      // A guard was written twice and keyed wrong twice, each time on a predicate
+      // ADJACENT to the one that matters — playback state where the question was
+      // queue state, then queue CONTENTS where the question was whether NAVIGATION
+      // landed (the rebuild inserts the target item first, :455, so that is already
+      // true before the seek runs). Reverted rather than attempted a third time on a
+      // release candidate.
       //
-      // The streaming branch above arms a 30s timer; this branch does not, so if the
-      // queue rebuild below fails, nothing surfaces it: the rebuild publishes
-      // `.started` even when its seek fails (:484-489), so a failed rebuild is
-      // indistinguishable from a successful one — no alert, no Retry, and the host's
-      // open lock is never released.
-      //
-      // A guard was attempted three times (#228, #229) and was wrong three times, each
-      // time on a predicate ADJACENT to the one that matters: playback state where the
-      // question was queue state, then queue CONTENTS where the question was whether
-      // NAVIGATION landed — the rebuild inserts the target item first (:455), so
-      // `currentItem == target && readyToPlay` is already true before the seek runs.
-      // It was reverted rather than attempted a fourth time on a release candidate.
-      //
-      // The right signal is the rebuild's own seek completion, which is where a guard
-      // belongs when this is done properly. See PP-5211.
+      // The right signal is the rebuild's own seek completion, and the right SHAPE is
+      // `OpenAccessPlayer.waitForItemReady` (:816-846): `item.observe(\.status)`
+      // cancelling in the observer, which is pause-independent by construction rather
+      // than by a condition someone has to get right. PP-5213 carries the trace.
     }
 
     if !needsRebuild {
@@ -601,8 +591,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   ///
   /// NOT sufficient on its own for "no wait": `buildPlayerItem` can still fall back
   /// to a streaming item when a multi-URL composition fails, which no predicate over
-  /// file state can foresee. The `needsRebuild` backstop in `playCallback` covers
-  /// that residue.
+  /// file state can foresee. NOTHING currently covers that residue — the backstop
+  /// that once did was reverted, and the gap is PP-5213. Do not read this predicate
+  /// as a guarantee that the seek will succeed; it only says a wait is not expected.
   nonisolated static func trackIsLocallyPlayable(hasSavedAssets: Bool, isForcedToStream: Bool) -> Bool {
     hasSavedAssets && !isForcedToStream
   }
