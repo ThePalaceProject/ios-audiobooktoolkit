@@ -10,7 +10,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   private var fullTrackCache = [String: Data]()
   private let maxConcurrentRequests = 8
   /// How long a data transfer may go without delivering a byte before the
-  /// request is failed with `-1001`.
+  /// request is failed with `LCPResourceLoaderError.transferStalled`.
   ///
   /// This bounds INACTIVITY in the data phase only. It deliberately does not
   /// apply while a request waits on a track's length (see `serve`), and it sits
@@ -329,8 +329,8 @@ private extension LCPResourceLoaderDelegate {
     await transfer(from: resource, start: start, count: count, to: request)
   }
 
-  /// Reads `count` bytes from `start` into the request, failing it with `-1001`
-  /// if `stallTimeout` passes with no bytes delivered. Stops without finishing
+  /// Reads `count` bytes from `start` into the request, failing it with
+  /// `transferStalled` if `stallTimeout` passes with no bytes delivered. Stops without finishing
   /// when the serving task is cancelled.
   func transfer(from resource: Resource, start: Int, count: Int, to request: FinishOnce) async {
     let lastProgress = LockIsolated(Date())
@@ -387,11 +387,7 @@ private extension LCPResourceLoaderDelegate {
           let idle = Date().timeIntervalSince(lastProgress.value)
           if idle >= stallTimeout {
             ATLog(.warn, "🎵 ResourceLoader: no bytes for \(Int(idle)) s — failing the request")
-            request.fail(NSError(
-              domain: "LCPResourceLoader",
-              code: -1001,
-              userInfo: [NSLocalizedDescriptionKey: "Streaming request stalled"]
-            ))
+            request.fail(LCPResourceLoaderError.transferStalled)
             return
           }
           do {
@@ -578,6 +574,29 @@ extension LCPResourceLoaderDelegate {
 }
 
 // MARK: - Serving primitives
+
+/// A failure the loader itself decides on, as opposed to one passed through
+/// from Readium or the transport.
+///
+/// AVFoundation rebuilds a loader error from its code alone and drops the
+/// domain: `-1001` comes back as `NSURLErrorDomain -1001 "The request timed
+/// out"`, indistinguishable from a real network timeout. The stall bound used
+/// that code until PP-5240, which is why the field reports could not tell the
+/// loader's timer from the network. Codes here stay clear of the
+/// `NSURLError` range (all negative) so they cannot be read as one.
+enum LCPResourceLoaderError: Int, CustomNSError {
+  /// A data transfer delivered no bytes for the loader's stall timeout.
+  case transferStalled = 5240
+
+  static var errorDomain: String { "LCPResourceLoader" }
+  var errorCode: Int { rawValue }
+  var errorUserInfo: [String: Any] {
+    switch self {
+    case .transferStalled:
+      return [NSLocalizedDescriptionKey: "Streaming transfer delivered no data within the stall timeout"]
+    }
+  }
+}
 
 /// One admission slot on the loader's concurrency semaphore, released at most once.
 final class RequestSlot: @unchecked Sendable {
