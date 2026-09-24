@@ -3,7 +3,7 @@
 //  PalaceAudiobookToolkitTests
 //
 //  PP-5240: LCP streaming failed tracks at their start with NSURLErrorDomain
-//  -1001. That error is the loader's own guard: a fixed 30 s timer armed per
+//  -1001. That error was the loader's own guard: a fixed 30 s timer armed per
 //  loading request, which only ever covered the content-information phase —
 //  the resource lookup plus `estimatedLength()`. For a CBC-encrypted LCP
 //  resource that length is computed by fetching the last encrypted blocks of
@@ -194,8 +194,8 @@ final class LCPResourceLoaderStallTests: XCTestCase {
   // MARK: - Data phase
 
   /// A read that delivers nothing for longer than the stall timeout ends with
-  /// the loader's timeout error instead of leaving AVFoundation waiting.
-  func testDataPhase_WhenNoBytesArriveForStallTimeout_FailsWithTimedOut() async throws {
+  /// the loader's own typed error instead of leaving AVFoundation waiting.
+  func testDataPhase_WhenNoBytesArriveForStallTimeout_FailsAsStalledNotAsNetworkTimeout() async throws {
     probe.length = 4096
     probe.readHangs = true
     let loader = makeLoader(stallTimeout: 0.2)
@@ -208,7 +208,29 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertTrue(loader.shouldWait(for: request))
     let outcome = try await request.waitUntilFinished(timeout: 5)
 
-    XCTAssertEqual(outcome, .failure(domain: "LCPResourceLoader", code: -1001))
+    XCTAssertEqual(outcome, .failure(domain: "LCPResourceLoader", code: LCPResourceLoaderError.transferStalled.rawValue))
+    XCTAssertNotEqual(
+      (LCPResourceLoaderError.transferStalled as NSError).code, NSURLErrorTimedOut,
+      "AVFoundation keeps only the code; -1001 would read as a network timeout"
+    )
+    XCTAssertEqual(request.respondedBytes, 0)
+  }
+
+  /// The transfer and its stall timer race to answer the same request. Once
+  /// the stall has failed it, a late success — and any late bytes — must not
+  /// reach AVFoundation: a request is answered once, and an expiry never
+  /// reports the good outcome.
+  func testFinishOnce_AfterAStallFailure_DropsTheLateSuccessAndItsBytes() {
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: false, range: nil)
+    let once = FinishOnce(request)
+
+    once.fail(LCPResourceLoaderError.transferStalled)
+    once.respond(with: Data(count: 16))
+    once.succeed()
+
+    XCTAssertEqual(request.finishCount, 1)
+    XCTAssertEqual(request.outcome, .failure(domain: "LCPResourceLoader", code: LCPResourceLoaderError.transferStalled.rawValue))
+    XCTAssertEqual(request.respondedBytes, 0)
   }
 
   /// The bound is on inactivity, not on the whole transfer: a read that keeps
@@ -229,6 +251,25 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
     XCTAssertEqual(outcome, .success, "six chunks take ~0.5 s, twice the stall timeout, but none stalls")
     XCTAssertEqual(request.respondedBytes, chunk * 6)
+  }
+
+  /// A zero-length request that does not ask for data to the end is served
+  /// empty; only a to-end request is widened to the track's length.
+  func testDataPhase_ZeroLengthRequestNotToEnd_ServesNoBytes() async throws {
+    probe.length = 300_000
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 1000, length: 0, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.respondedBytes, 0)
+    XCTAssertEqual(probe.lengthLookups, 0, "no length is needed for a request that does not read to the end")
   }
 
   // MARK: - Cancellation
