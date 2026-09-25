@@ -244,7 +244,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     
     // Now safe to pause
     avQueuePlayer.pause()
-    (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
+    // PP-5240: navigation does not cancel the loader's requests. AVFoundation
+    // cancels the ones a seek or queue change supersedes (didCancel), and the
+    // loader now stops those. A request it is still waiting on — a read-ahead
+    // that already covers the seek target — must keep being served: cancelling
+    // it leaves it unanswered and playback stalls when the buffer runs out.
+    // Before PP-5240 this call only disarmed the 30 s timers; the byte reads ran
+    // in detached tasks it could not reach.
     
     // PP-5205: a seek to a chapter whose audio is ALREADY ON DISK is not a wait.
     //
@@ -501,7 +507,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
     let wasPlaying = avQueuePlayer.rate > 0
     avQueuePlayer.pause()
-    (sharedResourceLoader as? LCPResourceLoaderDelegate)?.cancelAllRequests()
+    // PP-5240: no cancelAllRequests() here either; see playCallback(at:). The
+    // items removed below have their requests cancelled by AVFoundation.
     isLoaded = false
 
     let allTracks = tableOfContents.allTracks
