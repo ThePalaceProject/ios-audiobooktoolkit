@@ -30,6 +30,13 @@ public class AudiobookPlaybackModel: ObservableObject {
   @Published public var currentLocation: TrackPosition?
   private var pendingLocation: TrackPosition?
   private var suppressSavesUntil: Date?
+  /// PP-4964: the position and monotonic time of the last write this model
+  /// made. The playback-clock autosave measures drift and elapsed time from
+  /// here — not from `currentLocation`, which that same stream keeps current.
+  private var lastAutosave: AutosaveMark?
+  /// Monotonic clock for the autosave rate limit; a wall-clock step cannot
+  /// stall or burst it. Replaced by tests.
+  var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
   private var suppressPlaybackPollUntil: Date?
   // While a skip/seek is settling, the SDK buffers→resumes and briefly emits
   // transient position/`.playbackBegan` events (chapter start, chapter end,
@@ -421,27 +428,16 @@ public class AudiobookPlaybackModel: ObservableObject {
         }
       }
       .store(in: &subscriptions)
-    audiobookManager.statePublisher
-      .compactMap { state -> TrackPosition? in
-        if case let .positionUpdated(pos) = state {
-          return pos
-        }
-        return nil
-      }
-      .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
-      .filter { [weak self] position in
-        guard let self = self else {
-          return false
-        }
-        return Self.shouldSaveOnDrift(from: currentLocation, to: position)
-      }
-      .sink { [weak self] _ in
-        self?.saveLocation()
-      }
-      .store(in: &subscriptions)
-    
     // MARK: - Fast UI Updates (0.25s via AVPlayer's periodic time observer)
-    // This provides smooth slider and time display updates without expensive operations
+    // This provides smooth slider and time display updates without expensive operations.
+    //
+    // PP-4964: it also drives the automatic position save. That save used to
+    // ride `.positionUpdated` from the manager's main-runloop timer, throttled
+    // on `RunLoop.main` — the kind of timer iOS suspends during long
+    // screen-locked playback. Every player feeds this stream from its playback
+    // clock, so the save now continues for as long as audio does. Lifecycle
+    // saves (background, termination, seek, chapter end, transport) are
+    // unchanged and remain the backstop.
     audiobookManager.audiobook.player.positionPublisher
       .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
@@ -451,6 +447,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         if !acceptPositionUpdate(position) { return }
         currentLocation = position
         updateProgress()
+        autosaveFromPlaybackClock()
       }
       .store(in: &subscriptions)
 
@@ -570,12 +567,69 @@ public class AudiobookPlaybackModel: ObservableObject {
     return abs(movement) > threshold
   }
 
+  /// PP-4964: where and when this model last wrote a position.
+  struct AutosaveMark {
+    let position: TrackPosition
+    let uptime: TimeInterval
+  }
+
+  enum AutosaveDecision: Equatable {
+    /// No write has happened yet: record a baseline, write nothing.
+    case seed
+    case wait
+    case save
+  }
+
+  /// Minimum monotonic time between automatic writes: the most listening a
+  /// patron can lose if the app is killed without a lifecycle save.
+  ///
+  /// Not shorter, because each write is expensive on the host: Palace's
+  /// `saveListeningPosition` rewrites the whole book registry to disk (primary
+  /// and backup) and posts a registry-changed notification that the shelf,
+  /// holds and detail views observe. Its remote writer already coalesces to
+  /// one POST per 15 seconds, so a faster local cadence would buy nothing on
+  /// the server either.
+  static let autosaveInterval: TimeInterval = 15.0
+
+  /// Whether a playback-clock tick should write the patron's position.
+  ///
+  /// The first tick after load only seeds the baseline. The player can emit a
+  /// transient position while it settles onto the restored place, and writing
+  /// that would replace the place it is settling onto; the lifecycle saves
+  /// already cover the first seconds of a session.
+  ///
+  /// Movement is measured from the last WRITTEN position through
+  /// `shouldSaveOnDrift`, so a paused or barely-moving playhead still writes
+  /// nothing however much time passes.
+  static func autosaveDecision(
+    since last: AutosaveMark?,
+    candidate: TrackPosition,
+    now: TimeInterval
+  ) -> AutosaveDecision {
+    guard let last else { return .seed }
+    guard now - last.uptime >= autosaveInterval else { return .wait }
+    return shouldSaveOnDrift(from: last.position, to: candidate) ? .save : .wait
+  }
+
+  private func autosaveFromPlaybackClock() {
+    guard let currentLocation else { return }
+    switch Self.autosaveDecision(since: lastAutosave, candidate: currentLocation, now: uptime()) {
+    case .seed:
+      lastAutosave = AutosaveMark(position: currentLocation, uptime: uptime())
+    case .wait:
+      break
+    case .save:
+      saveLocation()
+    }
+  }
+
   private func saveLocation() {
     if let until = suppressSavesUntil, Date() < until {
       return
     }
     if let currentLocation {
       audiobookManager.saveLocation(currentLocation)
+      lastAutosave = AutosaveMark(position: currentLocation, uptime: uptime())
     }
   }
 
@@ -586,6 +640,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     suppressSavesUntil = nil
     if let currentLocation {
       audiobookManager.saveLocation(currentLocation)
+      lastAutosave = AutosaveMark(position: currentLocation, uptime: uptime())
     }
   }
 

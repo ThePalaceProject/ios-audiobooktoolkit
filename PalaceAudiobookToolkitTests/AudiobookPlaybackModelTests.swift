@@ -241,3 +241,183 @@ final class AudiobookPlaybackModelTests: XCTestCase {
                   "premise: `isLoaded` is false, so nothing has been asked to play — the title moved on the tap alone")
   }
 }
+
+// MARK: - PP-4964 — the automatic save rides the playback clock
+
+/// The automatic listening-position save used to be driven by
+/// `DefaultAudiobookManager`'s main-runloop `Timer.publish`, re-throttled on
+/// `RunLoop.main`. iOS coalesces and suspends that kind of timer during long
+/// screen-locked playback, so a patron who locks the phone and listens untouched
+/// is saved only by the lifecycle backstops. The save now subscribes to
+/// `player.positionPublisher`, which every player feeds from its playback clock.
+///
+/// These tests never let the manager's timer produce a position: the mock player
+/// reports `isPlaying == false`, so `setupNowPlayingInfoTimer`'s `compactMap`
+/// yields nothing. Any save they observe came from the playback-clock stream.
+/// Remove that subscription and `test_lockedListen_savesFromThePlaybackClockAlone`
+/// records zero saves.
+@MainActor
+final class AudiobookPlaybackModelAutosaveTests: XCTestCase {
+  private final class SpyBookmarkDelegate: AudiobookBookmarkDelegate {
+    private(set) var savedPositions: [TrackPosition] = []
+    func saveListeningPosition(at location: TrackPosition, completion: ((String?) -> Void)?) {
+      savedPositions.append(location)
+      completion?("server-id")
+    }
+    func saveBookmark(at location: TrackPosition, completion: ((TrackPosition?) -> Void)?) { completion?(nil) }
+    func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?) { completion?(false) }
+    func fetchBookmarks(for tracks: Tracks, toc: [Chapter], completion: @escaping ([TrackPosition]) -> Void) { completion([]) }
+    func flushPendingOperations() {}
+    func saveListeningPositionSync(at position: TrackPosition) { savedPositions.append(position) }
+  }
+
+  private struct Harness {
+    let model: AudiobookPlaybackModel
+    let player: PlayerMock
+    let spy: SpyBookmarkDelegate
+    let track: any Track
+    let tracks: Tracks
+    let clock: FakeUptime
+  }
+
+  private final class FakeUptime {
+    var now: TimeInterval = 1_000
+  }
+
+  private func makeHarness() throws -> Harness {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "pp4964-autosave", decryptor: nil, token: nil)
+    )
+    let player = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    player.isLoaded = false
+    player.isPlaying = false
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Autosave", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    let spy = SpyBookmarkDelegate()
+    manager.bookmarkDelegate = spy
+    let model = AudiobookPlaybackModel(audiobookManager: manager)
+    let clock = FakeUptime()
+    model.uptime = { clock.now }
+    let track = try XCTUnwrap(audiobook.tableOfContents.allTracks.first)
+    return Harness(model: model, player: player, spy: spy, track: track,
+                   tracks: audiobook.tableOfContents.tracks, clock: clock)
+  }
+
+  /// `positionPublisher` is delivered on the main queue; this returns once every
+  /// block enqueued before it has run, so the sink has seen each emitted tick.
+  private func drainMainQueue() async {
+    await withCheckedContinuation { continuation in
+      DispatchQueue.main.async { continuation.resume() }
+    }
+  }
+
+  /// Emits a tick every 0.25s of playback (the periodic observer's cadence),
+  /// advancing the monotonic clock in step. Drains after EACH tick: the sink
+  /// reads the clock when it runs, so emitting a batch and draining once would
+  /// deliver every tick at the batch's final time.
+  private func play(_ h: Harness, from start: Double, seconds: Double) async {
+    var t = start
+    while t <= start + seconds {
+      h.clock.now += 0.25
+      h.player._emitPosition(TrackPosition(track: h.track, timestamp: t, tracks: h.tracks))
+      await drainMainQueue()
+      t += 0.25
+    }
+  }
+
+  // MARK: Decision table
+
+  func test_autosaveDecision_withNoBaseline_seedsWithoutWriting() throws {
+    let h = try makeHarness()
+    let candidate = TrackPosition(track: h.track, timestamp: 30, tracks: h.tracks)
+    XCTAssertEqual(AudiobookPlaybackModel.autosaveDecision(since: nil, candidate: candidate, now: 5), .seed)
+  }
+
+  func test_autosaveDecision_insideTheInterval_waitsEvenAfterLargeMovement() throws {
+    let h = try makeHarness()
+    let mark = AudiobookPlaybackModel.AutosaveMark(
+      position: TrackPosition(track: h.track, timestamp: 0, tracks: h.tracks), uptime: 100)
+    let far = TrackPosition(track: h.track, timestamp: 300, tracks: h.tracks)
+    let justInside = 100 + AudiobookPlaybackModel.autosaveInterval - 0.1
+    XCTAssertEqual(AudiobookPlaybackModel.autosaveDecision(since: mark, candidate: far, now: justInside), .wait)
+  }
+
+  func test_autosaveDecision_atTheInterval_savesRealMovement() throws {
+    let h = try makeHarness()
+    let mark = AudiobookPlaybackModel.AutosaveMark(
+      position: TrackPosition(track: h.track, timestamp: 10, tracks: h.tracks), uptime: 100)
+    let moved = TrackPosition(track: h.track, timestamp: 25, tracks: h.tracks)
+    let exactlyDue = 100 + AudiobookPlaybackModel.autosaveInterval
+    XCTAssertEqual(AudiobookPlaybackModel.autosaveDecision(since: mark, candidate: moved, now: exactlyDue), .save)
+  }
+
+  func test_autosaveDecision_afterTheInterval_waitsWhenThePlayheadHasNotMoved() throws {
+    let h = try makeHarness()
+    let mark = AudiobookPlaybackModel.AutosaveMark(
+      position: TrackPosition(track: h.track, timestamp: 10, tracks: h.tracks), uptime: 100)
+    let barelyMoved = TrackPosition(track: h.track, timestamp: 11.5, tracks: h.tracks)
+    XCTAssertEqual(AudiobookPlaybackModel.autosaveDecision(since: mark, candidate: barelyMoved, now: 160), .wait)
+  }
+
+  // MARK: Wiring
+
+  func test_lockedListen_savesFromThePlaybackClockAlone() async throws {
+    let h = try makeHarness()
+
+    await play(h, from: 0, seconds: 180)
+
+    // 180s at one save per 15s is 12 after the seeding tick. The bound matters in
+    // both directions: zero is the defect, and more is a write cadence the host
+    // pays for with a full registry rewrite each time.
+    XCTAssertGreaterThanOrEqual(h.spy.savedPositions.count, 11,
+      "three minutes of playback-clock ticks with no runloop timer must keep saving the position")
+    XCTAssertLessThanOrEqual(h.spy.savedPositions.count, 12,
+      "the save must be rate-limited to one write per interval, not one per tick")
+    let last = try XCTUnwrap(h.spy.savedPositions.last)
+    XCTAssertGreaterThanOrEqual(last.timestamp, 175,
+      "the saved place must track the playhead, not the moment playback began")
+  }
+
+  func test_firstTick_isABaselineNotAWrite() async throws {
+    let h = try makeHarness()
+
+    await play(h, from: 600, seconds: 4)
+
+    XCTAssertTrue(h.spy.savedPositions.isEmpty,
+      "the first ticks after load must not write: a transient position there would replace the restored place")
+  }
+
+  func test_saveSuppression_holdsTheAutosaveOff() async throws {
+    let h = try makeHarness()
+    h.model.beginSaveSuppression(for: 600)
+
+    await play(h, from: 0, seconds: 60)
+
+    XCTAssertTrue(h.spy.savedPositions.isEmpty,
+      "the restore window's suppression must also cover the playback-clock save")
+  }
+
+  /// A suppressed tick must not count as a write. If it moved the baseline,
+  /// the first save after the window would slip another interval, and a
+  /// suppression that outlasts playback would leave nothing saved at all.
+  func test_saveSuppression_whenItLapses_theNextDueTickWrites() async throws {
+    let h = try makeHarness()
+    h.model.beginSaveSuppression(for: 0.4)
+
+    await play(h, from: 0, seconds: 20)
+    XCTAssertTrue(h.spy.savedPositions.isEmpty, "premise: the window covered the first ticks")
+
+    // `suppressSavesUntil` is wall-clock, so the window has to lapse in real time.
+    try await Task.sleep(nanoseconds: 500_000_000)
+    await play(h, from: 20.25, seconds: 0.25)
+
+    let saved = try XCTUnwrap(h.spy.savedPositions.first,
+      "the first tick after the window is already due and must write")
+    XCTAssertEqual(saved.timestamp, 20.25, accuracy: 0.001)
+  }
+}
