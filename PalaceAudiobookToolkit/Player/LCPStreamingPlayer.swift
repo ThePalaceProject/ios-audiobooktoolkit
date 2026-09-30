@@ -605,27 +605,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     hasSavedAssets && !isForcedToStream
   }
 
-  /// Wraps an optional `(Error?) -> Void` completion in a thread-safe,
-  /// fire-at-most-once closure. Required because `playCallback` has multiple
-  /// racing async paths (timeout work item, seek callback, rebuild fallback)
-  /// that can each invoke the caller's completion; the upstream `play(at:)`
-  /// async bridge resumes a CheckedContinuation and traps on a second resume.
-  /// Returns a non-optional closure so call sites stay simple even when the
-  /// caller passed `nil`.
-  static func makeOnceCompletion(_ completion: ((Error?) -> Void)?) -> (Error?) -> Void {
-    let lock = NSLock()
-    var fired = false
-    return { error in
-      lock.lock()
-      let shouldFire = !fired
-      fired = true
-      lock.unlock()
-      if shouldFire {
-        completion?(error)
-      }
-    }
-  }
-
   private func safeTimestamp(for position: TrackPosition) -> TimeInterval {
     let duration = position.track.duration
 

@@ -308,23 +308,41 @@ class OpenAccessPlayer: NSObject, Player {
   /// of crashing users.
   func play(at position: TrackPosition) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      let lock = NSLock()
-      var resumed = false
-      playCallback(at: position) { error in
-        lock.lock()
-        let shouldResume = !resumed
-        resumed = true
-        lock.unlock()
-        guard shouldResume else {
-          ATLog(.warn, "OpenAccessPlayer.play(at:): playCallback completion fired more than once; ignoring duplicate (error: \(error.map { "\($0)" } ?? "nil"))")
-          return
-        }
-        if let error = error {
-          continuation.resume(throwing: error)
-        } else {
-          continuation.resume()
-        }
+      playCallback(at: position, completion: Self.makeOnceCompletion(
+        { (error: Error?) in
+          if let error = error {
+            continuation.resume(throwing: error)
+          } else {
+            continuation.resume()
+          }
+        },
+        duplicateWarning: "OpenAccessPlayer.play(at:): playCallback completion fired more than once; ignoring duplicate"
+      ))
+    }
+  }
+
+  /// Wraps a completion so only its first call is delivered; later calls are
+  /// dropped (and logged when `duplicateWarning` is set). The async bridges
+  /// (`play(at:)`, `skipPlayhead`, `move(to:)`) resume a `CheckedContinuation`
+  /// from a callback that more than one path can reach, and a second resume
+  /// traps. `LCPStreamingPlayer.playCallback` uses it at its own entry too.
+  static func makeOnceCompletion<Value>(
+    _ completion: ((Value) -> Void)?,
+    duplicateWarning: String? = nil
+  ) -> (Value) -> Void {
+    let fired = LockIsolated(false)
+    return { value in
+      let isFirst = fired.withValue { alreadyFired -> Bool in
+        defer { alreadyFired = true }
+        return !alreadyFired
       }
+      guard isFirst else {
+        if let duplicateWarning {
+          ATLog(.warn, duplicateWarning)
+        }
+        return
+      }
+      completion?(value)
     }
   }
 
@@ -669,6 +687,9 @@ class OpenAccessPlayer: NSObject, Player {
   /// Async protocol surface — bridges to the internal callback `seekTo` via
   /// `withCheckedContinuation`. Returns nil when there is no current/last-
   /// known position to compute a target from.
+  ///
+  /// The continuation is resumed by the first seek completion only; a later
+  /// duplicate is logged and dropped rather than trapping.
   public func skipPlayhead(_ timeInterval: TimeInterval) async -> TrackPosition? {
     guard let currentTrackPosition = currentTrackPosition ?? lastKnownPosition else {
       return nil
@@ -676,9 +697,10 @@ class OpenAccessPlayer: NSObject, Player {
 
     let newPosition = currentTrackPosition + timeInterval
     return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
-      seekTo(position: newPosition) { result in
-        continuation.resume(returning: result)
-      }
+      seekTo(position: newPosition, completion: Self.makeOnceCompletion(
+        { (result: TrackPosition?) in continuation.resume(returning: result) },
+        duplicateWarning: "OpenAccessPlayer.skipPlayhead: seek completion fired more than once; ignoring duplicate"
+      ))
     }
   }
 
@@ -813,7 +835,7 @@ class OpenAccessPlayer: NSObject, Player {
     }
   }
   
-  private func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
+  func waitForItemReady(_ item: AVPlayerItem, timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
     if item.status == .failed {
       ATLog(.error, "OpenAccessPlayer: Item already failed - \(item.error?.localizedDescription ?? "unknown")")
       handleItemLoadFailure(item)
@@ -821,14 +843,24 @@ class OpenAccessPlayer: NSObject, Player {
       return
     }
 
+    // The wait ends on the first of {timeout, .readyToPlay, .failed}. The status
+    // paths cancel the timeout, and the timeout stops the status observation,
+    // so an item that fails or becomes ready after the timeout does not
+    // complete the wait a second time. This relies on both arriving on one
+    // queue: the timeout runs on main, and AVPlayerItem.h (NS_SWIFT_UI_ACTOR)
+    // says status KVO is serialized on the player's queue, "by default ... the
+    // main queue". That is a default, not a guarantee; the once-guards on the
+    // async bridges (`makeOnceCompletion`) are the safety net if it changes.
+    var observation: NSKeyValueObservation?
+
     let timeoutWorkItem = DispatchWorkItem { [weak self] in
+      observation?.invalidate()
       ATLog(.warn, "OpenAccessPlayer: Item ready timeout after \(timeout)s")
       self?.handleItemLoadFailure(item)
       completion(false)
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
 
-    var observation: NSKeyValueObservation?
     observation = item.observe(\.status, options: [.new]) { [weak self] observedItem, change in
       guard let self else { return }
 
@@ -920,9 +952,10 @@ class OpenAccessPlayer: NSObject, Player {
     )
 
     return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
-      seekTo(position: newPosition) { result in
-        continuation.resume(returning: result)
-      }
+      seekTo(position: newPosition, completion: Self.makeOnceCompletion(
+        { (result: TrackPosition?) in continuation.resume(returning: result) },
+        duplicateWarning: "OpenAccessPlayer.move(to:): seek completion fired more than once; ignoring duplicate"
+      ))
     }
   }
 
