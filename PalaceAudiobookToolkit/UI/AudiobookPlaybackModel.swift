@@ -37,6 +37,9 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// Monotonic clock for the autosave rate limit; a wall-clock step cannot
   /// stall or burst it. Replaced by tests.
   var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+  /// Wall clock for the save-suppression window (`beginSaveSuppression`).
+  /// Replaced by tests so the window can lapse without waiting in real time.
+  var wallClock: () -> Date = { Date() }
   private var suppressPlaybackPollUntil: Date?
   // While a skip/seek is settling, the SDK buffers→resumes and briefly emits
   // transient position/`.playbackBegan` events (chapter start, chapter end,
@@ -279,7 +282,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   }
 
   public func beginSaveSuppression(for seconds: TimeInterval) {
-    suppressSavesUntil = Date().addingTimeInterval(seconds)
+    suppressSavesUntil = wallClock().addingTimeInterval(seconds)
   }
 
   private func subscribeToPublisher() {
@@ -624,7 +627,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   }
 
   private func saveLocation() {
-    if let until = suppressSavesUntil, Date() < until {
+    if let until = suppressSavesUntil, wallClock() < until {
       return
     }
     if let currentLocation {
