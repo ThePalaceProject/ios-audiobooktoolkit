@@ -5,25 +5,14 @@
 # finally registered they produced 178 failing assertions, four of which
 # described a real chapter-navigation defect that patrons could see (PP-4948).
 #
-# This workflow is deliberately STAGE 1: the checks that need nothing but
-# Python. It does not build or test the framework, because it cannot — see
-# "Stage 2" below. It runs in seconds, needs no secrets and no macOS runner,
-# and it catches the specific class of defect that actually happened here: a
-# file that exists but is never executed, and a ledger row that silently
-# vanishes from its table.
+# This workflow is STAGE 1: the checks that need nothing but Python. It runs
+# in seconds, needs no secrets and no macOS runner, and it catches the specific
+# class of defect that actually happened here: a file that exists but is never
+# executed, and a ledger row that silently vanishes from its table.
 #
-# Stage 2 — compiling and running the 226-test suite — is blocked on three
-# things, all pre-existing:
-#   * `PalaceUIKit` is a target in the SEPARATE `Palace.xcodeproj`, imported
-#     by two UI files here, so this repository cannot be built from a checkout
-#     of itself;
-#   * `AudioEngine.xcframework` resolves to `../Carthage/Build/…`, outside
-#     this repository, and is a licensed binary;
-#   * `PureLayout.xcframework` is referenced by an absolute path into one
-#     developer's home directory.
-# Tracked separately. Do not add a build job here until those are resolved —
-# a red-by-default job teaches everyone to ignore the board, which is worse
-# than no board at all.
+# Stage 2, building the framework and running its XCTest suite, is tests.yml.
+# It became possible once PP-4953 removed the PalaceUIKit import and the
+# absolute PureLayout path; it fetches AudioEngine.xcframework itself.
 
 name: checks
 

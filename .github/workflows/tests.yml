@@ -1,0 +1,101 @@
+# Builds the framework and runs the PalaceAudiobookToolkitTests suite on every
+# pull request. This is the "stage 2" that checks.yml describes.
+#
+# The repository builds from a checkout of itself since PP-4953 vendored
+# PalaceUIKit. The one input from outside it is Findaway's
+# AudioEngine.xcframework, which the project reads from ../Carthage/Build. It
+# is fetched here from the same public CDN, same version, that ios-core's
+# scripts/fetch-audioengine.sh uses for its own CI builds, and its checksum is
+# pinned. It is not cached or uploaded, so the binary is never stored by this
+# repository's CI.
+
+name: tests
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AUDIOENGINE_ZIP: AudioEngine6.5.6.zip
+  AUDIOENGINE_SHA256: debe3f1c10d71ae31160418587560352eced166e176cbb040828d020bba66786
+
+jobs:
+  unit-tests:
+    name: unit tests
+    runs-on: macos-15
+    timeout-minutes: 40
+
+    steps:
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch AudioEngine into ../Carthage/Build
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -sSfLO "https://cdn.audioengine.io/ios/$AUDIOENGINE_ZIP"
+          echo "$AUDIOENGINE_SHA256  $AUDIOENGINE_ZIP" | shasum -a 256 -c -
+          unzip -q "$AUDIOENGINE_ZIP"
+          mkdir -p "$GITHUB_WORKSPACE/../Carthage/Build"
+          mv AudioEngine/AudioEngine.xcframework "$GITHUB_WORKSPACE/../Carthage/Build/"
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/spm
+          key: spm-${{ hashFiles('PalaceAudiobookToolkit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-
+
+      - name: Select simulator
+        id: sim
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone" \
+            | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}' | head -1)
+          [ -n "$SIMULATOR_ID" ] || { echo "::error::no iPhone simulator"; exit 1; }
+          echo "id=$SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Run tests
+        timeout-minutes: 30
+        shell: bash
+        # `shell: bash` runs with -eo pipefail; +e so the status is read from
+        # PIPESTATUS (xcodebuild's, not tee's) and the rollup still prints.
+        run: |
+          set +e
+          xcodebuild test \
+            -project PalaceAudiobookToolkit.xcodeproj \
+            -scheme PalaceAudiobookToolkit \
+            -destination "id=${{ steps.sim.outputs.id }}" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            -resultBundlePath "$RUNNER_TEMP/Tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/test.log"
+          status=${PIPESTATUS[0]}
+          echo "---- rollup ----"
+          grep -E -A1 "^Test Suite 'All tests'" "$RUNNER_TEMP/test.log"
+          grep -E "\*\* TEST" "$RUNNER_TEMP/test.log"
+          echo "xcodebuild exit status: $status"
+          exit "$status"
+
+      # xcodebuild exits 0 when the scheme selects no tests, so the step above
+      # cannot tell an empty run from a green one. The result bundle can.
+      - name: Require executed tests and no failures
+        if: ${{ !cancelled() }}
+        run: |
+          xcrun xcresulttool get test-results summary \
+            --path "$RUNNER_TEMP/Tests.xcresult" --format json > "$RUNNER_TEMP/summary.json"
+          python3 scripts/check-test-results.py "$RUNNER_TEMP/summary.json"
