@@ -37,9 +37,13 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// Monotonic clock for the autosave rate limit; a wall-clock step cannot
   /// stall or burst it. Replaced by tests.
   var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
-  /// Wall clock for the save-suppression window (`beginSaveSuppression`).
-  /// Replaced by tests so the window can lapse without waiting in real time.
+  /// Wall clock for the suppression windows: saves (`beginSaveSuppression`),
+  /// transient positions after a skip or seek, and the playback-state poll.
+  /// Replaced by tests so a window can lapse without waiting in real time.
   var wallClock: () -> Date = { Date() }
+  /// How long a chapter selection holds the display on its target track when
+  /// no position for that track arrives. Replaced by tests that must not race it.
+  var navigationHoldTimeout: TimeInterval = 3.0
   private var suppressPlaybackPollUntil: Date?
   // While a skip/seek is settling, the SDK buffers→resumes and briefly emits
   // transient position/`.playbackBegan` events (chapter start, chapter end,
@@ -50,14 +54,14 @@ public class AudiobookPlaybackModel: ObservableObject {
   private var isNavigating = false
 
   private var isSuppressingPositionUpdates: Bool {
-    if let until = suppressPositionUpdatesUntil { return Date() < until }
+    if let until = suppressPositionUpdatesUntil { return wallClock() < until }
     return false
   }
 
   /// Begins (or extends) the post-skip suppression window. Rapid skips keep
   /// pushing it out so the display tracks the latest target, not the churn.
   private func suppressTransientPlaybackUpdates(for seconds: TimeInterval) {
-    let until = Date().addingTimeInterval(seconds)
+    let until = wallClock().addingTimeInterval(seconds)
     suppressPositionUpdatesUntil = until
     suppressPlaybackPollUntil = until
   }
@@ -123,7 +127,7 @@ public class AudiobookPlaybackModel: ObservableObject {
       navigationTargetTrackKey = selectedLocation.track.key
       suppressTransientPlaybackUpdates(for: 1.5)
 
-      DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+      DispatchQueue.main.asyncAfter(deadline: .now() + navigationHoldTimeout) {
         if self.isNavigating {
           print("Navigation timeout reached - clearing navigation state")
           self.isNavigating = false
@@ -462,7 +466,7 @@ public class AudiobookPlaybackModel: ObservableObject {
       .autoconnect()
       .sink { [weak self] _ in
         guard let self = self else { return }
-        if let suppress = suppressPlaybackPollUntil, Date() < suppress { return }
+        if let suppress = suppressPlaybackPollUntil, wallClock() < suppress { return }
         let currentPlayingState = audiobookManager.audiobook.player.isPlaying
         if _isPlaying != currentPlayingState {
           _isPlaying = currentPlayingState
@@ -495,7 +499,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   // deallocates, and everything else this used to do belonged to other objects.
 
   func playPause() {
-    suppressPlaybackPollUntil = Date().addingTimeInterval(1.0)
+    suppressPlaybackPollUntil = wallClock().addingTimeInterval(1.0)
     let wasPlaying = isPlaying
     if wasPlaying {
       audiobookManager.pause()

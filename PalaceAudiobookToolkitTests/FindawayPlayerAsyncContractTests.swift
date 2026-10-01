@@ -562,8 +562,14 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
   /// The ceiling is far above the 0.5s debounce on purpose: the assertion is
   /// "this eventually happens", which is a property of the scheduler, where a
   /// fixed sleep would be a measurement of the host.
+  ///
+  /// 30 s rather than 5 s: on the macos-15 runner the debounced work item once
+  /// had not run after 5 s (toolkit run 36932958123, test duration 10.9 s),
+  /// and pure tests such as CursorTests have taken up to 15 s on CI. Both callers
+  /// wait for something that does happen, so a passing run returns as soon as
+  /// it does and the ceiling only bounds a hang.
   private static func eventually(
-    within ceiling: TimeInterval = 5.0,
+    within ceiling: TimeInterval = 30.0,
     _ condition: @MainActor () -> Bool
   ) async -> Bool {
     let deadline = Date().addingTimeInterval(ceiling)

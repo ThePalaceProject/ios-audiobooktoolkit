@@ -143,11 +143,16 @@ final class AudiobookPlaybackModelTests: XCTestCase {
   /// End-to-end wiring: the gate is actually consulted by the fast-position
   /// subscription, and it releases once the target's own position arrives.
   ///
-  /// The wait is deliberate. `selectedLocation` also opens the 1.5s skip
-  /// suppression window, which would reject the foreign position on its own —
-  /// so the assertion is made AFTER that window expires, where only the
-  /// content-keyed hold can still be responsible. Without the hold this test
-  /// fails: the foreign tick lands and `currentLocation` reverts to track A.
+  /// `selectedLocation` also opens the 1.5s skip suppression window, which
+  /// would reject the foreign position on its own — so the assertion is made
+  /// AFTER that window expires, where only the content-keyed hold can still be
+  /// responsible. Without the hold this test fails: the foreign tick lands and
+  /// `currentLocation` reverts to track A.
+  ///
+  /// Both clocks are controlled. The window lapses by advancing the model's
+  /// `wallClock`, and the hold's own fallback timeout is set far beyond the
+  /// test, so a slow runner cannot expire the hold before the ticks arrive and
+  /// the hold can only be released by the target's own position.
   ///
   /// `isLoaded = false` is load-bearing, not incidental. It routes the selection
   /// down the `pendingLocation` branch, so the mock never receives `play(at:)`,
@@ -171,6 +176,9 @@ final class AudiobookPlaybackModelTests: XCTestCase {
       networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
     )
     let model = AudiobookPlaybackModel(audiobookManager: manager)
+    var wallNow = Date(timeIntervalSinceReferenceDate: 0)
+    model.wallClock = { wallNow }
+    model.navigationHoldTimeout = 600
 
     let tracks = audiobook.tableOfContents.allTracks
     let leavingTrack = try XCTUnwrap(tracks.first)
@@ -183,25 +191,33 @@ final class AudiobookPlaybackModelTests: XCTestCase {
                    "the selection must be shown immediately")
 
     // Past the 1.5s skip-suppression window: only the content-keyed hold is left.
-    try await Task.sleep(nanoseconds: 1_600_000_000)
+    wallNow += 1.6
 
     player._emitPosition(TrackPosition(track: leavingTrack, timestamp: 12, tracks: allTracks))
-    try await Task.sleep(nanoseconds: 150_000_000)
+    await drainMainQueue()
     XCTAssertEqual(model.currentLocation?.track.key, targetTrack.key,
                    "a tick from the track being left must not move the display")
 
     // The seek lands: the target's own position is applied and the hold releases.
     player._emitPosition(TrackPosition(track: targetTrack, timestamp: 3, tracks: allTracks))
-    try await Task.sleep(nanoseconds: 150_000_000)
+    await drainMainQueue()
     XCTAssertEqual(model.currentLocation?.track.key, targetTrack.key)
     XCTAssertEqual(model.currentLocation?.timestamp ?? -1, 3, accuracy: 0.001,
                    "the target's own position must be applied, not swallowed")
 
     // Hold released — an ordinary rollover to the next track is honoured again.
     player._emitPosition(TrackPosition(track: leavingTrack, timestamp: 42, tracks: allTracks))
-    try await Task.sleep(nanoseconds: 150_000_000)
+    await drainMainQueue()
     XCTAssertEqual(model.currentLocation?.track.key, leavingTrack.key,
                    "the hold must not outlive the seek that set it")
+  }
+
+  /// `positionPublisher` is delivered on the main queue; this returns once every
+  /// block enqueued before it has run, so the sink has seen each emitted tick.
+  private func drainMainQueue() async {
+    await withCheckedContinuation { continuation in
+      DispatchQueue.main.async { continuation.resume() }
+    }
   }
 
   /// PP-5205: the chapter NAME must move on the tap, not on the audio.
