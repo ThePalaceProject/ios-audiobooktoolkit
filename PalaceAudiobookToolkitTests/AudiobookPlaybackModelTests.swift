@@ -407,13 +407,17 @@ final class AudiobookPlaybackModelAutosaveTests: XCTestCase {
   /// suppression that outlasts playback would leave nothing saved at all.
   func test_saveSuppression_whenItLapses_theNextDueTickWrites() async throws {
     let h = try makeHarness()
+    // The suppression window runs on the model's wall clock. Pinning it keeps
+    // the window open for all 20 s of ticks however long they take to deliver,
+    // then lapses it in one step.
+    var wallNow = Date(timeIntervalSinceReferenceDate: 0)
+    h.model.wallClock = { wallNow }
     h.model.beginSaveSuppression(for: 0.4)
 
     await play(h, from: 0, seconds: 20)
     XCTAssertTrue(h.spy.savedPositions.isEmpty, "premise: the window covered the first ticks")
 
-    // `suppressSavesUntil` is wall-clock, so the window has to lapse in real time.
-    try await Task.sleep(nanoseconds: 500_000_000)
+    wallNow += 0.5
     await play(h, from: 20.25, seconds: 0.25)
 
     let saved = try XCTUnwrap(h.spy.savedPositions.first,

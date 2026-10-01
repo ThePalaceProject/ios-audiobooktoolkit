@@ -79,20 +79,32 @@ final class LCPResourceLoaderStallTests: XCTestCase {
   }
 
   /// A length lookup that the transport ends with an error still ends the
-  /// request, and it ends it the way it always has: no length, bytes served.
+  /// request, and it ends it the way it always has: successfully, with no length.
+  ///
+  /// The lookup is held open by the test rather than by a delay, so "late"
+  /// means "still pending after the stall timeout has passed" on any machine.
+  /// The request asks for content information only: a data range would add
+  /// the data phase's own stall timer, which races the read and is covered by
+  /// the data-phase tests below.
   func testContentInfo_WhenLengthLookupFailsLate_FinishesWithoutLength() async throws {
     probe.length = 4096
-    probe.lengthDelay = 0.4
+    probe.lengthHangs = true
     probe.lengthFails = true
-    let loader = makeLoader(stallTimeout: 0.1)
-    let request = FakeLoadingRequest(
-      url: Self.trackURL,
-      needsContentInformation: true,
-      range: LCPRequestedRange(offset: 0, length: 2, toEnd: false)
-    )
+    let stallTimeout: TimeInterval = 0.1
+    let loader = makeLoader(stallTimeout: stallTimeout)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
 
     XCTAssertTrue(loader.shouldWait(for: request))
-    let outcome = try await request.waitUntilFinished(timeout: 5)
+    try await waitUntil(timeout: 30) { self.probe.lengthCallsStarted > 0 }
+    // At least five stall timeouts pass while the lookup is pending.
+    try await Task.sleep(nanoseconds: UInt64(stallTimeout * 5 * 1_000_000_000))
+    XCTAssertNil(request.outcome, "a pending length lookup must not be ended by a timer")
+
+    probe.releaseAll()
+    // Hang bound only: the request finishes as soon as the released lookup
+    // reports its failure. A 5 s bound was exceeded once on CI (ios-core run
+    // 36911638959, 37.7 s); the bound matters only if the request never ends.
+    let outcome = try await request.waitUntilFinished(timeout: 30)
 
     XCTAssertEqual(outcome, .success)
     XCTAssertNil(request.contentLength, "a failed lookup reports no length rather than a wrong one")

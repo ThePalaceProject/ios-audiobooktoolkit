@@ -161,6 +161,22 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
   }
 
+  /// Calls `body` on the main queue after every block already submitted to
+  /// `queue` has run, along with the main-queue work those blocks scheduled.
+  ///
+  /// For tests that assert nothing is published: they wait for the pending
+  /// work to drain instead of for a fixed interval. The barrier orders this
+  /// behind earlier submissions such as `initializeProgressFromCurrentState`.
+  /// The second main hop is needed because a block already on main (for
+  /// example `updateOverallProgress`) can enqueue its `send` after the first hop.
+  func whenPendingWorkDrains(_ body: @escaping () -> Void) {
+    queue.async(flags: .barrier) {
+      DispatchQueue.main.async {
+        DispatchQueue.main.async(execute: body)
+      }
+    }
+  }
+
   public func fetch() {
     fillDownloadSlots(startingFrom: 0)
   }

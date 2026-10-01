@@ -26,21 +26,23 @@ class AudiobookNetworkServiceTest: XCTestCase {
     super.tearDown()
   }
 
-  func testDownloadProgressWithEmptyTracks() {
+  func testDownloadProgressWithEmptyTracks() async {
     let service = DefaultAudiobookNetworkService(tracks: [])
-    let expectation = XCTestExpectation(description: "Expect no download state updates")
+    var received: [DownloadState] = []
 
     service.downloadStatePublisher
-      .sink(receiveValue: { _ in
-        XCTFail("Should not receive any download state updates")
-      })
+      .sink(receiveValue: { received.append($0) })
       .store(in: &cancellables)
 
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-      expectation.fulfill()
-    }
+    // Waits for the service's own startup work (the progress initialisation
+    // and the main-queue hops it schedules) rather than for a fixed interval,
+    // so a slow simulator delays the check instead of failing it.
+    let drained = expectation(description: "startup work drained")
+    service.whenPendingWorkDrains { drained.fulfill() }
+    // Hang bound only; the drain normally completes in milliseconds.
+    await fulfillment(of: [drained], timeout: 30)
 
-    wait(for: [expectation], timeout: 2)
+    XCTAssertTrue(received.isEmpty, "an empty track list publishes no download state, got \(received)")
   }
 
   func testDownloadProgressWithTwoTracks() {
