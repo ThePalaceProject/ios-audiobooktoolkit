@@ -245,7 +245,7 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
   func testMakeOnceCompletion_firesAtMostOnceAcrossThreads() {
     let invocationCount = NSLock()
     var calls: [Error?] = []
-    let wrapped = LCPStreamingPlayer.makeOnceCompletion { error in
+    let wrapped = LCPStreamingPlayer.makeOnceCompletion { (error: Error?) in
       invocationCount.lock()
       calls.append(error)
       invocationCount.unlock()
@@ -269,7 +269,7 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
   /// (no trap, no allocation surprises). Mutant: a `completion!` in the
   /// wrapper would crash here.
   func testMakeOnceCompletion_safeWhenSourceCompletionIsNil() {
-    let wrapped = LCPStreamingPlayer.makeOnceCompletion(nil)
+    let wrapped = LCPStreamingPlayer.makeOnceCompletion(nil as ((Error?) -> Void)?)
     wrapped(nil)
     wrapped(NSError(domain: "test", code: 1))
     // Reaching here without crashing IS the assertion.
