@@ -55,5 +55,5 @@ jobs:
       # draft flagged every table header.
       - name: the checks' own tests
         run: |
-          python3 -m pip install --quiet pytest
+          python3 -m pip install --quiet pytest pyyaml
           python3 -m pytest scripts/tests/ -q

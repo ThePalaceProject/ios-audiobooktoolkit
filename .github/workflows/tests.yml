@@ -8,6 +8,11 @@
 # scripts/fetch-audioengine.sh uses for its own CI builds, and its checksum is
 # pinned. It is not cached or uploaded, so the binary is never stored by this
 # repository's CI.
+#
+# Because the binary is licensed, the fetch-and-test job runs only for trusted
+# runs: workflow_dispatch, pushes, and pull requests whose head branch lives in
+# this repository. Pull requests from forks skip it, as Android's builds of
+# Findaway do; fork-notice records the skip so it does not read as a pass.
 
 name: tests
 
@@ -30,8 +35,16 @@ env:
   AUDIOENGINE_SHA256: debe3f1c10d71ae31160418587560352eced166e176cbb040828d020bba66786
 
 jobs:
+  fork-notice:
+    name: unit tests skipped (fork)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::notice::unit tests skipped on fork PRs (licensed AudioEngine)"
+
   unit-tests:
     name: unit tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-15
     timeout-minutes: 40
 
