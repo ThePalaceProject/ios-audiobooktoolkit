@@ -206,7 +206,8 @@ final class OverdriveDownloadTask: DownloadTask, @unchecked Sendable {
       downloadTask: self,
       statePublisher: statePublisher,
       finalDirectory: finalURL,
-      trackKey: key
+      trackKey: key,
+      resumeDataKey: resumeDataKey
     )
     // The local `delegate` binding retains it strongly for the whole of this
     // method, so it cannot dealloc before it is handed to `_sessionDelegate`
@@ -254,7 +255,7 @@ final class OverdriveDownloadTask: DownloadTask, @unchecked Sendable {
     }
 
     // Check for resume data from a previous interrupted download
-    if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: key) {
+    if let resumeData = DownloadPersistenceStore.shared.getResumeData(forTrackKey: resumeDataKey) {
       ATLog(.info, "OverdriveDownloadTask: Resuming download from saved state for: \(key)")
       guard let urlSession = urlSession else { return }
       let task = urlSession.downloadTask(withResumeData: resumeData)
@@ -278,6 +279,19 @@ final class OverdriveDownloadTask: DownloadTask, @unchecked Sendable {
     task.resume()
   }
 
+  /// Key for this track's resume data: the book, the track, and the link.
+  ///
+  /// Resume data replays the request it was recorded against, URL included.
+  /// Keyed on the track alone, data saved while an OverDrive link was valid
+  /// was replayed after the book was re-fulfilled with a fresh link, so the
+  /// expired link was requested again on every open (PP-4967). The track key
+  /// is also `readingOrder:<index>`, which every book shares. Including the
+  /// book and the link means a new link starts clean.
+  var resumeDataKey: String {
+    let identity = "\(bookID)-\(key)-\(url.absoluteString)"
+    return hash(identity) ?? identity
+  }
+
   private func hash(_ key: String) -> String? {
     guard let hash = key.sha256?.hexString else {
       return nil
@@ -292,7 +306,7 @@ final class OverdriveDownloadTask: DownloadTask, @unchecked Sendable {
       if let downloadTask = tasks.compactMap({ $0 as? URLSessionDownloadTask }).first {
         downloadTask.cancel(byProducingResumeData: { resumeData in
           if let data = resumeData {
-            DownloadPersistenceStore.shared.saveResumeData(data, forTrackKey: self.key)
+            DownloadPersistenceStore.shared.saveResumeData(data, forTrackKey: self.resumeDataKey)
             ATLog(.info, "OverdriveDownloadTask: Saved resume data on cancel for: \(self.key)")
           }
         })

@@ -750,6 +750,12 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   private let finalURL: URL
   private let trackKey: String
 
+  /// The key resume data is saved and cleared under. Defaults to `trackKey`;
+  /// OverDrive passes a key that includes the track's link, so resume data
+  /// recorded against an expired link is never replayed against its
+  /// replacement (PP-4967).
+  private let resumeDataKey: String
+
   /// Each Spine Element's Download Task has a URLSession delegate.
   /// If the player ever evolves to support concurrent requests, there
   /// should just be one delegate objects that keeps track of them all.
@@ -759,17 +765,20 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
   ///   - downloadTask: The corresponding download task for the URLSession.
   ///   - statePublisher: Publisher to forward download state changes
   ///   - finalDirectory: Final directory to move the asset to
-  ///   - trackKey: Unique key for the track (used for resume data storage)
+  ///   - trackKey: Unique key for the track
+  ///   - resumeDataKey: Key for resume data storage; `nil` uses `trackKey`
   required init(
     downloadTask: DownloadTask,
     statePublisher: PassthroughSubject<DownloadTaskState, Never>,
     finalDirectory: URL,
-    trackKey: String
+    trackKey: String,
+    resumeDataKey: String? = nil
   ) {
     _downloadTask = WeakLockIsolated(downloadTask)
     self.statePublisher = statePublisher
     self.finalURL = finalDirectory
     self.trackKey = trackKey
+    self.resumeDataKey = resumeDataKey ?? trackKey
   }
 
   func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -791,7 +800,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
           }
 
           // Clear any saved resume data since download completed successfully
-          DownloadPersistenceStore.shared.removeResumeData(forTrackKey: self.trackKey)
+          DownloadPersistenceStore.shared.removeResumeData(forTrackKey: self.resumeDataKey)
 
           if FileManager.default.fileExists(atPath: location.path) {
             do {
@@ -885,7 +894,7 @@ final class DownloadTaskURLSessionDelegate: NSObject, URLSessionDelegate, URLSes
     // Try to save resume data for later recovery
     let nsError = error as NSError
     if let resumeData = nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
-      DownloadPersistenceStore.shared.saveResumeData(resumeData, forTrackKey: trackKey)
+      DownloadPersistenceStore.shared.saveResumeData(resumeData, forTrackKey: resumeDataKey)
       ATLog(.info, "Saved resume data on error for track: \(trackKey) (\(resumeData.count) bytes)")
     }
 
