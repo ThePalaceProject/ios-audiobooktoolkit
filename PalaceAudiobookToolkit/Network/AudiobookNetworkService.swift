@@ -378,7 +378,19 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
         // and hammers the content server.
         let isForbidden = (track.downloadTask as? OpenAccessDownloadTask)?.isForbidden ?? false
 
-        if !isAlreadyActive && !isCompleted && !isForbidden && progress < 1.0 {
+        // Skip tracks whose last download the server refused (PP-4967). The
+        // same request cannot succeed again: an OverDrive track link is signed
+        // and expires, and once it answers 410 every restart answers 410. The
+        // host replaces the link by re-fulfilling the book, which builds a new
+        // service; until then, restarting it only repeats the failure.
+        let wasRefused: Bool = {
+          if case let .error(error)? = self.downloadStatus[track.key] {
+            return Self.isRefusedLink(error)
+          }
+          return false
+        }()
+
+        if !isAlreadyActive && !isCompleted && !isForbidden && !wasRefused && progress < 1.0 {
           activeDownloadIndices.insert(index)
           let capturedIndex = index
           // Dispatch the actual download start outside the barrier to avoid holding the lock
@@ -391,6 +403,18 @@ public final class DefaultAudiobookNetworkService: AudiobookNetworkService {
     }
   }
   
+  /// True when `error` carries an HTTP status meaning the server refused this
+  /// link itself, not that the attempt failed: 410 Gone (an expired signed
+  /// link) or 403 Forbidden. Download tasks stamp the status as
+  /// `userInfo["httpStatusCode"]`; one level of `NSUnderlyingError` is checked
+  /// as well.
+  static func isRefusedLink(_ error: Error?) -> Bool {
+    guard let nsError = error as NSError? else { return false }
+    let status = nsError.userInfo["httpStatusCode"] as? Int
+      ?? (nsError.userInfo[NSUnderlyingErrorKey] as? NSError)?.userInfo["httpStatusCode"] as? Int
+    return status == 410 || status == 403
+  }
+
   /// Releases a download slot when a track completes or errors.
   private func releaseDownloadSlot(for track: any Track) {
     // Read the key on the caller's thread so the barrier block carries a
