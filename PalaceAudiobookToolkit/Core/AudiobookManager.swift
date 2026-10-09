@@ -601,9 +601,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       playbackTrackerDelegate?.playbackStarted()
     }
 
+    // Both timers read the player on the main thread they fire on: player
+    // state is main-actor, and FindawayPlayer's seek state is written there
+    // (PP-5349).
     timer = Timer.publish(every: interval, on: .main, in: .common)
       .autoconnect()
-      .receive(on: DispatchQueue.global(qos: .utility))
       .compactMap { [weak self] _ -> TrackPosition? in
         guard let self = self, audiobook.player.isPlaying else {
           return nil
@@ -613,7 +615,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       .removeDuplicates { oldPosition, newPosition in
         abs(oldPosition.timestamp - newPosition.timestamp) < 0.5
       }
-      .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
         guard let self = self else {
           return
@@ -637,7 +638,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     chapterMonitorTimer = Timer.publish(every: 1.0, on: .main, in: .common) // Check every second
       .autoconnect()
-      .receive(on: DispatchQueue.global(qos: .userInitiated))
       .compactMap { [weak self] _ -> TrackPosition? in
         guard let self = self,
               audiobook.player.isPlaying,
@@ -647,7 +647,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         }
         return position
       }
-      .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
         guard let self = self else {
           return

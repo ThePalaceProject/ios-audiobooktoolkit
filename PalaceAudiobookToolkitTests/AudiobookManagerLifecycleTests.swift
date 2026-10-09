@@ -37,6 +37,10 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
   /// resource. Mirrors `AudiobookNavigationView`'s preview factory but in test
   /// scope so we exercise the real notification observers + timer machinery.
   private func makeManager() throws -> (DefaultAudiobookManager, PlayerMock) {
+    try makeManager(playerType: PlayerMock.self)
+  }
+
+  private func makeManager<P: PlayerMock>(playerType: P.Type) throws -> (DefaultAudiobookManager, P) {
     let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
     guard let audiobook = OpenAccessAudiobook(manifest: manifest, bookIdentifier: "audiobook-lifecycle-test", decryptor: nil, token: nil) else {
       throw XCTSkip("OpenAccessAudiobook failed to construct from alice_manifest — fixture problem, not a real failure.")
@@ -44,7 +48,7 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
 
     // Replace the real player with a controllable mock so we can drive
     // currentTrackPosition + isPlaying deterministically.
-    let mockPlayer = PlayerMock(tableOfContents: audiobook.tableOfContents)
+    let mockPlayer = P(tableOfContents: audiobook.tableOfContents)
     setMockPlayer(mockPlayer, on: audiobook)
 
     let manager = DefaultAudiobookManager(
@@ -225,5 +229,75 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
         "The refreshed lock-screen elapsed time must reflect the emitted position."
       )
     }
+  }
+
+  // MARK: - Test 5: the periodic timers read player state on the main thread
+
+  /// The lock-screen and chapter-monitor timers read `isPlaying` and
+  /// `currentTrackPosition` on the main thread, where that state is written (PP-5349).
+  func testPeriodicTimers_readPlayerStateOnMainThread() throws {
+    let (manager, player) = try makeManager(playerType: ThreadRecordingPlayerMock.self)
+    guard let track = manager.tableOfContents.allTracks.first else {
+      return XCTFail("Test fixture must have at least one track.")
+    }
+    player.isPlaying = true
+    player.currentTrackPosition = TrackPosition(track: track, timestamp: 5.0, tracks: manager.tableOfContents.tracks)
+    player.resetReads()
+
+    // `.positionUpdated` comes from the lock-screen timer here (didBecomeActive
+    // also sends it, but nothing posts that in this test). The timeout covers
+    // the timer's background cadence of 15s.
+    let published = XCTestExpectation(description: "Lock-screen timer published a position")
+    published.assertForOverFulfill = false
+    let cancellable = manager.statePublisher.sink { state in
+      if case .positionUpdated = state { published.fulfill() }
+    }
+    defer { cancellable.cancel() }
+
+    wait(for: [published], timeout: 25.0)
+
+    // A lock-screen tick reads the player three times, so a fourth read means
+    // the one-second chapter monitor also ran.
+    let reads = player.reads
+    XCTAssertGreaterThanOrEqual(reads.total, 4, "The timers did not read the player, so the thread check below proves nothing.")
+    XCTAssertEqual(reads.offMain, 0, "\(reads.offMain) of \(reads.total) timer reads of player state ran off the main thread.")
+  }
+}
+
+/// Records the thread each read of `isPlaying` / `currentTrackPosition` runs on.
+/// The counters are lock-guarded because a read may arrive off the main thread.
+final class ThreadRecordingPlayerMock: PlayerMock {
+  private let lock = NSLock()
+  private var total = 0
+  private var offMain = 0
+
+  var reads: (total: Int, offMain: Int) {
+    lock.lock()
+    defer { lock.unlock() }
+    return (total, offMain)
+  }
+
+  func resetReads() {
+    lock.lock()
+    defer { lock.unlock() }
+    total = 0
+    offMain = 0
+  }
+
+  private func recordRead() {
+    lock.lock()
+    defer { lock.unlock() }
+    total += 1
+    if !Thread.isMainThread { offMain += 1 }
+  }
+
+  override var isPlaying: Bool {
+    get { recordRead(); return super.isPlaying }
+    set { super.isPlaying = newValue }
+  }
+
+  override var currentTrackPosition: TrackPosition? {
+    get { recordRead(); return super.currentTrackPosition }
+    set { super.currentTrackPosition = newValue }
   }
 }
