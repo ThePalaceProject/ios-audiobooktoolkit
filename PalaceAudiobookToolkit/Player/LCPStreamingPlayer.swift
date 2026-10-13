@@ -307,7 +307,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         self.avQueuePlayer.isMuted = false
 
         // Emit a playback failure so AudiobookManager → Palace surfaces the
-        // "Audiobook Unavailable" alert and the BookService open lock releases
+        // "Audiobook Unavailable" alert and the app's open lock releases
         // instead of latching. Without this, a stalled resource loader looks
         // identical to a successful open from the UI's perspective.
         let timeoutError = NSError(
