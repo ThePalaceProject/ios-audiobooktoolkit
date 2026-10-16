@@ -787,7 +787,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// Inserted after the current item rather than appended. Appending put it
   /// behind every other queued item, which is how the queue came to hold the
   /// PREVIOUS chapter in the next position.
-  private func preloadFollowingChapter() {
+  func preloadFollowingChapter() {
     guard let currentKey = avQueuePlayer.currentItem?.trackIdentifier else { return }
     let allTracks = tableOfContents.allTracks
     guard let index = allTracks.firstIndex(where: { $0.key == currentKey }),
@@ -807,7 +807,20 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// Short enough that a chapter boundary is still covered, long enough that
   /// the preload's first read does not land while the current chapter is still
   /// filling its own buffer.
-  private static let preloadDelay: TimeInterval = 3
+  static let defaultPreloadDelay: TimeInterval = 3
+
+  /// When to ask for the next chapter, given how long the current one runs.
+  ///
+  /// A track shorter than the default ends before the preload fires, which
+  /// leaves the queue empty at the boundary and turns a seam into a rebuild.
+  /// Half the track still lets the current chapter read first and still beats
+  /// its end. A duration of zero means the manifest did not carry one, and
+  /// halving that would preload immediately, which is what the delay exists to
+  /// avoid.
+  nonisolated static func preloadDelay(forTrackDuration duration: TimeInterval) -> TimeInterval {
+    guard duration > 0 else { return defaultPreloadDelay }
+    return min(defaultPreloadDelay, duration / 2)
+  }
 
   // Inherit all the KVO management from LCPPlayer
   private var observedItems = Set<ObjectIdentifier>()
@@ -859,7 +872,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             // Let the chapter that just started settle before asking the
             // origin for the next one, so the preload cannot stall the audio
             // it is meant to follow.
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.preloadDelay) { [weak self] in
+            let settle = Self.preloadDelay(
+              forTrackDuration: currentTrackPosition?.track.duration ?? 0
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in
               self?.preloadFollowingChapter()
             }
           }
@@ -995,7 +1011,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   func publicationDidLoad() {
     ATLog(.debug, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
-    if !isLoaded && avQueuePlayer.items().isEmpty {
+    // Keyed on the queue alone. A rebuild that finds no target empties the
+    // queue and then reports the player loaded, so reading `isLoaded` here
+    // would skip the only recovery and leave nothing to play.
+    if avQueuePlayer.items().isEmpty {
       buildPlayerQueue()
     }
   }
