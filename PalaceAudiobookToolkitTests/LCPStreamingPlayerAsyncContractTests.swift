@@ -29,14 +29,8 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     var lastSuperSeekPosition: TrackPosition?
     var seekSuperCalls = 0
 
-    var buildPlayerQueueCalls = 0
-
     override func configurePlayer() {
       // skip real AV setup
-    }
-
-    override func buildPlayerQueue() {
-      buildPlayerQueueCalls += 1
     }
     override func addPlayerObservers() { /* no-op */ }
     override func removePlayerObservers() { /* no-op */ }
@@ -302,34 +296,38 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     }
   }
 
-  /// An empty queue is never a loaded player, so the publication arriving must
-  /// rebuild whatever the flag says.
+  /// `publicationDidLoad` must not consult `isLoaded`. An empty queue returns
+  /// the player to not-loaded, and the queue is built lazily on the next
+  /// `playCallback`.
   ///
   /// The rebuild's give-up exit empties the queue and then reports the player
-  /// loaded, which is right for the spinner and wrong for recovery: gating this
-  /// on `!isLoaded` as well left a player with nothing to play, no spinner, and
-  /// a play button that does nothing.
-  func testPublicationDidLoad_withAnEmptyQueueOnALoadedPlayer_rebuilds() {
+  /// loaded, which is right for the spinner. Reading `isLoaded` here as well
+  /// therefore left a player resting at loaded with nothing queued.
+  func testPublicationDidLoad_withAnEmptyQueue_returnsThePlayerToNotLoaded() {
     let player = makePlayer()
     player.isLoaded = true
     XCTAssertTrue(player.avQueuePlayer.items().isEmpty, "Precondition: nothing is queued")
 
     player.publicationDidLoad()
 
-    XCTAssertEqual(player.buildPlayerQueueCalls, 1, "the only recovery from an empty queue must run")
+    XCTAssertFalse(
+      player.isLoaded,
+      "an empty queue is not a loaded player, whatever the flag said on the way in"
+    )
   }
 
-  /// The converse, so the recovery cannot be made unconditional: a queue that
-  /// holds items is already playable and rebuilding it would discard them.
-  func testPublicationDidLoad_withAQueuedItem_doesNotRebuild() {
+  /// The converse, so the queue rebuild cannot be made unconditional: a queue
+  /// that holds items is already playable and resetting it would discard them.
+  func testPublicationDidLoad_withAQueuedItem_leavesTheQueueAndTheFlagAlone() {
     let player = makePlayer()
-    player.isLoaded = false
-    player.avQueuePlayer.insert(AVPlayerItem(url: Self.silentItemURL), after: nil)
-    XCTAssertFalse(player.avQueuePlayer.items().isEmpty, "Precondition: something is queued")
+    player.isLoaded = true
+    let queued = AVPlayerItem(url: Self.silentItemURL)
+    player.avQueuePlayer.insert(queued, after: nil)
 
     player.publicationDidLoad()
 
-    XCTAssertEqual(player.buildPlayerQueueCalls, 0, "a playable queue must be left alone")
+    XCTAssertEqual(player.avQueuePlayer.items(), [queued], "a playable queue must be left alone")
+    XCTAssertTrue(player.isLoaded, "a player with something to play stays loaded")
   }
 
   // MARK: - The preload is the only thing covering a chapter boundary

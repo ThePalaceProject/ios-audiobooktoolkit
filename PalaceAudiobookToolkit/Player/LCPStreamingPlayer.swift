@@ -1013,7 +1013,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     ATLog(.debug, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
     // Keyed on the queue alone. A rebuild that finds no target empties the
     // queue and then reports the player loaded, so reading `isLoaded` here
-    // would skip the only recovery and leave nothing to play.
+    // left the player resting at loaded with nothing queued. The override
+    // below enqueues nothing; it returns the player to not-loaded, and
+    // `playCallback` builds the queue on the next tap.
     if avQueuePlayer.items().isEmpty {
       buildPlayerQueue()
     }
