@@ -390,23 +390,7 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     )
   }
 
-  /// A silent local file, so an AVPlayerItem can be built and queued without a
-  /// network or a resource loader.
-  private static let silentItemURL: URL = {
-    let url = FileManager.default.temporaryDirectory
-      .appendingPathComponent("lcp-streaming-preload-\(UUID().uuidString).wav")
-    // A 44-byte WAV header describing zero samples.
-    var wav = Data("RIFF".utf8)
-    wav.append(contentsOf: [0x24, 0x00, 0x00, 0x00])
-    wav.append(Data("WAVEfmt ".utf8))
-    wav.append(contentsOf: [0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00])
-    wav.append(contentsOf: [0x44, 0xAC, 0x00, 0x00, 0x88, 0x58, 0x01, 0x00])
-    wav.append(contentsOf: [0x02, 0x00, 0x10, 0x00])
-    wav.append(Data("data".utf8))
-    wav.append(contentsOf: [0x00, 0x00, 0x00, 0x00])
-    try? wav.write(to: url)
-    return url
-  }()
+  private static let silentItemURL: URL = SilentAudioFixture.url
 
   // MARK: - PP-5205 — locality decides whether a chapter change is a WAIT
 

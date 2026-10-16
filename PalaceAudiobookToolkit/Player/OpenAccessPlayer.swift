@@ -403,7 +403,12 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   func unload() {
-    avQueuePlayer.removeAllItems()
+    // `resetPlayerQueue`, not `removeAllItems`: end observers are registered
+    // per item, and `removePlayerObservers` below covers only the session
+    // notifications and the KVO observations. The handler reads the item off
+    // the notification rather than off the queue, so a registration left
+    // behind here can navigate an unloaded player.
+    resetPlayerQueue()
     isLoaded = false
     playbackStatePublisher.send(.unloaded)
     removePlayerObservers()

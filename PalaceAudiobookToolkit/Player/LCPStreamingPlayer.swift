@@ -422,7 +422,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     isSeekingWithinSameTrack = false
     
     let allTracks = tableOfContents.allTracks
-    avQueuePlayer.removeAllItems()
+    // Reset rather than emptied, because each item carries an end observer.
+    // Reached whenever the target is not already queued — a jump outside the
+    // queued window, a track change inside a multi-track chapter, a first play,
+    // a streaming-to-local switch — and the preloaded following chapter means
+    // there can be two observed items to drop rather than one.
+    resetPlayerQueue()
 
     // Find target track index for windowing
     let targetTrackIndex = allTracks.firstIndex { $0.key == position.track.key } ?? 0
