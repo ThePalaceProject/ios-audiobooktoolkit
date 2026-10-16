@@ -423,9 +423,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     
     let allTracks = tableOfContents.allTracks
     // Reset rather than emptied, because each item carries an end observer.
-    // Every chapter change and every rebuilding seek passes through here, and
-    // the preloaded following chapter means a rebuild can discard two observed
-    // items rather than one.
+    // Reached whenever the target is not already queued — a jump outside the
+    // queued window, a track change inside a multi-track chapter, a first play,
+    // a streaming-to-local switch — and the preloaded following chapter means
+    // there can be two observed items to drop rather than one.
     resetPlayerQueue()
 
     // Find target track index for windowing
