@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 
 final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   weak var provider: StreamingResourceProvider?
-  private var fullTrackCache = [String: Data]()
   private let maxConcurrentRequests = 8
   /// How long a data transfer may go without delivering a byte before the
   /// request is failed with `LCPResourceLoaderError.transferStalled`.
@@ -21,18 +20,69 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
   private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
   private let concurrencySemaphore = DispatchSemaphore(value: 8)
-  /// Decrypted length per track href, for the life of the publication.
-  ///
-  /// Every loading request resolves a new Readium resource, and a CBC LCP
-  /// resource learns its length by fetching the last encrypted blocks of the
-  /// track. Without this, that tail fetch ran once per loading request — at
-  /// every track start, and again for each to-end read. A lookup that fails is
-  /// dropped so the next request asks again.
-  private let lengths = LockIsolated<[String: Task<UInt64?, Never>]>([:])
 
-  init(provider: StreamingResourceProvider? = nil, stallTimeout: TimeInterval = 90) {
+
+
+  /// Resolved, buffered resource per track href, least-recently-used first.
+  ///
+  /// Readium gives a ZIP it reads over HTTP a single buffer shared by every
+  /// entry (`ZIPFoundationArchiveFactory`), and documents it as ignored when
+  /// reading backward or far ahead. The player keeps a window of tracks open at
+  /// widely separated offsets in the archive, so their reads displace each
+  /// other and every displaced read pays for a whole fill. Measured at 48x the
+  /// bytes served — the archive buffer divided by this loader's segment.
+  ///
+  /// A buffer per track absorbs that: a track's reads come out of its own
+  /// window, so one archive fill is consumed in full before another track can
+  /// displace it. It has to be reused across loading requests to work at all,
+  /// because each request otherwise resolves a fresh resource with an empty
+  /// buffer, which is why this is a cache and not a local.
+  /// Typed as the concrete buffer rather than `any Resource`: `Resource` is not
+  /// `Sendable`, so an existential here draws a Sendable diagnostic on every
+  /// read of the store. `BufferingResource` is an actor, so it is.
+  private let bufferedTracks = LockIsolated<[(href: String, task: Task<TrackEntry?, Never>)]>([])
+
+  /// Per-track buffer size, and how many tracks are buffered at once.
+  ///
+  /// The size must be at least Readium's archive buffer or a proportional
+  /// refetch remains, because a per-track fill smaller than an archive fill
+  /// cannot consume one before another track displaces it. It is a copy of a
+  /// constant private to Readium (`ZIPFoundationArchiveFactory`'s `6.MB`); a
+  /// toolkit bump that changes that value silently degrades this, and no test
+  /// catches it, because the sweeps inject their own archive buffer rather than
+  /// reading Readium's.
+  ///
+  /// The count has to cover every track read together, which is the player's
+  /// prefetch window — `rebuildPlayerQueueAndNavigate` builds seven items. A
+  /// smaller count does not reduce the refetch, it loses the whole benefit:
+  /// reads arriving round-robin over more tracks than are buffered evict the
+  /// entry needed next, so the hit rate is zero. For a fixed memory budget a
+  /// larger count therefore beats a larger size.
+  ///
+  /// The count is a cap, not an allocation: a buffer exists only for a track
+  /// that has been read. `LCPStreamingEgressTests` measures both relationships.
+  ///
+  /// Named so the egress measurement exercises the shipped values rather than
+  /// restating them, which would let the two drift apart silently.
+  static let defaultPerTrackBufferSize = 6 * 1024 * 1024
+  static let defaultMaxBufferedTracks = 8
+
+  private let perTrackBufferSize: Int
+  private let maxBufferedTracks: Int
+  private let publicationWaitTimeout: TimeInterval
+
+  init(
+    provider: StreamingResourceProvider? = nil,
+    stallTimeout: TimeInterval = 90,
+    perTrackBufferSize: Int = LCPResourceLoaderDelegate.defaultPerTrackBufferSize,
+    maxBufferedTracks: Int = LCPResourceLoaderDelegate.defaultMaxBufferedTracks,
+    publicationWaitTimeout: TimeInterval = LCPResourceLoaderDelegate.defaultPublicationWaitTimeout
+  ) {
     self.provider = provider
     self.stallTimeout = stallTimeout
+    self.perTrackBufferSize = perTrackBufferSize
+    self.maxBufferedTracks = maxBufferedTracks
+    self.publicationWaitTimeout = publicationWaitTimeout
     super.init()
   }
 
@@ -48,10 +98,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   }
 
   func clearCaches() {
-    inflightQueue.async(flags: .barrier) { [weak self] in
-      self?.fullTrackCache.removeAll()
-    }
-    lengths.value = [:]
+    bufferedTracks.value = []
   }
 
   /// The object that owns the in-flight requests and caches cancels them.
@@ -104,28 +151,76 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
       return false
     }
 
-    // Wait briefly for the publication if not yet available to avoid immediate failure
-    var publication = provider?.getPublication()
-    if publication == nil {
-      let start = CFAbsoluteTimeGetCurrent()
-      while publication == nil && (CFAbsoluteTimeGetCurrent() - start) < 0.8 {
-        Thread.sleep(forTimeInterval: 0.02)
-        publication = provider?.getPublication()
-      }
+    if let publication = provider?.getPublication() {
+      startServing(loadingRequest: loadingRequest, with: publication)
+      return true
     }
-    guard let publication else {
-      ATLog(.debug, "🎵 ResourceLoader: Publication not available after brief wait")
+
+    // The publication is not open yet, which is the normal state on a first
+    // open: it is retrieved over the network, its licence validated, and its
+    // central directory read before it exists. So the request waits for it.
+    //
+    // It used to wait 0.8 s on this thread with `Thread.sleep` and then fail
+    // the request. Nothing recovered from that: the player has already built
+    // its items, and `publicationDidLoad` rebuilds only when the queue is
+    // EMPTY, so the failed items stayed, `isLoaded` never flipped, and the
+    // player's 30 s guard reported "Timed out waiting for LCP publication to
+    // load" and closed the book. A second open worked because the publication
+    // was cached by then, which is why this only showed on a first open.
+    awaitPublicationThenServe(loadingRequest)
+    return true
+  }
+
+  /// Serves `loadingRequest` once the publication exists, or fails it if it
+  /// never does.
+  ///
+  /// Suspends rather than blocking: this runs on whatever thread AVFoundation
+  /// calls the delegate on, and holding that thread stalls every other request
+  /// it is trying to hand over. No concurrency slot is taken while waiting —
+  /// `startServing` acquires one, and only once there is something to serve.
+  ///
+  /// Polling because the publication's arrival is not something this object is
+  /// told about; the player receives `publicationDidLoad`. Being signalled
+  /// instead of polling would be better, and is the shape to move to if this
+  /// needs to get cheaper.
+  private func awaitPublicationThenServe(_ loadingRequest: LCPStreamingLoadingRequest) {
+    let id = ObjectIdentifier(loadingRequest)
+    let waitTask = Task { [weak self, weak loadingRequest] in
+      let deadline = Date().addingTimeInterval(self?.publicationWaitTimeout
+        ?? Self.defaultPublicationWaitTimeout)
+      while Date() < deadline {
+        if Task.isCancelled { return }
+        // AVFoundation has let go of the request, so there is nobody to serve.
+        guard let loadingRequest else { return }
+        if let self, let publication = self.provider?.getPublication() {
+          self.inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.inflightTasks.removeValue(forKey: id)
+          }
+          self.startServing(loadingRequest: loadingRequest, with: publication)
+          return
+        }
+        try? await Task.sleep(nanoseconds: Self.publicationPollInterval)
+      }
+      guard let loadingRequest, !Task.isCancelled else { return }
+      ATLog(.warn, "🎵 ResourceLoader: publication never opened — failing the request")
       loadingRequest.finishLoading(with: NSError(
         domain: "LCPResourceLoader",
         code: -2,
         userInfo: [NSLocalizedDescriptionKey: "Publication not available for streaming"]
       ))
-      return false
     }
-
-    startServing(loadingRequest: loadingRequest, with: publication)
-    return true
+    // Registered so `didCancel` and `shutdown` reach a request that is still
+    // waiting, not only one already being served.
+    inflightQueue.async(flags: .barrier) { [weak self] in
+      self?.inflightTasks[id] = waitTask
+    }
   }
+
+  /// Long enough for a publication to open over a slow connection, and shorter
+  /// than the player's own 30 s guard so a genuine failure is reported by the
+  /// loader rather than by a timer that cannot say what went wrong.
+  static let defaultPublicationWaitTimeout: TimeInterval = 25
+  private static let publicationPollInterval: UInt64 = 50_000_000
 
   /// AVFoundation no longer needs this request. Its task — length lookup and
   /// byte transfer alike — stops, and the request is left unfinished, as the
@@ -271,16 +366,17 @@ private extension LCPResourceLoaderDelegate {
     }
 
     let finalHref = validLink.href.components(separatedBy: "#").first ?? validLink.href
-    let resource = Self.resource(for: pub, href: finalHref)
-
-    if resource is FailureResource {
-      request.fail(NSError(
-        domain: "LCPResourceLoader",
-        code: 3,
-        userInfo: [NSLocalizedDescriptionKey: "FailureResource for href: \(finalHref)"]
-      ))
-      return
+    guard case let .some(entry) = await trackEntry(for: pub, href: finalHref) else {
+      return // cancelled
     }
+
+    // With no length the buffer cannot clamp its read-ahead, so this request
+    // reads unbuffered rather than being refused: a tail fetch that failed
+    // once must not turn into a chapter that will not play. It costs this
+    // request the saving, not the patron the book.
+    let readSource: Resource? = entry?.buffer ?? Self.resource(for: pub, href: finalHref)
+
+    let trackLength = entry?.length
 
     // Content-information phase. No timer runs here: the length lookup is a
     // network round trip for CBC resources, and a fixed timer at this point
@@ -289,14 +385,10 @@ private extension LCPResourceLoaderDelegate {
     // cancels the request.
     if loadingRequest.needsContentInformation {
       let contentType = Self.utiIdentifier(forHref: finalHref, fallbackMime: validLink.mediaType?.string)
-      var contentLength: Int64?
-      if let resource {
-        guard case let .some(length) = await length(ofTrack: finalHref, resource: resource) else {
-          return // cancelled
-        }
-        contentLength = length.map { Int64($0) }
-      }
-      loadingRequest.provideContentInformation(contentType: contentType, contentLength: contentLength)
+      loadingRequest.provideContentInformation(
+        contentType: contentType,
+        contentLength: trackLength.map { Int64($0) }
+      )
     }
 
     guard let range = loadingRequest.requestedRange else {
@@ -304,7 +396,7 @@ private extension LCPResourceLoaderDelegate {
       return
     }
 
-    guard let resource else {
+    guard let readSource else {
       ATLog(.error, "🎵 ResourceLoader: No resource available for streaming")
       request.fail(NSError(
         domain: "LCPResourceLoader", code: 4,
@@ -320,25 +412,57 @@ private extension LCPResourceLoaderDelegate {
     let start = max(0, Int(range.offset))
     var count = range.length
     if count == 0 && range.toEnd {
-      guard case let .some(total) = await length(ofTrack: finalHref, resource: resource) else {
-        return // cancelled
-      }
-      count = total.map { max(0, Int($0) - start) } ?? Int.max
+      count = trackLength.map { max(0, Int($0) - start) } ?? Int.max
     }
 
-    await transfer(from: resource, start: start, count: count, to: request)
+    // The buffer serves the fast path; the clamp needs the raw resource, so a
+    // length/size mismatch can still find the real end (PP-4542).
+    await transfer(
+      from: readSource,
+      clampTrack: entry?.buffer == nil ? nil : (publication: pub, href: finalHref),
+      start: start,
+      count: count,
+      to: request
+    )
   }
 
   /// Reads `count` bytes from `start` into the request, failing it with
   /// `transferStalled` if `stallTimeout` passes with no bytes delivered. Stops without finishing
   /// when the serving task is cancelled.
-  func transfer(from resource: Resource, start: Int, count: Int, to request: FinishOnce) async {
+  /// `makeClampSource` yields the UNBUFFERED resource for the same track, used
+  /// only on the out-of-bounds path; see `readClampedToAvailable`. A factory
+  /// rather than a resource because the overshoot is rare and resolving one
+  /// per request would cost every well-formed read a container lookup it never
+  /// uses.
+  func transfer(
+    from resource: Resource,
+    clampTrack: (publication: Publication, href: String)? = nil,
+    start: Int,
+    count: Int,
+    to request: FinishOnce
+  ) async {
     let lastProgress = LockIsolated(Date())
     let stallTimeout = stallTimeout
 
     await withTaskGroup(of: Void.self) { group in
       group.addTask {
         do {
+          // Resolved on first use and reused, so an overshoot costs one
+          // lookup however many probes the search takes, and a read that
+          // never overshoots costs none. A local function, not a stored
+          // closure: it captures a mutable local and stays non-escaping.
+          var resolvedClampSource: Resource??
+          func clampRead(_ range: Range<UInt64>) async throws -> Data {
+            if resolvedClampSource == nil {
+              resolvedClampSource = .some(
+                clampTrack.flatMap { Self.resource(for: $0.publication, href: $0.href) }
+              )
+            }
+            guard let raw = resolvedClampSource.flatMap({ $0 }) else {
+              return try await resource.read(range: range).get()
+            }
+            return try await raw.read(range: range).get()
+          }
           let segmentSize = 128 * 1024
           var bytesRemaining = count
           var currentStart = start
@@ -357,7 +481,8 @@ private extension LCPResourceLoaderDelegate {
             // tail bytes and plays.
             let (data, reachedEOF) = try await LCPResourceLoaderDelegate.readClampedToAvailable(
               start: UInt64(currentStart),
-              requestedEnd: UInt64(endExcl)
+              requestedEnd: UInt64(endExcl),
+              probe: clampRead
             ) { try await resource.read(range: $0).get() }
             if Task.isCancelled { return }
             if !data.isEmpty {
@@ -406,35 +531,6 @@ private extension LCPResourceLoaderDelegate {
     }
   }
 
-  /// The track's decrypted length: `.some(length)` once known (`length` nil if
-  /// the lookup failed), or `nil` if the calling task was cancelled first.
-  func length(ofTrack href: String, resource: Resource) async -> UInt64?? {
-    let lookup = lengths.withValue { cache -> Task<UInt64?, Never> in
-      if let existing = cache[href] {
-        return existing
-      }
-      let task = Task<UInt64?, Never> {
-        if case let .success(length) = await resource.estimatedLength() {
-          return length
-        }
-        return nil
-      }
-      cache[href] = task
-      return task
-    }
-    guard let result = await Self.value(of: lookup) else {
-      return nil
-    }
-    if result == nil {
-      lengths.withValue { cache in
-        if cache[href] == lookup {
-          cache[href] = nil
-        }
-      }
-    }
-    return .some(result)
-  }
-
   /// `task.value`, or nil as soon as the CALLING task is cancelled.
   ///
   /// Awaiting `Task.value` does not observe the waiter's cancellation, and
@@ -451,6 +547,94 @@ private extension LCPResourceLoaderDelegate {
     } onCancel: {
       gate.resume(with: nil)
     }
+  }
+
+  /// Everything the loader needs for a track, resolved once and kept in one
+  /// place: the buffer reads come from, and the decrypted length those reads
+  /// and the content-information phase are answered with.
+  ///
+  /// One store, deliberately. The length reaches readers through Readium's
+  /// per-instance lazy task, its buffer's own memo, and this loader; holding
+  /// it in several places keyed differently is what produced a run of
+  /// coherence defects — a cold cache memoized as "unknown", an instance
+  /// reached untouched on a cache hit, a failure cached and never retried.
+  /// With a single entry per track there is no second store to disagree with.
+  ///
+  /// The entry is a task so the work happens once even under concurrent
+  /// requests, and so the length is resolved BEFORE any read: Readium learns
+  /// it in a `lazy var` that a read touches as well (`CBCLCPResource.stream`
+  /// awaits `plainTextSizeTask`, swift-toolkit 58413f8), and `BufferingResource`
+  /// is reentrant, so two reads could otherwise first-touch it together.
+  ///
+  /// A track whose length does not resolve is not cached at all. Readium
+  /// memoizes that failure per instance and then fails every ranged read, so
+  /// keeping it would cost the chapter; the caller reads unbuffered instead
+  /// and the next request builds afresh.
+  struct TrackEntry {
+    /// nil over a local file, where a per-track window costs a read and a
+    /// decrypt of its whole size to serve one segment and saves nothing.
+    /// `readSource` then falls back to the unbuffered resource, which is what
+    /// Readium serves a file-backed archive with anyway.
+    let buffer: BufferingResource?
+
+    /// Not optional: an entry exists only once the length is known. Readium's
+    /// CBC resource turns a missing underlying length into a failure rather
+    /// than a successful nil (`LCPDecryptor`: `requiredEstimatedLength`), and a
+    /// buffer built without a length has a dead read-ahead clamp for its whole
+    /// life, so "cached but unknown" is a state worth not having.
+    let length: UInt64
+  }
+
+  /// `.some(entry)` once built, `.some(nil)` if it could not be, or `nil` if
+  /// the CALLING request was cancelled first, so a cancelled request is never
+  /// mistaken for a failed one and finished on its behalf.
+  func trackEntry(for publication: Publication, href: String) async -> TrackEntry?? {
+    let build = bufferedTracks.withValue { cache -> Task<TrackEntry?, Never> in
+      if let index = cache.firstIndex(where: { $0.href == href }) {
+        let entry = cache.remove(at: index)
+        cache.append(entry)
+        return entry.task
+      }
+      let size = perTrackBufferSize
+      // Read before the task so the task captures a Bool, not the provider.
+      let bufferThisTrack = provider?.archiveIsLocalFile() != true
+      let task = Task<TrackEntry?, Never> {
+        guard let resolved = Self.resource(for: publication, href: href) else {
+          return nil
+        }
+        guard case let .success(.some(length)) = await resolved.estimatedLength() else {
+          return nil
+        }
+        return TrackEntry(
+          buffer: bufferThisTrack ? resolved.buffered(size: size) : nil,
+          length: length
+        )
+      }
+      cache.append((href: href, task: task))
+      // A `while` rather than one `removeFirst(count - bound)` call: the
+      // subtracting form removes nothing when the count equals the bound, so
+      // widening the comparison by one leaves behaviour identical and no test
+      // can tell the bound apart from the bound plus one.
+      while cache.count > maxBufferedTracks {
+        cache.removeFirst()
+      }
+      return task
+    }
+
+    // Cancellation-aware, so a request AVFoundation has dropped stops waiting
+    // on work it no longer wants instead of holding its slot (PP-5240).
+    guard let built = await Self.value(of: build) else {
+      return nil // this caller was cancelled; the build stands for the next one
+    }
+    if built == nil {
+      bufferedTracks.withValue { cache in
+        // Keyed on the task: it identifies this build uniquely, so an href
+        // test would be redundant — and a redundant conjunct is a mutation no
+        // test can distinguish.
+        cache.removeAll { $0.task == build }
+      }
+    }
+    return .some(built)
   }
 
   static func resource(for publication: Publication, href: String) -> Resource? {
@@ -535,10 +719,38 @@ extension LCPResourceLoaderDelegate {
   /// Non-bounds errors (decryption, cancellation, network) are re-thrown
   /// unchanged — never masked. Binary search only runs on the rare overshoot, so
   /// well-formed reads stay single-shot.
+  ///
+  /// `probe` is what the binary search and the final clamped read go through,
+  /// and it must honour the upper bound it is given. A `BufferingResource` does
+  /// not: it fetches `lowerBound ..< max(requested.upperBound, lowerBound +
+  /// bufferSize)`, so for any read smaller than its buffer the caller's upper
+  /// bound has no effect, every probe fetches the same over-long range and
+  /// fails identically, and the search converges on `start` — returning empty
+  /// with EOF, which `transfer` finishes SUCCESSFULLY. A chapter then reports
+  /// fine and plays silence. So the fast path may be buffered; the search may
+  /// not. It defaults to `read` for callers whose resource is already raw.
+  /// For a caller whose resource is already unbuffered, where the read itself
+  /// honours its upper bound and can serve as its own probe.
   static func readClampedToAvailable(
     start: UInt64,
     requestedEnd: UInt64,
     isOutOfBounds: (Error) -> Bool = LCPResourceLoaderDelegate.isRangeOutOfBoundsError,
+    _ read: (Range<UInt64>) async throws -> Data
+  ) async throws -> (data: Data, reachedEOF: Bool) {
+    try await readClampedToAvailable(
+      start: start,
+      requestedEnd: requestedEnd,
+      isOutOfBounds: isOutOfBounds,
+      probe: read,
+      read
+    )
+  }
+
+  static func readClampedToAvailable(
+    start: UInt64,
+    requestedEnd: UInt64,
+    isOutOfBounds: (Error) -> Bool = LCPResourceLoaderDelegate.isRangeOutOfBoundsError,
+    probe: (Range<UInt64>) async throws -> Data,
     _ read: (Range<UInt64>) async throws -> Data
   ) async throws -> (data: Data, reachedEOF: Bool) {
     guard requestedEnd > start else { return (Data(), true) }
@@ -547,6 +759,9 @@ extension LCPResourceLoaderDelegate {
       return (data, data.count < Int(requestedEnd - start))
     } catch {
       guard isOutOfBounds(error) else { throw error }
+      func search(_ range: Range<UInt64>) async throws -> Data {
+        try await probe(range)
+      }
       // The real readable end is somewhere in [start, requestedEnd). Binary-search
       // the largest `end` for which read(start..<end) succeeds. Invariant:
       // read(start..<lo) is known-OK (lo==start ⇒ empty), read(start..<hi) failed.
@@ -555,7 +770,7 @@ extension LCPResourceLoaderDelegate {
       while hi - lo > 1 {
         let mid = lo + (hi - lo) / 2
         do {
-          _ = try await read(start..<mid)
+          _ = try await search(start..<mid)
           lo = mid
         } catch {
           guard isOutOfBounds(error) else { throw error }
@@ -566,7 +781,7 @@ extension LCPResourceLoaderDelegate {
         ATLog(.debug, "🎵 ResourceLoader: range start \(start) is past EOF — serving empty (clamped)")
         return (Data(), true)
       }
-      let data = try await read(start..<lo)
+      let data = try await search(start..<lo)
       ATLog(.warn, "🎵 ResourceLoader: clamped overshooting range \(start)..<\(requestedEnd) to real EOF \(lo) (\(data.count) bytes) — LCP/ZIP length mismatch (PP-4542)")
       return (data, true)
     }
@@ -701,3 +916,4 @@ final class ResumeOnce<T: Sendable>: @unchecked Sendable {
     waiting?.resume(returning: value)
   }
 }
+
