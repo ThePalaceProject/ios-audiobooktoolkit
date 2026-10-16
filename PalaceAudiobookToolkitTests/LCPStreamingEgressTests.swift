@@ -557,10 +557,10 @@ final class LCPStreamingEgressTests: XCTestCase {
     ))
     XCTAssertLessThanOrEqual(
       probe.bytesFetched,
-      2 * Self.coldTrackBound,
+      Self.coldTrackBound,
       """
-      a first open must fetch no more than the two chapters the queue holds; \
-      at seven it was about 88 MB and books did not start
+      a first open must fetch no more than the one chapter the queue holds; \
+      at seven items it was about 88 MB and books did not start
       """
     )
   }

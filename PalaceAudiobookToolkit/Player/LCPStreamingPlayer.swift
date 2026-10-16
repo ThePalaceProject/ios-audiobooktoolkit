@@ -515,11 +515,21 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// finished.
   nonisolated static func queueWindow(targetIndex: Int, trackCount: Int) -> [Int] {
     guard trackCount > 0, targetIndex >= 0, targetIndex < trackCount else { return [] }
-    var window = [targetIndex]
-    if targetIndex + 1 < trackCount {
-      window.append(targetIndex + 1)
-    }
-    return window
+    return [targetIndex]
+  }
+
+  /// The chapter to put behind the one playing, once it is playing.
+  ///
+  /// Preloaded rather than enqueued up front, because AVFoundation asks every
+  /// queued item for content information at once and each answer costs an
+  /// archive fill on a streamed package. A second item therefore competes for
+  /// the link with the chapter the patron is waiting to hear, and a resumed
+  /// chapter is the case where that wait is already longest. Loading it after
+  /// playback starts keeps a chapter boundary seamless without charging the
+  /// cold open for it.
+  nonisolated static func followingChapterIndex(after index: Int, trackCount: Int) -> Int? {
+    guard trackCount > 0, index >= 0, index + 1 < trackCount else { return nil }
+    return index + 1
   }
 
   override public func rebuildPlayerQueueAndNavigate(
@@ -772,6 +782,33 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     return item
   }
 
+  /// Puts the next chapter behind the one playing, if it is not there already.
+  ///
+  /// Inserted after the current item rather than appended. Appending put it
+  /// behind every other queued item, which is how the queue came to hold the
+  /// PREVIOUS chapter in the next position.
+  private func preloadFollowingChapter() {
+    guard let currentKey = avQueuePlayer.currentItem?.trackIdentifier else { return }
+    let allTracks = tableOfContents.allTracks
+    guard let index = allTracks.firstIndex(where: { $0.key == currentKey }),
+          let nextIndex = Self.followingChapterIndex(after: index, trackCount: allTracks.count)
+    else {
+      return
+    }
+    let nextTrack = allTracks[nextIndex]
+    guard !avQueuePlayer.items().contains(where: { $0.trackIdentifier == nextTrack.key }) else {
+      return
+    }
+    let item = buildPlayerItem(for: nextTrack, index: nextIndex)
+    avQueuePlayer.insert(item, after: avQueuePlayer.currentItem)
+    addEndObserver(for: item)
+  }
+
+  /// Short enough that a chapter boundary is still covered, long enough that
+  /// the preload's first read does not land while the current chapter is still
+  /// filling its own buffer.
+  private static let preloadDelay: TimeInterval = 3
+
   // Inherit all the KVO management from LCPPlayer
   private var observedItems = Set<ObjectIdentifier>()
   private let observerQueue = DispatchQueue(label: "com.palace.lcp-streaming-observer", qos: .utility)
@@ -818,6 +855,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             queuedTrackPosition = nil
             if let pos = currentTrackPosition {
               playbackStatePublisher.send(.started(pos))
+            }
+            // Let the chapter that just started settle before asking the
+            // origin for the next one, so the preload cannot stall the audio
+            // it is meant to follow.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.preloadDelay) { [weak self] in
+              self?.preloadFollowingChapter()
             }
           }
           if isSeekingWithinSameTrack {

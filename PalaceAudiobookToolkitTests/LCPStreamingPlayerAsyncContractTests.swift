@@ -340,8 +340,8 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
   func testWindow_HoldsTheTargetAndTheNextTrackOnly() {
     XCTAssertEqual(
       LCPStreamingPlayer.queueWindow(targetIndex: 5, trackCount: 10),
-      [5, 6],
-      "a rebuild enqueues the chapter being played and the one that follows it"
+      [5],
+      "a rebuild enqueues the chapter being played and nothing else"
     )
   }
 
@@ -366,8 +366,8 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
   func testWindow_AtTheFirstTrack_StillHoldsTheNext() {
     XCTAssertEqual(
       LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 10),
-      [0, 1],
-      "a rebuild at the start of a book still has a following track"
+      [0],
+      "the chapter being played is the whole initial queue, wherever it sits"
     )
   }
 
@@ -381,20 +381,39 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
 
   /// The bound the first-open cost rests on, stated as a bound rather than a
   /// shape so it fails if the window is ever widened again.
-  func testWindow_NeverHoldsMoreThanTwoTracks() {
+  func testWindow_NeverHoldsMoreThanTheChapterBeingPlayed() {
     for count in 1 ... 12 {
       for target in 0 ..< count {
-        XCTAssertLessThanOrEqual(
-          LCPStreamingPlayer.queueWindow(targetIndex: target, trackCount: count).count,
-          2,
+        XCTAssertEqual(
+          LCPStreamingPlayer.queueWindow(targetIndex: target, trackCount: count),
+          [target],
           "target \(target) of \(count): each extra item costs a cold open an archive fill"
         )
       }
     }
   }
 
-  func testWindow_IsInLogicalPlaybackOrder() {
-    let window = LCPStreamingPlayer.queueWindow(targetIndex: 3, trackCount: 10)
-    XCTAssertEqual(window, window.sorted(), "the target must come before the track that follows it")
+  /// The chapter boundary still has to be covered, so the next chapter is
+  /// loaded once the current one is playing rather than never.
+  func testFollowingChapter_IsTheNextOne() {
+    XCTAssertEqual(LCPStreamingPlayer.followingChapterIndex(after: 3, trackCount: 10), 4)
+  }
+
+  func testFollowingChapter_AtTheLastChapter_IsNothingToPreload() {
+    XCTAssertNil(LCPStreamingPlayer.followingChapterIndex(after: 9, trackCount: 10))
+  }
+
+  func testFollowingChapter_OnASingleChapterBook_IsNothingToPreload() {
+    XCTAssertNil(LCPStreamingPlayer.followingChapterIndex(after: 0, trackCount: 1))
+  }
+
+  func testWindow_DoesNotEnqueueTheChapterAfterTheTarget() {
+    XCTAssertFalse(
+      LCPStreamingPlayer.queueWindow(targetIndex: 3, trackCount: 10).contains(4),
+      """
+      a second item costs the cold open another archive fill and competes with \
+      the chapter the patron is waiting for; it is preloaded once playing
+      """
+    )
   }
 }
