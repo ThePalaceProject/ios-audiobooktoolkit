@@ -323,3 +323,78 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: true))
   }
 }
+// MARK: - What the queue holds on a rebuild
+
+/// The queue window decides what a cold open has to fetch before audio starts.
+///
+/// Every track transition rebuilds the queue explicitly — `playerItemDidReachEnd`
+/// calls `rebuildPlayerQueueAndNavigate` for a continuing chapter and
+/// `playCallback` for a new one, and says in terms why it does not advance
+/// through the queue: AVQueuePlayer's order need not match the logical track
+/// order. So an item beyond the next one is never played; it is built, costs
+/// AVFoundation a content-information request, and is discarded at the next
+/// transition. On a streamed package each of those requests costs an archive
+/// fill, which is what made a first open exceed the player's 30 s load
+/// timeout while a second open — reading bytes already fetched — succeeded.
+final class LCPStreamingQueueWindowTests: XCTestCase {
+  func testWindow_HoldsTheTargetAndTheNextTrackOnly() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 5, trackCount: 10),
+      [5, 6],
+      "a rebuild enqueues the chapter being played and the one that follows it"
+    )
+  }
+
+  func testWindow_DoesNotEnqueueTheTrackBeforeTheTarget() {
+    let window = LCPStreamingPlayer.queueWindow(targetIndex: 5, trackCount: 10)
+    XCTAssertFalse(
+      window.contains(4),
+      """
+      the previous track was enqueued directly after the target, so the item       queued to play next was the one just finished
+      """
+    )
+  }
+
+  func testWindow_AtTheLastTrack_HoldsOnlyIt() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 9, trackCount: 10),
+      [9],
+      "there is no track after the last one to enqueue"
+    )
+  }
+
+  func testWindow_AtTheFirstTrack_StillHoldsTheNext() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 10),
+      [0, 1],
+      "a rebuild at the start of a book still has a following track"
+    )
+  }
+
+  func testWindow_OnASingleTrackBook_HoldsThatTrack() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 1),
+      [0],
+      "a one-track book enqueues its one track"
+    )
+  }
+
+  /// The bound the first-open cost rests on, stated as a bound rather than a
+  /// shape so it fails if the window is ever widened again.
+  func testWindow_NeverHoldsMoreThanTwoTracks() {
+    for count in 1 ... 12 {
+      for target in 0 ..< count {
+        XCTAssertLessThanOrEqual(
+          LCPStreamingPlayer.queueWindow(targetIndex: target, trackCount: count).count,
+          2,
+          "target \(target) of \(count): each extra item costs a cold open an archive fill"
+        )
+      }
+    }
+  }
+
+  func testWindow_IsInLogicalPlaybackOrder() {
+    let window = LCPStreamingPlayer.queueWindow(targetIndex: 3, trackCount: 10)
+    XCTAssertEqual(window, window.sorted(), "the target must come before the track that follows it")
+  }
+}

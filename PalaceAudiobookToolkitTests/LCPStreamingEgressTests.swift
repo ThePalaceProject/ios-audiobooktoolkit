@@ -477,6 +477,36 @@ final class LCPStreamingEgressTests: XCTestCase {
   private static let defaultPerTrackBufferSizeForComparison =
     LCPResourceLoaderDelegate.defaultPerTrackBufferSize
 
+  /// What a cold first open costs off the origin, driven by the window the
+  /// player actually builds rather than a number repeated here.
+  ///
+  /// This is the quantity a patron waits through before audio starts, and the
+  /// one the 30 s publication load timeout is racing. Each item in the window
+  /// costs a tail probe and a fill, so the cost is linear in the window and
+  /// the window is the only lever.
+  func testColdFirstOpen_CostsOnlyWhatTheWindowHolds() async throws {
+    let window = LCPStreamingPlayer.queueWindow(targetIndex: 3, trackCount: 20)
+    let loader = makeLoader(trackCount: 20)
+
+    var served = 0
+    for track in window {
+      served += try await readSegment(track: track, offset: Self.resumeOffset, loader: loader)
+    }
+
+    print(String(
+      format: "cold first open: %d item(s), served %d B, transferred %d B in %d requests",
+      window.count, served, probe.bytesFetched, probe.requests
+    ))
+    XCTAssertLessThanOrEqual(
+      probe.bytesFetched,
+      2 * Self.coldTrackBound,
+      """
+      a first open must fetch no more than the two chapters the queue holds; \
+      at seven it was about 88 MB and books did not start
+      """
+    )
+  }
+
   // MARK: - The length/size mismatch
 
   /// A track whose archive serves fewer bytes than the LCP resource reports

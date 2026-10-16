@@ -434,11 +434,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       avQueuePlayer.insert(targetItem, after: nil)
       addEndObserver(for: targetItem)
     }
-    // Then add a window of neighboring items lazily
-    let windowSize = 5
-    let startIndex = max(0, targetTrackIndex - 1)
-    let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-    for i in startIndex...endIndex where i != targetTrackIndex {
+    for i in Self.queueWindow(targetIndex: targetTrackIndex, trackCount: allTracks.count)
+      where i != targetTrackIndex
+    {
       let track = allTracks[i]
       let item = buildPlayerItem(for: track, index: i)
       avQueuePlayer.insert(item, after: nil)
@@ -497,6 +495,33 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
   }
 
+  /// Which tracks a rebuild enqueues, in playback order.
+  ///
+  /// The target and the one after it, and nothing else. A track beyond that is
+  /// never played from the queue: `playerItemDidReachEnd` rebuilds for a
+  /// chapter that continues and calls `playCallback` for one that starts, and
+  /// deliberately does not advance through the queue, because AVQueuePlayer's
+  /// order need not match the logical track order. An extra item therefore only
+  /// costs AVFoundation a content-information request and is then discarded.
+  ///
+  /// On a streamed package each of those requests costs a whole archive fill —
+  /// the plaintext length comes from decrypting the final block, so it is a read
+  /// far from the data offset. Seven items cost about 88 MB before any audio,
+  /// which is what put a first open past the 30 s publication load timeout while
+  /// a second open, reading bytes already fetched, started normally (PP-5368).
+  ///
+  /// The window used to start at `targetIndex - 1`, and since items are
+  /// appended after the target, the item queued to play next was the track just
+  /// finished.
+  nonisolated static func queueWindow(targetIndex: Int, trackCount: Int) -> [Int] {
+    guard trackCount > 0, targetIndex >= 0, targetIndex < trackCount else { return [] }
+    var window = [targetIndex]
+    if targetIndex + 1 < trackCount {
+      window.append(targetIndex + 1)
+    }
+    return window
+  }
+
   override public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
     shouldResumePlayback: Bool = true,
@@ -524,10 +549,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     avQueuePlayer.insert(targetItem, after: nil)
     addEndObserver(for: targetItem)
 
-    let windowSize = 5
-    let startIndex = max(0, targetTrackIndex - 1)
-    let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-    for i in startIndex...endIndex where i != targetTrackIndex {
+    for i in Self.queueWindow(targetIndex: targetTrackIndex, trackCount: allTracks.count)
+      where i != targetTrackIndex
+    {
       let track = allTracks[i]
       let item = buildPlayerItem(for: track, index: i)
       avQueuePlayer.insert(item, after: nil)
