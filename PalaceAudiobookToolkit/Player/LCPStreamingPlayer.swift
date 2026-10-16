@@ -434,11 +434,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       avQueuePlayer.insert(targetItem, after: nil)
       addEndObserver(for: targetItem)
     }
-    // Then add a window of neighboring items lazily
-    let windowSize = 5
-    let startIndex = max(0, targetTrackIndex - 1)
-    let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-    for i in startIndex...endIndex where i != targetTrackIndex {
+    for i in Self.queueWindow(targetIndex: targetTrackIndex, trackCount: allTracks.count)
+      where i != targetTrackIndex
+    {
       let track = allTracks[i]
       let item = buildPlayerItem(for: track, index: i)
       avQueuePlayer.insert(item, after: nil)
@@ -497,6 +495,43 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     }
   }
 
+  /// Which tracks a rebuild enqueues, in playback order.
+  ///
+  /// The target and the one after it, and nothing else. A track beyond that is
+  /// never played from the queue: `playerItemDidReachEnd` rebuilds for a
+  /// chapter that continues and calls `playCallback` for one that starts, and
+  /// deliberately does not advance through the queue, because AVQueuePlayer's
+  /// order need not match the logical track order. An extra item therefore only
+  /// costs AVFoundation a content-information request and is then discarded.
+  ///
+  /// On a streamed package each of those requests costs a whole archive fill —
+  /// the plaintext length comes from decrypting the final block, so it is a read
+  /// far from the data offset. Seven items cost about 88 MB before any audio,
+  /// which is what put a first open past the 30 s publication load timeout while
+  /// a second open, reading bytes already fetched, started normally (PP-5368).
+  ///
+  /// The window used to start at `targetIndex - 1`, and since items are
+  /// appended after the target, the item queued to play next was the track just
+  /// finished.
+  nonisolated static func queueWindow(targetIndex: Int, trackCount: Int) -> [Int] {
+    guard trackCount > 0, targetIndex >= 0, targetIndex < trackCount else { return [] }
+    return [targetIndex]
+  }
+
+  /// The chapter to put behind the one playing, once it is playing.
+  ///
+  /// Preloaded rather than enqueued up front, because AVFoundation asks every
+  /// queued item for content information at once and each answer costs an
+  /// archive fill on a streamed package. A second item therefore competes for
+  /// the link with the chapter the patron is waiting to hear, and a resumed
+  /// chapter is the case where that wait is already longest. Loading it after
+  /// playback starts keeps a chapter boundary seamless without charging the
+  /// cold open for it.
+  nonisolated static func followingChapterIndex(after index: Int, trackCount: Int) -> Int? {
+    guard trackCount > 0, index >= 0, index + 1 < trackCount else { return nil }
+    return index + 1
+  }
+
   override public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
     shouldResumePlayback: Bool = true,
@@ -515,6 +550,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     resetPlayerQueue()
 
     guard let targetTrackIndex = allTracks.firstIndex(where: { $0.key == position.track.key }) else {
+      // Nothing was enqueued, so nothing is loading. The clear above would
+      // otherwise hold the UI on a spinner and then offer a retry.
+      isLoaded = true
       completion?(false)
       return
     }
@@ -524,10 +562,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     avQueuePlayer.insert(targetItem, after: nil)
     addEndObserver(for: targetItem)
 
-    let windowSize = 5
-    let startIndex = max(0, targetTrackIndex - 1)
-    let endIndex = min(allTracks.count - 1, targetTrackIndex + windowSize)
-    for i in startIndex...endIndex where i != targetTrackIndex {
+    for i in Self.queueWindow(targetIndex: targetTrackIndex, trackCount: allTracks.count)
+      where i != targetTrackIndex
+    {
       let track = allTracks[i]
       let item = buildPlayerItem(for: track, index: i)
       avQueuePlayer.insert(item, after: nil)
@@ -550,9 +587,18 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           avQueuePlayer.play()
           restorePlaybackRate()
         }
+        // The rebuild is finished and the item is seeked, so the player is no
+        // longer loading whether or not playback resumes. `seekTo` passes
+        // `shouldResumePlayback: false`, and leaving `isLoaded` false over a
+        // player that is merely paused holds a spinner in the UI and then
+        // offers a retry. Reachable from back-15 across a track boundary.
+        isLoaded = true
         completion?(true)
       }
     } else {
+      // The target is not in the queue it was just built for, so there is
+      // nothing to wait on either.
+      isLoaded = true
       completion?(false)
     }
   }
@@ -715,6 +761,46 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     return item
   }
 
+  /// Puts the next chapter behind the one playing, if it is not there already.
+  ///
+  /// Inserted after the current item rather than appended. Appending put it
+  /// behind every other queued item, which is how the queue came to hold the
+  /// PREVIOUS chapter in the next position.
+  func preloadFollowingChapter() {
+    guard let currentKey = avQueuePlayer.currentItem?.trackIdentifier else { return }
+    let allTracks = tableOfContents.allTracks
+    guard let index = allTracks.firstIndex(where: { $0.key == currentKey }),
+          let nextIndex = Self.followingChapterIndex(after: index, trackCount: allTracks.count)
+    else {
+      return
+    }
+    let nextTrack = allTracks[nextIndex]
+    guard !avQueuePlayer.items().contains(where: { $0.trackIdentifier == nextTrack.key }) else {
+      return
+    }
+    let item = buildPlayerItem(for: nextTrack, index: nextIndex)
+    avQueuePlayer.insert(item, after: avQueuePlayer.currentItem)
+    addEndObserver(for: item)
+  }
+
+  /// Short enough that a chapter boundary is still covered, long enough that
+  /// the preload's first read does not land while the current chapter is still
+  /// filling its own buffer.
+  static let defaultPreloadDelay: TimeInterval = 3
+
+  /// When to ask for the next chapter, given how long the current one runs.
+  ///
+  /// A track shorter than the default ends before the preload fires, which
+  /// leaves the queue empty at the boundary and turns a seam into a rebuild.
+  /// Half the track still lets the current chapter read first and still beats
+  /// its end. A duration of zero means the manifest did not carry one, and
+  /// halving that would preload immediately, which is what the delay exists to
+  /// avoid.
+  nonisolated static func preloadDelay(forTrackDuration duration: TimeInterval) -> TimeInterval {
+    guard duration > 0 else { return defaultPreloadDelay }
+    return min(defaultPreloadDelay, duration / 2)
+  }
+
   // Inherit all the KVO management from LCPPlayer
   private var observedItems = Set<ObjectIdentifier>()
   private let observerQueue = DispatchQueue(label: "com.palace.lcp-streaming-observer", qos: .utility)
@@ -761,6 +847,15 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             queuedTrackPosition = nil
             if let pos = currentTrackPosition {
               playbackStatePublisher.send(.started(pos))
+            }
+            // Let the chapter that just started settle before asking the
+            // origin for the next one, so the preload cannot stall the audio
+            // it is meant to follow.
+            let settle = Self.preloadDelay(
+              forTrackDuration: currentTrackPosition?.track.duration ?? 0
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in
+              self?.preloadFollowingChapter()
             }
           }
           if isSeekingWithinSameTrack {
@@ -895,7 +990,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   func publicationDidLoad() {
     ATLog(.debug, "🎵 [LCPStreamingPlayer] Publication loaded - enabling streaming")
-    if !isLoaded && avQueuePlayer.items().isEmpty {
+    // Keyed on the queue alone. A rebuild that finds no target empties the
+    // queue and then reports the player loaded, so reading `isLoaded` here
+    // left the player resting at loaded with nothing queued. The override
+    // below enqueues nothing; it returns the player to not-loaded, and
+    // `playCallback` builds the queue on the next tap.
+    if avQueuePlayer.items().isEmpty {
       buildPlayerQueue()
     }
   }

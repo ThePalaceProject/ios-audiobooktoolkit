@@ -2,17 +2,12 @@
 //  LCPStreamingPlayerAsyncContractTests.swift
 //  PalaceAudiobookToolkitTests
 //
-//  Covers the LCPStreamingPlayer async overrides introduced by the
-//  swarm_efd1f0c3 T1 Player-protocol migration. These tests verify:
-//    1. The override `move(to:)` async path returns a clamped
-//       TrackPosition (preserves the safeTimestamp clamp without driving
-//       a real seek).
-//    2. The seekTo callback override still sets / clears
-//       `isSeekingWithinSameTrack` — i.e. the fast-path flag survived
-//       the migration to async on the protocol surface.
+//  Covers the LCPStreamingPlayer async overrides: that `move(to:)` returns a
+//  clamped TrackPosition without driving a real seek, and that the `seekTo`
+//  override still sets and clears `isSeekingWithinSameTrack`.
 //
-//  We avoid spinning up the real AVQueuePlayer + ResourceLoader stack
-//  by subclassing and stubbing the bridge points (initial item, seek).
+//  The real AVQueuePlayer and ResourceLoader stack is avoided by subclassing
+//  and stubbing the bridge points (initial item, seek).
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
@@ -301,6 +296,118 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     }
   }
 
+  /// `publicationDidLoad` must not consult `isLoaded`. An empty queue returns
+  /// the player to not-loaded, and the queue is built lazily on the next
+  /// `playCallback`.
+  ///
+  /// The rebuild's give-up exit empties the queue and then reports the player
+  /// loaded, which is right for the spinner. Reading `isLoaded` here as well
+  /// therefore left a player resting at loaded with nothing queued.
+  func testPublicationDidLoad_withAnEmptyQueue_returnsThePlayerToNotLoaded() {
+    let player = makePlayer()
+    player.isLoaded = true
+    XCTAssertTrue(player.avQueuePlayer.items().isEmpty, "Precondition: nothing is queued")
+
+    player.publicationDidLoad()
+
+    XCTAssertFalse(
+      player.isLoaded,
+      "an empty queue is not a loaded player, whatever the flag said on the way in"
+    )
+  }
+
+  /// The converse, so the queue rebuild cannot be made unconditional: a queue
+  /// that holds items is already playable and resetting it would discard them.
+  func testPublicationDidLoad_withAQueuedItem_leavesTheQueueAndTheFlagAlone() {
+    let player = makePlayer()
+    player.isLoaded = true
+    let queued = AVPlayerItem(url: Self.silentItemURL)
+    player.avQueuePlayer.insert(queued, after: nil)
+
+    player.publicationDidLoad()
+
+    XCTAssertEqual(player.avQueuePlayer.items(), [queued], "a playable queue must be left alone")
+    XCTAssertTrue(player.isLoaded, "a player with something to play stays loaded")
+  }
+
+  // MARK: - The preload is the only thing covering a chapter boundary
+
+  /// Since a rebuild enqueues one chapter, the following chapter is warmed by
+  /// the preload alone. Nothing else holds that property, so it is asserted on
+  /// the queue rather than on the index arithmetic.
+  func testPreloadFollowingChapter_warmsTheNextChapter() throws {
+    let player = makePlayer()
+    let tracks = toc.allTracks
+    try XCTSkipUnless(tracks.count >= 2, "Fixture must have a following chapter")
+    let current = AVPlayerItem(url: Self.silentItemURL)
+    current.trackIdentifier = tracks[0].key
+    player.avQueuePlayer.insert(current, after: nil)
+
+    player.preloadFollowingChapter()
+
+    XCTAssertEqual(
+      player.avQueuePlayer.items().compactMap(\.trackIdentifier),
+      [tracks[0].key, tracks[1].key],
+      "the following chapter must be queued behind the one playing, in that order"
+    )
+  }
+
+  /// The preload is armed once per chapter start but survives rebuilds and
+  /// rapid skips, so a second call must not stack a duplicate.
+  func testPreloadFollowingChapter_calledTwice_queuesOneCopy() throws {
+    let player = makePlayer()
+    let tracks = toc.allTracks
+    try XCTSkipUnless(tracks.count >= 2, "Fixture must have a following chapter")
+    let current = AVPlayerItem(url: Self.silentItemURL)
+    current.trackIdentifier = tracks[0].key
+    player.avQueuePlayer.insert(current, after: nil)
+
+    player.preloadFollowingChapter()
+    player.preloadFollowingChapter()
+
+    XCTAssertEqual(
+      player.avQueuePlayer.items().filter { $0.trackIdentifier == tracks[1].key }.count,
+      1,
+      "a repeated preload must not stack another copy of the same chapter"
+    )
+  }
+
+  /// The last chapter has no successor, so the preload must not queue anything.
+  func testPreloadFollowingChapter_onTheLastChapter_queuesNothing() throws {
+    let player = makePlayer()
+    let tracks = toc.allTracks
+    let last = try XCTUnwrap(tracks.last)
+    let current = AVPlayerItem(url: Self.silentItemURL)
+    current.trackIdentifier = last.key
+    player.avQueuePlayer.insert(current, after: nil)
+
+    player.preloadFollowingChapter()
+
+    XCTAssertEqual(
+      player.avQueuePlayer.items().count,
+      1,
+      "there is no chapter after the last one to warm"
+    )
+  }
+
+  /// A silent local file, so an AVPlayerItem can be built and queued without a
+  /// network or a resource loader.
+  private static let silentItemURL: URL = {
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("lcp-streaming-preload-\(UUID().uuidString).wav")
+    // A 44-byte WAV header describing zero samples.
+    var wav = Data("RIFF".utf8)
+    wav.append(contentsOf: [0x24, 0x00, 0x00, 0x00])
+    wav.append(Data("WAVEfmt ".utf8))
+    wav.append(contentsOf: [0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00])
+    wav.append(contentsOf: [0x44, 0xAC, 0x00, 0x00, 0x88, 0x58, 0x01, 0x00])
+    wav.append(contentsOf: [0x02, 0x00, 0x10, 0x00])
+    wav.append(Data("data".utf8))
+    wav.append(contentsOf: [0x00, 0x00, 0x00, 0x00])
+    try? wav.write(to: url)
+    return url
+  }()
+
   // MARK: - PP-5205 — locality decides whether a chapter change is a WAIT
 
   /// The loading state used to be gated on `!isSeekWithinSameTrack` alone, which is
@@ -321,5 +428,151 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
     XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: false),
                    "no saved assets is a genuine wait; the previous behaviour, mute included, must be kept")
     XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: true))
+  }
+
+  // MARK: - isLoaded on every exit of a rebuild
+
+  /// A rebuild clears `isLoaded` on the way in, and the UI latches a spinner on
+  /// that flag and then offers a retry 30 s later. So every exit must restore
+  /// it, including the one that gives up: a position may name a track the
+  /// manifest does not hold, which `EmptyTrack` produces with its empty key.
+  func testRebuild_whenTheTargetTrackIsNotInTheManifest_leavesThePlayerLoaded() {
+    let player = makePlayer()
+    player.isLoaded = false
+    let strayPosition = TrackPosition(track: EmptyTrack(), timestamp: 0, tracks: toc.tracks)
+    XCTAssertFalse(
+      toc.allTracks.contains { $0.key == strayPosition.track.key },
+      "Precondition: the manifest must not hold this track"
+    )
+    var reportedSuccess: Bool?
+
+    player.rebuildPlayerQueueAndNavigate(to: strayPosition, shouldResumePlayback: false) {
+      reportedSuccess = $0
+    }
+
+    XCTAssertEqual(reportedSuccess, false, "a target that is not in the manifest cannot be navigated to")
+    XCTAssertTrue(player.isLoaded, "a player that is not loading must not leave the UI on a spinner")
+  }
+
+}
+// MARK: - What the queue holds on a rebuild
+
+/// The queue window decides what a cold open has to fetch before audio starts.
+///
+/// Every track transition rebuilds the queue explicitly — `playerItemDidReachEnd`
+/// calls `rebuildPlayerQueueAndNavigate` for a continuing chapter and
+/// `playCallback` for a new one, and says in terms why it does not advance
+/// through the queue: AVQueuePlayer's order need not match the logical track
+/// order. So an item beyond the next one is never played; it is built, costs
+/// AVFoundation a content-information request, and is discarded at the next
+/// transition. On a streamed package each of those requests costs an archive
+/// fill, which is what made a first open exceed the player's 30 s load
+/// timeout while a second open — reading bytes already fetched — succeeded.
+final class LCPStreamingQueueWindowTests: XCTestCase {
+  func testWindow_HoldsTheTargetAndTheNextTrackOnly() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 5, trackCount: 10),
+      [5],
+      "a rebuild enqueues the chapter being played and nothing else"
+    )
+  }
+
+  func testWindow_DoesNotEnqueueTheTrackBeforeTheTarget() {
+    let window = LCPStreamingPlayer.queueWindow(targetIndex: 5, trackCount: 10)
+    XCTAssertFalse(
+      window.contains(4),
+      """
+      the previous track was enqueued directly after the target, so the item       queued to play next was the one just finished
+      """
+    )
+  }
+
+  func testWindow_AtTheLastTrack_HoldsOnlyIt() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 9, trackCount: 10),
+      [9],
+      "there is no track after the last one to enqueue"
+    )
+  }
+
+  func testWindow_AtTheFirstTrack_StillHoldsTheNext() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 10),
+      [0],
+      "the chapter being played is the whole initial queue, wherever it sits"
+    )
+  }
+
+  func testWindow_OnASingleTrackBook_HoldsThatTrack() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 1),
+      [0],
+      "a one-track book enqueues its one track"
+    )
+  }
+
+  /// The bound the first-open cost rests on, stated as a bound rather than a
+  /// shape so it fails if the window is ever widened again.
+  func testWindow_NeverHoldsMoreThanTheChapterBeingPlayed() {
+    for count in 1 ... 12 {
+      for target in 0 ..< count {
+        XCTAssertEqual(
+          LCPStreamingPlayer.queueWindow(targetIndex: target, trackCount: count),
+          [target],
+          "target \(target) of \(count): each extra item costs a cold open an archive fill"
+        )
+      }
+    }
+  }
+
+  /// The chapter boundary still has to be covered, so the next chapter is
+  /// loaded once the current one is playing rather than never.
+  func testFollowingChapter_IsTheNextOne() {
+    XCTAssertEqual(LCPStreamingPlayer.followingChapterIndex(after: 3, trackCount: 10), 4)
+  }
+
+  func testFollowingChapter_AtTheLastChapter_IsNothingToPreload() {
+    XCTAssertNil(LCPStreamingPlayer.followingChapterIndex(after: 9, trackCount: 10))
+  }
+
+  func testFollowingChapter_OnASingleChapterBook_IsNothingToPreload() {
+    XCTAssertNil(LCPStreamingPlayer.followingChapterIndex(after: 0, trackCount: 1))
+  }
+
+  /// A track that ends before the preload fires empties the queue, so the
+  /// chapter boundary falls to a full rebuild and the patron hears a gap where
+  /// a seam belongs. Short tracks are real in audiobooks: an "end of part"
+  /// track runs a few seconds.
+  func testPreloadDelay_OnATrackShorterThanTheDelay_FiresBeforeItEnds() {
+    let delay = LCPStreamingPlayer.preloadDelay(forTrackDuration: 4)
+    XCTAssertLessThan(delay, 4, "the preload must fire while the track is still playing")
+    XCTAssertEqual(delay, 2)
+  }
+
+  func testPreloadDelay_OnAFullLengthTrack_LetsTheChapterSettle() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.preloadDelay(forTrackDuration: 1800),
+      LCPStreamingPlayer.defaultPreloadDelay,
+      "a normal chapter keeps the full settle time, so the preload cannot stall its audio"
+    )
+  }
+
+  /// A manifest need not carry a duration, and halving an unknown would preload
+  /// at once and compete with the chapter the patron is waiting for.
+  func testPreloadDelay_WithNoKnownDuration_KeepsTheDefault() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.preloadDelay(forTrackDuration: 0),
+      LCPStreamingPlayer.defaultPreloadDelay
+    )
+  }
+
+  func testWindow_DoesNotEnqueueTheChapterAfterTheTarget() {
+    XCTAssertFalse(
+      LCPStreamingPlayer.queueWindow(targetIndex: 3, trackCount: 10).contains(4),
+      """
+      a second item costs the cold open another archive fill and competes with \
+      the chapter the patron is waiting for; it is preloaded once playing
+      """
+    )
   }
 }
