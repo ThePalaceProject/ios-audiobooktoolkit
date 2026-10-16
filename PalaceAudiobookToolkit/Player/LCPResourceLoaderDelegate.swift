@@ -52,20 +52,29 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// catches it, because the sweeps inject their own archive buffer rather than
   /// reading Readium's.
   ///
-  /// The count has to cover every track read together, which is the player's
-  /// prefetch window — `rebuildPlayerQueueAndNavigate` builds seven items. A
-  /// smaller count does not reduce the refetch, it loses the whole benefit:
+  /// The count has to cover every track read together. A rebuild enqueues one
+  /// item (`LCPStreamingPlayer.queueWindow`), and the chapter after it is
+  /// preloaded once playback has started (`followingChapterIndex`), so steady
+  /// playback reads two. A seek or a track boundary leaves the pair it
+  /// supersedes draining while the new pair is built, which is four hrefs
+  /// inside one episode and the widest set the player can produce — and a
+  /// patron who seeks back to where they were needs the first of those still
+  /// resident. Four is therefore the bound, twice the steady-state pair.
+  ///
+  /// A smaller count does not reduce the refetch, it loses the whole benefit:
   /// reads arriving round-robin over more tracks than are buffered evict the
   /// entry needed next, so the hit rate is zero. For a fixed memory budget a
-  /// larger count therefore beats a larger size.
+  /// larger count therefore beats a larger size. Three is measurably worse
+  /// over the same episode, which is why the bound is not lowered further.
   ///
   /// The count is a cap, not an allocation: a buffer exists only for a track
-  /// that has been read. `LCPStreamingEgressTests` measures both relationships.
+  /// that has been read, so four is at most 24 MB retained, not reserved.
+  /// `LCPStreamingEgressTests` measures both relationships.
   ///
   /// Named so the egress measurement exercises the shipped values rather than
   /// restating them, which would let the two drift apart silently.
   static let defaultPerTrackBufferSize = 6 * 1024 * 1024
-  static let defaultMaxBufferedTracks = 8
+  static let defaultMaxBufferedTracks = 4
 
   private let perTrackBufferSize: Int
   private let maxBufferedTracks: Int
