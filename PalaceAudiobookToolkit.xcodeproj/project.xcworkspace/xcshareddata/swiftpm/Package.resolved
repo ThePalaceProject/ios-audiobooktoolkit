@@ -1,5 +1,5 @@
 {
-  "originHash" : "58af6f46fdfaa3a9fad299dae0e528676041d4e4ed865512fcbefc694811933e",
+  "originHash" : "491a5b3cebaa2813e7521f043ab148eece43ddcb0e564e064d8e408de3d0bcfc",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ThePalaceProject/swift-toolkit.git",
       "state" : {
-        "revision" : "58413f8680a310ed6d98278687ab711e6be639c8",
-        "version" : "3.11.0-palace.1"
+        "revision" : "45fe8966382192486df226b24b6c1706684c1e2d",
+        "version" : "3.11.0-palace.2"
       }
     },
     {
