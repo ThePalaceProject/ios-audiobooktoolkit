@@ -55,7 +55,9 @@ final class LCPStreamingEgressTests: XCTestCase {
     trackCount: Int = 7,
     archiveBufferSize: Int = LCPStreamingEgressTests.readiumArchiveBufferSize,
     servableLength: UInt64? = nil,
-    isLocalFile: Bool = false
+    isLocalFile: Bool = false,
+    publicationAvailableFrom: Date? = nil,
+    publicationWaitTimeout: TimeInterval? = nil
   ) -> LCPResourceLoaderDelegate {
     let provider = ArchiveProvider(
       probe: probe,
@@ -66,12 +68,15 @@ final class LCPStreamingEgressTests: XCTestCase {
       servableLength: servableLength
     )
     provider.isLocalFile = isLocalFile
+    provider.availableFrom = publicationAvailableFrom
     loaderProviders.append(provider)
     return LCPResourceLoaderDelegate(
       provider: provider,
       stallTimeout: 5,
       perTrackBufferSize: perTrackBufferSize,
-      maxBufferedTracks: maxBufferedTracks
+      maxBufferedTracks: maxBufferedTracks,
+      publicationWaitTimeout: publicationWaitTimeout
+        ?? LCPResourceLoaderDelegate.defaultPublicationWaitTimeout
     )
   }
 
@@ -435,6 +440,59 @@ final class LCPStreamingEgressTests: XCTestCase {
       insertion order and the track being listened to loses its window
       """
     )
+  }
+
+  // MARK: - Opening a book whose publication is still arriving
+
+  /// A request issued before the publication has opened must wait for it, not
+  /// be failed.
+  ///
+  /// On a newly borrowed book the publication opens over the network, so the
+  /// first loading requests arrive before it exists. Failing them is not
+  /// recoverable: the player has already built its items, and
+  /// `publicationDidLoad` only rebuilds when the queue is EMPTY, so the failed
+  /// items stay, `isLoaded` never flips, and 30 s later the player reports
+  /// "Timed out waiting for LCP publication to load" and the book closes. A
+  /// second open works because the publication is cached by then, which is why
+  /// this only ever showed up on a first open (PP-5368).
+  func testRequestBeforeThePublicationOpens_WaitsForItRatherThanFailing() async throws {
+    let loader = makeLoader(
+      trackCount: 1,
+      publicationAvailableFrom: Date().addingTimeInterval(1.5)
+    )
+
+    let served = try await readSegment(track: 0, index: 0, loader: loader)
+
+    XCTAssertEqual(
+      served,
+      Self.loaderSegment,
+      "the segment must be served once the publication arrives"
+    )
+  }
+
+  /// A publication that never opens must still fail the request, rather than
+  /// leaving AVFoundation waiting on an answer that never comes.
+  ///
+  /// The wait has to end somewhere: a request held forever is a chapter whose
+  /// spinner never resolves and which reports nothing a caller can act on.
+  func testRequestWhenThePublicationNeverOpens_IsFailedNotLeftWaiting() async throws {
+    let loader = makeLoader(
+      trackCount: 1,
+      publicationAvailableFrom: Date().addingTimeInterval(3600),
+      publicationWaitTimeout: 0.5
+    )
+
+    let request = RecordingRequest(
+      url: URL(string: "readium-lcp://track0/track0.mp3")!,
+      range: LCPRequestedRange(offset: 0, length: Self.loaderSegment, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: request), "the loader takes the request on")
+
+    let outcome = try await request.waitUntilFinished(timeout: 20)
+    guard case .failure = outcome else {
+      return XCTFail("a publication that never opens must fail the request, got \(outcome)")
+    }
+    XCTAssertEqual(request.respondedBytes, 0, "nothing was served")
   }
 
   // MARK: - A local package is not a remote one
@@ -849,7 +907,15 @@ private final class ArchiveProvider: StreamingResourceProvider, @unchecked Senda
     )
   }
 
-  func getPublication() -> Publication? { publication }
+  /// Withholds the publication until this date, modelling an open that has to
+  /// go to the network: asset retrieval, licence validation, then the remote
+  /// archive's central directory.
+  var availableFrom: Date?
+
+  func getPublication() -> Publication? {
+    if let availableFrom, Date() < availableFrom { return nil }
+    return publication
+  }
 
   var isLocalFile = false
   func archiveIsLocalFile() -> Bool { isLocalFile }

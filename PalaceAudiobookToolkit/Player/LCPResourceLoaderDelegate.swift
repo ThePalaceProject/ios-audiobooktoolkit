@@ -69,17 +69,20 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   private let perTrackBufferSize: Int
   private let maxBufferedTracks: Int
+  private let publicationWaitTimeout: TimeInterval
 
   init(
     provider: StreamingResourceProvider? = nil,
     stallTimeout: TimeInterval = 90,
     perTrackBufferSize: Int = LCPResourceLoaderDelegate.defaultPerTrackBufferSize,
-    maxBufferedTracks: Int = LCPResourceLoaderDelegate.defaultMaxBufferedTracks
+    maxBufferedTracks: Int = LCPResourceLoaderDelegate.defaultMaxBufferedTracks,
+    publicationWaitTimeout: TimeInterval = LCPResourceLoaderDelegate.defaultPublicationWaitTimeout
   ) {
     self.provider = provider
     self.stallTimeout = stallTimeout
     self.perTrackBufferSize = perTrackBufferSize
     self.maxBufferedTracks = maxBufferedTracks
+    self.publicationWaitTimeout = publicationWaitTimeout
     super.init()
   }
 
@@ -148,28 +151,76 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
       return false
     }
 
-    // Wait briefly for the publication if not yet available to avoid immediate failure
-    var publication = provider?.getPublication()
-    if publication == nil {
-      let start = CFAbsoluteTimeGetCurrent()
-      while publication == nil && (CFAbsoluteTimeGetCurrent() - start) < 0.8 {
-        Thread.sleep(forTimeInterval: 0.02)
-        publication = provider?.getPublication()
-      }
+    if let publication = provider?.getPublication() {
+      startServing(loadingRequest: loadingRequest, with: publication)
+      return true
     }
-    guard let publication else {
-      ATLog(.debug, "🎵 ResourceLoader: Publication not available after brief wait")
+
+    // The publication is not open yet, which is the normal state on a first
+    // open: it is retrieved over the network, its licence validated, and its
+    // central directory read before it exists. So the request waits for it.
+    //
+    // It used to wait 0.8 s on this thread with `Thread.sleep` and then fail
+    // the request. Nothing recovered from that: the player has already built
+    // its items, and `publicationDidLoad` rebuilds only when the queue is
+    // EMPTY, so the failed items stayed, `isLoaded` never flipped, and the
+    // player's 30 s guard reported "Timed out waiting for LCP publication to
+    // load" and closed the book. A second open worked because the publication
+    // was cached by then, which is why this only showed on a first open.
+    awaitPublicationThenServe(loadingRequest)
+    return true
+  }
+
+  /// Serves `loadingRequest` once the publication exists, or fails it if it
+  /// never does.
+  ///
+  /// Suspends rather than blocking: this runs on whatever thread AVFoundation
+  /// calls the delegate on, and holding that thread stalls every other request
+  /// it is trying to hand over. No concurrency slot is taken while waiting —
+  /// `startServing` acquires one, and only once there is something to serve.
+  ///
+  /// Polling because the publication's arrival is not something this object is
+  /// told about; the player receives `publicationDidLoad`. Being signalled
+  /// instead of polling would be better, and is the shape to move to if this
+  /// needs to get cheaper.
+  private func awaitPublicationThenServe(_ loadingRequest: LCPStreamingLoadingRequest) {
+    let id = ObjectIdentifier(loadingRequest)
+    let waitTask = Task { [weak self, weak loadingRequest] in
+      let deadline = Date().addingTimeInterval(self?.publicationWaitTimeout
+        ?? Self.defaultPublicationWaitTimeout)
+      while Date() < deadline {
+        if Task.isCancelled { return }
+        // AVFoundation has let go of the request, so there is nobody to serve.
+        guard let loadingRequest else { return }
+        if let self, let publication = self.provider?.getPublication() {
+          self.inflightQueue.async(flags: .barrier) { [weak self] in
+            self?.inflightTasks.removeValue(forKey: id)
+          }
+          self.startServing(loadingRequest: loadingRequest, with: publication)
+          return
+        }
+        try? await Task.sleep(nanoseconds: Self.publicationPollInterval)
+      }
+      guard let loadingRequest, !Task.isCancelled else { return }
+      ATLog(.warn, "🎵 ResourceLoader: publication never opened — failing the request")
       loadingRequest.finishLoading(with: NSError(
         domain: "LCPResourceLoader",
         code: -2,
         userInfo: [NSLocalizedDescriptionKey: "Publication not available for streaming"]
       ))
-      return false
     }
-
-    startServing(loadingRequest: loadingRequest, with: publication)
-    return true
+    // Registered so `didCancel` and `shutdown` reach a request that is still
+    // waiting, not only one already being served.
+    inflightQueue.async(flags: .barrier) { [weak self] in
+      self?.inflightTasks[id] = waitTask
+    }
   }
+
+  /// Long enough for a publication to open over a slow connection, and shorter
+  /// than the player's own 30 s guard so a genuine failure is reported by the
+  /// loader rather than by a timer that cannot say what went wrong.
+  static let defaultPublicationWaitTimeout: TimeInterval = 25
+  private static let publicationPollInterval: UInt64 = 50_000_000
 
   /// AVFoundation no longer needs this request. Its task — length lookup and
   /// byte transfer alike — stops, and the request is left unfinished, as the
