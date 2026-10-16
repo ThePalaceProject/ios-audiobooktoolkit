@@ -26,6 +26,11 @@ DerivedData/
 ## Do not commit private AudioEngine SDK
 AudioEngine/
 Carthage/
+# Without this, a symlink to a Carthage checkout elsewhere shows as untracked:
+# a trailing-slash pattern matches a directory, and a symlink to one is not a
+# directory to git. The mutation docs tell you to resolve the framework from
+# ../Carthage, so symlinking it here is the ordinary setup.
+Carthage
 NYPLAEToolkit.framework/
 
 #binary spec for carthage
