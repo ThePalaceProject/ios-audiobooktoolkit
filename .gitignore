@@ -36,3 +36,8 @@ AudioEngine.json
 
 # Python bytecode from repo scripts
 __pycache__/
+
+# Merge artifacts. One was committed in #69 and sat in the test target
+# for years carrying live conflict markers.
+*.orig
+*.rej

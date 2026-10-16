@@ -779,6 +779,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       return
     }
     let item = buildPlayerItem(for: nextTrack, index: nextIndex)
+    // Asked before observing: a refused insert would otherwise leave an end
+    // observer registered for an item no queue holds, which never fires and
+    // never unregisters. The base class asks the same question at every insert.
+    guard avQueuePlayer.canInsert(item, after: avQueuePlayer.currentItem) else { return }
     avQueuePlayer.insert(item, after: avQueuePlayer.currentItem)
     addEndObserver(for: item)
   }
@@ -788,17 +792,20 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// filling its own buffer.
   static let defaultPreloadDelay: TimeInterval = 3
 
-  /// When to ask for the next chapter, given how long the current one runs.
+  /// When to ask for the next chapter, given how much of this one is left.
   ///
-  /// A track shorter than the default ends before the preload fires, which
-  /// leaves the queue empty at the boundary and turns a seam into a rebuild.
-  /// Half the track still lets the current chapter read first and still beats
-  /// its end. A duration of zero means the manifest did not carry one, and
-  /// halving that would preload immediately, which is what the delay exists to
-  /// avoid.
-  nonisolated static func preloadDelay(forTrackDuration duration: TimeInterval) -> TimeInterval {
-    guard duration > 0 else { return defaultPreloadDelay }
-    return min(defaultPreloadDelay, duration / 2)
+  /// Audio that ends before the preload fires leaves the queue empty at the
+  /// boundary and turns a seam into a rebuild. Half the remainder still lets
+  /// the current chapter read first and still beats its end. Keying on the
+  /// remainder rather than the track's length also covers a chapter resumed
+  /// near its end, which has a full-length duration and seconds of audio.
+  ///
+  /// A remainder of zero or less means the manifest carried no duration, or
+  /// carried one the position has already passed; halving that would preload
+  /// immediately, which is what the delay exists to avoid.
+  nonisolated static func preloadDelay(forTimeRemaining remaining: TimeInterval) -> TimeInterval {
+    guard remaining > 0 else { return defaultPreloadDelay }
+    return min(defaultPreloadDelay, remaining / 2)
   }
 
   // Inherit all the KVO management from LCPPlayer
@@ -852,7 +859,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
             // origin for the next one, so the preload cannot stall the audio
             // it is meant to follow.
             let settle = Self.preloadDelay(
-              forTrackDuration: currentTrackPosition?.track.duration ?? 0
+              forTimeRemaining: currentTrackPosition
+                .map { $0.track.duration - $0.timestamp } ?? 0
             )
             DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in
               self?.preloadFollowingChapter()

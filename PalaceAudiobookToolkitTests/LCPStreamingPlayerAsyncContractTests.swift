@@ -544,14 +544,23 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
   /// a seam belongs. Short tracks are real in audiobooks: an "end of part"
   /// track runs a few seconds.
   func testPreloadDelay_OnATrackShorterThanTheDelay_FiresBeforeItEnds() {
-    let delay = LCPStreamingPlayer.preloadDelay(forTrackDuration: 4)
+    let delay = LCPStreamingPlayer.preloadDelay(forTimeRemaining: 4)
     XCTAssertLessThan(delay, 4, "the preload must fire while the track is still playing")
     XCTAssertEqual(delay, 2)
   }
 
-  func testPreloadDelay_OnAFullLengthTrack_LetsTheChapterSettle() {
+  /// Keyed on what is left to play, not the track's length. A chapter resumed
+  /// near its end has only seconds of audio in front of the boundary, so the
+  /// full settle would expire after the queue had already run dry.
+  func testPreloadDelay_OnAChapterResumedNearItsEnd_FiresBeforeItEnds() {
+    let delay = LCPStreamingPlayer.preloadDelay(forTimeRemaining: 2)
+    XCTAssertLessThan(delay, 2, "a resumed chapter must still warm the next one")
+    XCTAssertEqual(delay, 1)
+  }
+
+  func testPreloadDelay_WithAFullChapterLeft_LetsTheChapterSettle() {
     XCTAssertEqual(
-      LCPStreamingPlayer.preloadDelay(forTrackDuration: 1800),
+      LCPStreamingPlayer.preloadDelay(forTimeRemaining: 1800),
       LCPStreamingPlayer.defaultPreloadDelay,
       "a normal chapter keeps the full settle time, so the preload cannot stall its audio"
     )
@@ -559,10 +568,18 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
 
   /// A manifest need not carry a duration, and halving an unknown would preload
   /// at once and compete with the chapter the patron is waiting for.
-  func testPreloadDelay_WithNoKnownDuration_KeepsTheDefault() {
+  /// A manifest need not carry a duration, which makes the remainder zero or
+  /// negative. Halving that would preload at once and compete with the chapter
+  /// the patron is waiting for.
+  func testPreloadDelay_WithNoKnownRemainder_KeepsTheDefault() {
     XCTAssertEqual(
-      LCPStreamingPlayer.preloadDelay(forTrackDuration: 0),
+      LCPStreamingPlayer.preloadDelay(forTimeRemaining: 0),
       LCPStreamingPlayer.defaultPreloadDelay
+    )
+    XCTAssertEqual(
+      LCPStreamingPlayer.preloadDelay(forTimeRemaining: -30),
+      LCPStreamingPlayer.defaultPreloadDelay,
+      "a timestamp past a stale duration must not collapse the delay"
     )
   }
 
