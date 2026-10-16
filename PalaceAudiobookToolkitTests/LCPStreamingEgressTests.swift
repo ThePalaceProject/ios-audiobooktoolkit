@@ -368,37 +368,103 @@ final class LCPStreamingEgressTests: XCTestCase {
     )
   }
 
-  /// The same question for the whole prefetch window, because the player does
-  /// not open one track — `rebuildPlayerQueueAndNavigate` builds a seven-item
-  /// queue and AVFoundation asks all of them for content information at once.
-  /// The bound is per track, so this pins that the window's cost stays linear
-  /// in the number of items rather than multiplying.
-  func testOpeningThePrefetchWindow_CostsOneFillPerTrack() async throws {
-    let loader = makeLoader(trackCount: 7)
+  /// The widest set of tracks the loader can be asked for inside one episode,
+  /// derived from the player rather than restated here so the two cannot drift.
+  ///
+  /// A rebuild enqueues `queueWindow`, and the chapter after it is preloaded
+  /// once playback has started, so steady playback reads that pair. A seek or
+  /// a track boundary supersedes a pair while the next is built, and the reads
+  /// it supersedes drain while the new ones arrive, so an episode spans two
+  /// pairs.
+  private static var episodeTrackCount: Int {
+    let window = LCPStreamingPlayer.queueWindow(targetIndex: 0, trackCount: 20).count
+    let preloaded = LCPStreamingPlayer.followingChapterIndex(after: 0, trackCount: 20) == nil ? 0 : 1
+    return 2 * (window + preloaded)
+  }
+
+  /// The same question for every track an episode touches, because the player
+  /// does not open one: AVFoundation asks each queued item for content
+  /// information, and a seek or a boundary puts a second pair in front of the
+  /// first before its reads have drained. The bound is per track, so this pins
+  /// that the cost stays linear in the set rather than multiplying.
+  func testOpeningTheEpisodeWindow_CostsOneFillPerTrack() async throws {
+    let tracks = Self.episodeTrackCount
+    let loader = makeLoader(trackCount: tracks)
+
+    XCTAssertGreaterThan(tracks, 1, "an episode spans more than one track, or this measures nothing")
 
     // Two passes, because one cannot see the bound at all: reading each track
     // once never revisits an entry, so a bound of 1 measures the same as the
-    // shipped 8. The second pass is served from each track's window only if
-    // all seven survived the first.
+    // shipped one. The second pass is served from each track's window only if
+    // every track survived the first.
     var served = 0
     for _ in 0 ..< 2 {
-      for track in 0 ..< 7 {
+      for track in 0 ..< tracks {
         served += try await readSegment(track: track, offset: Self.resumeOffset, loader: loader)
       }
     }
 
-    XCTAssertEqual(served, 2 * 7 * Self.loaderSegment, "every item in the window is answered")
+    XCTAssertEqual(served, 2 * tracks * Self.loaderSegment, "every track in the episode is answered")
     print(String(
-      format: "window open: served %d B, transferred %d B in %d requests",
-      served, probe.bytesFetched, probe.requests
+      format: "episode open: %d tracks, served %d B, transferred %d B in %d requests",
+      tracks, served, probe.bytesFetched, probe.requests
     ))
     XCTAssertLessThanOrEqual(
       probe.bytesFetched,
-      7 * Self.coldTrackBound,
+      tracks * Self.coldTrackBound,
       """
-      opening the window costs each item one tail probe and one fill, once. \
-      A bound narrower than the window would pay them again on the second pass
+      opening the episode costs each track one tail probe and one fill, once. \
+      A bound narrower than the episode would pay them again on the second pass
       """
+    )
+  }
+
+  /// Fixes the bound by measurement, the way the size above is fixed: the
+  /// shipped count must cover an episode, and the count below it must be seen
+  /// to fail on the same workload, so the value sits at a boundary rather than
+  /// being chosen for comfort.
+  ///
+  /// Run against a scaled-down archive buffer, because what has to hold is the
+  /// relationship, not the magnitude.
+  func testTheBoundIsTheNarrowestThatCoversAnEpisode() async throws {
+    let fill = Self.scaledArchiveBuffer
+    let tracks = 0 ..< Self.episodeTrackCount
+    let shipped = LCPResourceLoaderDelegate.defaultMaxBufferedTracks
+    XCTAssertGreaterThan(tracks.count, 1, "an episode spans more than one track, or this measures nothing")
+
+    var measured: [(bound: Int, ratio: Double)] = []
+    for bound in [shipped - 1, shipped] {
+      probe = ArchiveTransportProbe(length: Self.archiveLength)
+      let loader = makeLoader(
+        perTrackBufferSize: fill,
+        maxBufferedTracks: bound,
+        trackCount: tracks.count,
+        archiveBufferSize: fill
+      )
+      let served = try await readRoundRobin(
+        tracks: tracks,
+        segmentsPerTrack: fill / Self.loaderSegment,
+        loader: loader
+      )
+      let ratio = Double(probe.bytesFetched) / Double(served)
+      print(String(
+        format: "bound %d over %d-track episode -> amplification %.1fx",
+        bound, tracks.count, ratio
+      ))
+      measured.append((bound, ratio))
+    }
+
+    let starved = try XCTUnwrap(measured.first)
+    let covering = try XCTUnwrap(measured.last)
+    XCTAssertLessThan(
+      covering.ratio,
+      Self.steadyStateBound,
+      "the shipped bound must cover every track an episode interleaves"
+    )
+    XCTAssertGreaterThan(
+      starved.ratio,
+      covering.ratio * 4,
+      "one below the shipped bound must lose the benefit, or the bound is wider than it needs to be"
     )
   }
 
