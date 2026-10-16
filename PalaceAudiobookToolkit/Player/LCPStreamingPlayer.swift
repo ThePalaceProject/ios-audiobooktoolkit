@@ -574,9 +574,21 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
           avQueuePlayer.play()
           restorePlaybackRate()
         }
+        // The rebuild is finished and the item is seeked, so the player is no
+        // longer loading whether or not it resumes. `:537` cleared this on the
+        // way in, and the base implementation restores it on both exits; this
+        // override restored it only when it resumed. A seek that does not
+        // resume — `seekTo` passes `shouldResumePlayback: false` — therefore
+        // left `isLoaded` false over a player that is merely paused, and the
+        // UI holds a spinner on it and then offers a retry. Reachable from
+        // back-15 across a track boundary.
+        isLoaded = true
         completion?(true)
       }
     } else {
+      // The target is not in the queue it was just built for, so there is
+      // nothing to wait on either.
+      isLoaded = true
       completion?(false)
     }
   }
