@@ -555,6 +555,14 @@ final class LCPStreamingEgressTests: XCTestCase {
       format: "cold first open: %d item(s), served %d B, transferred %d B in %d requests",
       window.count, served, probe.bytesFetched, probe.requests
     ))
+    // Without this the bound below passes on an empty window, where nothing is
+    // read and nothing is fetched.
+    XCTAssertEqual(
+      served,
+      window.count * Self.loaderSegment,
+      "every item in the window is answered in full"
+    )
+    XCTAssertGreaterThan(served, 0, "a first open must read the chapter it opens")
     XCTAssertLessThanOrEqual(
       probe.bytesFetched,
       Self.coldTrackBound,

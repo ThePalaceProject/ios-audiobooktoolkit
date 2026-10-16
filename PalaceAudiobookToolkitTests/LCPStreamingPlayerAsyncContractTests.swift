@@ -2,17 +2,12 @@
 //  LCPStreamingPlayerAsyncContractTests.swift
 //  PalaceAudiobookToolkitTests
 //
-//  Covers the LCPStreamingPlayer async overrides introduced by the
-//  swarm_efd1f0c3 T1 Player-protocol migration. These tests verify:
-//    1. The override `move(to:)` async path returns a clamped
-//       TrackPosition (preserves the safeTimestamp clamp without driving
-//       a real seek).
-//    2. The seekTo callback override still sets / clears
-//       `isSeekingWithinSameTrack` — i.e. the fast-path flag survived
-//       the migration to async on the protocol surface.
+//  Covers the LCPStreamingPlayer async overrides: that `move(to:)` returns a
+//  clamped TrackPosition without driving a real seek, and that the `seekTo`
+//  override still sets and clears `isSeekingWithinSameTrack`.
 //
-//  We avoid spinning up the real AVQueuePlayer + ResourceLoader stack
-//  by subclassing and stubbing the bridge points (initial item, seek).
+//  The real AVQueuePlayer and ResourceLoader stack is avoided by subclassing
+//  and stubbing the bridge points (initial item, seek).
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
@@ -322,6 +317,31 @@ final class LCPStreamingPlayerAsyncContractTests: XCTestCase {
                    "no saved assets is a genuine wait; the previous behaviour, mute included, must be kept")
     XCTAssertFalse(LCPStreamingPlayer.trackIsLocallyPlayable(hasSavedAssets: false, isForcedToStream: true))
   }
+
+  // MARK: - isLoaded on every exit of a rebuild
+
+  /// A rebuild clears `isLoaded` on the way in, and the UI latches a spinner on
+  /// that flag and then offers a retry 30 s later. So every exit must restore
+  /// it, including the one that gives up: a position may name a track the
+  /// manifest does not hold, which `EmptyTrack` produces with its empty key.
+  func testRebuild_whenTheTargetTrackIsNotInTheManifest_leavesThePlayerLoaded() {
+    let player = makePlayer()
+    player.isLoaded = true
+    let strayPosition = TrackPosition(track: EmptyTrack(), timestamp: 0, tracks: toc.tracks)
+    XCTAssertFalse(
+      toc.allTracks.contains { $0.key == strayPosition.track.key },
+      "Precondition: the manifest must not hold this track"
+    )
+    var reportedSuccess: Bool?
+
+    player.rebuildPlayerQueueAndNavigate(to: strayPosition, shouldResumePlayback: false) {
+      reportedSuccess = $0
+    }
+
+    XCTAssertEqual(reportedSuccess, false, "a target that is not in the manifest cannot be navigated to")
+    XCTAssertTrue(player.isLoaded, "a player that is not loading must not leave the UI on a spinner")
+  }
+
 }
 // MARK: - What the queue holds on a rebuild
 
