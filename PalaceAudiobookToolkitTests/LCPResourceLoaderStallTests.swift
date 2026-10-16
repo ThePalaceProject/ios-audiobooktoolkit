@@ -7,8 +7,8 @@
 //  loading request, which only ever covered the content-information phase —
 //  the resource lookup plus `estimatedLength()`. For a CBC-encrypted LCP
 //  resource that length is computed by fetching the last encrypted blocks of
-//  the track, a network range request made again for every loading request,
-//  because each request resolves a fresh Readium resource. When that fetch
+//  the track, a network range request that must not be made per loading
+//  request. When that fetch
 //  took longer than 30 s the guard failed the request while the lookup was
 //  still live, AVFoundation failed the item, and the player rebuilt the queue
 //  and asked again.
@@ -32,6 +32,7 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
   private static let href = "track0.mp3"
   private static let trackURL = URL(string: "readium-lcp://track0/track0.mp3")!
+  private static let otherTrackURL = URL(string: "readium-lcp://track1/track1.mp3")!
 
   private var probe: ResourceProbe!
   private var provider: FakeProvider!
@@ -49,8 +50,17 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     super.tearDown()
   }
 
+  /// One segment per buffer, so the reader still takes one underlying read per
+  /// 128 KB and the cancellation tests below can observe it stopping between
+  /// them. The shipped buffer is far larger — what that costs in egress is
+  /// `LCPStreamingEgressTests`, and what it costs in cancellation granularity
+  /// is `testDidCancel_AtTheShippedBufferSize_StartsNoFurtherFill`.
   private func makeLoader(stallTimeout: TimeInterval) -> LCPResourceLoaderDelegate {
-    LCPResourceLoaderDelegate(provider: provider, stallTimeout: stallTimeout)
+    LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: stallTimeout,
+      perTrackBufferSize: 128 * 1024
+    )
   }
 
   // MARK: - The reported defect
@@ -80,11 +90,17 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
   /// A length lookup that the transport ends with an error still ends the
   /// request, and it ends it the way it always has: no length, bytes served.
+  ///
+  /// The stall bound is generous on purpose. What this pins is the outcome of a
+  /// failed lookup, not stall timing — that has its own test — and a bound in
+  /// the tens of milliseconds measures scheduler latency instead: it failed
+  /// only in the parallel full run, never in isolation, once the data path
+  /// gained the per-track buffer's actor hop. Production's bound is 90 s.
   func testContentInfo_WhenLengthLookupFailsLate_FinishesWithoutLength() async throws {
     probe.length = 4096
     probe.lengthDelay = 0.4
     probe.lengthFails = true
-    let loader = makeLoader(stallTimeout: 0.1)
+    let loader = makeLoader(stallTimeout: 5)
     let request = FakeLoadingRequest(
       url: Self.trackURL,
       needsContentInformation: true,
@@ -101,9 +117,9 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
   // MARK: - Length is looked up once per track
 
-  /// Every loading request resolves a new Readium resource, and for CBC each
-  /// one fetches the track's tail to learn its length. The loader keeps the
-  /// answer per track for the life of the publication.
+  /// Learning a CBC track's length means fetching its tail over the network.
+  /// The loader keeps the answer per track for the life of the publication, so
+  /// a second request for the same track does not pay for it again.
   func testLength_AcrossRequestsForTheSameTrack_IsLookedUpOnce() async throws {
     probe.length = 300_000
     let loader = makeLoader(stallTimeout: 5)
@@ -127,7 +143,11 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertEqual(outcome, .success)
     XCTAssertEqual(toEnd.respondedBytes, 200_000, "the cached length still bounds a to-end read")
     XCTAssertEqual(probe.lengthLookups, 1)
-    XCTAssertGreaterThanOrEqual(probe.resourcesResolved, 2, "precondition: each request resolved its own resource")
+    XCTAssertEqual(
+      probe.resourcesResolved,
+      1,
+      "the track's resource is resolved once and reused; a second would mean the buffer was rebuilt per request"
+    )
   }
 
   /// Concurrent requests for one track share one lookup rather than racing
@@ -149,6 +169,11 @@ final class LCPResourceLoaderStallTests: XCTestCase {
       XCTAssertEqual(request.contentLength, 4096)
     }
     XCTAssertEqual(probe.lengthLookups, 1)
+    XCTAssertEqual(
+      probe.resourcesResolved,
+      1,
+      "concurrent requests share one resource, so Readium's lazy tail fetch is first-touched once"
+    )
   }
 
   /// A failed lookup is not remembered: the next request asks again.
@@ -189,6 +214,11 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
     XCTAssertEqual(second.contentLength, 8192)
     XCTAssertEqual(probe.lengthLookups, 2)
+    XCTAssertEqual(
+      probe.resourcesResolved,
+      2,
+      "clearCaches drops the buffer, so the second request builds a new one; 1 would mean it outlived the publication"
+    )
   }
 
   // MARK: - Data phase
@@ -269,7 +299,146 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
     XCTAssertEqual(outcome, .success)
     XCTAssertEqual(request.respondedBytes, 0)
-    XCTAssertEqual(probe.lengthLookups, 0, "no length is needed for a request that does not read to the end")
+    XCTAssertEqual(
+      probe.lengthLookups,
+      1,
+      "the buffer's read-ahead clamp needs the track length, so it is resolved for every request — once per track, not once per request"
+    )
+  }
+
+  /// A length lookup that fails must not leave the track without a buffer for
+  /// the life of the publication.
+  ///
+  /// The failed build is not cached: Readium's buffer keeps whatever length it
+  /// is first told, so a buffer built without one would clamp nothing, and the
+  /// track would pay an archive fill per read until teardown. Dropping the
+  /// entry lets the next request build a working one — observable because two
+  /// consecutive reads then cost one underlying fetch instead of two.
+  func testLength_AfterAFailedLookup_TheNextRequestRebuildsTheBuffer() async throws {
+    probe.length = 65_536
+    probe.lengthFails = true
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: 64 * 1024
+    )
+
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+
+    probe.lengthFails = false
+    let readsBeforeRecovery = probe.reads
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+    try await serveRange(offset: 1_024, length: 1_024, on: loader)
+
+    XCTAssertEqual(
+      probe.reads - readsBeforeRecovery,
+      1,
+      "the rebuilt buffer serves the second read from memory; 2 would mean the track stayed unbuffered"
+    )
+  }
+
+  /// Drives one bounded data request to completion and returns the bytes it
+  /// was answered with.
+  ///
+  /// It asserts the request SUCCEEDED. `waitUntilFinished` only throws on a
+  /// timeout, so a request finished with an error would otherwise pass here
+  /// silently and leave a counter-only test green while every read failed —
+  /// which matters most for the unbuffered fallback, whose whole justification
+  /// is that the chapter still plays.
+  @discardableResult
+  private func serveRange(
+    offset: Int64,
+    length: Int,
+    on loader: LCPResourceLoaderDelegate,
+    url: URL? = nil
+  ) async throws -> Int {
+    let request = FakeLoadingRequest(
+      url: url ?? Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: offset, length: length, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success, "a served range must succeed, not fail silently")
+    return request.respondedBytes
+  }
+
+  /// A rebuilt buffer must touch its own resource's length, not rely on the
+  /// per-track answer already being cached.
+  ///
+  /// `lengths` memoizes the ANSWER per href; the lazy tail-fetch task it
+  /// stands in for belongs to an INSTANCE. Once the bound evicts a track — and
+  /// a book has far more tracks than the bound — the rebuild resolves a fresh
+  /// instance, hits the answer cache, and would hand reads a resource whose
+  /// lazy var no two of them may first-touch together.
+  func testBufferRebuild_TouchesItsOwnResourceLength() async throws {
+    probe.length = 65_536
+    let other = ResourceProbe()
+    other.length = 65_536
+    provider.addTrack(href: "track1.mp3", probe: other)
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: 64 * 1024,
+      maxBufferedTracks: 1
+    )
+
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+    let touchesAfterFirstBuild = probe.lengthCallsStarted
+
+    // Build the other track, which evicts this one at a bound of 1.
+    try await serveRange(offset: 0, length: 1_024, on: loader, url: Self.otherTrackURL)
+    // Come back: the answer is cached, but the instance is new.
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+
+    XCTAssertEqual(
+      probe.lengthCallsStarted,
+      touchesAfterFirstBuild + 1,
+      "the rebuilt instance is touched once by its build; without that a read would do it, racing another read"
+    )
+  }
+
+  /// A tail fetch that fails on a REBUILD must not be cached either.
+  ///
+  /// `lengths` answers from its per-href cache on a rebuild, so the length
+  /// guard passes while the fresh instance's own fetch can still fail. That
+  /// instance memoizes the failure, and Readium then fails every ranged read
+  /// through it, so caching it would leave the chapter unplayable until the
+  /// bound evicted it. The miss path already drops such an entry; this pins
+  /// the hit path to the same contract.
+  func testLength_WhenTheRebuildsOwnFetchFails_TheEntryIsNotCached() async throws {
+    probe.length = 65_536
+    let other = ResourceProbe()
+    other.length = 65_536
+    provider.addTrack(href: "track1.mp3", probe: other)
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: 64 * 1024,
+      maxBufferedTracks: 1
+    )
+
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+    try await serveRange(offset: 0, length: 1_024, on: loader, url: Self.otherTrackURL)
+
+    // Rebuild this track while its own tail fetch fails. `lengths` still has
+    // the answer, so only the instance's fetch fails.
+    probe.lengthFails = true
+    try await serveRange(offset: 0, length: 1_024, on: loader)
+    probe.lengthFails = false
+
+    // A poisoned entry would be reused here and fail every ranged read.
+    let readsBeforeRecovery = probe.reads
+    let first = try await serveRange(offset: 0, length: 1_024, on: loader)
+    let second = try await serveRange(offset: 1_024, length: 1_024, on: loader)
+    XCTAssertEqual(first, 1_024, "the recovered buffer serves bytes, not an error")
+    XCTAssertEqual(second, 1_024, "the recovered buffer serves bytes, not an error")
+
+    XCTAssertEqual(
+      probe.reads - readsBeforeRecovery,
+      1,
+      "the failed rebuild is dropped, so a working buffer replaces it; 2 would mean the track stayed unbuffered, more would mean the poisoned entry was reused"
+    )
   }
 
   // MARK: - Cancellation
@@ -297,6 +466,40 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertLessThanOrEqual(probe.reads, readsAtCancel + 1, "at most the read in flight at cancel may complete")
     XCTAssertLessThan(request.respondedBytes, chunk * 8)
     XCTAssertNil(request.outcome, "a cancelled request is AVFoundation's to drop, not ours to finish")
+  }
+
+  /// The same cancellation contract at the size the loader actually ships.
+  /// The buffer makes a read one fill rather than one segment, so a cancel can
+  /// no longer land between segments; what must still hold is that no further
+  /// fill is started once AVFoundation has cancelled.
+  func testDidCancel_AtTheShippedBufferSize_StartsNoFurtherFill() async throws {
+    let fill = LCPResourceLoaderDelegate.defaultPerTrackBufferSize
+    probe.length = UInt64(fill * 3)
+    probe.readDelay = 0.05
+    let loader = LCPResourceLoaderDelegate(provider: provider, stallTimeout: 5)
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: fill * 3, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    try await waitUntil(timeout: 5) { self.probe.reads > 0 }
+    loader.didCancel(request)
+    let readsAtCancel = probe.reads
+
+    try await Task.sleep(nanoseconds: 600_000_000)
+
+    XCTAssertLessThanOrEqual(
+      probe.reads,
+      readsAtCancel + 1,
+      "at most the fill in flight at cancel may complete; a cancelled request starts no new one"
+    )
+    XCTAssertLessThan(
+      probe.reads,
+      3,
+      "the whole track must not be read after a cancel — three fills would cover it"
+    )
   }
 
   /// A cancelled request waiting on a length lookup that never returns must
@@ -482,6 +685,16 @@ private final class FakeLoadingRequest: LCPStreamingLoadingRequest, @unchecked S
 /// Configures and counts what the fake resources for one track do. Every
 /// resource resolved for the track shares it, which mirrors production: each
 /// loading request gets a new Readium resource for the same bytes.
+/// One instance's memoized length answer.
+private final class LengthMemo: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: ReadResult<UInt64?>?
+  var value: ReadResult<UInt64?>? {
+    get { lock.withLock { stored } }
+    set { lock.withLock { stored = newValue } }
+  }
+}
+
 private final class ResourceProbe: @unchecked Sendable {
   private let lock = NSLock()
   private var _length: UInt64 = 0
@@ -572,11 +785,22 @@ private final class ResourceProbe: @unchecked Sendable {
 
 private final class FakeResource: Resource {
   let probe: ResourceProbe
+  private let memo = LengthMemo()
   init(probe: ResourceProbe) { self.probe = probe }
 
   let sourceURL: AbsoluteURL? = nil
   func properties() async -> ReadResult<ResourceProperties> { .success(ResourceProperties()) }
-  func estimatedLength() async -> ReadResult<UInt64?> { await probe.estimatedLength() }
+
+  /// Memoized per instance, as Readium's CBC resource is: it holds its tail
+  /// fetch in a `lazy var`, so asking one instance twice costs one fetch while
+  /// a fresh instance costs another. The probe counts fetches, so without this
+  /// the fakes would report network the real stack never performs.
+  func estimatedLength() async -> ReadResult<UInt64?> {
+    if let held = memo.value { return held }
+    let result = await probe.estimatedLength()
+    memo.value = result
+    return result
+  }
   func stream(range: Range<UInt64>?, consume: @escaping (Data) -> Void) async -> ReadResult<Void> {
     switch await probe.read(range) {
     case let .success(data):
