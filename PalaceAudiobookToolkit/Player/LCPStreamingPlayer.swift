@@ -497,8 +497,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   /// Which tracks a rebuild enqueues, in playback order.
   ///
-  /// The target and the one after it, and nothing else. A track beyond that is
-  /// never played from the queue: `playerItemDidReachEnd` rebuilds for a
+  /// The target and nothing else; the chapter after it is added by
+  /// `preloadFollowingChapter` once playback has started. A track beyond that
+  /// is never played from the queue: `playerItemDidReachEnd` rebuilds for a
   /// chapter that continues and calls `playCallback` for one that starts, and
   /// deliberately does not advance through the queue, because AVQueuePlayer's
   /// order need not match the logical track order. An extra item therefore only
