@@ -361,6 +361,26 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     XCTAssertTrue(lines[0].hasPrefix(PartialArchiveStore.journalMagic))
   }
 
+  /// At exactly the threshold the record file is left alone; one record more
+  /// and it is rewritten. Pins which side of the comparison the boundary falls
+  /// on, so the rewrite cannot start happening a launch early or late.
+  func testReopen_AtExactlyTheCompactionThreshold_LeavesTheRecordAlone() throws {
+    let records = PartialArchiveStore.compactionThreshold
+    let size = UInt64(records + 1) * 4
+    let store = try openStore(totalSize: size)
+    for index in 0..<records {
+      try store.write(bytes(4), at: UInt64(index) * 4)
+    }
+    store.close()
+    let before = try Data(contentsOf: journalURL)
+
+    let reopened = try openStore(totalSize: size)
+    reopened.close()
+    let after = try Data(contentsOf: journalURL)
+
+    XCTAssertEqual(after, before, "compaction ran one record too early")
+  }
+
   // MARK: Every truncation point
 
   /// The property, not one instance of it: for every single prefix of a healthy

@@ -150,6 +150,18 @@ public final class PartialArchiveStore: @unchecked Sendable {
 
   // MARK: Cipher grid
 
+  /// Whether a total size is one this store can address.
+  ///
+  /// Bounded above as well as below: every offset reaches the filesystem as an
+  /// `off_t`, which is signed, so a larger size would trap on conversion
+  /// rather than be refused — and a server's Content-Length is not a trusted
+  /// number. A separate function because that is the only way to pin the upper
+  /// boundary; reaching it through `open` would mean asking a filesystem to
+  /// truncate a file to 9.2 exabytes.
+  static func isAddressable(totalSize: UInt64) -> Bool {
+    totalSize > 0 && totalSize <= UInt64(Int64.max)
+  }
+
   /// AES block size. The archive's payload is AES-CBC, so a reader can only
   /// decrypt whole blocks.
   public static let cipherBlockSize: UInt64 = 16
@@ -235,7 +247,7 @@ public final class PartialArchiveStore: @unchecked Sendable {
     // Upper bound as well as lower: every offset reaches the filesystem as an
     // `off_t`, which is signed, so a larger size would trap on conversion
     // rather than be refused. A server Content-Length is not a trusted number.
-    guard totalSize > 0, totalSize <= UInt64(Int64.max) else {
+    guard Self.isAddressable(totalSize: totalSize) else {
       isClosed = true
       throw PartialArchiveStoreError.invalidTotalSize(totalSize)
     }
@@ -487,7 +499,11 @@ public final class PartialArchiveStore: @unchecked Sendable {
   public func readContiguous(from offset: UInt64, maxLength: Int) throws -> Data {
     try mutex.withLock {
       guard !isClosed else { throw PartialArchiveStoreError.closed }
-      guard maxLength > 0, offset < totalSize else { return Data() }
+      // No `offset < totalSize` test: `contiguousRun` is empty for any offset
+      // the set does not hold, and the set never holds `totalSize`, so the
+      // clause could not change the answer. `maxLength > 0` is load-bearing —
+      // it guards the `UInt64` conversion below, which traps on a negative.
+      guard maxLength > 0 else { return Data() }
       let run = ranges.contiguousRun(from: offset)
       guard !run.isEmpty else { return Data() }
       let length = Int(min(UInt64(maxLength), run.upperBound - offset))
@@ -549,7 +565,10 @@ public final class PartialArchiveStore: @unchecked Sendable {
       if errno == EINTR { continue }
       return (moved, errno)
     }
-    return (moved, moved >= total ? nil : EINTR)
+    // Reaching here means the allowance ran out without finishing: the check
+    // at the top of the loop returns as soon as `moved` reaches `total`, so
+    // this path cannot be a success.
+    return (moved, EINTR)
   }
 
   /// A short read here means the file is smaller than the journal says, i.e.

@@ -477,6 +477,46 @@ final class PartialArchiveStoreTests: XCTestCase {
     XCTAssertEqual(try store.readContiguous(from: 0, maxLength: 0), Data())
   }
 
+  /// A negative length serves nothing rather than trapping. `maxLength` is an
+  /// `Int` from a caller and is converted to `UInt64` to cap the run, which
+  /// traps on a negative value, so the guard that prevents it has to be pinned.
+  func testReadContiguous_WithANegativeLength_ReturnsNoBytes() throws {
+    let store = try makeStore()
+    defer { store.close() }
+    try store.write(bytes(100), at: 0)
+
+    XCTAssertEqual(try store.readContiguous(from: 0, maxLength: -1), Data())
+  }
+
+  /// An interruption that never resolves must fail rather than retry forever.
+  /// This is the bound that makes the transfer loop safe against a mutated
+  /// comparison: without it the suite hangs instead of failing.
+  func testWrite_WhenTheSyscallIsInterruptedWithoutEnd_FailsRatherThanSpinning() throws {
+    let attempts = LockIsolated(0)
+    let store = try PartialArchiveStore(
+      directory: directory,
+      totalSize: 1000,
+      barrier: Self.orderingBarrier,
+      freeSpace: { _ in nil },
+      rawWrite: { _, _, _, _ in
+        attempts.withValue { $0 += 1 }
+        errno = EINTR
+        return -1
+      }
+    )
+    defer { store.close() }
+
+    XCTAssertThrowsError(try store.write(bytes(100), at: 0)) { error in
+      XCTAssertEqual(
+        error as? PartialArchiveStoreError,
+        .io(code: EINTR, path: store.archiveURL.path)
+      )
+    }
+    XCTAssertEqual(store.bytesPresent(), 0)
+    XCTAssertGreaterThan(attempts.value, 0, "the interruption path never ran")
+    XCTAssertLessThan(attempts.value, 1000, "the retry loop was not bounded")
+  }
+
   func testReadContiguous_HonoursTheLengthCap() throws {
     let store = try makeStore()
     defer { store.close() }
@@ -652,6 +692,16 @@ final class PartialArchiveStoreTests: XCTestCase {
         .invalidTotalSize(UInt64(Int64.max) + 1)
       )
     }
+  }
+
+  /// The addressable range, at both boundaries. `Int64.max` is the largest
+  /// size an `off_t` can carry; one more would trap on conversion instead of
+  /// being refused.
+  func testIsAddressable_AtBothBoundaries() {
+    XCTAssertFalse(PartialArchiveStore.isAddressable(totalSize: 0))
+    XCTAssertTrue(PartialArchiveStore.isAddressable(totalSize: 1))
+    XCTAssertTrue(PartialArchiveStore.isAddressable(totalSize: UInt64(Int64.max)))
+    XCTAssertFalse(PartialArchiveStore.isAddressable(totalSize: UInt64(Int64.max) + 1))
   }
 
   func testOpen_WithAZeroTotalSize_IsRefused() throws {
