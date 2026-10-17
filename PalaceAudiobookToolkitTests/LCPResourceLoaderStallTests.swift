@@ -271,11 +271,21 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
   /// The bound is on inactivity, not on the whole transfer: a read that keeps
   /// delivering, chunk by chunk, runs as long as it needs to.
+  ///
+  /// This is the one test in this file that asserts a stall is NOT detected, so
+  /// it is the only one a scheduling delay can fail falsely: every other timing
+  /// test here forces a stall, and a late chunk only makes those pass harder.
+  /// The margin is therefore deliberately wide. Each gap is 0.25 s against a
+  /// 1 s timeout, so the test survives three quarters of a second of jitter per
+  /// chunk, while six chunks still take 1.5 s and so outlast the timeout, which
+  /// is what makes the assertion about inactivity rather than duration. Keep
+  /// the gap well under the timeout and the total above it; do not narrow
+  /// either to make the suite faster.
   func testDataPhase_SlowButSteadyTransfer_IsNotCutOff() async throws {
     let chunk = 128 * 1024
     probe.length = UInt64(chunk * 6)
-    probe.readDelay = 0.08
-    let loader = makeLoader(stallTimeout: 0.25)
+    probe.readDelay = 0.25
+    let loader = makeLoader(stallTimeout: 1.0)
     let request = FakeLoadingRequest(
       url: Self.trackURL,
       needsContentInformation: false,
@@ -285,7 +295,7 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertTrue(loader.shouldWait(for: request))
     let outcome = try await request.waitUntilFinished(timeout: 5)
 
-    XCTAssertEqual(outcome, .success, "six chunks take ~0.5 s, twice the stall timeout, but none stalls")
+    XCTAssertEqual(outcome, .success, "six chunks take ~1.5 s, longer than the stall timeout, but no single gap stalls")
     XCTAssertEqual(request.respondedBytes, chunk * 6)
   }
 
