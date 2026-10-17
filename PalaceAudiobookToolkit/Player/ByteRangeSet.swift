@@ -48,22 +48,28 @@ struct ByteRangeSet: Equatable, Sendable {
     var lower = range.lowerBound
     var upper = range.upperBound
 
-    // First interval that reaches `lower` — i.e. that could overlap or touch.
-    var low = 0
-    var high = ranges.count
-    while low < high {
-      let mid = low + (high - low) / 2
-      if ranges[mid].upperBound < lower { low = mid + 1 } else { high = mid }
-    }
+    // The first interval that reaches `lower`, so the first that could overlap
+    // or touch it.
+    //
+    // Both of these are bounded by the collection rather than by arithmetic the
+    // loop does itself. An index loop here is what lets a one-character change
+    // spin forever, and a test can only observe that as a hang: three such
+    // mutants timed out at 180 s rather than failing an assertion. A linear
+    // scan also costs nothing to run — the measured worst case is nine
+    // intervals (`ByteRangeSetGranularityTests`).
+    let start = ranges.firstIndex { $0.upperBound >= lower } ?? ranges.count
 
-    var end = low
-    while end < ranges.count, ranges[end].lowerBound <= upper {
-      lower = min(lower, ranges[end].lowerBound)
-      upper = max(upper, ranges[end].upperBound)
-      end += 1
-    }
+    let absorbed = ranges[start...].prefix { candidate in
+      guard candidate.lowerBound <= upper else { return false }
+      lower = min(lower, candidate.lowerBound)
+      upper = max(upper, candidate.upperBound)
+      return true
+    }.count
 
-    ranges.replaceSubrange(low..<end, with: CollectionOfOne(lower..<upper))
+    ranges.replaceSubrange(
+      start..<(start + absorbed),
+      with: CollectionOfOne(lower..<upper)
+    )
   }
 
   /// The parts of `query` that are in the set, clipped to `query`.
@@ -127,9 +133,10 @@ struct ByteRangeSet: Equatable, Sendable {
   /// This is a derived view, computed per query: the stored set itself stays
   /// byte-exact, so the up-to-`blockSize`-1 bytes trimmed here are still known
   /// to be present and are never refetched.
+  /// `blockSize` must be positive. Not guarded: the only caller passes
+  /// `PartialArchiveStore.cipherBlockSize`, and a guard here could not be
+  /// covered by a test — the arithmetic below traps on zero either way.
   func blockAlignedInward(blockSize: UInt64) -> ByteRangeSet {
-    precondition(blockSize > 0, "block size must be positive")
-    guard blockSize > 1 else { return self }
     var result = ByteRangeSet()
     for range in ranges {
       let lower = range.lowerBound.roundedUpToMultiple(of: blockSize)

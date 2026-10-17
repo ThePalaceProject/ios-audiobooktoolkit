@@ -172,6 +172,33 @@ final class PartialArchiveStoreTests: XCTestCase {
     XCTAssertEqual(store.coverage(of: 0..<1000).missing, [0..<1000])
   }
 
+  /// Exactly enough room is enough. A refusal here would stall a download that
+  /// could in fact finish, and the off-by-one is invisible except at the last
+  /// chunk of a nearly-full volume.
+  func testWrite_WhenTheVolumeHasExactlyEnoughRoom_Proceeds() throws {
+    let store = try PartialArchiveStore(
+      directory: directory,
+      totalSize: 1000,
+      barrier: PartialArchiveStore.fullFlushBarrier,
+      freeSpace: { _ in 100 }
+    )
+    defer { store.close() }
+
+    try store.write(bytes(100), at: 0)
+
+    XCTAssertEqual(store.coverage(of: 0..<1000).present, [0..<100])
+  }
+
+  /// A capacity Foundation could not report means "unknown", which must not
+  /// block a write. Reading it as "no space" would refuse every write on a
+  /// volume whose figure is unavailable.
+  func testAvailableBytes_ForAMissingOrNonPositiveCapacity_IsUnknown() {
+    XCTAssertNil(PartialArchiveStore.availableBytes(forCapacity: nil))
+    XCTAssertNil(PartialArchiveStore.availableBytes(forCapacity: 0))
+    XCTAssertNil(PartialArchiveStore.availableBytes(forCapacity: -1))
+    XCTAssertEqual(PartialArchiveStore.availableBytes(forCapacity: 4096), 4096)
+  }
+
   /// An unknown free-space figure must not block the write — the probe is an
   /// optimisation, and the short-write path is the real authority.
   func testWrite_WhenFreeSpaceIsUnknown_ProceedsAnyway() throws {
@@ -395,6 +422,23 @@ final class PartialArchiveStoreTests: XCTestCase {
     XCTAssertEqual(try store.readContiguous(from: 500, maxLength: 100), Data())
   }
 
+  func testReadContiguous_AtTheExactEndOfTheArchive_ReturnsNoBytes() throws {
+    let store = try makeStore(totalSize: 100)
+    defer { store.close() }
+    try store.write(bytes(100), at: 0)
+
+    XCTAssertEqual(try store.readContiguous(from: 100, maxLength: 10), Data())
+    XCTAssertEqual(try store.readContiguous(from: 99, maxLength: 10).count, 1)
+  }
+
+  func testReadContiguous_WithNoLengthToServe_ReturnsNoBytes() throws {
+    let store = try makeStore()
+    defer { store.close() }
+    try store.write(bytes(100), at: 0)
+
+    XCTAssertEqual(try store.readContiguous(from: 0, maxLength: 0), Data())
+  }
+
   func testReadContiguous_HonoursTheLengthCap() throws {
     let store = try makeStore()
     defer { store.close() }
@@ -448,6 +492,15 @@ final class PartialArchiveStoreTests: XCTestCase {
       PartialArchiveStore.decryptableWindow(for: 20..<40, totalSize: 1000),
       16..<64
     )
+  }
+
+  /// A window for a range that begins at or past the end of the archive is
+  /// empty, not a window over the final blocks. Anything else would have a
+  /// reader fetch bytes the origin does not have.
+  func testDecryptableWindow_ForARangeAtOrPastTheEnd_IsEmpty() {
+    XCTAssertTrue(PartialArchiveStore.decryptableWindow(for: 100..<101, totalSize: 100).isEmpty)
+    XCTAssertTrue(PartialArchiveStore.decryptableWindow(for: 200..<300, totalSize: 100).isEmpty)
+    XCTAssertTrue(PartialArchiveStore.decryptableWindow(for: 50..<50, totalSize: 100).isEmpty)
   }
 
   func testDecryptableWindow_IsClippedToTheArchive() {
@@ -548,6 +601,17 @@ final class PartialArchiveStoreTests: XCTestCase {
       XCTAssertEqual(
         error as? PartialArchiveStoreError,
         .totalSizeMismatch(recorded: 1000, requested: 2000)
+      )
+    }
+  }
+
+  /// An `off_t` is signed, so a size above `Int64.max` would trap on
+  /// conversion rather than be refused. A server's Content-Length is input.
+  func testOpen_WithATotalSizeTooLargeToAddress_IsRefused() throws {
+    XCTAssertThrowsError(try makeStore(totalSize: UInt64(Int64.max) + 1)) { error in
+      XCTAssertEqual(
+        error as? PartialArchiveStoreError,
+        .invalidTotalSize(UInt64(Int64.max) + 1)
       )
     }
   }

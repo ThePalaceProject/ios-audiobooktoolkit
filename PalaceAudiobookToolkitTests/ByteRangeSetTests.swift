@@ -128,6 +128,38 @@ final class ByteRangeSetTests: XCTestCase {
     XCTAssertEqual(covered, 120)
   }
 
+  /// A stored interval that ends exactly where the query starts holds none of
+  /// it. Reporting a zero-length range instead would break the invariant that
+  /// every range in an answer is non-empty, and a caller fetching it would ask
+  /// the origin for nothing.
+  func testPresent_WhenAStoredIntervalEndsExactlyAtTheQueryStart_IsEmpty() {
+    let set = ByteRangeSet([0..<10])
+
+    XCTAssertEqual(set.present(in: 10..<20), [])
+    XCTAssertEqual(set.missing(in: 10..<20), [10..<20])
+  }
+
+  func testPresent_WhenAStoredIntervalStartsExactlyAtTheQueryEnd_IsEmpty() {
+    let set = ByteRangeSet([10..<20])
+
+    XCTAssertEqual(set.present(in: 0..<10), [])
+    XCTAssertEqual(set.missing(in: 0..<10), [0..<10])
+  }
+
+  /// The invariant behind both cases above, asserted over every boundary
+  /// relationship rather than the two that happened to be wrong.
+  func testQueries_OverEveryBoundaryRelationship_NeverReturnAnEmptyRange() {
+    let set = ByteRangeSet([16..<32, 48..<64])
+    for lower in UInt64(0)...80 {
+      for length in UInt64(0)...20 {
+        let query = lower..<(lower + length)
+        for range in set.present(in: query) + set.missing(in: query) {
+          XCTAssertFalse(range.isEmpty, "empty range from query \(query)")
+        }
+      }
+    }
+  }
+
   func testMissing_WhenSetIsEmpty_ReturnsTheWholeQuery() {
     let set = ByteRangeSet()
 
@@ -218,6 +250,24 @@ final class ByteRangeSetTests: XCTestCase {
     let set = ByteRangeSet([1..<15, 20..<28])
 
     XCTAssertEqual(set.blockAlignedInward(blockSize: 16).ranges, [])
+  }
+
+  /// Rounding the two ends of one interval can meet in the middle. The result
+  /// is that the interval holds no whole block, which must drop it rather than
+  /// produce a zero-length one.
+  func testBlockAlignedInward_WhenRoundingMeetsInTheMiddle_ProducesNoInterval() {
+    let set = ByteRangeSet([10..<20])
+
+    XCTAssertEqual(set.blockAlignedInward(blockSize: 16).ranges, [])
+  }
+
+  /// With a block size of one every byte is its own whole block, so alignment
+  /// has nothing to trim. Pins the behaviour that an early return for this case
+  /// used to assume.
+  func testBlockAlignedInward_WithABlockSizeOfOne_ChangesNothing() {
+    let set = ByteRangeSet([5..<100, 200..<301])
+
+    XCTAssertEqual(set.blockAlignedInward(blockSize: 1).ranges, set.ranges)
   }
 
   func testBlockAlignedInward_NeverReportsAByteTheSetDoesNotHold() {

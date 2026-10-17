@@ -114,9 +114,16 @@ public final class PartialArchiveStore: @unchecked Sendable {
     let values = try? directory.resourceValues(
       forKeys: [.volumeAvailableCapacityForImportantUsageKey]
     )
-    guard let capacity = values?.volumeAvailableCapacityForImportantUsage, capacity > 0 else {
-      return nil
-    }
+    return availableBytes(forCapacity: values?.volumeAvailableCapacityForImportantUsage)
+  }
+
+  /// Turns a reported volume capacity into an available-byte count.
+  ///
+  /// Separate from the Foundation call so the decision can be tested: a missing
+  /// or non-positive figure becomes "unknown", which does NOT block a write,
+  /// rather than "no space", which would block every one.
+  static func availableBytes(forCapacity capacity: Int64?) -> UInt64? {
+    guard let capacity, capacity > 0 else { return nil }
     return UInt64(capacity)
   }
 
@@ -225,7 +232,10 @@ public final class PartialArchiveStore: @unchecked Sendable {
     journalDescriptor = -1
     lockDescriptor = -1
 
-    guard totalSize > 0 else {
+    // Upper bound as well as lower: every offset reaches the filesystem as an
+    // `off_t`, which is signed, so a larger size would trap on conversion
+    // rather than be refused. A server Content-Length is not a trusted number.
+    guard totalSize > 0, totalSize <= UInt64(Int64.max) else {
       isClosed = true
       throw PartialArchiveStoreError.invalidTotalSize(totalSize)
     }
@@ -236,7 +246,9 @@ public final class PartialArchiveStore: @unchecked Sendable {
       lockDescriptor = try Self.openDescriptor(lockURL, flags: O_RDWR | O_CREAT)
       guard flock(lockDescriptor, LOCK_EX | LOCK_NB) == 0 else {
         let code = errno
-        throw (code == EWOULDBLOCK || code == EAGAIN)
+        // `EAGAIN` is not also tested: on Darwin it is the same value as
+        // `EWOULDBLOCK`, so a second comparison cannot change the answer.
+        throw code == EWOULDBLOCK
           ? PartialArchiveStoreError.alreadyOpen(directory)
           : PartialArchiveStoreError.io(code: code, path: lockURL.path)
       }
@@ -417,24 +429,19 @@ public final class PartialArchiveStore: @unchecked Sendable {
       var failure: PartialArchiveStoreError?
       bytes.withUnsafeBytes { raw in
         guard let base = raw.baseAddress else { return }
-        while written < raw.count {
-          let count = rawWrite(
+        let transfer = Self.transferAll(total: raw.count) { alreadyMoved in
+          rawWrite(
             archiveDescriptor,
-            base.advanced(by: written),
-            raw.count - written,
-            off_t(offset) + off_t(written)
+            base.advanced(by: alreadyMoved),
+            raw.count - alreadyMoved,
+            off_t(offset) + off_t(alreadyMoved)
           )
-          if count > 0 {
-            written += count
-            continue
-          }
-          if count < 0, errno == EINTR { continue }
-          let code = count < 0 ? errno : EIO
-          failure = (code == ENOSPC || code == EDQUOT)
-            ? .outOfSpace(committed: UInt64(written))
-            : .io(code: code, path: archiveURL.path)
-          return
         }
+        written = transfer.moved
+        guard let code = transfer.errorCode else { return }
+        failure = (code == ENOSPC || code == EDQUOT)
+          ? .outOfSpace(committed: UInt64(written))
+          : .io(code: code, path: archiveURL.path)
       }
 
       let committed = offset..<(offset + UInt64(written))
@@ -497,13 +504,52 @@ public final class PartialArchiveStore: @unchecked Sendable {
   }
 
   private func releaseDescriptors() {
-    if archiveDescriptor >= 0 { Darwin.close(archiveDescriptor); archiveDescriptor = -1 }
-    if journalDescriptor >= 0 { Darwin.close(journalDescriptor); journalDescriptor = -1 }
-    if lockDescriptor >= 0 {
+    if archiveDescriptor != -1 { Darwin.close(archiveDescriptor); archiveDescriptor = -1 }
+    if journalDescriptor != -1 { Darwin.close(journalDescriptor); journalDescriptor = -1 }
+    if lockDescriptor != -1 {
       flock(lockDescriptor, LOCK_UN)
       Darwin.close(lockDescriptor)
       lockDescriptor = -1
     }
+  }
+
+  /// How many times a transfer may be interrupted without moving a byte before
+  /// it is reported as failed.
+  ///
+  /// Exists so the loop below has an upper bound that does not depend on
+  /// arithmetic inside it. Three mutants of the hand-written loops this
+  /// replaced made them spin forever, and the suite then HUNG at a 180 s
+  /// timeout rather than failing an assertion — which is indistinguishable from
+  /// infrastructure flakiness, and is how a real hang reaches production
+  /// unnoticed. Bounding the loop turns that class into an ordinary failure.
+  private static let interruptionAllowance = 64
+
+  /// Drives a partial-transfer syscall to completion, or to the first error.
+  ///
+  /// `attempt` is given the number of bytes already moved and returns the
+  /// syscall's result: a positive count, or a negative value with `errno` set.
+  ///
+  /// - Returns: how many bytes moved, and the `errno` to report if it did not
+  ///   finish.
+  private static func transferAll(
+    total: Int,
+    attempt: (_ alreadyMoved: Int) -> Int
+  ) -> (moved: Int, errorCode: Int32?) {
+    var moved = 0
+    for _ in 0..<(total + interruptionAllowance) {
+      if moved >= total { return (moved, nil) }
+      let count = attempt(moved)
+      if count > 0 {
+        moved += count
+        continue
+      }
+      // A zero-length result for a non-zero request is not progress, so
+      // retrying it would spin.
+      if count == 0 { return (moved, EIO) }
+      if errno == EINTR { continue }
+      return (moved, errno)
+    }
+    return (moved, moved >= total ? nil : EINTR)
   }
 
   /// A short read here means the file is smaller than the journal says, i.e.
@@ -511,15 +557,20 @@ public final class PartialArchiveStore: @unchecked Sendable {
   /// short result.
   private func readLocked(offset: UInt64, length: Int) throws -> Data {
     var buffer = [UInt8](repeating: 0, count: length)
-    var read = 0
-    try buffer.withUnsafeMutableBytes { raw in
+    var failureCode: Int32?
+    buffer.withUnsafeMutableBytes { raw in
       guard let base = raw.baseAddress else { return }
-      while read < length {
-        let count = pread(archiveDescriptor, base.advanced(by: read), length - read, off_t(offset) + off_t(read))
-        if count > 0 { read += count; continue }
-        if count < 0, errno == EINTR { continue }
-        throw PartialArchiveStoreError.io(code: count < 0 ? errno : EIO, path: archiveURL.path)
-      }
+      failureCode = Self.transferAll(total: length) { alreadyMoved in
+        pread(
+          archiveDescriptor,
+          base.advanced(by: alreadyMoved),
+          length - alreadyMoved,
+          off_t(offset) + off_t(alreadyMoved)
+        )
+      }.errorCode
+    }
+    if let failureCode {
+      throw PartialArchiveStoreError.io(code: failureCode, path: archiveURL.path)
     }
     return Data(buffer)
   }
@@ -595,7 +646,13 @@ public final class PartialArchiveStore: @unchecked Sendable {
     var accepted = 0
     var stoppedEarly = false
     for line in lines.dropFirst() {
-      guard let range = parseRecord(line) else { stoppedEarly = true; break }
+      // A record outside the archive cannot be produced by `write`, which
+      // bounds-checks first. Treating it as damage rather than clamping it
+      // keeps the record from ever describing bytes that cannot exist.
+      guard let range = parseRecord(line), range.upperBound <= totalSize else {
+        stoppedEarly = true
+        break
+      }
       set.insert(range)
       accepted += 1
     }
@@ -627,15 +684,17 @@ public final class PartialArchiveStore: @unchecked Sendable {
     barrier: DurabilityBarrier
   ) throws {
     let bytes = Array((line + "\n").utf8)
-    var written = 0
-    try bytes.withUnsafeBytes { raw in
+    var failureCode: Int32?
+    bytes.withUnsafeBytes { raw in
       guard let base = raw.baseAddress else { return }
-      while written < raw.count {
-        let count = Darwin.write(descriptor, base.advanced(by: written), raw.count - written)
-        if count > 0 { written += count; continue }
-        if count < 0, errno == EINTR { continue }
-        throw PartialArchiveStoreError.io(code: count < 0 ? errno : EIO, path: path)
-      }
+      failureCode = transferAll(total: raw.count) { alreadyMoved in
+        // The descriptor is `O_APPEND`, so every write lands at the end
+        // whatever else has happened to the file.
+        Darwin.write(descriptor, base.advanced(by: alreadyMoved), raw.count - alreadyMoved)
+      }.errorCode
+    }
+    if let failureCode {
+      throw PartialArchiveStoreError.io(code: failureCode, path: path)
     }
     try barrier(descriptor, path)
   }
@@ -671,7 +730,9 @@ public final class PartialArchiveStore: @unchecked Sendable {
 
   private static func openDescriptor(_ url: URL, flags: Int32) throws -> Int32 {
     let descriptor = Darwin.open(url.path, flags, 0o644)
-    guard descriptor >= 0 else {
+    // `-1` exactly, not `< 0`: that is what `open` returns on failure, and
+    // testing a range instead would also reject descriptor 0.
+    guard descriptor != -1 else {
       throw PartialArchiveStoreError.io(code: errno, path: url.path)
     }
     return descriptor
