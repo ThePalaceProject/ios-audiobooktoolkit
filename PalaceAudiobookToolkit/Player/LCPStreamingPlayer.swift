@@ -59,10 +59,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// cause rather than replaced by this backstop's "Timed out waiting for LCP
   /// publication to load".
   ///
-  /// Also the reason the ceiling is not longer: while a load is open the app
-  /// may be holding the background package fetch paused, and that fetch's
-  /// wall-clock resource budget keeps running while it is paused. See
-  /// `LCPContentDownloadCoordinator.maxSuspension` in Palace.
+  /// So the ceiling is not a free parameter: it is `stallTimeout`. Below it,
+  /// this backstop would pre-empt the loader and the patron would be told the
+  /// publication timed out when the real cause was a transport failure the
+  /// loader was about to name. Above it, the loader has already failed every
+  /// request and there is nothing left for the extra wait to recover.
   static let defaultLoadCeiling: TimeInterval = 90.0
 
   /// Overridable so the lifecycle tests can drive the timeout without waiting
