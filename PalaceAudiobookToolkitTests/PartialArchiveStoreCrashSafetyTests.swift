@@ -36,6 +36,26 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     directory.appendingPathComponent(PartialArchiveStore.archiveFileName)
   }
 
+  /// A plain `fsync` rather than `F_FULLFSYNC`. These tests simulate the
+  /// process being KILLED, for which what matters is that the record is written
+  /// after the data — ordering, which any barrier preserves. A device cache
+  /// flush guards against power loss instead, and costs real time where the
+  /// disk is virtualised. The kill-window test below still drives the shipped
+  /// barrier.
+  static let orderingBarrier: PartialArchiveStore.DurabilityBarrier = { descriptor, path in
+    guard fsync(descriptor) == 0 else {
+      throw PartialArchiveStoreError.io(code: errno, path: path)
+    }
+  }
+
+  private func openStore(totalSize: UInt64 = 1000) throws -> PartialArchiveStore {
+    try PartialArchiveStore(
+      directory: directory,
+      totalSize: totalSize,
+      barrier: Self.orderingBarrier
+    )
+  }
+
   private func bytes(_ count: Int, seed: UInt8 = 0) -> Data {
     Data((0..<count).map { UInt8(truncatingIfNeeded: $0 &+ Int(seed)) })
   }
@@ -83,7 +103,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     // The kill window was real: those bytes ARE on disk.
     XCTAssertEqual(rawArchiveBytes(0..<100), bytes(100))
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).missing, [0..<1000])
@@ -118,7 +138,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     try? dying.write(bytes(100), at: 200)
     dying.close()
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<200])
@@ -130,7 +150,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// A kill during the record append leaves a line with no terminating newline.
   /// A fragment is not a record.
   func testReopen_WhenTheRecordFileEndsInAnUnterminatedLine_DropsThatLineOnly() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     try store.write(bytes(100), at: 500)
     store.close()
@@ -139,7 +159,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     journal.append(contentsOf: Array("700 800 99".utf8))  // no newline: torn append
     try journal.write(to: journalURL)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100, 500..<600])
@@ -148,7 +168,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// A torn write can land a newline and still leave the bytes wrong, which is
   /// why each record carries a checksum rather than relying on the newline.
   func testReopen_WhenARecordsChecksumDoesNotMatch_StopsAtThatRecord() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -156,7 +176,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     journal += "500 600 12345\n"  // well-formed, wrong checksum
     try journal.write(to: journalURL, atomically: true, encoding: .utf8)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100])
@@ -166,7 +186,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// append-only file a damaged record means the tail cannot be vouched for,
   /// and under-claiming is the only safe way to be wrong.
   func testReopen_WhenADamagedRecordHasIntactOnesAfterIt_DiscardsTheTail() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -178,7 +198,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     try (lines.joined(separator: "\n") + "\n")
       .write(to: journalURL, atomically: true, encoding: .utf8)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100])
@@ -188,7 +208,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// to clamp: `write` bounds-checks, so no healthy run can produce one, and
   /// accepting it would have the record describe bytes that cannot exist.
   func testReopen_WhenARecordNamesBytesPastTheArchive_StopsAtThatRecord() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -197,23 +217,23 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     journal += "\(body) \(PartialArchiveStore.crc32(Array(body.utf8)))\n"
     try journal.write(to: journalURL, atomically: true, encoding: .utf8)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100])
   }
 
   func testReopen_WhenTheRecordFileIsGarbage_ReportsNothingPresent() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(1000), at: 0)
     store.close()
-    let healthy = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let healthy = try openStore()
     XCTAssertTrue(healthy.isComplete(), "the record was not healthy before being damaged")
     healthy.close()
 
     try Data(repeating: 0x7F, count: 4096).write(to: journalURL)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).missing, [0..<1000])
@@ -221,27 +241,27 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   }
 
   func testReopen_WhenTheRecordFileIsEmpty_ReportsNothingPresent() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(500), at: 0)
     store.close()
 
     try Data().write(to: journalURL)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.bytesPresent(), 0)
   }
 
   func testReopen_WhenOnlyTheHeaderSurvived_ReportsNothingPresent() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(500), at: 0)
     store.close()
 
     try "\(PartialArchiveStore.journalMagic) 1000\n"
       .write(to: journalURL, atomically: true, encoding: .utf8)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.bytesPresent(), 0)
@@ -260,7 +280,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// never emits one, and accepting it would let the loader carry on past a
   /// record it cannot vouch for.
   func testReopen_WhenARecordNamesAnEmptyRange_StopsAtThatRecord() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -270,7 +290,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     }
     try journal.write(to: journalURL, atomically: true, encoding: .utf8)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100])
@@ -280,13 +300,13 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// launch would mean a rename of the one file the store's guarantee rests on,
   /// repeatedly, for no reason.
   func testReopen_WhenTheRecordIsHealthy_LeavesItByteForByte() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     try store.write(bytes(100), at: 500)
     store.close()
     let before = try Data(contentsOf: journalURL)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     let after = try Data(contentsOf: journalURL)
     reopened.close()
 
@@ -296,7 +316,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// And a damaged one IS rewritten, so the damage is not re-read at every
   /// launch thereafter.
   func testReopen_WhenTheRecordWasDamaged_RewritesItClean() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -304,7 +324,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     journal.append(contentsOf: Array("600 700".utf8))  // torn, unterminated
     try journal.write(to: journalURL)
 
-    let first = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let first = try openStore()
     first.close()
     let rewritten = try Data(contentsOf: journalURL)
 
@@ -312,7 +332,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
       String(decoding: rewritten, as: UTF8.self).hasSuffix("600 700"),
       "the torn fragment was left in the record file"
     )
-    let second = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let second = try openStore()
     defer { second.close() }
     XCTAssertEqual(second.coverage(of: 0..<1000).present, [0..<100])
   }
@@ -324,7 +344,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { _, _, _, _ in
         errno = ENOSPC
@@ -349,7 +369,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// archive complete only when the record is whole.
   func testReopen_AtEveryTruncationPointOfTheRecordFile_NeverOverClaims() throws {
     let written: [Range<UInt64>] = [0..<100, 100..<200, 400..<500, 900..<1000]
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     for range in written {
       try store.write(bytes(range.count), at: range.lowerBound)
     }
@@ -360,7 +380,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     for length in 0...healthy.count {
       try healthy.prefix(length).write(to: journalURL)
 
-      let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+      let reopened = try openStore()
       let present = reopened.coverage(of: 0..<1000).present
       reopened.close()
 
@@ -383,7 +403,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// record does not name must not be served, and an archive whose file is full
   /// length must not read as complete.
   func testStore_WhenTheFileHoldsBytesTheRecordDoesNotName_RefusesToServeThem() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let store = try openStore()
     try store.write(bytes(100), at: 0)
     store.close()
 
@@ -395,7 +415,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
     XCTAssertEqual(pwrite(descriptor, smuggled, smuggled.count, 500), 100)
     close(descriptor)
 
-    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 1000)
+    let reopened = try openStore()
     defer { reopened.close() }
 
     XCTAssertEqual(reopened.coverage(of: 0..<1000).present, [0..<100])
@@ -408,7 +428,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// nothing about what is present. The check this store replaces was exactly a
   /// size-or-existence check.
   func testArchiveFile_OnANewStore_IsAlreadyFullLengthAndEmptyOfContent() throws {
-    let store = try PartialArchiveStore.open(directory: directory, totalSize: 4096)
+    let store = try openStore(totalSize: 4096)
     defer { store.close() }
 
     let size = try FileManager.default.attributesOfItem(atPath: archiveURL.path)[.size] as? Int
@@ -425,11 +445,7 @@ final class PartialArchiveStoreCrashSafetyTests: XCTestCase {
   /// leave an unbounded file behind. A plain `fsync` barrier here: this is about
   /// file size, and a full flush per write would make the test minutes long.
   func testReopen_WhenTheRecordHasManyMoreRecordsThanIntervals_CompactsIt() throws {
-    let cheapBarrier: PartialArchiveStore.DurabilityBarrier = { descriptor, path in
-      guard fsync(descriptor) == 0 else {
-        throw PartialArchiveStoreError.io(code: errno, path: path)
-      }
-    }
+    let cheapBarrier = Self.orderingBarrier
     let records = PartialArchiveStore.compactionThreshold + 10
     let store = try PartialArchiveStore(
       directory: directory,

@@ -28,8 +28,28 @@ final class PartialArchiveStoreTests: XCTestCase {
     try super.tearDownWithError()
   }
 
+  /// Opens a store with a cheap durability barrier.
+  ///
+  /// `F_FULLFSYNC` asks the DEVICE to flush its write cache, which guards
+  /// against power loss. Every guarantee these tests assert is about ordering —
+  /// that the record is written after the data — and ordering is preserved by
+  /// any barrier, so a plain `fsync` tests the same property. The distinction
+  /// costs real time where the disk is virtualised: with the production barrier
+  /// these 115 tests ran in 3.5 s locally but added over 36 s to CI, roughly
+  /// doubling the suite. `testOpen_ThroughThePublicEntryPoint_UsesTheFullFlush`
+  /// keeps the shipped default covered.
   private func makeStore(totalSize: UInt64 = 1000) throws -> PartialArchiveStore {
-    try PartialArchiveStore.open(directory: directory, totalSize: totalSize)
+    try PartialArchiveStore(
+      directory: directory,
+      totalSize: totalSize,
+      barrier: Self.orderingBarrier
+    )
+  }
+
+  static let orderingBarrier: PartialArchiveStore.DurabilityBarrier = { descriptor, path in
+    guard fsync(descriptor) == 0 else {
+      throw PartialArchiveStoreError.io(code: errno, path: path)
+    }
   }
 
   private func bytes(_ count: Int, seed: UInt8 = 0) -> Data {
@@ -37,6 +57,24 @@ final class PartialArchiveStoreTests: XCTestCase {
   }
 
   // MARK: Ask
+
+  /// The shipped entry point and its `F_FULLFSYNC` barrier, end to end. Every
+  /// other test here swaps the barrier for a cheaper one, so without this the
+  /// production default would never run.
+  func testOpen_ThroughThePublicEntryPoint_UsesTheFullFlush() throws {
+    let payload = bytes(200, seed: 4)
+    let store = try PartialArchiveStore.open(directory: directory, totalSize: 200)
+    try store.write(payload, at: 0)
+    XCTAssertTrue(store.isComplete())
+    store.close()
+
+    let reopened = try PartialArchiveStore.open(directory: directory, totalSize: 200)
+    defer { reopened.close() }
+
+    XCTAssertEqual(try reopened.read(0..<200), payload)
+    XCTAssertTrue(reopened.isComplete())
+  }
+
 
   func testCoverage_OnANewStore_ReportsEverythingMissing() throws {
     let store = try makeStore()
@@ -160,7 +198,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in 10 }
     )
     defer { store.close() }
@@ -179,7 +217,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in 100 }
     )
     defer { store.close() }
@@ -205,7 +243,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil }
     )
     defer { store.close() }
@@ -226,7 +264,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { descriptor, pointer, count, offset in
         let allowed = min(count, max(0, acceptedBytes - Int(offset)))
@@ -258,7 +296,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let first = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { descriptor, pointer, count, offset in
         let allowed = min(count, max(0, 40 - Int(offset)))
@@ -283,7 +321,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { _, _, _, _ in
         errno = ENOSPC
@@ -305,7 +343,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { descriptor, pointer, count, offset in
         if !interrupted.value {
@@ -331,7 +369,7 @@ final class PartialArchiveStoreTests: XCTestCase {
     let store = try PartialArchiveStore(
       directory: directory,
       totalSize: 1000,
-      barrier: PartialArchiveStore.fullFlushBarrier,
+      barrier: Self.orderingBarrier,
       freeSpace: { _ in nil },
       rawWrite: { _, _, _, _ in 0 }
     )

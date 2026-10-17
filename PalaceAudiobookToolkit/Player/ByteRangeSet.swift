@@ -153,7 +153,11 @@ struct ByteRangeSet: Equatable, Sendable {
   /// interval anchored at 0 and ending at `totalSize` is the only way to hold
   /// every byte.
   func covers(totalSize: UInt64) -> Bool {
-    ranges.count == 1 && ranges[0].lowerBound == 0 && ranges[0].upperBound == totalSize
+    // `first` rather than `ranges[0]`: indexing is safe here only because of
+    // the short-circuit, so a mutated operator crashes the test process instead
+    // of failing an assertion, and a crash does not read as a finding.
+    guard ranges.count == 1, let only = ranges.first else { return false }
+    return only.lowerBound == 0 && only.upperBound == totalSize
   }
 }
 
