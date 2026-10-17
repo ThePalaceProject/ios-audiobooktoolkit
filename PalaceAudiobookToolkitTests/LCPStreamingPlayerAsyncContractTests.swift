@@ -647,6 +647,29 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
   }
 
+  /// Waits for `condition`, polling, instead of sleeping a fixed time.
+  ///
+  /// These timers are `DispatchQueue.main.asyncAfter` work items and the test
+  /// holds the main actor, so the await is also what lets them run. A fixed
+  /// sleep has to be longer than the worst runner delay and is still a race at
+  /// that length: a sibling test in this repository failed CI on its first run
+  /// with 170 ms of slack. Polling returns as soon as the behaviour happens and
+  /// tolerates a delay up to the bound, so the bound can be generous without
+  /// making the normal case slow — exceeding it means the behaviour never
+  /// happened, not that the machine was busy.
+  private func waitUntil(
+    _ description: String,
+    timeout: TimeInterval = 5,
+    _ condition: () -> Bool
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if condition() { return }
+      try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    XCTFail("timed out after \(timeout)s waiting for \(description)")
+  }
+
   /// Begins a load the way `playCallback` does, through the shipped timer.
   private func beginLoad(on player: LifecyclePlayer, completion: @escaping (Error?) -> Void = { _ in }) {
     player.isLoaded = false
@@ -669,7 +692,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     beginLoad(on: player)
     XCTAssertEqual(provider.events, ["begin"], "Arming the load must announce it")
 
-    try await Task.sleep(nanoseconds: 300_000_000)
+    await waitUntil("the timeout to fire") { provider.events.count >= 2 }
 
     XCTAssertEqual(provider.events, ["begin", "end"],
                    "A load the timeout failed must be announced as ended exactly once")
@@ -739,7 +762,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
   func testStreamingLoad_endedTwice_releasesOnce() async throws {
     let player = makePlayer()
     beginLoad(on: player)
-    try await Task.sleep(nanoseconds: 300_000_000)
+    await waitUntil("the timeout to fire") { provider.events.count >= 2 }
     XCTAssertEqual(provider.events, ["begin", "end"], "Precondition: the timeout ended it")
 
     player.isLoaded = true
@@ -818,7 +841,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     var failure: NSError?
     beginLoad(on: player) { failure = $0 as NSError? }
 
-    try await Task.sleep(nanoseconds: 300_000_000)
+    await waitUntil("the load to fail") { failure != nil }
 
     XCTAssertEqual(failure?.domain, "LCPStreamingPlayer")
     XCTAssertEqual(
@@ -837,7 +860,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     var failure: NSError?
     beginLoad(on: player) { failure = $0 as NSError? }
 
-    try await Task.sleep(nanoseconds: 600_000_000)
+    await waitUntil("the ceiling to end the load") { failure != nil }
 
     XCTAssertEqual(
       failure?.localizedDescription,
@@ -857,7 +880,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     defer { cancellable.cancel() }
 
     beginLoad(on: player) { _ in }
-    try await Task.sleep(nanoseconds: 300_000_000)
+    await waitUntil("a playback failure to be published") { !states.isEmpty }
 
     let failed = states.contains { state in
       if case .failed = state { return true }
