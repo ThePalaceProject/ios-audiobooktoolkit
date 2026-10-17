@@ -770,3 +770,10 @@ public final class PartialArchiveStore: @unchecked Sendable {
     return ~crc
   }
 }
+
+// MARK: - ArchiveRangeStore
+
+/// The caching client needs only the four range operations this store already
+/// provides, so the conformance is declarative: `totalSize`, `missingRanges(in:)`,
+/// `write(_:at:)` and `read(_:)` match the protocol as written.
+extension PartialArchiveStore: ArchiveRangeStore {}
