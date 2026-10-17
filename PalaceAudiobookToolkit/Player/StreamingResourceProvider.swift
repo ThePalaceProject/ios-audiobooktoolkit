@@ -23,6 +23,29 @@ public protocol StreamingResourceProvider: AnyObject {
   /// and decrypt a whole window to serve one segment and save nothing, because
   /// there is no request to avoid making.
   func archiveIsLocalFile() -> Bool
+
+  /// The player has started a streaming load the patron is waiting on, and
+  /// will call `streamingLoadDidEnd()` when that load finishes, fails or is
+  /// torn down.
+  ///
+  /// Palace fetches the whole package in the background while streaming
+  /// serves playback (PP-5135). The two transfers are separate URLSessions
+  /// over one link, so the background fetch competes with the chapter the
+  /// patron is waiting for, and a cross-chapter seek then exceeds the load
+  /// timeout. A provider implements this pair to let the chapter have the
+  /// link first; neither hook fetches anything, so egress is unchanged.
+  ///
+  /// Called once per load event, on the main queue, and paired: a seek to
+  /// another chapter is a new load and calls `streamingLoadDidBegin()` again.
+  ///
+  /// Deliberately without a default implementation, unlike
+  /// `archiveIsLocalFile()` above: a witness that fails to bind falls back to
+  /// the default and disables the behaviour with no diagnostic.
+  func streamingLoadDidBegin()
+
+  /// The load announced by `streamingLoadDidBegin()` is over — loaded, failed,
+  /// timed out or torn down. See that method; also without a default.
+  func streamingLoadDidEnd()
 }
 
 public extension StreamingResourceProvider {

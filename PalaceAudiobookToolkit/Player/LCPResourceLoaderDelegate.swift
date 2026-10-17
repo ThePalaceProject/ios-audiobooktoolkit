@@ -21,6 +21,18 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
   private let concurrencySemaphore = DispatchSemaphore(value: 8)
 
+  /// Total decrypted bytes this loader has handed to AVFoundation, across every
+  /// request it has served.
+  ///
+  /// Monotonic and never reset, so a reader only has to compare two samples: a
+  /// higher number means bytes arrived in between. `LCPStreamingPlayer` samples
+  /// it to tell a slow load from a stalled one — the publication load timeout
+  /// used to fail both, and a cross-chapter seek competing with the background
+  /// package fetch is the slow case (PP-5367).
+  private let servedByteCount = LockIsolated(0)
+
+  var bytesServed: Int { servedByteCount.value }
+
 
 
   /// Resolved, buffered resource per track href, least-recently-used first.
@@ -443,6 +455,10 @@ private extension LCPResourceLoaderDelegate {
   ) async {
     let lastProgress = LockIsolated(Date())
     let stallTimeout = stallTimeout
+    // Captured rather than reached through `self`: the box is `Sendable`, the
+    // loader is not, so touching `self` inside the task below draws a
+    // concurrency diagnostic.
+    let servedByteCount = servedByteCount
 
     await withTaskGroup(of: Void.self) { group in
       group.addTask {
@@ -488,6 +504,7 @@ private extension LCPResourceLoaderDelegate {
             if !data.isEmpty {
               request.respond(with: data)
               lastProgress.value = Date()
+              servedByteCount.withValue { $0 += data.count }
               totalBytesRead += data.count
               if bytesRemaining != Int.max {
                 bytesRemaining -= data.count

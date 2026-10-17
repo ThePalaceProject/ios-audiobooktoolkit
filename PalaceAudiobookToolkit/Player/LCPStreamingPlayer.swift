@@ -43,6 +43,162 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   internal var isSeekingWithinSameTrack = false
   private var loadTimeoutWorkItem: DispatchWorkItem?
 
+  /// Whether a streaming load the provider has been told about is still open.
+  /// Internal so the lifecycle tests can read it alongside the provider's
+  /// begin/end counts.
+  internal var streamingLoadIsOpen = false
+
+  /// How long a streaming load may deliver no bytes before it is failed.
+  static let defaultLoadProgressWindow: TimeInterval = 30.0
+
+  /// Ceiling on one streaming load, however many bytes keep arriving.
+  ///
+  /// Three progress windows, and the same budget `LCPResourceLoaderDelegate`
+  /// gives one request's inactivity (`stallTimeout`, 90 s), so a transfer that
+  /// has genuinely stopped is reported by the loader with the transport's own
+  /// cause rather than replaced by this backstop's "Timed out waiting for LCP
+  /// publication to load".
+  ///
+  /// Also the reason the ceiling is not longer: while a load is open the app
+  /// may be holding the background package fetch paused, and that fetch's
+  /// wall-clock resource budget keeps running while it is paused. See
+  /// `LCPContentDownloadCoordinator.maxSuspension` in Palace.
+  static let defaultLoadCeiling: TimeInterval = 90.0
+
+  /// Overridable so the lifecycle tests can drive the timeout without waiting
+  /// the shipped 30 seconds for each exit path.
+  var loadProgressWindow: TimeInterval { Self.defaultLoadProgressWindow }
+  var loadCeiling: TimeInterval { Self.defaultLoadCeiling }
+
+  /// Decrypted bytes the resource loader has served so far, or 0 when there is
+  /// no loader. Two samples are compared, so the absolute value is irrelevant.
+  var streamedBytesServed: Int { sharedResourceLoader?.bytesServed ?? 0 }
+
+  // MARK: - Streaming load lifecycle
+
+  /// Ending a load is keyed on the flag every exit already sets, rather than on
+  /// each exit remembering to call `finishStreamingLoad()`: there are eight of
+  /// them and a ninth added later would otherwise leave the patron's
+  /// background download suspended with nobody to resume it. Teardown and the
+  /// nothing-was-enqueued error path do not touch the flag, so those two call
+  /// it directly.
+  override var isLoaded: Bool {
+    get { super.isLoaded }
+    set {
+      super.isLoaded = newValue
+      if newValue { finishStreamingLoad() }
+    }
+  }
+
+  /// Tells the provider a load the patron is waiting on has started, so it can
+  /// yield the link to it (PP-5367). Idempotent: a load already announced is
+  /// not announced twice, which is what keeps begin/end balanced without every
+  /// exit path having to agree on who calls which.
+  func beginStreamingLoad() {
+    guard !streamingLoadIsOpen else { return }
+    streamingLoadIsOpen = true
+    streamingProvider?.streamingLoadDidBegin()
+  }
+
+  /// The counterpart. Also idempotent, so an exit path may be reached twice —
+  /// a late seek completion after the timeout already fired, say — without
+  /// releasing the provider twice.
+  func endStreamingLoad() {
+    guard streamingLoadIsOpen else { return }
+    streamingLoadIsOpen = false
+    streamingProvider?.streamingLoadDidEnd()
+  }
+
+  /// One exit from a streaming load: disarm its timeout and release the
+  /// provider. Called from every path that leaves the load — loaded, failed,
+  /// timed out, rebuilt, torn down — because a load left open leaves the
+  /// patron's background download suspended.
+  func finishStreamingLoad() {
+    loadTimeoutWorkItem?.cancel()
+    loadTimeoutWorkItem = nil
+    endStreamingLoad()
+  }
+
+  /// Whether a load that has not finished within its progress window is still
+  /// worth waiting for.
+  ///
+  /// The window alone cannot tell a stalled load from a slow one, and failing
+  /// a slow one loses the book. Bytes arriving since the last check is the
+  /// discriminator; the ceiling bounds how long "still arriving" may go on.
+  enum LoadTimeoutOutcome: Equatable { case rearm, fail }
+
+  nonisolated static func loadTimeoutOutcome(
+    bytesServed: Int,
+    bytesAtLastCheck: Int,
+    elapsed: TimeInterval,
+    ceiling: TimeInterval
+  ) -> LoadTimeoutOutcome {
+    guard bytesServed > bytesAtLastCheck else { return .fail }
+    return elapsed < ceiling ? .rearm : .fail
+  }
+
+  /// Arms the publication load timeout for the load that has just begun.
+  /// Internal so the lifecycle tests drive the shipped timer rather than a
+  /// re-implementation of it.
+  func armLoadTimeout(
+    for position: TrackPosition,
+    startedAt: Date,
+    bytesAtLastCheck: Int,
+    onceCompletion: @escaping (Error?) -> Void
+  ) {
+    // Cancel any prior fallback from an earlier play(at:) so stale timers don't
+    // fire after the queue has advanced past the startup window. Without this,
+    // rapid re-presentations stack multiple timers that all log at once.
+    loadTimeoutWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self = self, !self.isLoaded else { return }
+      let outcome = Self.loadTimeoutOutcome(
+        bytesServed: self.streamedBytesServed,
+        bytesAtLastCheck: bytesAtLastCheck,
+        elapsed: Date().timeIntervalSince(startedAt),
+        ceiling: self.loadCeiling
+      )
+      switch outcome {
+      case .rearm:
+        self.armLoadTimeout(
+          for: position,
+          startedAt: startedAt,
+          bytesAtLastCheck: self.streamedBytesServed,
+          onceCompletion: onceCompletion
+        )
+      case .fail:
+        self.failStreamingLoad(at: position, onceCompletion: onceCompletion)
+      }
+    }
+    loadTimeoutWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + loadProgressWindow, execute: workItem)
+  }
+
+  /// Surfaces a load that never completed as a playback failure.
+  private func failStreamingLoad(at position: TrackPosition, onceCompletion: @escaping (Error?) -> Void) {
+    ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — surfacing failure so caller can show an alert and release the open lock")
+    isLoaded = true
+    suppressAudibleUntilPlaying = false
+    avQueuePlayer.isMuted = false
+
+    // Emit a playback failure so AudiobookManager → Palace surfaces the
+    // "Audiobook Unavailable" alert and the app's open lock releases
+    // instead of latching. Without this, a stalled resource loader looks
+    // identical to a successful open from the UI's perspective.
+    let timeoutError = NSError(
+      domain: "LCPStreamingPlayer",
+      code: -1,
+      userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
+    )
+    // PP-5205: the seek never landed, so the optimistic position must not
+    // outlive it. Leaving it set would have the UI — and position reporting,
+    // which drives bookmarks and progress sync — claim a chapter that never
+    // started playing.
+    queuedTrackPosition = nil
+    playbackStatePublisher.send(.failed(position, timeoutError))
+    onceCompletion(timeoutError)
+  }
+
   override var currentOffset: Double {
     guard let currentTrackPosition, let currentChapter else {
       return 0
@@ -294,45 +450,21 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       avQueuePlayer.isMuted = true
       lastStartedItemKey = nil
 
-      // Cancel any prior fallback from an earlier play(at:) so stale timers don't
-      // fire after the queue has advanced past the startup window. Without this,
-      // rapid re-presentations stack multiple timers that all log at once.
-      loadTimeoutWorkItem?.cancel()
-      let timeoutPosition = position
-      let workItem = DispatchWorkItem { [weak self] in
-        guard let self = self, !self.isLoaded else { return }
-        ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — surfacing failure so caller can show an alert and release the open lock")
-        self.isLoaded = true
-        self.suppressAudibleUntilPlaying = false
-        self.avQueuePlayer.isMuted = false
-
-        // Emit a playback failure so AudiobookManager → Palace surfaces the
-        // "Audiobook Unavailable" alert and the BookService open lock releases
-        // instead of latching. Without this, a stalled resource loader looks
-        // identical to a successful open from the UI's perspective.
-        let timeoutError = NSError(
-          domain: "LCPStreamingPlayer",
-          code: -1,
-          userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
-        )
-        // PP-5205: the seek never landed, so the optimistic position must not
-        // outlive it. Leaving it set would have the UI — and position reporting,
-        // which drives bookmarks and progress sync — claim a chapter that never
-        // started playing.
-        self.queuedTrackPosition = nil
-        self.playbackStatePublisher.send(.failed(timeoutPosition, timeoutError))
-        onceCompletion(timeoutError)
-      }
-      loadTimeoutWorkItem = workItem
-      DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: workItem)
+      // The patron is waiting on bytes for this chapter, so ask the provider
+      // to yield the link to it until the load ends (PP-5367).
+      beginStreamingLoad()
+      armLoadTimeout(
+        for: position,
+        startedAt: Date(),
+        bytesAtLastCheck: streamedBytesServed,
+        onceCompletion: onceCompletion
+      )
     } else if !isSeekWithinSameTrack {
       // PP-5205: a local cross-track seek arms NO load timeout — there is no load to
       // time out. But a timer armed by an EARLIER streaming seek may still be in
       // flight, and letting it fire here would surface "Audiobook Unavailable" over a
       // book that is playing fine from disk. Cancel it, and make sure the audible
       // suppression from that earlier seek cannot outlive it either.
-      loadTimeoutWorkItem?.cancel()
-      loadTimeoutWorkItem = nil
       if suppressAudibleUntilPlaying {
         suppressAudibleUntilPlaying = false
         avQueuePlayer.isMuted = false
@@ -403,7 +535,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
                 isLoaded = true
                 suppressAudibleUntilPlaying = false
                 avQueuePlayer.isMuted = false
-                self.loadTimeoutWorkItem?.cancel()
               }
             }
           } else {
@@ -487,6 +618,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         onceCompletion(nil)
       }
     } else {
+      // Nothing was enqueued, so nothing is loading and nothing will arrive to
+      // end the load later.
+      finishStreamingLoad()
       onceCompletion(NSError(
         domain: "LCPStreamingPlayer",
         code: -1,
@@ -854,8 +988,6 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         switch player.timeControlStatus {
         case .playing:
           self.isLoaded = true
-          loadTimeoutWorkItem?.cancel()
-          loadTimeoutWorkItem = nil
           if suppressAudibleUntilPlaying {
             avQueuePlayer.isMuted = false
             suppressAudibleUntilPlaying = false
@@ -1026,6 +1158,9 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   // to reach across for.
 
   override func unload() {
+    // Unconditional, and before anything else drops the provider: a load left
+    // open here strands the patron's background download suspended.
+    finishStreamingLoad()
     super.unload()
     (sharedResourceLoader as? LCPResourceLoaderDelegate)?.shutdown()
     streamingProvider = nil

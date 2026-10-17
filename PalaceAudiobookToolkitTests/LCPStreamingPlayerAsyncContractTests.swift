@@ -13,6 +13,8 @@
 //
 
 import AVFoundation
+import Combine
+import ReadiumShared
 import XCTest
 @testable import PalaceAudiobookToolkit
 
@@ -574,5 +576,292 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
       the chapter the patron is waiting for; it is preloaded once playing
       """
     )
+  }
+}
+
+// MARK: - Streaming load lifecycle and the progress-aware load timeout (PP-5367)
+
+/// Records the provider hooks the player uses to hand the link to a chapter the
+/// patron is waiting for.
+///
+/// Held strongly by each test: `LCPStreamingPlayer.streamingProvider` is weak.
+private final class SpyStreamingProvider: StreamingResourceProvider {
+  var events: [String] = []
+  var begins: Int { events.filter { $0 == "begin" }.count }
+  var ends: Int { events.filter { $0 == "end" }.count }
+
+  func getPublication() -> Publication? { nil }
+  func archiveIsLocalFile() -> Bool { false }
+  func streamingLoadDidBegin() { events.append("begin") }
+  func streamingLoadDidEnd() { events.append("end") }
+}
+
+@MainActor
+final class LCPStreamingLoadLifecycleTests: XCTestCase {
+
+  /// Shortens the shipped windows and stands in for the resource loader's byte
+  /// counter, so the real timer and the real failure path run in milliseconds.
+  final class LifecyclePlayer: LCPStreamingPlayer {
+    var window: TimeInterval = 0.05
+    var ceiling: TimeInterval = 10
+    /// Bytes "arriving" between two samples. Zero models a load that is
+    /// receiving nothing at all.
+    var bytesPerSample = 0
+    private var served = 0
+
+    override var loadProgressWindow: TimeInterval { window }
+    override var loadCeiling: TimeInterval { ceiling }
+    override var streamedBytesServed: Int {
+      served += bytesPerSample
+      return served
+    }
+
+    override func configurePlayer() {}
+    override func addPlayerObservers() {}
+    override func removePlayerObservers() {}
+  }
+
+  private var toc: AudiobookTableOfContents!
+  private var firstTrack: (any Track)!
+  private var provider: SpyStreamingProvider!
+
+  override func setUp() async throws {
+    try await super.setUp()
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "lcp-yield-test", decryptor: nil, token: nil)
+    )
+    toc = audiobook.tableOfContents
+    firstTrack = try XCTUnwrap(toc.allTracks.first)
+    provider = SpyStreamingProvider()
+  }
+
+  private func makePlayer() -> LifecyclePlayer {
+    let player = LifecyclePlayer(tableOfContents: toc, drmDecryptor: nil)
+    player.setStreamingProvider(provider)
+    return player
+  }
+
+  private var position: TrackPosition {
+    TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+  }
+
+  /// Begins a load the way `playCallback` does, through the shipped timer.
+  private func beginLoad(on player: LifecyclePlayer, completion: @escaping (Error?) -> Void = { _ in }) {
+    player.isLoaded = false
+    player.beginStreamingLoad()
+    player.armLoadTimeout(
+      for: position,
+      startedAt: Date(),
+      bytesAtLastCheck: player.streamedBytesServed,
+      onceCompletion: completion
+    )
+  }
+
+  // MARK: - Balance across every exit
+
+  /// The timeout is an exit: it must release the provider it asked to yield,
+  /// or the patron's background download stays suspended with nothing left to
+  /// resume it.
+  func testStreamingLoad_whenTheTimeoutFires_endsTheLoadItBegan() async throws {
+    let player = makePlayer()
+    beginLoad(on: player)
+    XCTAssertEqual(provider.events, ["begin"], "Arming the load must announce it")
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(provider.events, ["begin", "end"],
+                   "A load the timeout failed must be announced as ended exactly once")
+  }
+
+  /// Teardown does not flip `isLoaded`, so it is one of the two paths that
+  /// release the provider explicitly.
+  func testStreamingLoad_onUnload_endsTheLoadItBegan() {
+    let player = makePlayer()
+    beginLoad(on: player)
+
+    player.unload()
+
+    XCTAssertEqual(provider.events, ["begin", "end"],
+                   "Teardown must release a load that was still open")
+  }
+
+  /// The other six exits all reach the load's end by flipping `isLoaded` —
+  /// the seek completion, the rebuild's seek completion, the local
+  /// cross-track seek, `timeControlStatus == .playing`, and both of
+  /// `rebuildPlayerQueueAndNavigate`'s nothing-to-wait-on arms.
+  func testStreamingLoad_whenTheLoadedFlagFlips_endsTheLoadItBegan() {
+    let player = makePlayer()
+    beginLoad(on: player)
+
+    player.isLoaded = true
+
+    XCTAssertEqual(provider.events, ["begin", "end"],
+                   "Reaching loaded must release the provider")
+  }
+
+  /// Driven through the real `rebuildPlayerQueueAndNavigate`, so the balance is
+  /// asserted over shipped control flow rather than over the flag alone. The
+  /// give-up arm — a position naming a track the manifest does not hold — is
+  /// the one that would otherwise leave a load open with no seek to end it.
+  func testStreamingLoad_whenARebuildFindsNoTargetTrack_endsTheLoadItBegan() {
+    let player = makePlayer()
+    beginLoad(on: player)
+    let strayPosition = TrackPosition(track: EmptyTrack(), timestamp: 0, tracks: toc.tracks)
+    XCTAssertFalse(
+      toc.allTracks.contains { $0.key == strayPosition.track.key },
+      "Precondition: the manifest must not hold this track"
+    )
+
+    player.rebuildPlayerQueueAndNavigate(to: strayPosition, shouldResumePlayback: false) { _ in }
+
+    XCTAssertEqual(provider.events, ["begin", "end"],
+                   "A rebuild that cannot navigate must release the provider")
+  }
+
+  /// A second announcement for one load would have the app suspend a download
+  /// twice and need two resumes to undo it.
+  func testStreamingLoad_begunTwice_isAnnouncedOnce() {
+    let player = makePlayer()
+    beginLoad(on: player)
+    player.beginStreamingLoad()
+
+    XCTAssertEqual(provider.events, ["begin"], "One load, one announcement")
+
+    player.isLoaded = true
+    XCTAssertEqual(provider.events, ["begin", "end"], "And one release")
+  }
+
+  /// A late exit after the timeout already ended the load must not release the
+  /// provider a second time — that would resume a download a LATER load is
+  /// waiting on.
+  func testStreamingLoad_endedTwice_releasesOnce() async throws {
+    let player = makePlayer()
+    beginLoad(on: player)
+    try await Task.sleep(nanoseconds: 300_000_000)
+    XCTAssertEqual(provider.events, ["begin", "end"], "Precondition: the timeout ended it")
+
+    player.isLoaded = true
+    player.unload()
+
+    XCTAssertEqual(provider.events, ["begin", "end"], "Later exits must be no-ops")
+  }
+
+  /// Two loads in a row — the owner's case is skipping chapter after chapter —
+  /// must each be announced and each released.
+  func testStreamingLoad_perSeek_isAnnouncedAndReleasedEachTime() {
+    let player = makePlayer()
+    beginLoad(on: player)
+    player.isLoaded = true
+    beginLoad(on: player)
+    player.isLoaded = true
+
+    XCTAssertEqual(provider.events, ["begin", "end", "begin", "end"],
+                   "The hooks are per load event, not once per player")
+  }
+
+  // MARK: - Progress-aware timeout
+
+  func test_loadTimeoutOutcome_bytesArrivingInsideTheCeiling_rearms() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      .rearm
+    )
+  }
+
+  func test_loadTimeoutOutcome_noBytesInsideTheCeiling_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      .fail
+    )
+  }
+
+  func test_loadTimeoutOutcome_bytesArrivingPastTheCeiling_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 90, ceiling: 90),
+      .fail
+    )
+  }
+
+  func test_loadTimeoutOutcome_noBytesPastTheCeiling_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 120, ceiling: 90),
+      .fail
+    )
+  }
+
+  /// The defect the owner reported: a cross-chapter seek that is slow because
+  /// the background package fetch is competing for the link gets killed at the
+  /// window and the patron loses the book. While bytes keep arriving the load
+  /// must be left alone.
+  func testLoadTimeout_whileBytesKeepArriving_doesNotFailTheLoad() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 128 * 1024
+    player.ceiling = 60
+    var failure: Error?
+    beginLoad(on: player) { failure = $0 }
+
+    // Eight progress windows' worth of a load that is making headway.
+    try await Task.sleep(nanoseconds: 400_000_000)
+
+    XCTAssertNil(failure, "A load still receiving bytes must not be failed at the window")
+    XCTAssertFalse(player.isLoaded, "Precondition: nothing else completed the load")
+    XCTAssertEqual(provider.events, ["begin"], "And the load is still open, so the provider stays yielded")
+  }
+
+  /// The timeout still has to catch a load that is receiving nothing, as
+  /// promptly as it does today.
+  func testLoadTimeout_withNoBytesArriving_failsAtTheWindow() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    var failure: NSError?
+    beginLoad(on: player) { failure = $0 as NSError? }
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(failure?.domain, "LCPStreamingPlayer")
+    XCTAssertEqual(
+      failure?.localizedDescription,
+      "Timed out waiting for LCP publication to load",
+      "A load with no bytes must still surface the failure the app shows an alert for"
+    )
+  }
+
+  /// The ceiling: a load that keeps dribbling bytes for ever still ends, so a
+  /// stalled-but-not-silent transfer cannot hang the player.
+  func testLoadTimeout_whenBytesArrivePastTheCeiling_failsAnyway() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 1024
+    player.ceiling = 0.15
+    var failure: NSError?
+    beginLoad(on: player) { failure = $0 as NSError? }
+
+    try await Task.sleep(nanoseconds: 600_000_000)
+
+    XCTAssertEqual(
+      failure?.localizedDescription,
+      "Timed out waiting for LCP publication to load",
+      "Progress may extend the wait, not remove its bound"
+    )
+    XCTAssertEqual(provider.events, ["begin", "end"], "And the provider is released on that exit too")
+  }
+
+  /// The failure must keep reaching the app, which is what drives the
+  /// "Audiobook Unavailable" alert and releases the open lock.
+  func testLoadTimeout_whenItFails_publishesAPlaybackFailure() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    var states: [PlaybackState] = []
+    let cancellable = player.playbackStatePublisher.sink { states.append($0) }
+    defer { cancellable.cancel() }
+
+    beginLoad(on: player) { _ in }
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    let failed = states.contains { state in
+      if case .failed = state { return true }
+      return false
+    }
+    XCTAssertTrue(failed, "The timeout must publish .failed so the host can alert")
   }
 }

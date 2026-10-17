@@ -573,6 +573,157 @@ final class LCPStreamingEgressTests: XCTestCase {
     )
   }
 
+  // MARK: - Time to first audio (PP-5367)
+
+  /// What the patron waits through before the first sample of a cold chapter
+  /// can play, measured as bytes off the origin before the first byte is handed
+  /// back.
+  ///
+  /// A different quantity from the amplification above, and they move in
+  /// opposite directions: read-ahead that removes a refetch later is work in
+  /// front of the first byte now. The owner's bar is that switching chapters
+  /// does not make the patron feel their network, so this is the number the
+  /// streaming path is tuned against; nothing pinned it before.
+  ///
+  /// Driven with the three requests AVFoundation actually makes on a cold
+  /// item: content information, a tail probe for duration and metadata, and
+  /// then the audio read at the start of the chapter.
+  func testColdChapterOpen_BytesBeforeTheFirstSampleIsServed() async throws {
+    let loader = makeLoader(trackCount: 20)
+    let track = 3
+
+    // 1. Content information. No range, so this resolves the plaintext length
+    //    and serves no bytes.
+    let info = RecordingRequest(
+      url: Self.trackURL(track),
+      range: nil,
+      needsContentInformation: true
+    )
+    XCTAssertTrue(loader.shouldWait(for: info))
+    let infoOutcome = try await info.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(infoOutcome, .success)
+    let afterContentInformation = probe.bytesFetched
+
+    // 2. The tail probe: AVPlayer reads the last bytes of the track for
+    //    duration and metadata before it reads any audio.
+    let tailOffset = Int(Self.trackLength) - Self.loaderSegment
+    let tail = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: Int64(tailOffset), length: Self.loaderSegment, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: tail))
+    let tailOutcome = try await tail.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(tailOutcome, .success)
+    let afterTailProbe = probe.bytesFetched
+
+    // 3. The audio read, at the start of the chapter.
+    let audio = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: 0, length: Self.loaderSegment, toEnd: false)
+    )
+    var bytesBeforeFirstSample: Int?
+    audio.onFirstRespond = { [probe] in bytesBeforeFirstSample = probe.bytesFetched }
+    XCTAssertTrue(loader.shouldWait(for: audio))
+    let audioOutcome = try await audio.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(audioOutcome, .success)
+
+    let beforeFirstSample = try XCTUnwrap(bytesBeforeFirstSample, "no audio byte was ever served")
+    print(String(
+      format: "cold chapter open: content information %d B, tail probe +%d B, "
+        + "bytes before the first audio sample %d B in %d requests",
+      afterContentInformation,
+      afterTailProbe - afterContentInformation,
+      beforeFirstSample,
+      probe.requests
+    ))
+    for range in probe.ranges {
+      print(String(
+        format: "  origin range %10llu ..< %10llu -> %8d B",
+        range.lower, range.upper, range.count
+      ))
+    }
+    XCTAssertEqual(audio.respondedBytes, Self.loaderSegment, "the audio read is answered in full")
+    XCTAssertLessThanOrEqual(
+      beforeFirstSample,
+      Self.timeToFirstAudioBound,
+      """
+      a cold chapter must start on about one archive fill, not on a fill per \
+      request: every extra fill in front of the first sample is a second the \
+      patron spends looking at a frozen 0:00
+      """
+    )
+  }
+
+  /// Attribution: the same cold open with the loader's own per-track buffer
+  /// switched OFF (`archiveIsLocalFile` true), against the same 6 MB Readium
+  /// archive buffer. If the bytes before the first sample do not move, the cost
+  /// is the archive buffer underneath the loader and not the loader's
+  /// read-ahead, and no change to WHICH reads the loader buffers can reduce it.
+  func testColdChapterOpen_WithNoPerTrackBuffer_CostsTheSame() async throws {
+    let loader = makeLoader(trackCount: 20, isLocalFile: true)
+    let track = 3
+
+    let info = RecordingRequest(url: Self.trackURL(track), range: nil, needsContentInformation: true)
+    XCTAssertTrue(loader.shouldWait(for: info))
+    let infoOutcome = try await info.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(infoOutcome, .success)
+
+    let tailOffset = Int(Self.trackLength) - Self.loaderSegment
+    let tail = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: Int64(tailOffset), length: Self.loaderSegment, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: tail))
+    let tailOutcome = try await tail.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(tailOutcome, .success)
+
+    let audio = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: 0, length: Self.loaderSegment, toEnd: false)
+    )
+    var bytesBeforeFirstSample: Int?
+    audio.onFirstRespond = { [probe] in bytesBeforeFirstSample = probe.bytesFetched }
+    XCTAssertTrue(loader.shouldWait(for: audio))
+    let audioOutcome = try await audio.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(audioOutcome, .success)
+
+    let beforeFirstSample = try XCTUnwrap(bytesBeforeFirstSample)
+    print(String(
+      format: "cold chapter open, no per-track buffer: bytes before the first audio sample %d B in %d requests",
+      beforeFirstSample, probe.requests
+    ))
+    for range in probe.ranges {
+      print(String(format: "  origin range %10llu ..< %10llu -> %8d B", range.lower, range.upper, range.count))
+    }
+    XCTAssertEqual(audio.respondedBytes, Self.loaderSegment)
+  }
+
+  /// What a cold chapter open costs today: three archive fills and the segment.
+  ///
+  /// Measured, and each fill is attributable:
+  ///   - the content-information read, which resolves the plaintext length from
+  ///     the last bytes of the entry;
+  ///   - AVFoundation's tail probe, 128 kB from the end — 122,880 bytes BEFORE
+  ///     the length read, and Readium's archive buffer does not serve a read
+  ///     that starts behind its window, so this is a second fill;
+  ///   - the audio read at the start of the chapter, 20 MB away from both.
+  ///
+  /// The fills are Readium's, not this loader's. `ZIPFoundationArchiveFactory`
+  /// buffers a remote archive at 6 MB, so every read that misses that window
+  /// costs a whole one whatever this loader asks for — which
+  /// `testColdChapterOpen_WithNoPerTrackBuffer_CostsTheSame` demonstrates by
+  /// switching the per-track buffer off and measuring the same figure. So no
+  /// change to WHICH reads this loader buffers can move this number; what moves
+  /// it is not discarding what the fills already fetched.
+  ///
+  /// The bound pins today's cost so a fourth fill cannot appear unnoticed.
+  private static let timeToFirstAudioBound =
+    3 * LCPStreamingEgressTests.readiumArchiveBufferSize + LCPStreamingEgressTests.loaderSegment
+
+  private static func trackURL(_ track: Int) -> URL {
+    URL(string: "readium-lcp://track\(track)/track\(track).mp3")!
+  }
+
   // MARK: - The length/size mismatch
 
   /// A track whose archive serves fewer bytes than the LCP resource reports
@@ -709,6 +860,7 @@ private final class ArchiveTransportProbe: @unchecked Sendable {
   private var _bytesFetched = 0
   private var _requests = 0
   private var _highestRequestedEnd: UInt64 = 0
+  private var _ranges: [(lower: UInt64, upper: UInt64, count: Int)] = []
   let length: UInt64
 
   init(length: UInt64) { self.length = length }
@@ -717,12 +869,17 @@ private final class ArchiveTransportProbe: @unchecked Sendable {
   var requests: Int { lock.withLock { _requests } }
   /// Highest upper bound any read asked for, before the origin clamped it.
   var highestRequestedEnd: UInt64 { lock.withLock { _highestRequestedEnd } }
+  /// Every range the origin was asked for, in order. Read by the cold-open
+  /// measurement, which needs to know WHICH reads cost a fill, not only how
+  /// many bytes moved in total.
+  var ranges: [(lower: UInt64, upper: UInt64, count: Int)] { lock.withLock { _ranges } }
 
-  func note(_ count: Int, requestedEnd: UInt64) {
+  func note(_ count: Int, requestedLower: UInt64, requestedEnd: UInt64) {
     lock.withLock {
       _requests += 1
       _bytesFetched += count
       _highestRequestedEnd = max(_highestRequestedEnd, requestedEnd)
+      _ranges.append((requestedLower, requestedEnd, count))
     }
   }
 }
@@ -741,7 +898,11 @@ private final class ArchiveResource: Resource {
     let lower = min(range?.lowerBound ?? 0, probe.length)
     let upper = min(range?.upperBound ?? probe.length, probe.length)
     let count = Int(upper > lower ? upper - lower : 0)
-    probe.note(count, requestedEnd: range?.upperBound ?? probe.length)
+    probe.note(
+      count,
+      requestedLower: range?.lowerBound ?? 0,
+      requestedEnd: range?.upperBound ?? probe.length
+    )
     consume(Data(count: count))
     return .success(())
   }
@@ -928,6 +1089,11 @@ private final class ArchiveProvider: StreamingResourceProvider, @unchecked Senda
   var isLocalFile = false
   func archiveIsLocalFile() -> Bool { isLocalFile }
 
+  // Required without a default so no conformer can silently skip them; this
+  // fake measures egress, not the yield behaviour.
+  func streamingLoadDidBegin() {}
+  func streamingLoadDidEnd() {}
+
   /// The entry behind a track, for tests that assert on what it was asked for.
   func entry(forTrack track: Int) -> StoredEntryResource? {
     container.tracks["track\(track).mp3"] as? StoredEntryResource
@@ -948,17 +1114,21 @@ private final class RecordingRequest: LCPStreamingLoadingRequest, @unchecked Sen
   }
 
   let requestURL: URL?
-  let needsContentInformation = false
+  let needsContentInformation: Bool
   let requestedRange: LCPRequestedRange?
+  /// Fires on the first byte handed back, which is when audio can start.
+  var onFirstRespond: (() -> Void)?
+  private var hasResponded = false
 
   private let lock = NSLock()
   private var _respondedBytes = 0
   private var _outcome: Outcome?
   private var waiters: [CheckedContinuation<Outcome, Never>] = []
 
-  init(url: URL, range: LCPRequestedRange) {
+  init(url: URL, range: LCPRequestedRange?, needsContentInformation: Bool = false) {
     requestURL = url
     requestedRange = range
+    self.needsContentInformation = needsContentInformation
   }
 
   var respondedBytes: Int { lock.withLock { _respondedBytes } }
@@ -966,7 +1136,12 @@ private final class RecordingRequest: LCPStreamingLoadingRequest, @unchecked Sen
   func provideContentInformation(contentType: String, contentLength: Int64?) {}
 
   func respond(with data: Data) {
-    lock.withLock { _respondedBytes += data.count }
+    let isFirst: Bool = lock.withLock {
+      _respondedBytes += data.count
+      defer { hasResponded = true }
+      return !hasResponded && !data.isEmpty
+    }
+    if isFirst { onFirstRespond?() }
   }
 
   func finishLoading() { finish(.success) }
