@@ -858,6 +858,11 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
 
   func getPublication() -> Publication? { lock.withLock { publication } }
 
+  // The protocol requires these without a default so no conformer can
+  // silently skip them; this fake is not exercising the yield behaviour.
+  func streamingLoadDidBegin() {}
+  func streamingLoadDidEnd() {}
+
   private static func makePublication(hrefs: [String], container: Container) -> Publication {
     Publication(
       manifest: Manifest(
