@@ -357,6 +357,29 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
     )
   }
 
+  /// Exactly at the gap cap still fills, so the bound is inclusive.
+  ///
+  /// The cap is a trade between round trips and bytes, and the case right at it
+  /// is the one an off-by-one silently moves: four gaps is four round trips
+  /// against a whole 6 MB window, which is still the cheaper side.
+  func test_decide_gapsExactlyAtTheCap_fillsTheGaps() {
+    let gaps: [Range<UInt64>] = [
+      0 ..< 1024, 2048 ..< 3072, 4096 ..< 5120, 6144 ..< 7168
+    ]
+    XCTAssertEqual(
+      Client.decide(
+        isRangedGET: true,
+        requested: 0 ..< 6_291_456,
+        missing: gaps,
+        maxCacheableRangeLength: 8 * 1024 * 1024,
+        hasCacheSlot: true,
+        maxGapRequestsPerRead: 4
+      ),
+      .fillGaps(requested: 0 ..< 6_291_456, missing: gaps)
+    )
+  }
+
+
   /// A saving that does not at least halve the bytes does not pay for the extra
   /// round trip.
   func test_decide_partlyPresentWithLittleSaving_fetchesTheWholeWindow() {
