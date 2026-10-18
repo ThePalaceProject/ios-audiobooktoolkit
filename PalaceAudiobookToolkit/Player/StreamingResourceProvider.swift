@@ -24,6 +24,14 @@ public protocol StreamingResourceProvider: AnyObject {
   /// there is no request to avoid making.
   func archiveIsLocalFile() -> Bool
 
+  /// What the archive's HTTP client has fetched from the origin so far, as
+  /// (requests, bytes), for diagnosing a slow chapter change.
+  ///
+  /// The loader cannot reach that client — the app builds it and injects it
+  /// into Readium — so the provider is the seam. A default of (0, 0) keeps
+  /// every other provider unchanged; it reports "unknown", and the log says so.
+  func archiveOriginActivity() -> (requests: Int, bytes: Int)
+
   /// The player has started a streaming load the patron is waiting on, and
   /// will call `streamingLoadDidEnd()` when that load finishes, fails or is
   /// torn down.
@@ -52,6 +60,7 @@ public extension StreamingResourceProvider {
   /// Remote is the safe default: it keeps the per-track buffer, so a provider
   /// that has not been taught the difference still gets the egress fix.
   func archiveIsLocalFile() -> Bool { false }
+  func archiveOriginActivity() -> (requests: Int, bytes: Int) { (0, 0) }
 }
 
 // MARK: - StreamingCapablePlayer

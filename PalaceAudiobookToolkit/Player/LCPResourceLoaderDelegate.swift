@@ -328,8 +328,35 @@ private extension LCPResourceLoaderDelegate {
     }
   }
 
+  /// A chapter change slower than this is what a patron reports as a book that
+  /// will not start, so it is worth a line in the log they can export.
+  static let slowChapterServeThreshold: TimeInterval = 1.5
+
   func serve(loadingRequest: LCPStreamingLoadingRequest, with pub: Publication, slot: RequestSlot) async {
     let request = FinishOnce(loadingRequest)
+    let serveStartedAt = Date()
+    let originBefore = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
+    let servedBefore = servedByteCount.value
+    // `lengthResolvedAt` separates the two halves of a cold chapter: Readium
+    // must read the entry's CBC tail to learn the plaintext length before any
+    // audio byte can be asked for, and that probe sits at the far end of the
+    // entry from the audio. Reported from a `defer` so a cancelled or failed
+    // serve is measured too — the slow cases are the ones that do not finish.
+    let lengthResolvedAt = LockIsolated<Date?>(nil)
+    defer {
+      let elapsed = Date().timeIntervalSince(serveStartedAt)
+      if elapsed >= Self.slowChapterServeThreshold {
+        let after = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
+        ATLog(.error, String(
+          format: "LCP chapter serve took %.1fs (length probe %@); archive origin cost %d request(s) / %d bytes; loader served %d bytes (counter is loader-wide)",
+          elapsed,
+          lengthResolvedAt.value.map { String(format: "%.1fs", $0.timeIntervalSince(serveStartedAt)) } ?? "never",
+          after.requests - originBefore.requests,
+          after.bytes - originBefore.bytes,
+          servedByteCount.value - servedBefore
+        ))
+      }
+    }
     guard let url = loadingRequest.requestURL else {
       request.fail(NSError(
         domain: "LCPResourceLoader", code: 1,
@@ -378,7 +405,9 @@ private extension LCPResourceLoaderDelegate {
     }
 
     let finalHref = validLink.href.components(separatedBy: "#").first ?? validLink.href
-    guard case let .some(entry) = await trackEntry(for: pub, href: finalHref) else {
+    let resolvedEntry = await trackEntry(for: pub, href: finalHref)
+    lengthResolvedAt.withValue { $0 = Date() }
+    guard case let .some(entry) = resolvedEntry else {
       return // cancelled
     }
 
