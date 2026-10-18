@@ -275,7 +275,25 @@ public class AudiobookPlaybackModel: ObservableObject {
     setupBindings()
     subscribeToPublisher()
     setupReactivePlaybackStateMonitoring()
-    self.audiobookManager.networkService.fetch()
+    if Self.shouldPrefetchTracks(servingRemoteArchive: Self.isServingRemoteArchive(audiobookManager)) {
+      self.audiobookManager.networkService.fetch()
+    }
+  }
+
+  /// Whether to prefetch and decrypt whole tracks as the book opens.
+  ///
+  /// Over a remote archive the prefetch reads whole tracks, three at a time,
+  /// across the link the chapter the patron is waiting on also has to cross,
+  /// and it buys nothing a streaming session needs: playback is served from
+  /// byte ranges, and Palace fetches the whole archive separately for offline
+  /// use (PP-5135). Once that archive is local the prefetch costs no egress,
+  /// so the gate is the remoteness of the archive, not the use of streaming.
+  static func shouldPrefetchTracks(servingRemoteArchive: Bool) -> Bool {
+    !servingRemoteArchive
+  }
+
+  private static func isServingRemoteArchive(_ manager: AudiobookManager) -> Bool {
+    (manager.audiobook.player as? StreamingCapablePlayer)?.isServingRemoteArchive ?? false
   }
 
   // MARK: - Public helpers

@@ -61,6 +61,18 @@ public extension StreamingResourceProvider {
 public protocol StreamingCapablePlayer: AnyObject {
   func publicationDidLoad()
   func setStreamingProvider(_ provider: StreamingResourceProvider)
+
+  /// Whether playback is currently served from a remote archive.
+  ///
+  /// Prefetching whole tracks competes with the chapter the patron is waiting
+  /// on when both cross the same link, and the prefetch is far the larger of
+  /// the two: a track is read and decrypted in full, three at a time, while a
+  /// cold chapter needs about 12.7 MB. Callers that can defer work until the
+  /// archive is local ask here first.
+  ///
+  /// Deliberately without a default implementation: a witness that fails to
+  /// bind would silently report the local case and restore the competition.
+  var isServingRemoteArchive: Bool { get }
 }
 
 // MARK: - LCPStreamingProvider

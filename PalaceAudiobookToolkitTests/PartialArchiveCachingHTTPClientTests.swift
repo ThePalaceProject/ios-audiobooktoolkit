@@ -86,6 +86,10 @@ private final class ScriptedHTTPClient: HTTPClient {
   /// When set, the answer is built from the range the request asked for,
   /// so a test can tell a gap fetch from a whole-window refetch.
   var answerForRange: ((Range<UInt64>) -> Answer)?
+  /// When set and it returns an error for the asked-for range, the request
+  /// fails instead of being answered. Lets a test fail one gap fetch while
+  /// the whole-window fetch still succeeds.
+  var failureForRange: ((Range<UInt64>) -> HTTPError?)?
   private(set) var requestedRangeHeaders: [String?] = []
   private(set) var callCount = 0
 
@@ -101,8 +105,13 @@ private final class ScriptedHTTPClient: HTTPClient {
     callCount += 1
     let header = req.headers["Range"]
     requestedRangeHeaders.append(header)
-    if let answerForRange, let asked = Self.parseRangeHeader(header) {
-      answer = answerForRange(asked)
+    if let asked = Self.parseRangeHeader(header) {
+      if let failure = failureForRange?(asked) {
+        return .failure(failure)
+      }
+      if let answerForRange {
+        answer = answerForRange(asked)
+      }
     }
     // Delivered in two chunks, because the real client does and a decorator
     // that only works for one chunk would pass a single-chunk test.
@@ -995,6 +1004,39 @@ final class PartialArchiveCachingGapFillTests: XCTestCase {
       upstream.requestedRangeHeaders,
       [],
       "a window already on disk must not be fetched to discover how long the archive is"
+    )
+  }
+
+
+  /// A gap fetch that fails must not fail the patron's read.
+  ///
+  /// Serving a window we cannot prove we hold would be worse than slow: an
+  /// unwritten extent reads back as zeros of exactly the right length, so a
+  /// chapter would report fine and play silence. The window is read through
+  /// instead, which costs a fill and is always correct.
+  func testGapFetchFails_readsTheWindowThroughAndStillAnswersInFull() async {
+    let upstream = upstreamAnsweringItsRange()
+    let client = makeClient(upstream)
+
+    await read(client, contentInformationFill)
+
+    // Fail only the gap-sized request; the whole-window fetch still succeeds,
+    // so the fallback has somewhere to go.
+    let gap = tailProbeFill.lowerBound ..< contentInformationFill.lowerBound
+    upstream.failureForRange = { asked in asked == gap ? HTTPError.offline(nil) : nil }
+
+    let second = await read(client, tailProbeFill)
+
+    XCTAssertTrue(second.ok, "a failed gap fetch must not fail the read")
+    XCTAssertEqual(
+      second.bytes,
+      tailProbeFill.count,
+      "the caller is answered in full from the origin rather than from a window we cannot vouch for"
+    )
+    XCTAssertEqual(
+      upstream.requestedRangeHeaders.count,
+      3,
+      "the first fill, the failed gap, then the whole window read through"
     )
   }
 

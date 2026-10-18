@@ -418,7 +418,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         }
         await onStoreQueue { try? store.write(gapBody, at: offset) }
       }
-      
+
       // Never serve what we cannot prove we hold: an unwritten extent reads
       // back as zeros of exactly the right length, and nothing downstream
       // would notice. If the window is not whole now, go to the origin.
