@@ -62,28 +62,65 @@ final class AudiobookPrefetchGateTests: XCTestCase {
     }
   }
 
-  /// The gate must be the remoteness of the archive, not the presence of
-  /// streaming: once the archive is on disk, prefetching reads no link at all.
-  func test_openingABookWhoseArchiveIsLocal_stillPrefetches() throws {
+  /// Deferred for every vendor, not only LCP: three full-track transfers at
+  /// open cross the same link the first chapter needs whatever the format.
+  func test_openingABookWhoseArchiveIsLocal_doesNotPrefetchYet() throws {
     let (model, spy) = try makeModel(id: "pp5367-local", servingRemoteArchive: false)
     withExtendedLifetime(model) {
-      XCTAssertEqual(
-        spy.fetchCallCount, 1,
-        "a local archive costs no egress, so the prefetch must still run"
-      )
+      XCTAssertEqual(spy.fetchCallCount, 0, "the prefetch must not start while the first chapter loads")
     }
   }
 
-  /// Every non-streaming format reaches the same initializer, so the gate must
-  /// leave a player that knows nothing about archives alone.
-  func test_openingANonStreamingBook_stillPrefetches() throws {
+  func test_openingANonStreamingBook_doesNotPrefetchYet() throws {
     let (model, spy) = try makeModel(id: "pp5367-plain", servingRemoteArchive: nil)
     withExtendedLifetime(model) {
-      XCTAssertEqual(
-        spy.fetchCallCount, 1,
-        "a player with no streaming session must keep the prefetch it has always had"
-      )
+      XCTAssertEqual(spy.fetchCallCount, 0, "a player with no streaming session is deferred too")
     }
+  }
+
+  // MARK: - When the deferred prefetch becomes due
+
+  private func due(
+    isPlaying: Bool = false,
+    seconds: TimeInterval = 0,
+    started: Bool = false,
+    remote: Bool = false
+  ) -> Bool {
+    AudiobookPlaybackModel.shouldStartDeferredPrefetch(
+      isPlaying: isPlaying, secondsSinceOpen: seconds,
+      alreadyStarted: started, servingRemoteArchive: remote
+    )
+  }
+
+  func test_atOpen_theBookIsNotYetDue() {
+    XCTAssertFalse(due())
+  }
+
+  /// Playback starting means the chapter has the bytes it needed.
+  func test_oncePlaybackStarts_itIsDueImmediately() {
+    XCTAssertTrue(due(isPlaying: true))
+  }
+
+  /// The bound that stops this becoming a deadlock: a vendor whose player needs
+  /// tracks on disk never reports playing, and must still get its download.
+  func test_pastTheGraceWindow_itIsDueEvenWithoutPlayback() {
+    XCTAssertTrue(due(seconds: AudiobookPlaybackModel.deferredPrefetchGrace))
+    XCTAssertFalse(
+      due(seconds: AudiobookPlaybackModel.deferredPrefetchGrace - 0.01),
+      "the bound must not fire early"
+    )
+  }
+
+  /// The poll fires twice a second for the whole session; the prefetch is one
+  /// transfer set, not one per tick.
+  func test_onceStarted_itIsNeverDueAgain() {
+    XCTAssertFalse(due(isPlaying: true, seconds: 600, started: true))
+  }
+
+  /// A remote LCP archive is served by byte ranges and fetched whole separately,
+  /// so its prefetch is skipped outright rather than deferred.
+  func test_aRemoteLCPArchive_isNeverDue() {
+    XCTAssertFalse(due(isPlaying: true, seconds: 600, remote: true))
   }
 }
 

@@ -15,6 +15,11 @@ import SwiftUI
 @MainActor
 public class AudiobookPlaybackModel: ObservableObject {
   @Published private var reachability = Reachability()
+  /// When this book was opened, so the prefetch's grace window is measured from
+  /// the moment the patron started waiting.
+  private let openedAt = Date()
+  private var hasStartedDeferredPrefetch = false
+
   @Published var isWaitingForPlayer = false
   @Published var playbackProgress: Double = 0
   @Published public var isDownloading = false
@@ -275,9 +280,6 @@ public class AudiobookPlaybackModel: ObservableObject {
     setupBindings()
     subscribeToPublisher()
     setupReactivePlaybackStateMonitoring()
-    if Self.shouldPrefetchTracks(servingRemoteArchive: Self.isServingRemoteArchive(audiobookManager)) {
-      self.audiobookManager.networkService.fetch()
-    }
   }
 
   /// Whether to prefetch and decrypt whole tracks as the book opens.
@@ -290,6 +292,34 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// so the gate is the remoteness of the archive, not the use of streaming.
   static func shouldPrefetchTracks(servingRemoteArchive: Bool) -> Bool {
     !servingRemoteArchive
+  }
+
+  /// How long the first chapter may keep the link to itself before the prefetch
+  /// starts regardless.
+  ///
+  /// A bound, not a wait on playback alone: a vendor whose player needs a track
+  /// on disk before it can play would never report playing, and a prefetch
+  /// gated only on playback would then never run at all — the book would never
+  /// reach the device.
+  static let deferredPrefetchGrace: TimeInterval = 5
+
+  /// Whether to start the deferred whole-track prefetch now.
+  ///
+  /// Three full-track transfers starting as the book opens cross the same link
+  /// the first chapter needs, for every vendor rather than only LCP. They are
+  /// deferred, never skipped: playback starting means the chapter has what it
+  /// needs, and `deferredPrefetchGrace` covers the case where playback cannot
+  /// start until tracks are present.
+  static func shouldStartDeferredPrefetch(
+    isPlaying: Bool,
+    secondsSinceOpen: TimeInterval,
+    alreadyStarted: Bool,
+    servingRemoteArchive: Bool,
+    grace: TimeInterval = deferredPrefetchGrace
+  ) -> Bool {
+    guard !alreadyStarted else { return false }
+    guard shouldPrefetchTracks(servingRemoteArchive: servingRemoteArchive) else { return false }
+    return isPlaying || secondsSinceOpen >= grace
   }
 
   private static func isServingRemoteArchive(_ manager: AudiobookManager) -> Bool {
@@ -489,8 +519,22 @@ public class AudiobookPlaybackModel: ObservableObject {
         if _isPlaying != currentPlayingState {
           _isPlaying = currentPlayingState
         }
+        startDeferredPrefetchIfDue(isPlaying: currentPlayingState)
       }
       .store(in: &subscriptions)
+  }
+
+  /// Evaluated on the existing playback poll, so the prefetch starts on the
+  /// first tick after playback begins or after the grace window.
+  private func startDeferredPrefetchIfDue(isPlaying: Bool) {
+    guard Self.shouldStartDeferredPrefetch(
+      isPlaying: isPlaying,
+      secondsSinceOpen: Date().timeIntervalSince(openedAt),
+      alreadyStarted: hasStartedDeferredPrefetch,
+      servingRemoteArchive: Self.isServingRemoteArchive(audiobookManager)
+    ) else { return }
+    hasStartedDeferredPrefetch = true
+    audiobookManager.networkService.fetch()
   }
 
   private func setupBindings() {
