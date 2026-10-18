@@ -676,6 +676,51 @@ final class PartialArchiveCachingHTTPClientTests: XCTestCase {
     )
   }
 
+  // MARK: - Counting what an operation cost
+
+  /// The counter exists to tell a slow publication open's causes apart, so it
+  /// has to distinguish an origin fetch from a store serve and report the bytes
+  /// of each. A counter that merely rises would not answer the question.
+  func test_upstreamActivity_separatesOriginFetchesFromStoreServes() async {
+    let total: UInt64 = 4096
+    let body = Data(repeating: 0x33, count: Int(total))
+    let store = CountingStore(totalSize: total)
+    let upstream = ScriptedHTTPClient(
+      answer: .init(
+        status: 206,
+        headers: ["Content-Range": "bytes 0-\(total - 1)/\(total)"],
+        body: body
+      )
+    )
+    let client = PartialArchiveCachingHTTPClient(upstream: upstream, storeFactory: { _, _ in store })
+    let url = HTTPURL(string: "https://example.invalid/counted.lcpa")!
+
+    let start = client.upstreamActivity
+    XCTAssertEqual(start.originRequests, 0, "precondition: a fresh client has asked for nothing")
+
+    // Missing from the store, so it must come from the origin.
+    var miss = HTTPRequest(url: url)
+    miss.setRange(0 ..< total)
+    _ = await client.stream(request: miss) { _, _ in .success(()) }
+
+    let afterMiss = client.upstreamActivity.delta(since: start)
+    XCTAssertEqual(afterMiss.originRequests, 1, "a range the store lacks costs exactly one origin request")
+    XCTAssertEqual(afterMiss.originBytes, Int(total), "the bytes counted must be the bytes fetched")
+    XCTAssertEqual(afterMiss.storeServes, 0, "nothing was served from the store on a miss")
+
+    // Now present, so the same range must be served locally and cost no origin request.
+    store.holdEverything = true
+    let beforeHit = client.upstreamActivity
+    var hit = HTTPRequest(url: url)
+    hit.setRange(0 ..< total)
+    _ = await client.stream(request: hit) { _, _ in .success(()) }
+
+    let afterHit = client.upstreamActivity.delta(since: beforeHit)
+    XCTAssertEqual(afterHit.originRequests, 0, "a range the store holds must not reach the origin")
+    XCTAssertEqual(afterHit.storeServes, 1, "the serve has to be counted, or a cheap open looks like an expensive one")
+    XCTAssertEqual(afterHit.storeBytes, Int(total), "the bytes served must be the bytes reported")
+  }
+
   // MARK: - Serving a fully-present range
 
   /// Readium asks for everything from an offset with an open-ended
@@ -1281,4 +1326,33 @@ private final class ServedChunkLog: @unchecked Sendable {
   private var _sizes: [Int] = []
   var sizes: [Int] { lock.withLock { _sizes } }
   func record(_ size: Int) { lock.withLock { _sizes.append(size) } }
+}
+
+/// A store whose contents can be flipped from empty to complete, so one test
+/// can exercise both a miss and a hit on the same client.
+private final class CountingStore: ArchiveRangeStore, @unchecked Sendable {
+  let totalSize: UInt64
+  private let lock = NSLock()
+  private var _holdEverything = false
+
+  init(totalSize: UInt64) { self.totalSize = totalSize }
+
+  var holdEverything: Bool {
+    get { lock.withLock { _holdEverything } }
+    set { lock.withLock { _holdEverything = newValue } }
+  }
+
+  func missingRanges(in range: Range<UInt64>) -> [Range<UInt64>] {
+    holdEverything ? [] : [range]
+  }
+
+  @discardableResult
+  func write(_ bytes: Data, at offset: UInt64) throws -> Range<UInt64> {
+    offset ..< offset + UInt64(bytes.count)
+  }
+
+  func read(_ range: Range<UInt64>) throws -> Data {
+    guard holdEverything else { throw PartialArchiveStoreError.notPresent(missing: [range]) }
+    return Data(repeating: 0x33, count: range.count)
+  }
 }
