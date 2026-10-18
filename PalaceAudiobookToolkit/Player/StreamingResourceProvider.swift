@@ -32,6 +32,17 @@ public protocol StreamingResourceProvider: AnyObject {
   /// every other provider unchanged; it reports "unknown", and the log says so.
   func archiveOriginActivity() -> (requests: Int, bytes: Int)
 
+  /// The plaintext length already known for `href`, if any.
+  ///
+  /// Learning it costs a read of the entry's CBC tail, and that read is far
+  /// from the audio in the archive, so it was measured at 17.8-28.8 MB of
+  /// origin traffic to serve zero bytes of audio. The archive is immutable, so
+  /// the answer is worth keeping.
+  func cachedPlaintextLength(forHref href: String) -> UInt64?
+
+  /// Records a plaintext length just learned, so no later session pays for it.
+  func cachePlaintextLength(_ length: UInt64, forHref href: String)
+
   /// The player has started a streaming load the patron is waiting on, and
   /// will call `streamingLoadDidEnd()` when that load finishes, fails or is
   /// torn down.
@@ -61,6 +72,8 @@ public extension StreamingResourceProvider {
   /// that has not been taught the difference still gets the egress fix.
   func archiveIsLocalFile() -> Bool { false }
   func archiveOriginActivity() -> (requests: Int, bytes: Int) { (0, 0) }
+  func cachedPlaintextLength(forHref href: String) -> UInt64? { nil }
+  func cachePlaintextLength(_ length: UInt64, forHref href: String) {}
 }
 
 // MARK: - StreamingCapablePlayer
