@@ -136,11 +136,24 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   /// trips and a whole-window fetch is both simpler and faster.
   public static let gapFillMaxMissingFraction = 2
 
+  /// How long a store-open failure is honoured before another attempt.
+  ///
+  /// A failure to open the store is usually transient — a momentary disk
+  /// error, a brief ENOSPC — so refusing the archive for the rest of the
+  /// process costs every later chapter window a full refetch from the origin.
+  /// Retrying on every request is the other extreme: each attempt is blocking
+  /// file I/O in front of the patron's audio. An interval is the middle: one
+  /// attempt per window-read burst, and the cache heals itself once the
+  /// condition clears.
+  public static let defaultStoreRetryInterval: TimeInterval = 30
+
   private let upstream: HTTPClient
   private let storeFactory: ArchiveRangeStoreFactory
   private let maxCacheableRangeLength: Int
   private let maxConcurrentCachedRequests: Int
   private let maxGapRequestsPerRead: Int
+  private let storeRetryInterval: TimeInterval
+  private let monotonicNow: @Sendable () -> TimeInterval
 
   /// Store calls are synchronous blocking file I/O. Reached from `stream`,
   /// which is `async`, so they are hopped onto this queue rather than run
@@ -152,7 +165,8 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
 
   private let lock = NSLock()
   private var stores: [String: ArchiveRangeStore] = [:]
-  private var storesRefused: Set<String> = []
+  /// Monotonic time before which this archive's store is not reopened.
+  private var storeRetryNotBefore: [String: TimeInterval] = [:]
   private var cachedRequestsInFlight = 0
 
   public init(
@@ -162,13 +176,24 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     maxConcurrentCachedRequests: Int = PartialArchiveCachingHTTPClient
       .defaultMaxConcurrentCachedRequests,
     maxGapRequestsPerRead: Int = PartialArchiveCachingHTTPClient
-      .defaultMaxGapRequestsPerRead
+      .defaultMaxGapRequestsPerRead,
+    storeRetryInterval: TimeInterval = PartialArchiveCachingHTTPClient
+      .defaultStoreRetryInterval,
+    // Monotonic, not wall clock: an NTP correction or a user clock change can
+    // move `Date()` by hours, which would either strand the archive uncached
+    // or reopen it on every request. Injectable so the retry bound is driven
+    // deterministically in a test rather than by a real sleep.
+    monotonicNow: @escaping @Sendable () -> TimeInterval = {
+      ProcessInfo.processInfo.systemUptime
+    }
   ) {
     self.upstream = upstream
     self.storeFactory = storeFactory
     self.maxCacheableRangeLength = maxCacheableRangeLength
     self.maxConcurrentCachedRequests = maxConcurrentCachedRequests
     self.maxGapRequestsPerRead = maxGapRequestsPerRead
+    self.storeRetryInterval = storeRetryInterval
+    self.monotonicNow = monotonicNow
   }
 
   // MARK: - Pure decisions
@@ -404,7 +429,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         }
         guard case let .success(gapResponse) = gapResult else {
           log(.warning, "partial archive cache: a gap fetch failed — reading the window through")
-          return await upstream.stream(request: req, consume: consume)
+          return await fetchAndStore(
+            req: req, key: key, range: requested, store: store, consume: consume
+          )
         }
         let gapBody = gapBuffer.value
         guard case let .store(offset) = Self.admitResponse(
@@ -414,7 +441,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
           bodyLength: gapBody.count
         ) else {
           log(.warning, "partial archive cache: a gap response was not admissible — reading the window through")
-          return await upstream.stream(request: req, consume: consume)
+          return await fetchAndStore(
+            req: req, key: key, range: requested, store: store, consume: consume
+          )
         }
         // Queued like the whole-window write above. The `read` below is also a
         // `storeQueue` hop, and the queue is serial, so it runs after these.
@@ -428,7 +457,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
             data.count == requested.count
       else {
         log(.warning, "partial archive cache: the window was still not whole after filling — reading it through")
-        return await upstream.stream(request: req, consume: consume)
+        return await fetchAndStore(
+          req: req, key: key, range: requested, store: store, consume: consume
+        )
       }
       if case let .failure(error) = consume(data, 1.0) {
         return .failure(error)
@@ -526,7 +557,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       lock.unlock()
       return existing
     }
-    guard !storesRefused.contains(key) else {
+    if let notBefore = storeRetryNotBefore[key], monotonicNow() < notBefore {
       lock.unlock()
       return nil
     }
@@ -544,15 +575,21 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       lock.lock()
       let winner = stores[key] ?? opened
       stores[key] = winner
+      storeRetryNotBefore[key] = nil
       lock.unlock()
       return winner
     } catch {
       // One store per archive per process holds an exclusive lock, and a
       // factory that cannot give us one must not take the patron's read down
       // with it: the request falls back to the origin and the book plays.
+      //
+      // Held off for an interval rather than refused outright: the condition
+      // behind the failure is usually temporary, and an archive refused for
+      // the whole process pays a full origin refetch for every window read
+      // after it.
       log(.warning, "partial archive cache: could not open a store (\(error)) — reading through")
       lock.lock()
-      storesRefused.insert(key)
+      storeRetryNotBefore[key] = monotonicNow() + storeRetryInterval
       lock.unlock()
       return nil
     }
@@ -560,7 +597,10 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
 
   private enum StoreKeyError: Error { case notAnHTTPURL(String) }
 
-  private func reserveCacheSlot() -> Bool {
+  /// Internal rather than private so the bound can be driven directly in a
+  /// test: it is stateful, so nothing pure observes whether the counter
+  /// actually moves.
+  func reserveCacheSlot() -> Bool {
     lock.lock()
     defer { lock.unlock() }
     guard cachedRequestsInFlight < maxConcurrentCachedRequests else { return false }
@@ -568,7 +608,8 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     return true
   }
 
-  private func releaseCacheSlot() {
+  /// See `reserveCacheSlot()` for why this is not private.
+  func releaseCacheSlot() {
     lock.lock()
     defer { lock.unlock() }
     if cachedRequestsInFlight > 0 { cachedRequestsInFlight -= 1 }
