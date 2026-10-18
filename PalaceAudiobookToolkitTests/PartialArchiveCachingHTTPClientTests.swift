@@ -532,8 +532,10 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
     )
   }
 
-  /// A fully-local range is served however large it is: nothing is buffered
-  /// for validation on that path.
+  /// A fully-local range is served however large it is: the serve path hands it
+  /// downstream in chunks of at most the cap, so its span does not set the
+  /// buffer. `test_serve_aRangeLargerThanTheCap_isDeliveredInCappedChunks`
+  /// pins that delivery.
   func test_decide_rangeLargerThanTheCapButFullyLocal_isStillServed() {
     XCTAssertEqual(
       Client.decide(
@@ -633,6 +635,59 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
 // MARK: - End to end through the client
 
 final class PartialArchiveCachingHTTPClientTests: XCTestCase {
+
+  // MARK: - Serving a fully-present range
+
+  /// Readium asks for everything from an offset with an open-ended
+  /// `bytes=start-`, which resolves to the archive's full length. A 1-2 GB
+  /// archive fully present in the store must not become one allocation of that
+  /// size: this client caps every other buffer at `maxCacheableRangeLength`
+  /// because the device has a backgrounded out-of-memory crash on record.
+  func test_serve_aRangeLargerThanTheCap_isDeliveredInCappedChunks() async {
+    let cap = 8 * 1024 * 1024
+    let total: UInt64 = 20 * 1024 * 1024
+    let store = FullyPresentStore(totalSize: total)
+    let upstream = ScriptedHTTPClient(answer: .init(status: 206, headers: [:], body: Data()))
+    let client = PartialArchiveCachingHTTPClient(
+      upstream: upstream,
+      storeFactory: { _, _ in store },
+      maxCacheableRangeLength: cap
+    )
+
+    var request = HTTPRequest(url: HTTPURL(string: "https://example.invalid/big.lcpa")!)
+    // The open-ended form, written verbatim rather than through `setRange`,
+    // because the unbounded span is the whole point of the case.
+    request.headers["Range"] = "bytes=0-"
+
+    let chunks = ServedChunkLog()
+    let result = await client.stream(request: request) { data, _ in
+      chunks.record(data.count)
+      return .success(())
+    }
+
+    guard case .success = result else {
+      return XCTFail("premise: a fully-present range must be served from the store, got \(result)")
+    }
+    XCTAssertEqual(upstream.callCount, 0, "premise: nothing may be fetched for a range the store holds")
+
+    let delivered = chunks.sizes
+    XCTAssertEqual(
+      delivered.reduce(0, +), Int(total),
+      "every requested byte must still reach the caller"
+    )
+    XCTAssertGreaterThan(
+      delivered.count, 1,
+      "a span larger than the cap must arrive in more than one piece, or it was one allocation"
+    )
+    XCTAssertEqual(
+      delivered.filter { $0 > cap }, [],
+      "no single delivery may exceed the buffer cap"
+    )
+    XCTAssertEqual(
+      store.largestRead, cap,
+      "the store must never be asked for more than the cap in one read"
+    )
+  }
 
   private let archiveURL = HTTPURL(string: "https://storage.googleapis.com/bucket/book.lcpa")!
   private let archiveLength: UInt64 = 1_630_000_000
@@ -1145,4 +1200,36 @@ final class PartialArchiveCachingGapFillTests: XCTestCase {
     )
   }
 
+}
+
+/// A store that holds the whole archive, so every read is a hit.
+private final class FullyPresentStore: ArchiveRangeStore, @unchecked Sendable {
+  let totalSize: UInt64
+  private let lock = NSLock()
+  private var _largestRead = 0
+
+  init(totalSize: UInt64) { self.totalSize = totalSize }
+
+  var largestRead: Int { lock.withLock { _largestRead } }
+
+  func missingRanges(in range: Range<UInt64>) -> [Range<UInt64>] { [] }
+
+  @discardableResult
+  func write(_ bytes: Data, at offset: UInt64) throws -> Range<UInt64> {
+    offset ..< offset + UInt64(bytes.count)
+  }
+
+  func read(_ range: Range<UInt64>) throws -> Data {
+    lock.withLock { _largestRead = max(_largestRead, range.count) }
+    return Data(repeating: 0x7F, count: range.count)
+  }
+}
+
+/// Records what each `consume` call was handed. The closure is `@Sendable`, so
+/// the sizes cannot be appended to a captured local.
+private final class ServedChunkLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var _sizes: [Int] = []
+  var sizes: [Int] { lock.withLock { _sizes } }
+  func record(_ size: Int) { lock.withLock { _sizes.append(size) } }
 }

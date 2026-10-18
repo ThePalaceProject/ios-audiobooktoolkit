@@ -282,7 +282,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     guard isRangedGET, let requested, !requested.isEmpty else {
       return .passThrough(reason: "not a ranged GET")
     }
-    // Serving costs no buffer, so neither cap applies to it.
+    // Neither cap applies: a served range is delivered in chunks of at most
+    // `maxCacheableRangeLength`, so its span does not set the buffer, and it
+    // reserves no slot because it makes no upstream request.
     if let missing, missing.isEmpty {
       return .serveFromStore(requested)
     }
@@ -375,26 +377,61 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     case let .serveFromStore(range):
       os_log("LCPCACHE hit %{public}llu-%{public}llu %{public}d", log: lcpCacheLog, type: .default,
              range.lowerBound, range.upperBound, range.count)
-      guard let store,
-            let data = await onStoreQueue({ try? store.read(range) }),
-            data.count == range.count
-      else {
+      guard let store else {
+        return await upstream.stream(request: req, consume: consume)
+      }
+      // Presence is confirmed from the journal, which costs no buffer, BEFORE
+      // any byte is handed to `consume`. Once a chunk has been delivered the
+      // request can no longer be restarted upstream without serving those
+      // bytes twice, so the check that used to be "read it all and compare
+      // lengths" has to happen first instead.
+      let stillMissing = await onStoreQueue({ store.missingRanges(in: range) })
+      guard stillMissing.isEmpty else {
         // The record and the file disagree. Never serve what we cannot prove
         // we hold — a hole reads back as zeros of the right length and nothing
         // downstream would notice. Go to the origin instead.
-        log(.warning, "partial archive cache: a range recorded present could not be read — refetching")
+        log(.warning, "partial archive cache: a range recorded present is no longer held — refetching")
         return await upstream.stream(request: req, consume: consume)
       }
-      if case let .failure(error) = consume(data, 1.0) {
-        return .failure(error)
+
+      // Served in chunks rather than as one `Data`. Readium asks for
+      // everything from an offset with an open-ended `bytes=start-`, which
+      // `requestedRange` resolves to the archive's full length, so a
+      // fully-present tail of a 1-2 GB archive was a single allocation of that
+      // size — in a client that caps every other buffer at
+      // `maxCacheableRangeLength` because this device has a backgrounded
+      // out-of-memory crash on record.
+      var servedCount = 0
+      var cursor = range.lowerBound
+      while cursor < range.upperBound {
+        let want = Int(min(UInt64(maxCacheableRangeLength), range.upperBound - cursor))
+        let chunkRange = cursor ..< cursor + UInt64(want)
+        let chunk = await onStoreQueue({ try? store.read(chunkRange) })
+        guard let chunk, chunk.count == want else {
+          if servedCount == 0 {
+            log(.warning, "partial archive cache: a range recorded present could not be read — refetching")
+            return await upstream.stream(request: req, consume: consume)
+          }
+          // Bytes are already downstream, so the origin cannot be used without
+          // duplicating them. Fail the request and let the caller reissue it.
+          log(.warning, "partial archive cache: a served range became unreadable part way through — failing the request")
+          let unreadable = PartialArchiveStoreError.notPresent(missing: [chunkRange])
+          return .failure(.other(unreadable))
+        }
+        if case let .failure(error) = consume(chunk, Double(servedCount + chunk.count) / Double(range.count)) {
+          return .failure(error)
+        }
+        servedCount += chunk.count
+        cursor += UInt64(chunk.count)
       }
+
       return .success(HTTPResponse(
         request: req,
         url: req.url,
         status: HTTPStatus(rawValue: 206) ?? .ok,
         headers: [
           "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(store.totalSize)",
-          "Content-Length": "\(data.count)"
+          "Content-Length": "\(servedCount)"
         ],
         mediaType: nil,
         body: nil
