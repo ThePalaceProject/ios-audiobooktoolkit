@@ -19,6 +19,13 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     sharedResourceLoader = LCPResourceLoaderDelegate(provider: provider)
   }
 
+  /// No provider means no streaming session, so there is no remote archive to
+  /// defer work for.
+  public var isServingRemoteArchive: Bool {
+    guard let streamingProvider else { return false }
+    return !streamingProvider.archiveIsLocalFile()
+  }
+
   private weak var streamingProvider: StreamingResourceProvider?
   private let resourceLoaderQueue = DispatchQueue(label: "com.palace.lcp-streaming-loader", qos: .userInitiated)
   /// Replaces a `private static var … : UInt8 = 0` passed as `&Self…`, which
