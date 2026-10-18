@@ -635,6 +635,7 @@ private extension LCPResourceLoaderDelegate {
   /// the CALLING request was cancelled first, so a cancelled request is never
   /// mistaken for a failed one and finished on its behalf.
   func trackEntry(for publication: Publication, href: String) async -> TrackEntry?? {
+    let knownLengthWasAbsent = provider?.cachedPlaintextLength(forHref: href) == nil
     let build = bufferedTracks.withValue { cache -> Task<TrackEntry?, Never> in
       if let index = cache.firstIndex(where: { $0.href == href }) {
         let entry = cache.remove(at: index)
@@ -644,12 +645,24 @@ private extension LCPResourceLoaderDelegate {
       let size = perTrackBufferSize
       // Read before the task so the task captures a Bool, not the provider.
       let bufferThisTrack = provider?.archiveIsLocalFile() != true
+      // Likewise read before the task. A known length skips
+      // `estimatedLength()` entirely, and that call is the expensive one: it
+      // reads the entry's CBC tail, which sits a whole chapter away from the
+      // audio, and was measured costing 17.8-28.8 MB of origin traffic to
+      // serve no audio at all.
+      let knownLength = provider?.cachedPlaintextLength(forHref: href)
       let task = Task<TrackEntry?, Never> {
         guard let resolved = Self.resource(for: publication, href: href) else {
           return nil
         }
-        guard case let .success(.some(length)) = await resolved.estimatedLength() else {
-          return nil
+        let length: UInt64
+        if let knownLength {
+          length = knownLength
+        } else {
+          guard case let .success(.some(probed)) = await resolved.estimatedLength() else {
+            return nil
+          }
+          length = probed
         }
         return TrackEntry(
           buffer: bufferThisTrack ? resolved.buffered(size: size) : nil,
@@ -671,6 +684,11 @@ private extension LCPResourceLoaderDelegate {
     // on work it no longer wants instead of holding its slot (PP-5240).
     guard let built = await Self.value(of: build) else {
       return nil // this caller was cancelled; the build stands for the next one
+    }
+    if let built, knownLengthWasAbsent {
+      // Outside the task deliberately: the provider is not `Sendable`, and the
+      // existing comments above keep it out of the task for that reason.
+      provider?.cachePlaintextLength(built.length, forHref: href)
     }
     if built == nil {
       bufferedTracks.withValue { cache in
