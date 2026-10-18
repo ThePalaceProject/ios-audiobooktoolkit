@@ -329,6 +329,80 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     return start ..< last + 1
   }
 
+  // MARK: - Diagnosing a slow open
+
+  /// What this client has asked the origin for, and what it answered from the
+  /// store, since it was created.
+  ///
+  /// Monotonic for the client's lifetime: a caller snapshots it either side of
+  /// an operation and reports the delta. It exists because a slow publication
+  /// open is opaque from the app — `PublicationOpener.open` is a single await —
+  /// and the question that separates its candidate causes is how many ranged
+  /// requests the archive reads cost. One or two means the time went to licence
+  /// validation; many for a few megabytes served means the reads are
+  /// refetching the same windows.
+  public struct UpstreamActivity: Sendable, Equatable {
+    public let originRequests: Int
+    public let originBytes: Int
+    public let storeServes: Int
+    public let storeBytes: Int
+
+    public func delta(since earlier: UpstreamActivity) -> UpstreamActivity {
+      UpstreamActivity(
+        originRequests: originRequests - earlier.originRequests,
+        originBytes: originBytes - earlier.originBytes,
+        storeServes: storeServes - earlier.storeServes,
+        storeBytes: storeBytes - earlier.storeBytes
+      )
+    }
+  }
+
+  private let activityLock = NSLock()
+  private var _activity = UpstreamActivity(originRequests: 0, originBytes: 0, storeServes: 0, storeBytes: 0)
+
+  public var upstreamActivity: UpstreamActivity {
+    activityLock.lock()
+    defer { activityLock.unlock() }
+    return _activity
+  }
+
+  private func recordOriginRequest(bytes: Int) {
+    activityLock.lock()
+    _activity = UpstreamActivity(
+      originRequests: _activity.originRequests + 1,
+      originBytes: _activity.originBytes + bytes,
+      storeServes: _activity.storeServes,
+      storeBytes: _activity.storeBytes
+    )
+    activityLock.unlock()
+  }
+
+  private func recordStoreServe(bytes: Int) {
+    activityLock.lock()
+    _activity = UpstreamActivity(
+      originRequests: _activity.originRequests,
+      originBytes: _activity.originBytes,
+      storeServes: _activity.storeServes + 1,
+      storeBytes: _activity.storeBytes + bytes
+    )
+    activityLock.unlock()
+  }
+
+  /// Every origin request goes through here, so `upstreamActivity` cannot
+  /// drift from what was actually fetched.
+  private func streamFromOrigin(
+    request: any HTTPRequestConvertible,
+    consume: @escaping (Data, Double?) -> HTTPResult<Void>
+  ) async -> HTTPResult<HTTPResponse> {
+    let fetched = LockIsolated(0)
+    let result = await upstream.stream(request: request) { data, progress in
+      fetched.withValue { $0 += data.count }
+      return consume(data, progress)
+    }
+    recordOriginRequest(bytes: fetched.value)
+    return result
+  }
+
   // MARK: - HTTPClient
 
   public func stream(
@@ -336,7 +410,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     consume: @escaping (Data, Double?) -> HTTPResult<Void>
   ) async -> HTTPResult<HTTPResponse> {
     guard case let .success(req) = request.httpRequest() else {
-      return await upstream.stream(request: request, consume: consume)
+      return await streamFromOrigin(request: request, consume: consume)
     }
     let key = req.url.string
     let store = openStore(for: key)
@@ -372,13 +446,13 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       // whose decisions cannot be observed is one nobody can tune or trust.
       // These lines are the only evidence the client is installed and working.
       os_log("LCPCACHE through %{public}@", log: lcpCacheLog, type: .default, String(describing: reason))
-      return await upstream.stream(request: req, consume: consume)
+      return await streamFromOrigin(request: req, consume: consume)
 
     case let .serveFromStore(range):
       os_log("LCPCACHE hit %{public}llu-%{public}llu %{public}d", log: lcpCacheLog, type: .default,
              range.lowerBound, range.upperBound, range.count)
       guard let store else {
-        return await upstream.stream(request: req, consume: consume)
+        return await streamFromOrigin(request: req, consume: consume)
       }
       // Presence is confirmed from the journal, which costs no buffer, BEFORE
       // any byte is handed to `consume`. Once a chunk has been delivered the
@@ -391,7 +465,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         // we hold — a hole reads back as zeros of the right length and nothing
         // downstream would notice. Go to the origin instead.
         log(.warning, "partial archive cache: a range recorded present is no longer held — refetching")
-        return await upstream.stream(request: req, consume: consume)
+        return await streamFromOrigin(request: req, consume: consume)
       }
 
       // Served in chunks rather than as one `Data`. Readium asks for
@@ -410,7 +484,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         guard let chunk, chunk.count == want else {
           if servedCount == 0 {
             log(.warning, "partial archive cache: a range recorded present could not be read — refetching")
-            return await upstream.stream(request: req, consume: consume)
+            return await streamFromOrigin(request: req, consume: consume)
           }
           // Bytes are already downstream, so the origin cannot be used without
           // duplicating them. Fail the request and let the caller reissue it.
@@ -425,6 +499,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         cursor += UInt64(chunk.count)
       }
 
+      recordStoreServe(bytes: servedCount)
       return .success(HTTPResponse(
         request: req,
         url: req.url,
@@ -460,7 +535,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
         // The caller's `consume` is not passed down: it expects the bytes of
         // the window it asked for, in order, and a gap is a fragment of that
         // window. The assembled range is handed over once, below.
-        let gapResult = await upstream.stream(request: gapRequest) { chunk, _ in
+        let gapResult = await streamFromOrigin(request: gapRequest) { chunk, _ in
           gapBuffer.withValue { $0.append(chunk) }
           return .success(())
         }
@@ -521,7 +596,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     consume: @escaping (Data, Double?) -> HTTPResult<Void>
   ) async -> HTTPResult<HTTPResponse> {
     let buffer = LockIsolated(Data())
-    let result = await upstream.stream(request: req) { chunk, progress in
+    let result = await streamFromOrigin(request: req) { chunk, progress in
       buffer.withValue { $0.append(chunk) }
       return consume(chunk, progress)
     }
