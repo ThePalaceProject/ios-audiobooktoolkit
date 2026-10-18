@@ -83,6 +83,9 @@ private final class ScriptedHTTPClient: HTTPClient {
   }
 
   var answer: Answer
+  /// When set, the answer is built from the range the request asked for,
+  /// so a test can tell a gap fetch from a whole-window refetch.
+  var answerForRange: ((Range<UInt64>) -> Answer)?
   private(set) var requestedRangeHeaders: [String?] = []
   private(set) var callCount = 0
 
@@ -96,7 +99,11 @@ private final class ScriptedHTTPClient: HTTPClient {
       return .failure(HTTPError.malformedResponse(nil))
     }
     callCount += 1
-    requestedRangeHeaders.append(req.headers["Range"])
+    let header = req.headers["Range"]
+    requestedRangeHeaders.append(header)
+    if let answerForRange, let asked = Self.parseRangeHeader(header) {
+      answer = answerForRange(asked)
+    }
     // Delivered in two chunks, because the real client does and a decorator
     // that only works for one chunk would pass a single-chunk test.
     let split = answer.body.count / 2
@@ -114,6 +121,18 @@ private final class ScriptedHTTPClient: HTTPClient {
       body: nil
     ))
   }
+
+    /// `bytes=<start>-<last>` only; this double is never sent an open range.
+    static func parseRangeHeader(_ header: String?) -> Range<UInt64>? {
+      guard let spec = header?.split(separator: "=").last else { return nil }
+      let bounds = spec.split(separator: "-")
+      guard bounds.count == 2,
+            let start = UInt64(bounds[0]),
+            let last = UInt64(bounds[1]),
+            last >= start
+      else { return nil }
+      return start ..< last + 1
+    }
 }
 
 // MARK: - The pure decisions
@@ -301,10 +320,12 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
     )
   }
 
-  /// A partly-present range is fetched whole for now. Splitting it into gaps
-  /// is the gap-filler's job; what matters here is that it is never served
-  /// from a store that does not hold all of it.
-  func test_decide_partlyPresent_fetchesAndStores() {
+  /// A window that is mostly local costs its gaps.
+  ///
+  /// This is the cold-chapter-open shape: Readium's 6 MB archive window shifted
+  /// 122,880 bytes backwards for AVFoundation's tail probe, so nearly all of
+  /// what it asks for was fetched by the read before it.
+  func test_decide_mostlyPresent_fillsTheGaps() {
     XCTAssertEqual(
       Client.decide(
         isRangedGET: true,
@@ -313,7 +334,57 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
         maxCacheableRangeLength: 8 * 1024 * 1024,
         hasCacheSlot: true
       ),
+      .fillGaps(requested: 0 ..< 6_291_456, missing: [1024 ..< 2048])
+    )
+  }
+
+  /// Each gap is its own round trip, so a window broken into more pieces than
+  /// the cap is cheaper to refetch whole than to stitch.
+  func test_decide_partlyPresentButTooFragmented_fetchesTheWholeWindow() {
+    let gaps: [Range<UInt64>] = [
+      0 ..< 1024, 2048 ..< 3072, 4096 ..< 5120, 6144 ..< 7168, 8192 ..< 9216
+    ]
+    XCTAssertEqual(
+      Client.decide(
+        isRangedGET: true,
+        requested: 0 ..< 6_291_456,
+        missing: gaps,
+        maxCacheableRangeLength: 8 * 1024 * 1024,
+        hasCacheSlot: true,
+        maxGapRequestsPerRead: 4
+      ),
       .fetchAndStore(0 ..< 6_291_456)
+    )
+  }
+
+  /// A saving that does not at least halve the bytes does not pay for the extra
+  /// round trip.
+  func test_decide_partlyPresentWithLittleSaving_fetchesTheWholeWindow() {
+    XCTAssertEqual(
+      Client.decide(
+        isRangedGET: true,
+        requested: 0 ..< 6_291_456,
+        missing: [0 ..< 4_000_000],
+        maxCacheableRangeLength: 8 * 1024 * 1024,
+        hasCacheSlot: true
+      ),
+      .fetchAndStore(0 ..< 6_291_456)
+    )
+  }
+
+  /// Exactly half missing is the boundary, and it fills rather than refetching:
+  /// the comparison is `<=`, so the cheaper path is taken on the tie.
+  func test_decide_exactlyHalfMissing_fillsTheGaps() {
+    let half: Range<UInt64> = 0 ..< 3_145_728
+    XCTAssertEqual(
+      Client.decide(
+        isRangedGET: true,
+        requested: 0 ..< 6_291_456,
+        missing: [half],
+        maxCacheableRangeLength: 8 * 1024 * 1024,
+        hasCacheSlot: true
+      ),
+      .fillGaps(requested: 0 ..< 6_291_456, missing: [half])
     )
   }
 
@@ -569,25 +640,35 @@ final class PartialArchiveCachingHTTPClientTests: XCTestCase {
     XCTAssertEqual(store.writes, [])
   }
 
-  /// The store is opened lazily, from the length the first response reports,
-  /// because nothing knows the archive's size before then.
-  func testTheStore_isOpenedFromTheFirstResponsesLength() async {
+  /// The store is asked for on the way in, and opened from the length the first
+  /// response reports when nothing is on disk yet.
+  ///
+  /// Both calls matter. The first carries no length and is what lets a book read
+  /// before be served from disk without a round trip; the second carries the
+  /// length from `Content-Range` and is what opens a store for a book being read
+  /// for the first time. Nothing knows the archive's size before that response,
+  /// so the order is not negotiable.
+  func testTheStore_isAskedForWithoutALength_thenOpenedFromTheResponse() async {
     let range: Range<UInt64> = 0 ..< 131_072
     let upstream = ScriptedHTTPClient(answer: partialAnswer(for: range))
     let store = FakeRangeStore(totalSize: archiveLength)
-    var openedWith: [UInt64] = []
+    var openedWith: [UInt64?] = []
     let client = PartialArchiveCachingHTTPClient(
       upstream: upstream,
       storeFactory: { _, totalSize in
         openedWith.append(totalSize)
-        return store
+        // Nothing on disk for this archive yet, so decline until a length is known.
+        return totalSize == nil ? nil : store
       }
     )
 
     _ = await collect(client, request(range: range))
 
-    XCTAssertEqual(openedWith, [archiveLength],
-                   "the length comes from Content-Range, not from a HEAD round trip")
+    XCTAssertEqual(
+      openedWith,
+      [nil, archiveLength],
+      "asked without a length first, then opened with the one Content-Range reported"
+    )
   }
 
   /// Opened once, not once per request: a second store on the same archive
@@ -716,4 +797,182 @@ private extension HTTPResult {
     case .failure: return false
     }
   }
+}
+
+// MARK: - The cold chapter open, as a sequence
+
+/// The cold-chapter-open geometry, driven as the sequence AVFoundation actually
+/// issues, against the real store.
+///
+/// `LCPStreamingEgressTests` measures three 6 MB archive fills, 18,874,368
+/// bytes, before the first audio sample of a cold chapter. Two of them sit
+/// 122,880 bytes apart at the end of the same entry: the content-information
+/// read resolves the plaintext length from the final block, and AVFoundation's
+/// tail probe then reads 128 kB from the end, which starts behind the window
+/// Readium just filled. So 6,168,576 of the second fill's 6,291,456 bytes are
+/// bytes the first fill already fetched and this client already stored.
+final class PartialArchiveCachingGapFillTests: XCTestCase {
+
+  private let archiveURL = HTTPURL(string: "https://storage.googleapis.com/bucket/book.lcpa")!
+  private let archiveLength: UInt64 = 1_630_000_000
+
+  /// Measured, from `testColdChapterOpen_BytesBeforeTheFirstSampleIsServed`.
+  private let contentInformationFill: Range<UInt64> = 96_460_800 ..< 102_752_256
+  private let tailProbeFill: Range<UInt64> = 96_337_920 ..< 102_629_376
+
+  private var directory: URL!
+  private var store: PartialArchiveStore!
+
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    directory = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("gapfill-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    store = try PartialArchiveStore.open(directory: directory, totalSize: archiveLength)
+  }
+
+  override func tearDownWithError() throws {
+    store?.close()
+    store = nil
+    if let directory { try? FileManager.default.removeItem(at: directory) }
+    try super.tearDownWithError()
+  }
+
+  private func request(range: Range<UInt64>) -> HTTPRequest {
+    var req = HTTPRequest(url: archiveURL)
+    req.setRange(range)
+    return req
+  }
+
+  /// Answers exactly what it is asked for, so what the caller receives
+  /// identifies which part of a window came from where.
+  private func upstreamAnsweringItsRange() -> ScriptedHTTPClient {
+    let client = ScriptedHTTPClient(answer: ScriptedHTTPClient.Answer(
+      status: 206, headers: [:], body: Data()
+    ))
+    let length = archiveLength
+    client.answerForRange = { asked in
+      ScriptedHTTPClient.Answer(
+        status: 206,
+        headers: ["Content-Range": "bytes \(asked.lowerBound)-\(asked.upperBound - 1)/\(length)"],
+        body: Data(repeating: 0x5A, count: asked.count)
+      )
+    }
+    return client
+  }
+
+  private func makeClient(_ upstream: ScriptedHTTPClient) -> PartialArchiveCachingHTTPClient {
+    PartialArchiveCachingHTTPClient(upstream: upstream, storeFactory: { [store] _, _ in store! })
+  }
+
+  @discardableResult
+  private func read(
+    _ client: PartialArchiveCachingHTTPClient,
+    _ range: Range<UInt64>
+  ) async -> (ok: Bool, bytes: Int) {
+    var received = Data()
+    let result = await client.stream(request: request(range: range)) { chunk, _ in
+      received.append(chunk)
+      return .success(())
+    }
+    return (result.isSuccess, received.count)
+  }
+
+  /// The tail probe must cost the bytes the first fill missed, not a second
+  /// complete fill.
+  ///
+  /// This is the cost the patron feels: every full fill in front of the first
+  /// sample is a second spent watching a frozen 0:00, and on the device
+  /// measurement a 6 MB fill took a 5.2 s median.
+  func testColdChapterOpen_TailProbeFetchesOnlyWhatTheFirstFillMissed() async {
+    let upstream = upstreamAnsweringItsRange()
+    let client = makeClient(upstream)
+
+    let first = await read(client, contentInformationFill)
+    XCTAssertTrue(first.ok, "the content-information read must succeed")
+    XCTAssertEqual(first.bytes, contentInformationFill.count)
+
+    let second = await read(client, tailProbeFill)
+    XCTAssertTrue(second.ok, "the tail probe must succeed")
+    XCTAssertEqual(
+      second.bytes,
+      tailProbeFill.count,
+      "the caller is still answered in full, from the store and the origin together"
+    )
+
+    let gap = tailProbeFill.lowerBound ..< contentInformationFill.lowerBound
+    XCTAssertEqual(
+      upstream.requestedRangeHeaders,
+      [
+        "bytes=\(contentInformationFill.lowerBound)-\(contentInformationFill.upperBound - 1)",
+        "bytes=\(gap.lowerBound)-\(gap.upperBound - 1)"
+      ],
+      """
+      the tail probe may fetch only the 122,880 bytes the first fill did not \
+      cover; refetching its window costs a second complete 6 MB fill in front \
+      of the first audio sample
+      """
+    )
+  }
+
+  /// A window read twice in one session costs nothing the second time. This
+  /// already held before gap filling, and is kept so the change cannot regress
+  /// a fully present window into a fetch.
+  func testWindowReadTwice_FetchesNothingTheSecondTime() async {
+    let upstream = upstreamAnsweringItsRange()
+    let client = makeClient(upstream)
+
+    await read(client, tailProbeFill)
+    let again = await read(client, tailProbeFill)
+
+    XCTAssertTrue(again.ok)
+    XCTAssertEqual(again.bytes, tailProbeFill.count)
+    XCTAssertEqual(
+      upstream.requestedRangeHeaders.count,
+      1,
+      "the second read of the same window must not reach the origin"
+    )
+  }
+
+  /// A window with nothing local is unchanged: one fetch for the whole thing.
+  func testWindowWithNothingLocal_FetchesTheWholeWindow() async {
+    let upstream = upstreamAnsweringItsRange()
+    let client = makeClient(upstream)
+
+    let only = await read(client, tailProbeFill)
+
+    XCTAssertTrue(only.ok)
+    XCTAssertEqual(only.bytes, tailProbeFill.count)
+    XCTAssertEqual(
+      upstream.requestedRangeHeaders,
+      ["bytes=\(tailProbeFill.lowerBound)-\(tailProbeFill.upperBound - 1)"]
+    )
+  }
+
+  /// A book read before is served from disk on its FIRST read, not after a round
+  /// trip.
+  ///
+  /// The client learns an archive's length from a response's `Content-Range`, so
+  /// unless the store is consulted on the way in, the first read of every book
+  /// open pays a full 6 MB fill for bytes already on disk. The store directory
+  /// outlives the process; a client instance does not.
+  func testFirstReadOfAnArchiveAlreadyOnDisk_FetchesNothing() async throws {
+    try store.write(
+      Data(repeating: 0x5A, count: tailProbeFill.count),
+      at: tailProbeFill.lowerBound
+    )
+    let upstream = upstreamAnsweringItsRange()
+    let client = makeClient(upstream)
+
+    let only = await read(client, tailProbeFill)
+
+    XCTAssertTrue(only.ok)
+    XCTAssertEqual(only.bytes, tailProbeFill.count, "answered in full from the store")
+    XCTAssertEqual(
+      upstream.requestedRangeHeaders,
+      [],
+      "a window already on disk must not be fetched to discover how long the archive is"
+    )
+  }
+
 }

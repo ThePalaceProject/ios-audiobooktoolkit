@@ -207,6 +207,34 @@ public final class PartialArchiveStore: @unchecked Sendable {
 
   // MARK: Lifecycle
 
+  /// The archive length a store on disk was opened for, read from its journal
+  /// header without opening the store.
+  ///
+  /// Lets a caller consult a store it has not opened yet. The caching client
+  /// learns an archive's length from a response's `Content-Range`, so without
+  /// this the bytes of a book already on disk stay invisible until one request
+  /// has been to the network and come back.
+  ///
+  /// Returns nil when there is no readable store here, which is not an error:
+  /// the archive has simply not been read before.
+  public static func recordedTotalSize(in directory: URL) -> UInt64? {
+    let journal = directory.appendingPathComponent(journalFileName)
+    guard let handle = try? FileHandle(forReadingFrom: journal) else { return nil }
+    defer { try? handle.close() }
+    // The header is the first newline-terminated line, and a magic plus a
+    // decimal UInt64 cannot exceed this, so one bounded read is enough.
+    guard let head = (try? handle.read(upToCount: 64)) ?? nil, !head.isEmpty,
+          let newline = head.firstIndex(of: UInt8(ascii: "\n"))
+    else { return nil }
+    let fields = String(decoding: head[head.startIndex ..< newline], as: UTF8.self)
+      .split(separator: " ")
+    guard fields.count == 2, fields[0] == journalMagic, let size = UInt64(fields[1]) else {
+      return nil
+    }
+    return size
+  }
+
+
   /// Opens the store for one book, creating it if it does not exist.
   ///
   /// Holds an exclusive advisory lock on the directory for the store's

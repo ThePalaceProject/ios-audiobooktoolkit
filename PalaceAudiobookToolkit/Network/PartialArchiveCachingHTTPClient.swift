@@ -7,7 +7,16 @@
 //
 
 import Foundation
+import os
 import ReadiumShared
+
+/// Decision trace for the partial-archive cache.
+///
+/// A dedicated subsystem rather than `ATLog` or Readium's `log()`: the former
+/// throttles by message prefix and drops `.debug` in DEBUG builds, and the
+/// latter's sink belongs to the host app. Read it with
+/// `log stream --predicate 'subsystem == "org.thepalaceproject.lcpcache"'`.
+let lcpCacheLog = OSLog(subsystem: "org.thepalaceproject.lcpcache", category: "decisions")
 
 // MARK: - What the client needs from a byte-range store
 
@@ -25,13 +34,17 @@ public protocol ArchiveRangeStore: AnyObject, Sendable {
   func read(_ range: Range<UInt64>) throws -> Data
 }
 
-/// Opens the store for an archive once its true length is known.
+/// Opens the store for an archive.
 ///
-/// Length comes from the first response's `Content-Range`, so the store cannot
-/// be opened before one request has come back; see `stream`. The factory also
-/// owns the policy for an archive whose recorded length no longer matches —
-/// delete and start over — because that is a data decision, not this client's.
-public typealias ArchiveRangeStoreFactory = (HTTPURL, UInt64) throws -> ArchiveRangeStore
+/// Called with a length once a response's `Content-Range` has reported
+/// one, and with nil before then, which asks for a store only if one
+/// already exists on disk: otherwise the first read of a book read
+/// before would fetch bytes it already holds just to learn how long the
+/// archive is. Returning nil means not available yet, and is not an
+/// error. The factory also owns the policy for an archive whose recorded
+/// length no longer matches, delete and start over, because that is a
+/// data decision and not this client's.
+public typealias ArchiveRangeStoreFactory = (HTTPURL, UInt64?) throws -> ArchiveRangeStore?
 
 // MARK: - PartialArchiveCachingHTTPClient
 
@@ -62,6 +75,14 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     case serveFromStore(Range<UInt64>)
     /// Fetch it, and record what comes back.
     case fetchAndStore(Range<UInt64>)
+    /// Fetch only the parts of the window that are not local, then answer
+    /// the whole window from the store.
+    ///
+    /// Readium's archive buffer re-asks for a window shifted a little from
+    /// one it already filled, so most of what it asks for is usually
+    /// already here. `maxGapRequestsPerRead` bounds when this is worth it.
+    case fillGaps(requested: Range<UInt64>, missing: [Range<UInt64>])
+
     /// Hand it to the upstream client untouched. The reason is logged, not
     /// branched on.
     case passThrough(reason: String)
@@ -102,10 +123,24 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   /// pass through uncached: slower to fill the archive, never incorrect.
   public static let defaultMaxConcurrentCachedRequests = 2
 
+  /// How many separate gap requests one read may be split into.
+  ///
+  /// Each gap is its own round trip, so a window broken into many pieces
+  /// is cheaper to refetch whole than to stitch. This bounds the trade at
+  /// the shape that actually occurs: one gap at the leading edge of a
+  /// window Readium shifted backwards.
+  public static let defaultMaxGapRequestsPerRead = 4
+
+  /// Gaps are fetched separately only when doing so at least halves the
+  /// bytes moved. Below that the saving does not pay for the extra round
+  /// trips and a whole-window fetch is both simpler and faster.
+  public static let gapFillMaxMissingFraction = 2
+
   private let upstream: HTTPClient
   private let storeFactory: ArchiveRangeStoreFactory
   private let maxCacheableRangeLength: Int
   private let maxConcurrentCachedRequests: Int
+  private let maxGapRequestsPerRead: Int
 
   /// Store calls are synchronous blocking file I/O. Reached from `stream`,
   /// which is `async`, so they are hopped onto this queue rather than run
@@ -125,12 +160,15 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     storeFactory: @escaping ArchiveRangeStoreFactory,
     maxCacheableRangeLength: Int = PartialArchiveCachingHTTPClient.defaultMaxCacheableRangeLength,
     maxConcurrentCachedRequests: Int = PartialArchiveCachingHTTPClient
-      .defaultMaxConcurrentCachedRequests
+      .defaultMaxConcurrentCachedRequests,
+    maxGapRequestsPerRead: Int = PartialArchiveCachingHTTPClient
+      .defaultMaxGapRequestsPerRead
   ) {
     self.upstream = upstream
     self.storeFactory = storeFactory
     self.maxCacheableRangeLength = maxCacheableRangeLength
     self.maxConcurrentCachedRequests = maxConcurrentCachedRequests
+    self.maxGapRequestsPerRead = maxGapRequestsPerRead
   }
 
   // MARK: - Pure decisions
@@ -212,7 +250,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     requested: Range<UInt64>?,
     missing: [Range<UInt64>]?,
     maxCacheableRangeLength: Int,
-    hasCacheSlot: Bool
+    hasCacheSlot: Bool,
+    maxGapRequestsPerRead: Int = PartialArchiveCachingHTTPClient.defaultMaxGapRequestsPerRead,
+    gapFillMaxMissingFraction: Int = PartialArchiveCachingHTTPClient.gapFillMaxMissingFraction
   ) -> CacheDecision {
     guard isRangedGET, let requested, !requested.isEmpty else {
       return .passThrough(reason: "not a ranged GET")
@@ -226,6 +266,15 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     }
     guard hasCacheSlot else {
       return .passThrough(reason: "too many cacheable requests already in flight")
+    }
+    // A window that is mostly local costs its gaps, not its whole span.
+    // Readium shifts its 6 MB archive window by a fraction of itself
+    // between reads, so the overlap is usually nearly the whole window.
+    if let missing,
+       !missing.isEmpty,
+       missing.count <= maxGapRequestsPerRead,
+       missing.reduce(0) { $0 + $1.count } * gapFillMaxMissingFraction <= requested.count {
+      return .fillGaps(requested: requested, missing: missing)
     }
     return .fetchAndStore(requested)
   }
@@ -280,18 +329,27 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       requested: requested,
       missing: missing,
       maxCacheableRangeLength: maxCacheableRangeLength,
-      hasCacheSlot: reserved
+      hasCacheSlot: reserved,
+      maxGapRequestsPerRead: maxGapRequestsPerRead
     )
-    if case .fetchAndStore = decision {} else if reserved {
-      releaseCacheSlot()
+    switch decision {
+    case .fetchAndStore, .fillGaps:
+      break
+    case .serveFromStore, .passThrough:
+      if reserved { releaseCacheSlot() }
     }
 
     switch decision {
     case let .passThrough(reason):
-      log(.debug, "partial archive cache: passing through (\(reason))")
+      // .info, not .debug: ATLog drops .debug in DEBUG builds, and a cache
+      // whose decisions cannot be observed is one nobody can tune or trust.
+      // These lines are the only evidence the client is installed and working.
+      os_log("LCPCACHE through %{public}@", log: lcpCacheLog, type: .default, String(describing: reason))
       return await upstream.stream(request: req, consume: consume)
 
     case let .serveFromStore(range):
+      os_log("LCPCACHE hit %{public}llu-%{public}llu %{public}d", log: lcpCacheLog, type: .default,
+             range.lowerBound, range.upperBound, range.count)
       guard let store,
             let data = await onStoreQueue({ try? store.read(range) }),
             data.count == range.count
@@ -318,39 +376,135 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       ))
 
     case let .fetchAndStore(range):
+      os_log("LCPCACHE miss %{public}llu-%{public}llu %{public}d", log: lcpCacheLog, type: .default,
+             range.lowerBound, range.upperBound, range.count)
       defer { releaseCacheSlot() }
-      let buffer = LockIsolated(Data())
-      let result = await upstream.stream(request: req) { chunk, progress in
-        buffer.withValue { $0.append(chunk) }
-        return consume(chunk, progress)
-      }
-      guard case let .success(response) = result else { return result }
+      return await fetchAndStore(req: req, key: key, range: range, store: store, consume: consume)
 
-      let contentRange = response.valueForHeader("Content-Range")
-      let body = buffer.value
-      // The store may not exist yet: this response is what reveals the length.
-      let target = store ?? openStore(
-        for: key,
-        totalSizeFrom: contentRange.flatMap { Self.parseContentRange($0)?.totalSize }
-      )
-      guard let target else { return .success(response) }
-
-      switch Self.admitResponse(
-        status: response.status.rawValue,
-        contentRange: contentRange,
-        requested: range,
-        bodyLength: body.count
-      ) {
-      case let .store(offset):
-        // A write that runs out of space commits the prefix that reached disk
-        // and records exactly that, so a later read refetches only the tail.
-        await onStoreQueue { try? target.write(body, at: offset) }
-      case let .reject(reason):
-        log(.warning, "partial archive cache: not storing this response (\(reason))")
+    case let .fillGaps(requested, missing):
+      os_log("LCPCACHE gapfill %{public}llu-%{public}llu %{public}d in %{public}d gap(s)",
+             log: lcpCacheLog, type: .default,
+             requested.lowerBound, requested.upperBound, requested.count, missing.count)
+      defer { releaseCacheSlot() }
+      guard let store else {
+        // Decided with a store in hand, so this cannot happen; fetching the
+        // window is the answer that is never wrong if it somehow does.
+        return await fetchAndStore(req: req, key: key, range: requested, store: nil, consume: consume)
       }
-      return .success(response)
+      for gap in missing {
+        var gapRequest = req
+        gapRequest.setRange(gap)
+        let gapBuffer = LockIsolated(Data())
+        // The caller's `consume` is not passed down: it expects the bytes of
+        // the window it asked for, in order, and a gap is a fragment of that
+        // window. The assembled range is handed over once, below.
+        let gapResult = await upstream.stream(request: gapRequest) { chunk, _ in
+          gapBuffer.withValue { $0.append(chunk) }
+          return .success(())
+        }
+        guard case let .success(gapResponse) = gapResult else {
+          log(.warning, "partial archive cache: a gap fetch failed — reading the window through")
+          return await upstream.stream(request: req, consume: consume)
+        }
+        let gapBody = gapBuffer.value
+        guard case let .store(offset) = Self.admitResponse(
+          status: gapResponse.status.rawValue,
+          contentRange: gapResponse.valueForHeader("Content-Range"),
+          requested: gap,
+          bodyLength: gapBody.count
+        ) else {
+          log(.warning, "partial archive cache: a gap response was not admissible — reading the window through")
+          return await upstream.stream(request: req, consume: consume)
+        }
+        await onStoreQueue { try? store.write(gapBody, at: offset) }
+      }
+      
+      // Never serve what we cannot prove we hold: an unwritten extent reads
+      // back as zeros of exactly the right length, and nothing downstream
+      // would notice. If the window is not whole now, go to the origin.
+      guard let data = await onStoreQueue({ try? store.read(requested) }),
+            data.count == requested.count
+      else {
+        log(.warning, "partial archive cache: the window was still not whole after filling — reading it through")
+        return await upstream.stream(request: req, consume: consume)
+      }
+      if case let .failure(error) = consume(data, 1.0) {
+        return .failure(error)
+      }
+      return .success(Self.partialResponse(
+        for: req, range: requested, served: data.count, totalSize: store.totalSize
+      ))
     }
   }
+
+  // MARK: - Fetching
+
+  /// Fetches a whole range, hands it to the caller as it arrives, and keeps it.
+  ///
+  /// Shared by the whole-window fetch and by gap filling's fallbacks, so there is
+  /// one admission and one write path rather than two that can drift apart.
+  private func fetchAndStore(
+    req: HTTPRequest,
+    key: String,
+    range: Range<UInt64>,
+    store: ArchiveRangeStore?,
+    consume: @escaping (Data, Double?) -> HTTPResult<Void>
+  ) async -> HTTPResult<HTTPResponse> {
+    let buffer = LockIsolated(Data())
+    let result = await upstream.stream(request: req) { chunk, progress in
+      buffer.withValue { $0.append(chunk) }
+      return consume(chunk, progress)
+    }
+    guard case let .success(response) = result else { return result }
+
+    let contentRange = response.valueForHeader("Content-Range")
+    let body = buffer.value
+    // The store may not exist yet: this response is what reveals the length.
+    let target = store ?? openStore(
+      for: key,
+      totalSizeFrom: contentRange.flatMap { Self.parseContentRange($0)?.totalSize }
+    )
+    guard let target else { return .success(response) }
+
+    switch Self.admitResponse(
+      status: response.status.rawValue,
+      contentRange: contentRange,
+      requested: range,
+      bodyLength: body.count
+    ) {
+    case let .store(offset):
+      // A write that runs out of space commits the prefix that reached disk
+      // and records exactly that, so a later read refetches only the tail.
+      await onStoreQueue { try? target.write(body, at: offset) }
+    case let .reject(reason):
+      log(.warning, "partial archive cache: not storing this response (\(reason))")
+    }
+    return .success(response)
+  }
+
+  /// The 206 this client synthesises when it answered from the store.
+  ///
+  /// Readium reads `Content-Range` to learn the archive's length, so a served
+  /// response has to state it the same way the origin would.
+  private static func partialResponse(
+    for req: HTTPRequest,
+    range: Range<UInt64>,
+    served: Int,
+    totalSize: UInt64
+  ) -> HTTPResponse {
+    HTTPResponse(
+      request: req,
+      url: req.url,
+      status: HTTPStatus(rawValue: 206) ?? .ok,
+      headers: [
+        "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(totalSize)",
+        "Content-Length": "\(served)"
+      ],
+      mediaType: nil,
+      body: nil
+    )
+  }
+
 
   // MARK: - Store lifecycle
 
@@ -364,15 +518,21 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       lock.unlock()
       return existing
     }
-    guard let totalSize, totalSize > 0, !storesRefused.contains(key) else {
+    guard !storesRefused.contains(key) else {
       lock.unlock()
       return nil
     }
     lock.unlock()
 
+    // A length of zero names no bytes; asking the factory for it would be
+    // asking it to create an empty store.
+    if let totalSize, totalSize == 0 { return nil }
+
     do {
       guard let url = HTTPURL(string: key) else { throw StoreKeyError.notAnHTTPURL(key) }
-      let opened = try storeFactory(url, totalSize)
+      // Declining is not failing: with no length yet the factory answers
+      // only for an archive already on disk, and most are not.
+      guard let opened = try storeFactory(url, totalSize) else { return nil }
       lock.lock()
       let winner = stores[key] ?? opened
       stores[key] = winner
