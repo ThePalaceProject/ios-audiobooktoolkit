@@ -57,7 +57,8 @@ final class LCPStreamingEgressTests: XCTestCase {
     servableLength: UInt64? = nil,
     isLocalFile: Bool = false,
     publicationAvailableFrom: Date? = nil,
-    publicationWaitTimeout: TimeInterval? = nil
+    publicationWaitTimeout: TimeInterval? = nil,
+    cacheStore: ArchiveRangeStore? = nil
   ) -> LCPResourceLoaderDelegate {
     let provider = ArchiveProvider(
       probe: probe,
@@ -65,7 +66,8 @@ final class LCPStreamingEgressTests: XCTestCase {
       stride: Self.trackStride,
       trackLength: Self.trackLength,
       archiveBufferSize: archiveBufferSize,
-      servableLength: servableLength
+      servableLength: servableLength,
+      cacheStore: cacheStore
     )
     provider.isLocalFile = isLocalFile
     provider.availableFrom = publicationAvailableFrom
@@ -654,6 +656,76 @@ final class LCPStreamingEgressTests: XCTestCase {
     )
   }
 
+  /// The same cold open with the byte-range cache under Readium's archive
+  /// buffer, which is where the app puts it.
+  ///
+  /// The three fills are 96,460,800, 96,337,920 and 75,497,472. The first two
+  /// overlap by 6,168,576 bytes, so with the fetched bytes kept the tail probe
+  /// costs the 122,880 it missed instead of a second whole fill. The third is
+  /// 20 MB away and is genuinely new, so it still costs a fill: this removes one
+  /// of the three round trips in front of the first sample, not all of them.
+  func testColdChapterOpen_WithTheByteRangeCache_SavesTheOverlappingFill() async throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("egress-cache-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try PartialArchiveStore.open(directory: directory, totalSize: Self.archiveLength)
+    defer { store.close() }
+
+    let loader = makeLoader(trackCount: 20, cacheStore: store)
+    let track = 3
+
+    let info = RecordingRequest(url: Self.trackURL(track), range: nil, needsContentInformation: true)
+    XCTAssertTrue(loader.shouldWait(for: info))
+    let infoOutcome = try await info.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(infoOutcome, .success)
+
+    let tailOffset = Int(Self.trackLength) - Self.loaderSegment
+    let tail = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: Int64(tailOffset), length: Self.loaderSegment, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: tail))
+    let tailOutcome = try await tail.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(tailOutcome, .success)
+
+    let audio = RecordingRequest(
+      url: Self.trackURL(track),
+      range: LCPRequestedRange(offset: 0, length: Self.loaderSegment, toEnd: false)
+    )
+    var bytesBeforeFirstSample: Int?
+    audio.onFirstRespond = { [probe] in bytesBeforeFirstSample = probe.bytesFetched }
+    XCTAssertTrue(loader.shouldWait(for: audio))
+    let audioOutcome = try await audio.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(audioOutcome, .success)
+
+    let beforeFirstSample = try XCTUnwrap(bytesBeforeFirstSample, "no audio byte was ever served")
+    print(String(
+      format: "cold chapter open, with the byte-range cache: bytes before the first audio sample %d B in %d requests",
+      beforeFirstSample, probe.requests
+    ))
+    for range in probe.ranges {
+      print(String(format: "  origin range %10llu ..< %10llu -> %8d B", range.lower, range.upper, range.count))
+    }
+
+    XCTAssertEqual(audio.respondedBytes, Self.loaderSegment, "the audio read is answered in full")
+    XCTAssertLessThan(
+      beforeFirstSample,
+      Self.timeToFirstAudioBound,
+      """
+      keeping the fetched bytes must remove the overlapping fill, so a cold     chapter costs strictly less than the three fills it cost before
+      """
+    )
+    XCTAssertLessThanOrEqual(
+      beforeFirstSample,
+      2 * Self.readiumArchiveBufferSize + Self.loaderSegment,
+      """
+      two fills and the segment: the content-information read, the audio read     20 MB away, and the 122,880 bytes the tail probe did not already hold
+      """
+    )
+  }
+
+
   /// Attribution: the same cold open with the loader's own per-track buffer
   /// switched OFF (`archiveIsLocalFile` true), against the same 6 MB Readium
   /// archive buffer. If the bytes before the first sample do not move, the cost
@@ -941,7 +1013,8 @@ private final class StoredEntryResource: Resource {
     archive: Resource,
     entryOffset: UInt64,
     entryLength: UInt64,
-    servableLength: UInt64? = nil
+    servableLength: UInt64? = nil,
+    cacheStore: ArchiveRangeStore? = nil
   ) {
     self.archive = archive
     self.entryOffset = entryOffset
@@ -1006,6 +1079,86 @@ private final class StoredEntryResource: Resource {
   }
 }
 
+/// The origin as an `HTTPClient`, counted by the same probe as the resource
+/// origin so the two topologies are directly comparable.
+private final class ProbeHTTPClient: HTTPClient, @unchecked Sendable {
+  private let probe: ArchiveTransportProbe
+
+  init(probe: ArchiveTransportProbe) { self.probe = probe }
+
+  func stream(
+    request: any HTTPRequestConvertible,
+    consume: @escaping (Data, Double?) -> HTTPResult<Void>
+  ) async -> HTTPResult<HTTPResponse> {
+    guard case let .success(req) = request.httpRequest() else {
+      return .failure(HTTPError.malformedResponse(nil))
+    }
+    guard let header = req.headers["Range"],
+          let spec = header.split(separator: "=").last,
+          case let bounds = spec.split(separator: "-"),
+          bounds.count == 2,
+          let lower = UInt64(bounds[0]),
+          let last = UInt64(bounds[1])
+    else {
+      return .failure(HTTPError.malformedResponse(nil))
+    }
+    let upper = min(last + 1, probe.length)
+    let count = Int(upper > lower ? upper - lower : 0)
+    probe.note(count, requestedLower: lower, requestedEnd: upper)
+    if case let .failure(error) = consume(Data(count: count), 1.0) {
+      return .failure(error)
+    }
+    return .success(HTTPResponse(
+      request: req,
+      url: req.url,
+      status: HTTPStatus(rawValue: 206) ?? .ok,
+      headers: [
+        "Content-Range": "bytes \(lower)-\(upper - 1)/\(probe.length)",
+        "Content-Length": "\(count)"
+      ],
+      mediaType: nil,
+      body: nil
+    ))
+  }
+}
+
+/// Reads the archive through an `HTTPClient`, so a decorator on that client is
+/// driven by exactly the reads Readium's archive buffer makes.
+private final class HTTPArchiveResource: Resource {
+  private let client: HTTPClient
+  private let url: HTTPURL
+  private let length: UInt64
+
+  init(client: HTTPClient, url: HTTPURL, length: UInt64) {
+    self.client = client
+    self.url = url
+    self.length = length
+  }
+
+  let sourceURL: AbsoluteURL? = nil
+  func properties() async -> ReadResult<ResourceProperties> { .success(ResourceProperties()) }
+  func estimatedLength() async -> ReadResult<UInt64?> { .success(length) }
+
+  func stream(range: Range<UInt64>?, consume: @escaping (Data) -> Void) async -> ReadResult<Void> {
+    let lower = min(range?.lowerBound ?? 0, length)
+    let upper = min(range?.upperBound ?? length, length)
+    guard upper > lower else { return .success(()) }
+    var req = HTTPRequest(url: url)
+    req.setRange(lower ..< upper)
+    let result = await client.stream(request: req) { data, _ in
+      consume(data)
+      return .success(())
+    }
+    switch result {
+    case .success:
+      return .success(())
+    case let .failure(error):
+      return .failure(.access(.http(error)))
+    }
+  }
+}
+
+
 /// Hands out one entry resource per track over a single shared buffered
 /// archive, which is the topology `ZIPFoundationArchiveFactory` builds: one
 /// `BufferingResource`, every entry reading through it.
@@ -1021,16 +1174,34 @@ private final class ArchiveContainer: Container, @unchecked Sendable {
     stride: UInt64,
     trackLength: UInt64,
     archiveBufferSize: Int,
-    servableLength: UInt64? = nil
+    servableLength: UInt64? = nil,
+    cacheStore: ArchiveRangeStore? = nil
   ) {
-    let sharedArchive = ArchiveResource(probe: probe).buffered(size: archiveBufferSize)
+    // The origin, optionally with the app's byte-range cache between it and
+    // Readium's archive buffer, which is where that cache sits in the app:
+    // below the buffer, so it sees the buffer's own 6 MB fills.
+    let origin: Resource
+    if let cacheStore {
+      origin = HTTPArchiveResource(
+        client: PartialArchiveCachingHTTPClient(
+          upstream: ProbeHTTPClient(probe: probe),
+          storeFactory: { _, _ in cacheStore }
+        ),
+        url: HTTPURL(string: "https://origin.example/book.lcpa")!,
+        length: probe.length
+      )
+    } else {
+      origin = ArchiveResource(probe: probe)
+    }
+    let sharedArchive = origin.buffered(size: archiveBufferSize)
     var built: [String: Resource] = [:]
     for track in 0 ..< trackCount {
       let entry = StoredEntryResource(
         archive: sharedArchive,
         entryOffset: UInt64(track) * stride,
         entryLength: trackLength,
-        servableLength: servableLength
+        servableLength: servableLength,
+        cacheStore: cacheStore
       )
       built["track\(track).mp3"] = entry
     }
@@ -1056,7 +1227,8 @@ private final class ArchiveProvider: StreamingResourceProvider, @unchecked Senda
     stride: UInt64,
     trackLength: UInt64,
     archiveBufferSize: Int,
-    servableLength: UInt64? = nil
+    servableLength: UInt64? = nil,
+    cacheStore: ArchiveRangeStore? = nil
   ) {
     let container = ArchiveContainer(
       probe: probe,
@@ -1064,7 +1236,8 @@ private final class ArchiveProvider: StreamingResourceProvider, @unchecked Senda
       stride: stride,
       trackLength: trackLength,
       archiveBufferSize: archiveBufferSize,
-      servableLength: servableLength
+      servableLength: servableLength,
+      cacheStore: cacheStore
     )
     self.container = container
     publication = Publication(
