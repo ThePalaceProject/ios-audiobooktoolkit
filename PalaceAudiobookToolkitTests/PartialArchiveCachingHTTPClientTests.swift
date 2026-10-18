@@ -636,6 +636,46 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
 
 final class PartialArchiveCachingHTTPClientTests: XCTestCase {
 
+  /// The journal can claim a range the file cannot produce. Caught before any
+  /// byte is delivered, the request still goes to the origin; caught after,
+  /// re-fetching would hand Readium the same plaintext twice, so the request
+  /// fails instead. Both arms matter: the first keeps the archive readable, the
+  /// second keeps an AES-CBC stream from being fed duplicate bytes.
+  func test_serve_whenTheFirstChunkIsUnreadable_refetchesFromTheOrigin() async {
+    let total: UInt64 = 4096
+    let store = FullyPresentStore(totalSize: total, failReadsFrom: 0)
+    let body = Data(repeating: 0x11, count: Int(total))
+    let upstream = ScriptedHTTPClient(
+      answer: .init(
+        status: 206,
+        headers: ["Content-Range": "bytes 0-\(total - 1)/\(total)"],
+        body: body
+      )
+    )
+    let client = PartialArchiveCachingHTTPClient(
+      upstream: upstream,
+      storeFactory: { _, _ in store }
+    )
+
+    var request = HTTPRequest(url: HTTPURL(string: "https://example.invalid/short.lcpa")!)
+    request.setRange(0 ..< total)
+
+    let chunks = ServedChunkLog()
+    let result = await client.stream(request: request) { data, _ in
+      chunks.record(data.count)
+      return .success(())
+    }
+
+    guard case .success = result else {
+      return XCTFail("an unreadable first chunk must fall back to the origin, got \(result)")
+    }
+    XCTAssertEqual(upstream.callCount, 1, "the origin is the only place the bytes can come from")
+    XCTAssertEqual(
+      chunks.sizes.reduce(0, +), Int(total),
+      "the caller must receive the range exactly once, from the origin"
+    )
+  }
+
   // MARK: - Serving a fully-present range
 
   /// Readium asks for everything from an offset with an open-ended
@@ -1205,10 +1245,16 @@ final class PartialArchiveCachingGapFillTests: XCTestCase {
 /// A store that holds the whole archive, so every read is a hit.
 private final class FullyPresentStore: ArchiveRangeStore, @unchecked Sendable {
   let totalSize: UInt64
+  /// Offset from which reads throw, standing in for a journal that claims a
+  /// range the file cannot produce. nil means every read succeeds.
+  private let failReadsFrom: UInt64?
   private let lock = NSLock()
   private var _largestRead = 0
 
-  init(totalSize: UInt64) { self.totalSize = totalSize }
+  init(totalSize: UInt64, failReadsFrom: UInt64? = nil) {
+    self.totalSize = totalSize
+    self.failReadsFrom = failReadsFrom
+  }
 
   var largestRead: Int { lock.withLock { _largestRead } }
 
@@ -1220,6 +1266,9 @@ private final class FullyPresentStore: ArchiveRangeStore, @unchecked Sendable {
   }
 
   func read(_ range: Range<UInt64>) throws -> Data {
+    if let failReadsFrom, range.lowerBound >= failReadsFrom {
+      throw PartialArchiveStoreError.notPresent(missing: [range])
+    }
     lock.withLock { _largestRead = max(_largestRead, range.count) }
     return Data(repeating: 0x7F, count: range.count)
   }
