@@ -23,19 +23,42 @@ private final class FakeRangeStore: ArchiveRangeStore {
   }
 
   let totalSize: UInt64
+
+  // The client commits a window on its own serial queue and no longer waits for
+  // that commit before answering the caller, so the test thread reads this
+  // state while the queue is still mutating it. Every access goes through the
+  // lock: an unsynchronised `writes.append` racing a `writes.count` read is
+  // undefined behaviour, not merely a stale count. Holding the lock for the
+  // whole of `write` also makes a reader observe a commit as atomic, so a poll
+  // for "has it landed yet" cannot see a half-filled window.
+  private let lock = NSLock()
   /// Offsets present, as a set so the fake needs no interval algebra of its own.
-  private(set) var bytes: [UInt64: UInt8] = [:]
-  private(set) var writes: [Range<UInt64>] = []
+  private var _bytes: [UInt64: UInt8] = [:]
+  private var _writes: [Range<UInt64>] = []
+  private var _commitLimitPerWrite: Int?
+
+  var bytes: [UInt64: UInt8] { lock.withLock { _bytes } }
+  var writes: [Range<UInt64>] { lock.withLock { _writes } }
+
   /// When set, a write commits only this many bytes and then throws.
-  var commitLimitPerWrite: Int?
+  var commitLimitPerWrite: Int? {
+    get { lock.withLock { _commitLimitPerWrite } }
+    set { lock.withLock { _commitLimitPerWrite = newValue } }
+  }
 
   init(totalSize: UInt64) { self.totalSize = totalSize }
 
   func missingRanges(in range: Range<UInt64>) -> [Range<UInt64>] {
+    lock.withLock { _missingRanges(in: range) }
+  }
+
+  /// Caller must hold `lock`. Separate from `missingRanges` because `read`
+  /// needs both answers under one acquisition, and `NSLock` is not recursive.
+  private func _missingRanges(in range: Range<UInt64>) -> [Range<UInt64>] {
     var missing: [Range<UInt64>] = []
     var run: Range<UInt64>?
     for offset in range {
-      if bytes[offset] == nil {
+      if _bytes[offset] == nil {
         run = run.map { $0.lowerBound ..< offset + 1 } ?? (offset ..< offset + 1)
       } else if let current = run {
         missing.append(current)
@@ -48,13 +71,15 @@ private final class FakeRangeStore: ArchiveRangeStore {
 
   @discardableResult
   func write(_ data: Data, at offset: UInt64) throws -> Range<UInt64> {
-    let limit = commitLimitPerWrite ?? data.count
+    lock.lock()
+    defer { lock.unlock() }
+    let limit = _commitLimitPerWrite ?? data.count
     let committed = min(limit, data.count)
     for index in 0 ..< committed {
-      bytes[offset + UInt64(index)] = data[data.startIndex + index]
+      _bytes[offset + UInt64(index)] = data[data.startIndex + index]
     }
     let range = offset ..< offset + UInt64(committed)
-    writes.append(range)
+    _writes.append(range)
     if committed < data.count {
       throw Failure.outOfSpace(committed: UInt64(committed))
     }
@@ -62,15 +87,17 @@ private final class FakeRangeStore: ArchiveRangeStore {
   }
 
   func read(_ range: Range<UInt64>) throws -> Data {
-    let missing = missingRanges(in: range)
+    lock.lock()
+    defer { lock.unlock() }
+    let missing = _missingRanges(in: range)
     guard missing.isEmpty else { throw Failure.notPresent(missing: missing) }
     var out = Data(capacity: range.count)
-    for offset in range { out.append(bytes[offset]!) }
+    for offset in range { out.append(_bytes[offset]!) }
     return out
   }
 
   func seed(_ range: Range<UInt64>, byte: UInt8 = 0xAA) {
-    for offset in range { bytes[offset] = byte }
+    lock.withLock { for offset in range { _bytes[offset] = byte } }
   }
 }
 
@@ -164,6 +191,62 @@ final class PartialArchiveCachingDecisionTests: XCTestCase {
       Client.parseContentRange("bytes 75497472-81788927/1630000000"),
       Client.ContentRange(start: 75_497_472, end: 81_788_927, totalSize: 1_630_000_000)
     )
+  }
+
+  // Both bounds are inclusive, so the single-byte range is the edge where a
+  // `>=` and a `>` disagree. Mutation reported all three of these comparisons
+  // surviving: every existing case here spans many bytes.
+
+  /// `bytes 5-5` is one byte, not an empty range.
+  func test_parseContentRange_singleByte() {
+    XCTAssertEqual(
+      Client.parseContentRange("bytes 5-5/100"),
+      Client.ContentRange(start: 5, end: 5, totalSize: 100)
+    )
+  }
+
+  func test_contentRangeLength_singleByte_isOne() {
+    XCTAssertEqual(Client.ContentRange(start: 5, end: 5, totalSize: 100).length, 1)
+  }
+
+  /// A request for one byte must be understood as one byte. Readium asks for
+  /// exactly this when it probes an archive's final byte.
+  func test_requestedRange_singleByte() {
+    XCTAssertEqual(
+      Client.requestedRange(rangeHeader: "bytes=100-100", knownTotalSize: 1000),
+      100 ..< 101
+    )
+  }
+
+  /// A reversed range names no bytes, so it must not be read as a span.
+  func test_requestedRange_reversed_isNil() {
+    XCTAssertNil(Client.requestedRange(rangeHeader: "bytes=200-100", knownTotalSize: 1000))
+  }
+
+  // MARK: How many cached reads may run at once
+
+  /// The bound exists because each in-flight cached read holds its window in
+  /// memory to validate it. Mutation reported both the comparison and the
+  /// counter's increment surviving — nothing observed the counter at all.
+  func test_cacheSlots_areBoundedByTheCap() {
+    let client = Client(
+      upstream: ScriptedHTTPClient(answer: .init(status: 206, headers: [:], body: Data())),
+      storeFactory: { _, _ in nil },
+      maxConcurrentCachedRequests: 2
+    )
+
+    XCTAssertTrue(client.reserveCacheSlot(), "the first read is admitted")
+    XCTAssertTrue(client.reserveCacheSlot(), "and so is the second, up to the cap")
+    XCTAssertFalse(
+      client.reserveCacheSlot(),
+      "past the cap a read must be refused, or the counter is not bounding anything"
+    )
+
+    // Releasing one makes room for exactly one more, which is what proves the
+    // counter moves in both directions rather than merely being compared.
+    client.releaseCacheSlot()
+    XCTAssertTrue(client.reserveCacheSlot(), "a released slot is reusable")
+    XCTAssertFalse(client.reserveCacheSlot(), "and the cap still holds afterwards")
   }
 
   /// A server that does not know the total length says `*`. The range itself
@@ -618,10 +701,14 @@ final class PartialArchiveCachingHTTPClientTests: XCTestCase {
 
   /// Waits for the queued store commits, bounded so a lost write fails rather
   /// than hangs the suite.
+  /// Generous on purpose. This fake stores one dictionary entry per byte, so a
+  /// 6 MB window is over six million insertions; a tight bound turns a slow
+  /// machine into a failing assertion. The poll returns as soon as the commit
+  /// lands, so the ceiling costs nothing when the machine is idle.
   private func awaitWrites(
     _ store: FakeRangeStore,
     count: Int,
-    timeout: TimeInterval = 2
+    timeout: TimeInterval = 30
   ) async {
     let deadline = Date().addingTimeInterval(timeout)
     while store.writes.count < count, Date() < deadline {
