@@ -609,7 +609,24 @@ final class PartialArchiveCachingHTTPClientTests: XCTestCase {
 
     XCTAssertTrue(result.isSuccess, "the read must still succeed")
     XCTAssertEqual(received.count, range.count, "every byte reaches the caller")
+    // The commit is queued rather than awaited, so the chapter's response is
+    // not held behind the store's flush. It still lands; it is not synchronous
+    // with the response any more.
+    await awaitWrites(store, count: 1)
     XCTAssertEqual(store.writes, [range], "and every byte is kept")
+  }
+
+  /// Waits for the queued store commits, bounded so a lost write fails rather
+  /// than hangs the suite.
+  private func awaitWrites(
+    _ store: FakeRangeStore,
+    count: Int,
+    timeout: TimeInterval = 2
+  ) async {
+    let deadline = Date().addingTimeInterval(timeout)
+    while store.writes.count < count, Date() < deadline {
+      try? await Task.sleep(nanoseconds: 10_000_000)
+    }
   }
 
   /// And the second read of the same range costs nothing at the origin. This
@@ -755,6 +772,7 @@ final class PartialArchiveCachingHTTPClientTests: XCTestCase {
 
     XCTAssertTrue(result.isSuccess, "a full disk must not fail the patron's read")
     XCTAssertEqual(received.count, range.count)
+    await awaitWrites(store, count: 1)
     XCTAssertEqual(store.writes, [0 ..< 1024], "only what reached disk is recorded")
   }
 

@@ -416,7 +416,9 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
           log(.warning, "partial archive cache: a gap response was not admissible — reading the window through")
           return await upstream.stream(request: req, consume: consume)
         }
-        await onStoreQueue { try? store.write(gapBody, at: offset) }
+        // Queued like the whole-window write above. The `read` below is also a
+        // `storeQueue` hop, and the queue is serial, so it runs after these.
+        storeAsync { try? store.write(gapBody, at: offset) }
       }
 
       // Never serve what we cannot prove we hold: an unwritten extent reads
@@ -475,7 +477,13 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     case let .store(offset):
       // A write that runs out of space commits the prefix that reached disk
       // and records exactly that, so a later read refetches only the tail.
-      await onStoreQueue { try? target.write(body, at: offset) }
+      //
+      // Queued, not awaited: the caller is Readium reading the chapter these
+      // bytes are for, and the commit ends in two `F_FULLFSYNC`s against a
+      // sparse multi-gigabyte archive — the slowest step on the path, for a
+      // result nothing in this response needs. `storeQueue` is serial, so a
+      // later `missingRanges` or `read` still observes this write.
+      storeAsync { try? target.write(body, at: offset) }
     case let .reject(reason):
       log(.warning, "partial archive cache: not storing this response (\(reason))")
     }
@@ -573,5 +581,15 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     await withCheckedContinuation { continuation in
       storeQueue.async { continuation.resume(returning: body()) }
     }
+  }
+
+  /// Runs a store call without waiting for it.
+  ///
+  /// For writes only, and only because nothing in the response depends on the
+  /// result. `storeQueue` is serial, so ordering against every later store call
+  /// is preserved; what is given up is only the caller's knowledge of when the
+  /// commit finished, which no caller uses.
+  private func storeAsync(_ body: @escaping @Sendable () -> Void) {
+    storeQueue.async(execute: body)
   }
 }
