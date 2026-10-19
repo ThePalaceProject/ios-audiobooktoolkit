@@ -133,16 +133,107 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// The window alone cannot tell a stalled load from a slow one, and failing
   /// a slow one loses the book. Bytes arriving since the last check is the
   /// discriminator; the ceiling bounds how long "still arriving" may go on.
-  enum LoadTimeoutOutcome: Equatable { case rearm, fail }
+  enum LoadTimeoutOutcome: Equatable { case rearm, fail, notStreaming }
 
+  typealias LoaderActivity = LCPResourceLoaderDelegate.LoaderActivity
+
+  /// `loaderRequestsReceived` is nil when the track cannot be named to the
+  /// loader, which is "unknown" and keeps the previous behaviour; zero is the
+  /// positive fact that nothing asked.
   nonisolated static func loadTimeoutOutcome(
     bytesServed: Int,
     bytesAtLastCheck: Int,
+    loaderRequestsReceived: Int?,
     elapsed: TimeInterval,
     ceiling: TimeInterval
   ) -> LoadTimeoutOutcome {
+    // Nothing has asked the resource loader for this track, so the bytes this
+    // guard counts were never going to come from it and their absence says
+    // nothing about the chapter. Failing here reported the publication as timed
+    // out over a package that had opened from disk in 0.3 s.
+    if loaderRequestsReceived == 0 { return .notStreaming }
     guard bytesServed > bytesAtLastCheck else { return .fail }
     return elapsed < ceiling ? .rearm : .fail
+  }
+
+  /// What a load timeout measured, as the exported log and the error report it.
+  struct LoadTimeoutReport: Equatable {
+    let trackKey: String
+    let hasSavedAssets: Bool
+    let isForcedToStream: Bool
+    let bytesServed: Int
+    let loaderRequests: LoaderActivity?
+
+    var description: String {
+      let assets = hasSavedAssets ? "has saved assets" : "has no saved assets"
+      let forced = isForcedToStream ? "is forced to stream" : "streaming is not forced"
+      let asked: String
+      switch loaderRequests {
+      case .none:
+        asked = "an unknown number of loading requests reached the resource loader for it"
+      case let .some(activity) where activity.received == 0:
+        asked = "no loading request for it reached the resource loader"
+      case let .some(activity):
+        asked = "\(activity.received) loading request(s) for it reached the resource loader, "
+          + "\(activity.failed) failed"
+      }
+      return "LCP chapter load timeout for \(trackKey): \(bytesServed) bytes served; "
+        + "the track \(assets); \(forced); \(asked)"
+    }
+  }
+
+  /// The facts a load timeout's verdict rests on, for `track`.
+  private func loadTimeoutReport(for track: any Track) -> LoadTimeoutReport {
+    LoadTimeoutReport(
+      trackKey: track.key,
+      hasSavedAssets: trackHasSavedAssets(track),
+      isForcedToStream: forceStreamingTrackKeys.contains(track.key),
+      bytesServed: streamedBytesServed,
+      loaderRequests: streamedRequests(for: track)
+    )
+  }
+
+  /// What the resource loader was asked for `track`, or nil when the track
+  /// cannot be named to the loader — there is no loader, or no publication to
+  /// take the href from. Nil is "unknown", not "none".
+  func streamedRequests(for track: any Track) -> LoaderActivity? {
+    guard let loader = sharedResourceLoader, let href = streamingHref(for: track) else { return nil }
+    return loader.loadingRequests(forHref: href)
+  }
+
+  /// The href the streaming item for `track` was built with. Must stay the
+  /// expression `createStreamingPlayerItem` uses, because that URL is where the
+  /// loader's key comes from.
+  private func streamingHref(for track: any Track) -> String? {
+    guard let publication = streamingProvider?.getPublication(),
+          let index = tableOfContents.allTracks.firstIndex(where: { $0.key == track.key }),
+          index < publication.readingOrder.count
+    else { return nil }
+    return publication.readingOrder[index].href
+  }
+
+  /// Whether AVFoundation can read a queued asset without the resource loader.
+  nonisolated static func assetIsLocal(_ asset: AVAsset) -> Bool {
+    if let urlAsset = asset as? AVURLAsset { return urlAsset.url.isFileURL }
+    return true
+  }
+
+  /// Whether the seek target can be played from its own files right now.
+  func trackIsLocallyPlayable(_ track: any Track) -> Bool {
+    Self.trackIsLocallyPlayable(
+      hasSavedAssets: trackHasSavedAssets(track),
+      isForcedToStream: forceStreamingTrackKeys.contains(track.key)
+    )
+  }
+
+  /// Whether the track's decrypted audio is on disk, in the terms
+  /// `buildPlayerItem` gates on.
+  func trackHasSavedAssets(_ track: any Track) -> Bool {
+    guard let lcpTrack = track as? LCPTrack,
+          let task = lcpTrack.downloadTask as? LCPDownloadTask,
+          case let .saved(urls) = task.assetFileStatus()
+    else { return false }
+    return !urls.isEmpty
   }
 
   /// Arms the publication load timeout for the load that has just begun.
@@ -163,6 +254,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       let outcome = Self.loadTimeoutOutcome(
         bytesServed: self.streamedBytesServed,
         bytesAtLastCheck: bytesAtLastCheck,
+        loaderRequestsReceived: self.streamedRequests(for: position.track)?.received,
         elapsed: Date().timeIntervalSince(startedAt),
         ceiling: self.loadCeiling
       )
@@ -176,15 +268,35 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
         )
       case .fail:
         self.failStreamingLoad(at: position, onceCompletion: onceCompletion)
+      case .notStreaming:
+        self.concludeLoadNothingIsStreaming(at: position, onceCompletion: onceCompletion)
       }
     }
     loadTimeoutWorkItem = workItem
     DispatchQueue.main.asyncAfter(deadline: .now() + loadProgressWindow, execute: workItem)
   }
 
+  /// Ends a load the resource loader was never asked to serve.
+  /// No failure is published. The guard measures bytes the resource loader
+  /// served, nothing asked it for this track, so its silence is not evidence
+  /// about this chapter and an alert over it closes a book that may be fine.
+  /// The load is released so the patron is not left muted behind a spinner.
+  private func concludeLoadNothingIsStreaming(
+    at position: TrackPosition,
+    onceCompletion: @escaping (Error?) -> Void
+  ) {
+    let report = loadTimeoutReport(for: position.track)
+    ATLog(.warn, "\(report.description) — so the load ends without failing it")
+    suppressAudibleUntilPlaying = false
+    avQueuePlayer.isMuted = false
+    isLoaded = true
+    onceCompletion(nil)
+  }
+
   /// Surfaces a load that never completed as a playback failure.
   private func failStreamingLoad(at position: TrackPosition, onceCompletion: @escaping (Error?) -> Void) {
-    ATLog(.warn, "LCPStreamingPlayer: Publication loading timeout — surfacing failure so caller can show an alert and release the open lock")
+    let report = loadTimeoutReport(for: position.track)
+    ATLog(.error, report.description)
     isLoaded = true
     suppressAudibleUntilPlaying = false
     avQueuePlayer.isMuted = false
@@ -193,10 +305,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // "Audiobook Unavailable" alert and the app's open lock releases
     // instead of latching. Without this, a stalled resource loader looks
     // identical to a successful open from the UI's perspective.
+    // The message names what was measured — this chapter's audio — rather than
+    // the publication, which on the reported device had opened from a local
+    // package before the chapter was asked for. The measurement travels with
+    // the error so the alert can be traced without a second log export.
     let timeoutError = NSError(
       domain: "LCPStreamingPlayer",
       code: -1,
-      userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for LCP publication to load"]
+      userInfo: [
+        NSLocalizedDescriptionKey: "Timed out waiting for this chapter's audio",
+        NSDebugDescriptionErrorKey: report.description
+      ]
     )
     // PP-5205: the seek never landed, so the optimistic position must not
     // outlive it. Leaving it set would have the UI — and position reporting,
@@ -377,12 +496,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     if !needsRebuild {
       if let targetIndex = avQueuePlayer.items().firstIndex(where: { $0.trackIdentifier == position.track.key }) {
         let item = avQueuePlayer.items()[targetIndex]
-        let isCurrentlyLocal: Bool = {
-          if let urlAsset = item.asset as? AVURLAsset {
-            return urlAsset.url.isFileURL
-          }
-          return !(item.asset is AVURLAsset)
-        }()
+        let isCurrentlyLocal = Self.assetIsLocal(item.asset)
         if let lcpTrack = position.track as? LCPTrack {
           let shouldBeLocal = lcpTrack.hasLocalFiles() && !forceStreamingTrackKeys.contains(lcpTrack.key)
           if shouldBeLocal != isCurrentlyLocal {
@@ -441,16 +555,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // gates on `assetFileStatus() == .saved(urls)` with a non-empty list (:630-634).
     // Two predicates over the same fact disagree eventually, and here the
     // disagreement would declare a wait over before the item that serves it exists.
-    let targetIsLocallyPlayable: Bool = {
-      guard let lcpTrack = position.track as? LCPTrack,
-            let task = lcpTrack.downloadTask as? LCPDownloadTask,
-            case let .saved(urls) = task.assetFileStatus()
-      else { return false }
-      return Self.trackIsLocallyPlayable(
-        hasSavedAssets: !urls.isEmpty,
-        isForcedToStream: forceStreamingTrackKeys.contains(lcpTrack.key)
-      )
-    }()
+    let targetIsLocallyPlayable = trackIsLocallyPlayable(position.track)
 
     if !isSeekWithinSameTrack && !targetIsLocallyPlayable {
       isLoaded = false

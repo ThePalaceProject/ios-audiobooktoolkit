@@ -33,6 +33,37 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var bytesServed: Int { servedByteCount.value }
 
+  /// What the loader was asked for one track, and how much of it failed.
+  struct LoaderActivity: Equatable {
+    var received: Int
+    var failed: Int
+  }
+
+  /// Loading requests handed over per track, and the ones that ended in an
+  /// error.
+  ///
+  /// `bytesServed` cannot tell a loader that is serving nothing from a loader
+  /// nothing has asked, because both read zero, and the player's load timeout
+  /// decides whether to fail a chapter on that difference. The failure count
+  /// separates the other pair that reads alike: a request failing in
+  /// milliseconds, repeatedly, costs the same chapter as one transfer that
+  /// stalls.
+  private let requestActivityByHref = LockIsolated<[String: LoaderActivity]>([:])
+
+  /// What was asked for `href`, in the spelling the player builds the item's
+  /// URL from.
+  func loadingRequests(forHref href: String) -> LoaderActivity {
+    requestActivityByHref.value[href] ?? LoaderActivity(received: 0, failed: 0)
+  }
+
+  /// The track a request names, taken from the URL rather than the reading
+  /// order: a caller asking why nothing was served has to be told about
+  /// requests that never reached `serve` either.
+  static func requestedHref(for url: URL) -> String {
+    let path = url.path
+    return path.hasPrefix("/") ? String(path.dropFirst()) : path
+  }
+
   /// How long a chapter waits for a resolution already running to reach its
   /// track before it falls back to Readium's probe.
   ///
@@ -74,12 +105,19 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     /// Bytes THIS serve handed to AVFoundation.
     let deliveredBytes: Int
     let wasCancelled: Bool
+    /// Why the serve ended the request with an error, or nil when it did not.
+    let failure: String?
 
-    /// Worth a line in the exported log. Below the threshold a serve is one a
-    /// patron would not notice, and a line per segment read would bury the
-    /// ones they would.
+    /// Worth a line in the exported log.
+    ///
+    /// A fast successful serve is one a patron would not notice, and a line per
+    /// segment read would bury the ones they would. A serve that failed or was
+    /// cancelled costs the chapter whatever it cost in time — a failed item is
+    /// pushed onto the streaming path and the queue rebuilt — so the duration
+    /// is not what decides it.
     var isWorthALogLine: Bool {
-      elapsed >= LCPResourceLoaderDelegate.slowChapterServeThreshold
+      failure != nil || wasCancelled
+        || elapsed >= LCPResourceLoaderDelegate.slowChapterServeThreshold
     }
 
     /// What AVFoundation asked this serve for, in the terms the request used.
@@ -104,7 +142,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         deliveredBytes,
         originRequests,
         originBytes,
-        wasCancelled ? "cancelled" : "finished"
+        failure.map { "failed: \($0)" } ?? (wasCancelled ? "cancelled" : "finished")
       )
     }
   }
@@ -253,6 +291,13 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         userInfo: [NSLocalizedDescriptionKey: "Invalid URL scheme"]
       ))
       return false
+    }
+
+    // Counted here rather than in `serve`: what the player asks is whether
+    // anything ever asked the loader for a track, which includes a request
+    // that never reached a serve at all.
+    requestActivityByHref.withValue {
+      $0[Self.requestedHref(for: url), default: LoaderActivity(received: 0, failed: 0)].received += 1
     }
 
     if let publication = provider?.getPublication() {
@@ -424,6 +469,10 @@ private extension LCPResourceLoaderDelegate {
   func serve(loadingRequest: LCPStreamingLoadingRequest, with pub: Publication, slot: RequestSlot) async {
     let request = FinishOnce(loadingRequest)
     let serveStartedAt = Date()
+    // Keyed the way the player will ask for it, and read before the reading
+    // order is consulted so a serve that never gets there still counts against
+    // the right track.
+    let requestHref = loadingRequest.requestURL.map(Self.requestedHref(for:)) ?? ""
     let originBefore = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
     // Read here rather than in the report: the report is written from a `defer`
     // that can run after AVFoundation has dropped the request.
@@ -452,9 +501,15 @@ private extension LCPResourceLoaderDelegate {
         originRequests: after.requests - originBefore.requests,
         originBytes: after.bytes - originBefore.bytes,
         deliveredBytes: deliveredBytes.value,
-        wasCancelled: Task.isCancelled
+        wasCancelled: Task.isCancelled,
+        failure: request.failure
       )
       record(report)
+      if request.failure != nil {
+        requestActivityByHref.withValue {
+          $0[requestHref, default: LoaderActivity(received: 0, failed: 0)].failed += 1
+        }
+      }
       if report.isWorthALogLine {
         ATLog(.error, report.description)
       }
@@ -1024,6 +1079,11 @@ final class RequestSlot: @unchecked Sendable {
 final class FinishOnce: @unchecked Sendable {
   private let request: LCPStreamingLoadingRequest
   private let finished = LockIsolated(false)
+  private let failureDescription = LockIsolated<String?>(nil)
+
+  /// Why this request was failed, or nil if it was not. Read from the report
+  /// `defer` in `serve`, which runs after every exit including the failing ones.
+  var failure: String? { failureDescription.value }
 
   init(_ request: LCPStreamingLoadingRequest) {
     self.request = request
@@ -1039,7 +1099,10 @@ final class FinishOnce: @unchecked Sendable {
   }
 
   func fail(_ error: Error) {
-    if claim() { request.finishLoading(with: error) }
+    if claim() {
+      failureDescription.value = (error as NSError).localizedDescription
+      request.finishLoading(with: error)
+    }
   }
 
   private func claim() -> Bool {

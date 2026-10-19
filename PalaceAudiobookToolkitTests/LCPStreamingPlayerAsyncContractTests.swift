@@ -597,30 +597,43 @@ private final class SpyStreamingProvider: StreamingResourceProvider {
   func streamingLoadDidEnd() { events.append("end") }
 }
 
+/// Shortens the shipped windows and stands in for the facts the player reads
+/// off the resource loader and the download task, so the real timer and the
+/// real failure path run in milliseconds.
+@MainActor
+final class LifecyclePlayer: LCPStreamingPlayer {
+  var window: TimeInterval = 0.05
+  var ceiling: TimeInterval = 10
+  /// Bytes "arriving" between two samples. Zero models a load that is
+  /// receiving nothing at all.
+  var bytesPerSample = 0
+  private var served = 0
+
+  /// Loading requests the loader has received for the track under test, and how
+  /// many of them failed. One received by default, because these tests model a
+  /// load the loader WAS asked to serve, which is the case the timeout exists
+  /// to catch.
+  var requestsReceived: Int? = 1
+  var requestsFailed = 0
+
+  override var loadProgressWindow: TimeInterval { window }
+  override var loadCeiling: TimeInterval { ceiling }
+  override var streamedBytesServed: Int {
+    served += bytesPerSample
+    return served
+  }
+
+  override func streamedRequests(for _: any Track) -> LCPStreamingPlayer.LoaderActivity? {
+    requestsReceived.map { LCPStreamingPlayer.LoaderActivity(received: $0, failed: requestsFailed) }
+  }
+
+  override func configurePlayer() {}
+  override func addPlayerObservers() {}
+  override func removePlayerObservers() {}
+}
+
 @MainActor
 final class LCPStreamingLoadLifecycleTests: XCTestCase {
-
-  /// Shortens the shipped windows and stands in for the resource loader's byte
-  /// counter, so the real timer and the real failure path run in milliseconds.
-  final class LifecyclePlayer: LCPStreamingPlayer {
-    var window: TimeInterval = 0.05
-    var ceiling: TimeInterval = 10
-    /// Bytes "arriving" between two samples. Zero models a load that is
-    /// receiving nothing at all.
-    var bytesPerSample = 0
-    private var served = 0
-
-    override var loadProgressWindow: TimeInterval { window }
-    override var loadCeiling: TimeInterval { ceiling }
-    override var streamedBytesServed: Int {
-      served += bytesPerSample
-      return served
-    }
-
-    override func configurePlayer() {}
-    override func addPlayerObservers() {}
-    override func removePlayerObservers() {}
-  }
 
   private var toc: AudiobookTableOfContents!
   private var firstTrack: (any Track)!
@@ -765,28 +778,36 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
 
   func test_loadTimeoutOutcome_bytesArrivingInsideTheCeiling_rearms() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 30, ceiling: 90
+      ),
       .rearm
     )
   }
 
   func test_loadTimeoutOutcome_noBytesInsideTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 1024, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 30, ceiling: 90
+      ),
       .fail
     )
   }
 
   func test_loadTimeoutOutcome_bytesArrivingPastTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 90, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 90, ceiling: 90
+      ),
       .fail
     )
   }
 
   func test_loadTimeoutOutcome_noBytesPastTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 120, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 1024, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 120, ceiling: 90
+      ),
       .fail
     )
   }
@@ -823,7 +844,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     XCTAssertEqual(failure?.domain, "LCPStreamingPlayer")
     XCTAssertEqual(
       failure?.localizedDescription,
-      "Timed out waiting for LCP publication to load",
+      "Timed out waiting for this chapter's audio",
       "A load with no bytes must still surface the failure the app shows an alert for"
     )
   }
@@ -841,7 +862,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
 
     XCTAssertEqual(
       failure?.localizedDescription,
-      "Timed out waiting for LCP publication to load",
+      "Timed out waiting for this chapter's audio",
       "Progress may extend the wait, not remove its bound"
     )
     XCTAssertEqual(provider.events, ["begin", "end"], "And the provider is released on that exit too")
@@ -864,5 +885,258 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
       return false
     }
     XCTAssertTrue(failed, "The timeout must publish .failed so the host can alert")
+  }
+}
+
+// MARK: - What the load timeout measures, and following a download that lands
+
+/// A patron played a fully downloaded LCP audiobook and the player reported
+/// "Timed out waiting for LCP publication to load" for chapter 46. The archive
+/// had opened from the local package in 0.3 s, and the guard that failed the
+/// load was comparing the resource loader's byte counter against itself. These
+/// tests pin two behaviours: the guard reports the loader's silence only when
+/// the loader was asked for that track, and a track whose decrypted audio
+/// reaches disk after its item was built is switched over without waiting for
+/// the patron to change chapter.
+@MainActor
+final class LCPStreamingLoadDiagnosisTests: XCTestCase {
+  private var toc: AudiobookTableOfContents!
+  private var firstTrack: (any Track)!
+  private var provider: SpyStreamingProvider!
+
+  override func setUp() async throws {
+    try await super.setUp()
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "lcp-diagnosis-test", decryptor: nil, token: nil)
+    )
+    toc = audiobook.tableOfContents
+    firstTrack = try XCTUnwrap(toc.allTracks.first)
+    provider = SpyStreamingProvider()
+  }
+
+  private func makePlayer() -> LifecyclePlayer {
+    let player = LifecyclePlayer(tableOfContents: toc, drmDecryptor: nil)
+    player.setStreamingProvider(provider)
+    return player
+  }
+
+  private var position: TrackPosition {
+    TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+  }
+
+  private func beginLoad(on player: LifecyclePlayer, completion: @escaping (Error?) -> Void = { _ in }) {
+    player.isLoaded = false
+    player.beginStreamingLoad()
+    player.armLoadTimeout(
+      for: position,
+      startedAt: Date(),
+      bytesAtLastCheck: player.streamedBytesServed,
+      onceCompletion: completion
+    )
+  }
+
+  private static func activity(received: Int, failed: Int = 0) -> LCPStreamingPlayer.LoaderActivity {
+    LCPStreamingPlayer.LoaderActivity(received: received, failed: failed)
+  }
+
+  // MARK: - The guard reports only the loader's own silence
+
+  /// The reported defect. No loading request reached the loader, so the bytes
+  /// this guard counts were never going to arrive from it, and their absence is
+  /// not a stalled transfer to be reported as one.
+  func test_loadTimeoutOutcome_noBytesAndNothingAskedTheLoader_doesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 0, elapsed: 30, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// And waiting past the ceiling does not convert it into a failure: more time
+  /// does not make the loader the source of these bytes.
+  func test_loadTimeoutOutcome_nothingAskedTheLoader_pastTheCeiling_stillDoesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 0, elapsed: 120, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// Nor do bytes counted loader-wide, which belong to whichever chapter was
+  /// being served, make a track nothing asked for into this guard's business.
+  func test_loadTimeoutOutcome_bytesElsewhere_butNothingAskedForThisTrack_doesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 0, elapsed: 30, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// The remit the guard keeps: the loader was asked for this track and has
+  /// served nothing, which is the stall it exists to catch.
+  func test_loadTimeoutOutcome_noBytesAfterTheLoaderWasAsked_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 3, elapsed: 30, ceiling: 90
+      ),
+      .fail
+    )
+  }
+
+  /// An unknown count — no loader, or no publication to name the track to it —
+  /// keeps the previous behaviour rather than assuming either answer.
+  func test_loadTimeoutOutcome_withAnUnknownRequestCount_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: nil, elapsed: 30, ceiling: 90
+      ),
+      .fail
+    )
+  }
+
+  /// And an unknown count still rearms while bytes arrive, so the slow-chapter
+  /// behaviour (PP-5367) is not narrowed by the new question.
+  func test_loadTimeoutOutcome_withAnUnknownRequestCount_rearmsWhileBytesArrive() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: nil, elapsed: 30, ceiling: 90
+      ),
+      .rearm
+    )
+  }
+
+  // MARK: - The failure says what was measured
+
+  /// The line a patron exports has to carry the facts the verdict rests on. The
+  /// old line named the publication, which had opened in 0.3 s, and sent the
+  /// diagnosis to the archive three times.
+  func test_loadTimeoutReport_namesEveryFactTheVerdictRestsOn() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "9798350430943_046.mp3",
+      hasSavedAssets: true,
+      isForcedToStream: true,
+      bytesServed: 0,
+      loaderRequests: Self.activity(received: 0)
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("9798350430943_046.mp3"), line)
+    XCTAssertTrue(line.contains("saved assets"), line)
+    XCTAssertTrue(line.contains("forced to stream"), line)
+    XCTAssertTrue(line.contains("0 bytes"), line)
+    XCTAssertTrue(line.contains("no loading request"), line)
+  }
+
+  /// Each fact the other way round, so the line cannot be a fixed string: a
+  /// track with nothing on disk, not forced, asked for twice with one failure
+  /// reads differently in every field.
+  func test_loadTimeoutReport_readsTheOtherWayWhenTheFactsAreTheOtherWay() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: false,
+      isForcedToStream: false,
+      bytesServed: 4096,
+      loaderRequests: Self.activity(received: 2, failed: 1)
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("no saved assets"), line)
+    XCTAssertFalse(line.contains("forced to stream"), line)
+    XCTAssertTrue(line.contains("4096 bytes"), line)
+    XCTAssertTrue(line.contains("2 loading request"), line)
+    XCTAssertTrue(line.contains("1 failed"), line)
+  }
+
+  /// A fast repeated failure and a stalled transfer read the same in today's
+  /// log, because both serve zero bytes. The failure count is what separates
+  /// them, so it must appear even when every request failed.
+  func test_loadTimeoutReport_whenEveryRequestFailed_saysHowMany() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: true,
+      isForcedToStream: true,
+      bytesServed: 0,
+      loaderRequests: Self.activity(received: 4, failed: 4)
+    )
+
+    XCTAssertTrue(report.description.contains("4 failed"), report.description)
+  }
+
+  /// An unknown count must not read as zero: the two lead to opposite verdicts.
+  func test_loadTimeoutReport_whenTheRequestCountIsUnknown_saysSoRatherThanZero() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: false,
+      isForcedToStream: false,
+      bytesServed: 0,
+      loaderRequests: nil
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("unknown"), line)
+    XCTAssertFalse(line.contains("no loading request"), line)
+  }
+
+  /// The measurement travels with the error, so the alert the app raises can be
+  /// traced to the facts behind it without a second log export.
+  func testLoadTimeout_whenItFails_carriesTheMeasurementOnTheError() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 2
+    player.requestsFailed = 2
+    var failure: NSError?
+    beginLoad(on: player) { failure = $0 as NSError? }
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    let detail = failure?.userInfo[NSDebugDescriptionErrorKey] as? String
+    XCTAssertNotNil(detail, "a timeout the app alerts on must carry what it measured")
+    XCTAssertTrue(detail?.contains("2 loading request") == true, detail ?? "")
+    XCTAssertTrue(detail?.contains("2 failed") == true, detail ?? "")
+  }
+
+  // MARK: - A load nothing is streaming ends without failing
+
+  /// The patron's book: the guard fires, nothing had asked the loader, and the
+  /// load must end without an "Audiobook Unavailable" alert.
+  func testLoadTimeout_whenNothingAskedTheLoader_doesNotFailTheLoad() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    var states: [PlaybackState] = []
+    let cancellable = player.playbackStatePublisher.sink { states.append($0) }
+    defer { cancellable.cancel() }
+    var failure: Error?
+    var completions = 0
+    beginLoad(on: player) { failure = $0; completions += 1 }
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertNil(failure, "a load nothing was streaming is not this guard's to fail")
+    XCTAssertEqual(completions, 1, "the caller must still be released, not left waiting")
+    XCTAssertFalse(
+      states.contains { if case .failed = $0 { return true } else { return false } },
+      "no failure may be published, or the app alerts over a book that is playable"
+    )
+  }
+
+  /// And it ends: the provider is released and the player is neither muted nor
+  /// left on a spinner, which is what a load left open costs.
+  func testLoadTimeout_whenNothingAskedTheLoader_endsTheLoadAndClearsTheMute() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    player.avQueuePlayer.isMuted = true
+    beginLoad(on: player)
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(provider.events, ["begin", "end"], "the load must be released, once")
+    XCTAssertTrue(player.isLoaded, "a player that is not loading must not hold the spinner")
+    XCTAssertFalse(player.avQueuePlayer.isMuted, "and must not be left silent")
   }
 }

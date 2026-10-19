@@ -841,9 +841,148 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     )
   }
 
+  // MARK: - What the loader was asked for, per track
+
+  /// The byte counter cannot tell a loader that is serving nothing from a
+  /// loader nothing has asked, because both read zero. The player's load
+  /// timeout decides whether to fail a chapter on that difference, so the
+  /// loader counts what it was handed, per track.
+  func testRequestCount_CountsEveryLoadingRequestPerTrack() async throws {
+    probe.length = 4096
+    let otherProbe = ResourceProbe()
+    otherProbe.length = 4096
+    provider.addTrack(href: "track1.mp3", probe: otherProbe)
+    let loader = makeLoader(stallTimeout: 5)
+
+    for _ in 0..<2 {
+      XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+        url: Self.trackURL, needsContentInformation: true, range: nil
+      )))
+    }
+    XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: true, range: nil
+    )))
+
+    XCTAssertEqual(loader.loadingRequests(forHref: Self.href).received, 2)
+    XCTAssertEqual(loader.loadingRequests(forHref: "track1.mp3").received, 1)
+    loader.cancelAllRequests()
+    otherProbe.releaseAll()
+  }
+
+  /// A track nothing has asked for reads zero, which is the answer the player
+  /// acts on: there were never going to be bytes for it.
+  func testRequestCount_ForATrackNothingAskedFor_IsZero() {
+    let loader = makeLoader(stallTimeout: 5)
+
+    XCTAssertEqual(loader.loadingRequests(forHref: "track7.mp3").received, 0)
+  }
+
+  /// A URL this loader does not serve is not a request for any track, so it
+  /// must not make one look busy.
+  func testRequestCount_DoesNotCountAURLThisLoaderDoesNotServe() {
+    let loader = makeLoader(stallTimeout: 5)
+    let foreign = FakeLoadingRequest(
+      url: URL(string: "https://example.com/track0.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertFalse(loader.shouldWait(for: foreign))
+    XCTAssertEqual(loader.loadingRequests(forHref: "track0.mp3").received, 0)
+  }
+
+  /// A fast repeated failure and a stalled transfer both serve zero bytes. The
+  /// failure count is what tells them apart, so the loader keeps it per track.
+  func testRequestCount_WhenAServeFails_CountsTheFailureAgainstTheTrack() async throws {
+    let loader = makeLoader(stallTimeout: 5)
+    let missing = FakeLoadingRequest(
+      url: URL(string: "readium-lcp://track9/absent.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: missing))
+    let outcome = try await missing.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .failure(domain: "LCPResourceLoader", code: 2))
+    try await waitUntil(timeout: 5) {
+      loader.loadingRequests(forHref: "absent.mp3").failed == 1
+    }
+    XCTAssertEqual(loader.loadingRequests(forHref: "absent.mp3").received, 1)
+  }
+
+  /// A serve that succeeds must not be counted as a failure, or the count that
+  /// separates a failing track from a slow one says nothing.
+  func testRequestCount_WhenAServeSucceeds_CountsNoFailure() async throws {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    XCTAssertEqual(loader.loadingRequests(forHref: Self.href).failed, 0)
+  }
+
+  // MARK: - A serve that fails leaves a line whatever it cost
+
+  /// The threshold was the only thing deciding what reached the log, so a serve
+  /// that failed in a few milliseconds left no trace — and a failed item is
+  /// then forced onto the streaming path and rebuilt, which can repeat without
+  /// a single line in the exported log.
+  func testServeReport_AFailedServeIsWorthALogLineHoweverFastItWas() {
+    XCTAssertTrue(Self.report(elapsed: 0.01, failure: "Track not found in reading order").isWorthALogLine)
+  }
+
+  /// A cancelled serve too: a chapter the patron left is how a superseded read
+  /// ends, and it is the context for the serve they are waiting on.
+  func testServeReport_ACancelledServeIsWorthALogLineHoweverFastItWas() {
+    XCTAssertTrue(Self.report(elapsed: 0.01, wasCancelled: true).isWorthALogLine)
+  }
+
+  /// And a fast serve that neither failed nor was cancelled stays out of the
+  /// log, or a line per segment read buries the ones that matter.
+  func testServeReport_AFastSuccessfulServeStaysOutOfTheLog() {
+    XCTAssertFalse(Self.report(elapsed: 0.01).isWorthALogLine)
+  }
+
+  /// The line has to name the failure, not only its existence: the cause is
+  /// what distinguishes a missing track from a transport error.
+  func testServeReport_NamesTheFailureInTheLine() {
+    let line = Self.report(elapsed: 0.01, failure: "Track not found in reading order").description
+
+    XCTAssertTrue(line.contains("failed"), line)
+    XCTAssertTrue(line.contains("Track not found in reading order"), line)
+  }
+
+  /// Driven through the shipped path, so the recording is asserted over the
+  /// real failure exit rather than over a hand-built report.
+  func testServe_WhenTheTrackIsNotInTheReadingOrder_RecordsTheFailure() async throws {
+    let loader = makeLoader(stallTimeout: 5)
+    let missing = FakeLoadingRequest(
+      url: URL(string: "readium-lcp://track9/absent.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: missing))
+    _ = try await missing.waitUntilFinished(timeout: 5)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    let report = try XCTUnwrap(loader.serveReports.value.last)
+    XCTAssertNotNil(report.failure, "a serve that failed must say so in its report")
+    XCTAssertTrue(report.isWorthALogLine, "and reach the log however fast it was")
+  }
+
   // MARK: - Helpers
 
-  private static func report(elapsed: TimeInterval) -> LCPResourceLoaderDelegate.ServeReport {
+  private static func report(
+    elapsed: TimeInterval,
+    wasCancelled: Bool = false,
+    failure: String? = nil
+  ) -> LCPResourceLoaderDelegate.ServeReport {
     LCPResourceLoaderDelegate.ServeReport(
       href: href,
       range: nil,
@@ -852,7 +991,8 @@ final class LCPResourceLoaderStallTests: XCTestCase {
       originRequests: 0,
       originBytes: 0,
       deliveredBytes: 0,
-      wasCancelled: false
+      wasCancelled: wasCancelled,
+      failure: failure
     )
   }
 
