@@ -86,6 +86,21 @@ public class AudiobookPlaybackModel: ObservableObject {
     return now.timeIntervalSince(loadingSince) >= delay
   }
 
+  /// Raises the panel for a chapter the patron has just chosen, before the
+  /// player has begun loading it.
+  ///
+  /// The wait starts when the patron taps, not when the transport notices, so
+  /// the panel is the first thing shown for a chapter predicted slow and the
+  /// chrome follows it. A chapter predicted quick raises nothing, which is
+  /// what keeps this from flashing over a cached chapter.
+  private func presentPanelForSelectedChapter(_ position: TrackPosition, now: Date = Date()) {
+    guard audiobookManager.audiobook.player.expectsSlowChapterStart(at: position) else { return }
+    loadingSince = now
+    panelRetired = false
+    panelShownAt = now
+    if !showsLoadingPanel { showsLoadingPanel = true }
+  }
+
   /// Advances the panel's state. Called from the playback poll, so its
   /// resolution is that poll's interval.
   func updateLoadingPresentation(now: Date = Date()) {
@@ -247,6 +262,13 @@ public class AudiobookPlaybackModel: ObservableObject {
         // title on a chapter that is not playing.
         self.navigationTargetTrackKey = nil
       }
+
+      // Decide the panel now rather than on the next poll, and decide it for
+      // the chapter just chosen rather than the one being left. The poll runs
+      // twice a second, so a slow chapter showed the player's chrome first and
+      // the panel after it, which reads as going backwards — player, loading
+      // screen, player.
+      presentPanelForSelectedChapter(selectedLocation)
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
         let target = selectedLocation
@@ -629,6 +651,11 @@ public class AudiobookPlaybackModel: ObservableObject {
         startDeferredPrefetchIfDue(isPlaying: currentPlayingState)
       }
       .store(in: &subscriptions)
+
+    // The first evaluation happens here rather than half a second later, so a
+    // cold open presents the panel instead of presenting chrome and replacing
+    // it.
+    updateLoadingPresentation()
   }
 
   /// Evaluated on the existing playback poll, so the prefetch starts on the

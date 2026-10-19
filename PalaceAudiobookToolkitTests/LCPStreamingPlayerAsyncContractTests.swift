@@ -643,6 +643,8 @@ private final class SpyStreamingProvider: StreamingResourceProvider {
 
   func getPublication() -> Publication? { nil }
   func archiveIsLocalFile() -> Bool { false }
+  var headCached = true
+  func trackHeadIsCached(forHref _: String) -> Bool { headCached }
   func streamingLoadDidBegin() { events.append("begin") }
   func streamingLoadDidEnd() { events.append("end") }
 }

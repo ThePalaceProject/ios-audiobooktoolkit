@@ -41,8 +41,14 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// a quick chapter, which is the flicker the delay rule removed, so every
   /// clause has to hold.
   public var expectsSlowChapterStart: Bool {
-    guard let position = queuedTrackPosition ?? currentTrackPosition,
-          let provider = streamingProvider,
+    guard let position = queuedTrackPosition ?? currentTrackPosition else { return false }
+    return expectsSlowChapterStart(at: position)
+  }
+
+  /// The prediction for a named chapter, which is what a selection needs: the
+  /// patron has chosen a track the player has not started loading yet.
+  public func expectsSlowChapterStart(at position: TrackPosition) -> Bool {
+    guard let provider = streamingProvider,
           let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
     else { return false }
     return Self.expectsSlowChapterStart(

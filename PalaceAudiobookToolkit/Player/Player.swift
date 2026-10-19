@@ -166,6 +166,15 @@ public protocol Player: NSObject {
   /// Default false: a player that cannot be slow this way never predicts it,
   /// and the wait-and-see rule still covers it.
   var expectsSlowChapterStart: Bool { get }
+
+  /// The same prediction for a chapter the patron has just chosen but which
+  /// has not begun loading yet.
+  ///
+  /// The property above answers about the chapter now loading, which at the
+  /// moment of a selection is still the one being left. Asked here so the
+  /// panel can be decided when the patron taps, rather than after the player
+  /// has already drawn its chrome for the new chapter.
+  func expectsSlowChapterStart(at position: TrackPosition) -> Bool
   var queuesEvents: Bool { get }
   var isDrmOk: Bool { get set }
   var currentOffset: Double { get }
@@ -208,6 +217,7 @@ extension Player {
 
   /// Local audio is never predicted slow; the wait-and-see rule still applies.
   public var expectsSlowChapterStart: Bool { false }
+  public func expectsSlowChapterStart(at _: TrackPosition) -> Bool { false }
   func savePlaybackRate(rate: PlaybackRate) {
     UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
   }
