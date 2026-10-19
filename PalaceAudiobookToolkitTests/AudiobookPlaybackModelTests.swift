@@ -275,6 +275,7 @@ final class AudiobookPlaybackModelTests: XCTestCase {
     isLoading: Bool,
     transportIsWaiting: Bool? = nil,
     expectsSlowStart: Bool = false,
+    panelRetired: Bool = false,
     loadingSince: TimeInterval?,
     panelShownAt: TimeInterval?,
     now: TimeInterval
@@ -283,11 +284,52 @@ final class AudiobookPlaybackModelTests: XCTestCase {
       isLoading: isLoading,
       transportIsWaiting: transportIsWaiting ?? isLoading,
       expectsSlowStart: expectsSlowStart,
+      panelRetired: panelRetired,
       loadingSince: loadingSince.map { Self.start.addingTimeInterval($0) },
       panelShownAt: panelShownAt.map { Self.start.addingTimeInterval($0) },
       now: Self.start.addingTimeInterval(now),
       delay: AudiobookPlaybackModel.loadingPanelDelay,
       minimumVisible: AudiobookPlaybackModel.loadingPanelMinimumVisible
+    )
+  }
+
+  /// The blink. After the panel hands over to the chrome the load is still
+  /// running — `isLoading` is `!isLoaded || transportIsWaiting`, and the
+  /// transport goes ready first — so a rule that only asks "is it loading"
+  /// puts the panel straight back on the next poll, roughly once a second.
+  /// Reported from a device: "it flashes only for a brief moment and looks
+  /// glitchy".
+  func test_loadingPanel_afterHandingOver_doesNotComeBackForTheSameLoad() {
+    XCTAssertFalse(
+      panelVisible(
+        isLoading: true, transportIsWaiting: false, expectsSlowStart: true,
+        panelRetired: true, loadingSince: 0, panelShownAt: nil, now: 5
+      ),
+      "one panel per load; re-showing after the hand-over is what blinks"
+    )
+  }
+
+  /// And the wait-and-see path cannot bring it back either, which is the same
+  /// blink by the other route once the delay has already elapsed.
+  func test_loadingPanel_afterHandingOver_staysDownEvenPastTheDelay() {
+    XCTAssertFalse(
+      panelVisible(
+        isLoading: true, transportIsWaiting: false, expectsSlowStart: false,
+        panelRetired: true, loadingSince: 0, panelShownAt: nil,
+        now: AudiobookPlaybackModel.loadingPanelDelay * 3
+      )
+    )
+  }
+
+  /// A panel already up is unaffected: retirement is recorded when it comes
+  /// down, so it must not cut short the minimum that stops a flash.
+  func test_loadingPanel_retirementDoesNotCutShortAPanelStillUp() {
+    XCTAssertTrue(
+      panelVisible(
+        isLoading: true, transportIsWaiting: true, expectsSlowStart: true,
+        panelRetired: true, loadingSince: 0, panelShownAt: 0, now: 0.1
+      ),
+      "the transport is waiting again, so the panel it is showing stays"
     )
   }
 

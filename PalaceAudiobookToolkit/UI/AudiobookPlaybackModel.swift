@@ -36,6 +36,14 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// there is nothing to wait for.
   private var loadingSince: Date?
   private var panelShownAt: Date?
+  /// Whether this load has already had its panel and given it back.
+  ///
+  /// The panel hands over to the chrome when the transport has bytes, which
+  /// happens while the load is still running — so without this the next poll
+  /// finds no panel, a load still in progress and a slow-start prediction, and
+  /// puts the panel straight back. The patron sees it blink about once a
+  /// second. One panel per load; a new load clears this.
+  private var panelRetired = false
 
   /// How long a wait must last before it is worth a panel, and how long a
   /// panel stays once shown. The second number exists because a panel that
@@ -52,6 +60,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     isLoading: Bool,
     transportIsWaiting: Bool,
     expectsSlowStart: Bool,
+    panelRetired: Bool,
     loadingSince: Date?,
     panelShownAt: Date?,
     now: Date,
@@ -66,6 +75,9 @@ public class AudiobookPlaybackModel: ObservableObject {
       if transportIsWaiting { return true }
       return now.timeIntervalSince(panelShownAt) < minimumVisible
     }
+    // Shown once per load. Re-showing after the hand-over is what makes it
+    // blink, because the load outlives the transport becoming ready.
+    guard !panelRetired else { return false }
     guard isLoading, let loadingSince else { return false }
     // A start predicted slow earns the panel at once: waiting two seconds to
     // say "this is loading" is two seconds of a player that looks broken.
@@ -84,9 +96,13 @@ public class AudiobookPlaybackModel: ObservableObject {
     let transportIsWaiting = player.isWaitingForData
     let isLoading = !player.isLoaded || transportIsWaiting
     if isLoading {
-      if loadingSince == nil { loadingSince = now }
+      if loadingSince == nil {
+        loadingSince = now
+        panelRetired = false
+      }
     } else {
       loadingSince = nil
+      panelRetired = false
     }
 
     // Only asked while something is loading, and only before the panel is up:
@@ -100,12 +116,14 @@ public class AudiobookPlaybackModel: ObservableObject {
       isLoading: isLoading,
       transportIsWaiting: transportIsWaiting,
       expectsSlowStart: expectsSlowStart,
+      panelRetired: panelRetired,
       loadingSince: loadingSince,
       panelShownAt: panelShownAt,
       now: now,
       delay: Self.loadingPanelDelay,
       minimumVisible: Self.loadingPanelMinimumVisible
     )
+    if panelShownAt != nil && !visible { panelRetired = true }
     panelShownAt = visible ? (panelShownAt ?? now) : nil
     if showsLoadingPanel != visible { showsLoadingPanel = visible }
   }
