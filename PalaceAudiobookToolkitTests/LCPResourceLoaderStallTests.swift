@@ -611,6 +611,82 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertEqual(outcome, .success)
   }
 
+  // MARK: - Where the length comes from
+
+  /// A resolution for this archive reads a track's length in two small ranges.
+  /// Readium's own probe reads the entry's CBC tail through the shared window,
+  /// measured on device at 18.6 MB of origin traffic to deliver two bytes. So
+  /// when the provider says an answer is coming, the loader waits for it and
+  /// the probe is never run.
+  func testContentInfo_whenTheProviderSuppliesTheLength_doesNotProbeTheArchive() async throws {
+    probe.length = 9_999
+    provider.suppliedLength = 4_073
+    provider.lengthWait = 0.2
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_073, "the length the resolution supplied is served")
+    XCTAssertEqual(probe.lengthLookups, 0, "the archive tail is never read for a length already coming")
+    XCTAssertEqual(
+      provider.waitsAsked.first,
+      LCPResourceLoaderDelegate.lengthWaitTimeout,
+      "the loader states how long it is prepared to wait"
+    )
+  }
+
+  /// With no resolution running there is nothing to wait for — a local package,
+  /// or a book whose resolution has already finished without this track. The
+  /// probe is the only remaining answer and the chapter must still play.
+  func testContentInfo_whenNoLengthIsComing_fallsBackToTheArchiveProbe() async throws {
+    probe.length = 4_096
+    provider.suppliedLength = nil
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_096)
+    XCTAssertEqual(probe.lengthLookups, 1, "the probe answers when nothing else will")
+  }
+
+  /// A length the probe had to learn must be remembered, or the next session
+  /// pays the same megabytes for the same answer.
+  func testContentInfo_whenTheProbeLearnedTheLength_isWrittenBackToTheProvider() async throws {
+    probe.length = 4_096
+    provider.suppliedLength = nil
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(provider.writes.map(\.href), [Self.href])
+    XCTAssertEqual(provider.writes.map(\.length), [4_096])
+  }
+
+  /// A length the provider supplied is already stored there, so writing it
+  /// back says nothing and would hide whether the probe ever ran.
+  func testContentInfo_whenTheProviderSuppliedTheLength_isNotWrittenBack() async throws {
+    probe.length = 9_999
+    provider.suppliedLength = 4_073
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_073)
+    XCTAssertTrue(provider.writes.isEmpty, "nothing new was learned, so nothing is written")
+  }
+
   // MARK: - What a serve records
 
   /// The exported log has to say which track a slow serve was for and what
@@ -1018,6 +1094,11 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
   private let lock = NSLock()
   private var hrefs: [String] = []
   private var publication: Publication
+  private var _suppliedLength: UInt64?
+  private var _lengthWait: TimeInterval = 0
+  private var _waitsAsked: [TimeInterval] = []
+  private var _writes: [(href: String, length: UInt64)] = []
+  private var _stored: [String: UInt64] = [:]
 
   init(probe: ResourceProbe, href: String) {
     container.add(href: href, probe: probe)
@@ -1034,6 +1115,50 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
   }
 
   func getPublication() -> Publication? { lock.withLock { publication } }
+
+  /// What a resolution running for this archive will supply, after `lengthWait`.
+  /// nil means nothing is coming, which is what sends the loader to the probe.
+  var suppliedLength: UInt64? {
+    get { lock.withLock { _suppliedLength } }
+    set { lock.withLock { _suppliedLength = newValue } }
+  }
+
+  var lengthWait: TimeInterval {
+    get { lock.withLock { _lengthWait } }
+    set { lock.withLock { _lengthWait = newValue } }
+  }
+
+  /// The timeouts the loader asked to wait, in order.
+  var waitsAsked: [TimeInterval] { lock.withLock { _waitsAsked } }
+
+  /// What the loader asked to be remembered, in order. Recorded but not
+  /// served back: a write that changed later answers would change what the
+  /// other tests here measure.
+  var writes: [(href: String, length: UInt64)] { lock.withLock { _writes } }
+
+  func cachePlaintextLength(_ length: UInt64, forHref href: String) {
+    lock.withLock { _writes.append((href: href, length: length)) }
+  }
+
+  /// Empty unless a test stores one, which is the state the loader meets on a
+  /// first open.
+  func cachedPlaintextLength(forHref href: String) -> UInt64? {
+    lock.withLock { _stored[href] }
+  }
+
+  func store(length: UInt64, forHref href: String) {
+    lock.withLock { _stored[href] = length }
+  }
+
+  func plaintextLength(forHref href: String, waitingUpTo timeout: TimeInterval) async -> UInt64? {
+    let (supplied, wait): (UInt64?, TimeInterval) = lock.withLock {
+      _waitsAsked.append(timeout)
+      return (_suppliedLength, _lengthWait)
+    }
+    guard let supplied else { return nil }
+    if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+    return supplied
+  }
 
   // The protocol requires these without a default so no conformer can
   // silently skip them; this fake is not exercising the yield behaviour.

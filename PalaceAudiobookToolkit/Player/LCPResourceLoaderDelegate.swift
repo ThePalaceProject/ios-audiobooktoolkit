@@ -33,6 +33,16 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var bytesServed: Int { servedByteCount.value }
 
+  /// How long a chapter waits for a resolution already running to reach its
+  /// track before it falls back to Readium's probe.
+  ///
+  /// The resolution takes the track a chapter is waiting on first and needs two
+  /// small reads for it, measured at about 0.8s each on device. The probe it
+  /// falls back to cost 10.9-18.3s and 18.6 MB in the same measurement, so a
+  /// wait of this length is worth taking and its worst case is no worse than
+  /// what it replaces.
+  static let lengthWaitTimeout: TimeInterval = 6
+
   /// A chapter change slower than this is what a patron reports as a book that
   /// will not start, so it is worth a line in the log they can export.
   static let slowChapterServeThreshold: TimeInterval = 1.5
@@ -733,7 +743,16 @@ private extension LCPResourceLoaderDelegate {
   /// the CALLING request was cancelled first, so a cancelled request is never
   /// mistaken for a failed one and finished on its behalf.
   func trackEntry(for publication: Publication, href: String) async -> TrackEntry?? {
-    let knownLengthWasAbsent = provider?.cachedPlaintextLength(forHref: href) == nil
+    // The ask the provider reads as "this chapter is waiting", and the answer
+    // that saves the probe. Only asked when there is no entry for the track
+    // yet: an entry carries its length, so a built track needs no wait.
+    var supplied = provider?.cachedPlaintextLength(forHref: href)
+    if supplied == nil, !bufferedTracks.withValue({ $0.contains { $0.href == href } }) {
+      supplied = await provider?.plaintextLength(
+        forHref: href, waitingUpTo: Self.lengthWaitTimeout
+      )
+    }
+    let knownLengthWasAbsent = supplied == nil
     let build = bufferedTracks.withValue { cache -> Task<TrackEntry?, Never> in
       if let index = cache.firstIndex(where: { $0.href == href }) {
         let entry = cache.remove(at: index)
@@ -748,7 +767,7 @@ private extension LCPResourceLoaderDelegate {
       // reads the entry's CBC tail, which sits a whole chapter away from the
       // audio, and was measured costing 17.8-28.8 MB of origin traffic to
       // serve no audio at all.
-      let knownLength = provider?.cachedPlaintextLength(forHref: href)
+      let knownLength = supplied
       let task = Task<TrackEntry?, Never> {
         guard let resolved = Self.resource(for: publication, href: href) else {
           return nil

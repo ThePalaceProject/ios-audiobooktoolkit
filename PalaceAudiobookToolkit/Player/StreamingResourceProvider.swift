@@ -43,6 +43,22 @@ public protocol StreamingResourceProvider: AnyObject {
   /// Records a plaintext length just learned, so no later session pays for it.
   func cachePlaintextLength(_ length: UInt64, forHref href: String)
 
+  /// The track's plaintext length, waiting up to `timeout` for a resolution
+  /// the provider already has running for this archive.
+  ///
+  /// Both answers to the same question cost very differently. A provider that
+  /// reads the archive directly needs two small ranges per track; Readium's
+  /// tail probe reads the entry's last AES blocks through the archive's shared
+  /// window, measured on device at 18.6 MB of origin traffic to deliver two
+  /// bytes. So the loader asks here first and only probes when the answer is
+  /// nil, which means nothing is coming: a local package, a provider that
+  /// resolves nothing, or a resolution that has already ended without this
+  /// track.
+  ///
+  /// The default answers from the cache without waiting, so a provider that
+  /// has not been taught this is unchanged.
+  func plaintextLength(forHref href: String, waitingUpTo timeout: TimeInterval) async -> UInt64?
+
   /// The player has started a streaming load the patron is waiting on, and
   /// will call `streamingLoadDidEnd()` when that load finishes, fails or is
   /// torn down.
@@ -74,6 +90,9 @@ public extension StreamingResourceProvider {
   func archiveOriginActivity() -> (requests: Int, bytes: Int) { (0, 0) }
   func cachedPlaintextLength(forHref href: String) -> UInt64? { nil }
   func cachePlaintextLength(_ length: UInt64, forHref href: String) {}
+  func plaintextLength(forHref href: String, waitingUpTo _: TimeInterval) async -> UInt64? {
+    cachedPlaintextLength(forHref: href)
+  }
 }
 
 // MARK: - StreamingCapablePlayer
