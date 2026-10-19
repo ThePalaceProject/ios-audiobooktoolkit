@@ -408,6 +408,12 @@ public class AudiobookPlaybackModel: ObservableObject {
     setupBindings()
     subscribeToPublisher()
     setupReactivePlaybackStateMonitoring()
+
+    // First open takes the same decision a chapter selection does. Without
+    // this the panel could only arrive on the playback poll, by which time the
+    // player has drawn its chrome, and the patron sees the skeleton and then a
+    // loading screen over the top of it.
+    if let currentLocation { presentPanelForSelectedChapter(currentLocation) }
   }
 
   /// Whether to prefetch and decrypt whole tracks as the book opens.
@@ -459,6 +465,9 @@ public class AudiobookPlaybackModel: ObservableObject {
   public func jumpToInitialLocation(_ position: TrackPosition) {
     pendingLocation = position
     currentLocation = position
+    // Resuming into the middle of a book is a first open too, and the chapter
+    // resumed into is the one whose bytes decide the wait.
+    presentPanelForSelectedChapter(position)
   }
 
   public func beginSaveSuppression(for seconds: TimeInterval) {
@@ -652,10 +661,6 @@ public class AudiobookPlaybackModel: ObservableObject {
       }
       .store(in: &subscriptions)
 
-    // The first evaluation happens here rather than half a second later, so a
-    // cold open presents the panel instead of presenting chrome and replacing
-    // it.
-    updateLoadingPresentation()
   }
 
   /// Evaluated on the existing playback poll, so the prefetch starts on the
