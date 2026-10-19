@@ -267,19 +267,80 @@ final class AudiobookPlaybackModelTests: XCTestCase {
 
   private static let start = Date(timeIntervalSince1970: 1_000_000)
 
+  /// `transportIsWaiting` defaults to `isLoading`, which is what the rule used
+  /// to key the "stays up" branch on, so the cases below that predate the
+  /// prediction keep their original meaning. The cases that care about the two
+  /// diverging pass both.
   private func panelVisible(
     isLoading: Bool,
+    transportIsWaiting: Bool? = nil,
+    expectsSlowStart: Bool = false,
     loadingSince: TimeInterval?,
     panelShownAt: TimeInterval?,
     now: TimeInterval
   ) -> Bool {
     AudiobookPlaybackModel.loadingPanelIsVisible(
       isLoading: isLoading,
+      transportIsWaiting: transportIsWaiting ?? isLoading,
+      expectsSlowStart: expectsSlowStart,
       loadingSince: loadingSince.map { Self.start.addingTimeInterval($0) },
       panelShownAt: panelShownAt.map { Self.start.addingTimeInterval($0) },
       now: Self.start.addingTimeInterval(now),
       delay: AudiobookPlaybackModel.loadingPanelDelay,
       minimumVisible: AudiobookPlaybackModel.loadingPanelMinimumVisible
+    )
+  }
+
+  /// A start predicted slow gets the panel at once rather than after the
+  /// delay: the two seconds spent finding out are the two in which the player
+  /// looks broken. Measured on device, a cold streamed chapter takes 2-10 s.
+  func test_loadingPanel_forAPredictedSlowStart_appearsImmediately() {
+    XCTAssertTrue(
+      panelVisible(isLoading: true, expectsSlowStart: true,
+                   loadingSince: 0, panelShownAt: nil, now: 0)
+    )
+  }
+
+  /// The prediction only ever promotes a wait that exists. Nothing loading,
+  /// nothing shown, however slow the next chapter is expected to be.
+  func test_loadingPanel_predictedSlowButNothingLoading_staysHidden() {
+    XCTAssertFalse(
+      panelVisible(isLoading: false, expectsSlowStart: true,
+                   loadingSince: nil, panelShownAt: nil, now: 0)
+    )
+  }
+
+  /// The hand-over to the skeleton. Once the transport has bytes the panel
+  /// goes even though the load is not finished, so the patron sees the player
+  /// settle and then hears it — rather than a panel over a ready player.
+  func test_loadingPanel_onceTheTransportHasData_hidesBeforeTheLoadCompletes() {
+    let shownFor = AudiobookPlaybackModel.loadingPanelMinimumVisible
+    XCTAssertFalse(
+      panelVisible(isLoading: true, transportIsWaiting: false,
+                   loadingSince: 0, panelShownAt: 3, now: 3 + shownFor)
+    )
+  }
+
+  /// And that hand-over still respects the minimum, so it cannot flash.
+  func test_loadingPanel_transportReadyWhileThePanelIsYoung_staysUp() {
+    XCTAssertTrue(
+      panelVisible(isLoading: true, transportIsWaiting: false,
+                   loadingSince: 0, panelShownAt: 3, now: 3.1)
+    )
+  }
+
+  /// A prediction that proves wrong costs the minimum and no more: the panel
+  /// appears, the bytes turn out to be near, and it goes at its floor. This is
+  /// the cost of predicting, stated rather than hidden.
+  func test_loadingPanel_aWrongPredictionCostsOnlyTheMinimum() {
+    let shownFor = AudiobookPlaybackModel.loadingPanelMinimumVisible
+    XCTAssertTrue(
+      panelVisible(isLoading: true, transportIsWaiting: false, expectsSlowStart: true,
+                   loadingSince: 0, panelShownAt: 0, now: shownFor / 2)
+    )
+    XCTAssertFalse(
+      panelVisible(isLoading: true, transportIsWaiting: false, expectsSlowStart: true,
+                   loadingSince: 0, panelShownAt: 0, now: shownFor)
     )
   }
 

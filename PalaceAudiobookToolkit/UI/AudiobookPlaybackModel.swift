@@ -50,6 +50,8 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// and a wait that ends after it has had its minimum.
   nonisolated static func loadingPanelIsVisible(
     isLoading: Bool,
+    transportIsWaiting: Bool,
+    expectsSlowStart: Bool,
     loadingSince: Date?,
     panelShownAt: Date?,
     now: Date,
@@ -57,10 +59,18 @@ public class AudiobookPlaybackModel: ObservableObject {
     minimumVisible: TimeInterval
   ) -> Bool {
     if let panelShownAt {
-      if isLoading { return true }
+      // Hand back to the chrome as soon as the transport has bytes, not when
+      // the load is declared finished. That moment is about a second before
+      // audio, so the patron sees the player settle and then hears it, instead
+      // of a panel sitting over a player that is ready.
+      if transportIsWaiting { return true }
       return now.timeIntervalSince(panelShownAt) < minimumVisible
     }
     guard isLoading, let loadingSince else { return false }
+    // A start predicted slow earns the panel at once: waiting two seconds to
+    // say "this is loading" is two seconds of a player that looks broken.
+    // Everything else must prove it is slow by lasting.
+    if expectsSlowStart { return true }
     return now.timeIntervalSince(loadingSince) >= delay
   }
 
@@ -71,7 +81,8 @@ public class AudiobookPlaybackModel: ObservableObject {
     // Waiting on the transport counts as loading: `isLoaded` can be true while
     // AVFoundation still has no audio to play, which is the window that reads
     // as "it says it is playing but nothing happens".
-    let isLoading = !player.isLoaded || player.isWaitingForData
+    let transportIsWaiting = player.isWaitingForData
+    let isLoading = !player.isLoaded || transportIsWaiting
     if isLoading {
       if loadingSince == nil { loadingSince = now }
     } else {
@@ -80,6 +91,8 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     let visible = Self.loadingPanelIsVisible(
       isLoading: isLoading,
+      transportIsWaiting: transportIsWaiting,
+      expectsSlowStart: player.expectsSlowChapterStart,
       loadingSince: loadingSince,
       panelShownAt: panelShownAt,
       now: now,

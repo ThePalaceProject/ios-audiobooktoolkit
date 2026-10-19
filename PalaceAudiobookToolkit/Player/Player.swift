@@ -151,6 +151,21 @@ public protocol Player: NSObject {
   ///
   /// Default false: a player that cannot be in that state is never waiting.
   var isWaitingForData: Bool { get }
+
+  /// Whether the chapter now loading is expected to take long enough that the
+  /// patron should be told, rather than left watching chrome that does nothing.
+  ///
+  /// A prediction, asked at the moment the load starts, because the
+  /// alternative — waiting to see — is what makes a cold start look broken: the
+  /// panel arrives after the patron has already decided something is wrong.
+  /// Being a prediction, it can be wrong, so a player answers true only from
+  /// positive evidence that the bytes are not nearby. Measured on device
+  /// 2026-10-19: a cold streamed chapter moved 12-31 MB and took 2-10 s, while
+  /// one served from the byte-range cache cost no origin bytes and 0.0 s.
+  ///
+  /// Default false: a player that cannot be slow this way never predicts it,
+  /// and the wait-and-see rule still covers it.
+  var expectsSlowChapterStart: Bool { get }
   var queuesEvents: Bool { get }
   var isDrmOk: Bool { get set }
   var currentOffset: Double { get }
@@ -190,6 +205,9 @@ public protocol Player: NSObject {
 extension Player {
   /// A player with no transport of its own is never waiting on one.
   public var isWaitingForData: Bool { false }
+
+  /// Local audio is never predicted slow; the wait-and-see rule still applies.
+  public var expectsSlowChapterStart: Bool { false }
   func savePlaybackRate(rate: PlaybackRate) {
     UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
   }

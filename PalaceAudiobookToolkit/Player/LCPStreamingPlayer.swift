@@ -20,6 +20,29 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     sharedResourceLoader = LCPResourceLoaderDelegate(provider: provider)
   }
 
+  /// Predicts a slow start from positive evidence that this chapter's bytes
+  /// are not nearby: the track cannot be played from disk, the archive is
+  /// remote, and no plaintext length has been learned for it yet.
+  ///
+  /// The length is the tell that the track has been opened before. Its cache
+  /// and the byte-range cache are filled by the same first read, so a track
+  /// with a known length has had its head bytes fetched and starts from the
+  /// cache; one without has not, and pays a full archive fill — 6 MB, which is
+  /// the floor the packaged-archive format imposes (`max(per-track window,
+  /// Readium's archive buffer)`), and at a few Mbps that is the whole wait.
+  ///
+  /// Conservative on purpose. Answering true wrongly puts a panel in front of
+  /// a chapter that was quick, which is the flicker the delay rule removed, so
+  /// every clause has to hold.
+  public var expectsSlowChapterStart: Bool {
+    guard let position = queuedTrackPosition ?? currentTrackPosition else { return false }
+    guard !trackIsLocallyPlayable(position.track) else { return false }
+    guard isServingRemoteArchive else { return false }
+    let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
+    guard let href else { return false }
+    return streamingProvider?.cachedPlaintextLength(forHref: href) == nil
+  }
+
   /// No provider means no streaming session, so there is no remote archive to
   /// defer work for.
   public var isServingRemoteArchive: Bool {
