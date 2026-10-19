@@ -370,6 +370,126 @@ final class LCPStreamingEgressTests: XCTestCase {
     )
   }
 
+  /// What AVFoundation asks for first when it opens a track: a couple of bytes
+  /// at offset zero, to sniff the format. Measured on device 2026-10-19 at
+  /// 17.2 s and 18.6 MB of origin traffic in 4 requests to deliver TWO bytes,
+  /// with the length already cached (`length probe 0.0s`), on the chapter the
+  /// patron was waiting to hear. That wait is the whole of a cold start.
+  private static let formatSniffBytes = 2
+
+  /// Characterises the opening read rather than bounding it: it prints which
+  /// ranges the origin was asked for, because "how many bytes" cannot say
+  /// whether the cost is the length tail, the archive's own fill, the
+  /// per-track window, or some stack of all three — and the fix differs for
+  /// each. The assertion is only that the bytes arrive.
+  func testFormatSniffAtTrackStart_CostOfTheOpeningRead() async throws {
+    let loader = makeLoader(trackCount: 1)
+
+    let served = try await readRange(
+      track: 0,
+      offset: 0,
+      length: Self.formatSniffBytes,
+      loader: loader
+    )
+
+    XCTAssertEqual(served, Self.formatSniffBytes, "the opening read must be answered")
+    print(String(
+      format: "format sniff: served %d B, transferred %d B in %d request(s)",
+      served, probe.bytesFetched, probe.requests
+    ))
+    for (i, r) in probe.ranges.enumerated() {
+      print(String(
+        format: "  read %d: asked %llu..<%llu (%llu B), got %d B",
+        i, r.lower, r.upper, r.upper - r.lower, r.count
+      ))
+    }
+  }
+
+  /// Which buffer makes the opening read cost a fill: the loader's per-track
+  /// window, or Readium's archive buffer underneath it.
+  ///
+  /// It decides the fix and the two are indistinguishable from the total. The
+  /// pair below varies one at a time against the same 2-byte read, with the
+  /// length supplied so the tail probe cannot contribute: whichever size the
+  /// fetched bytes track is the one that has to change.
+  func testFormatSniff_WithNoPerTrackWindow_ShowsWhoChargesTheFill() async throws {
+    let loader = makeLoader(
+      perTrackBufferSize: Self.loaderSegment,
+      trackCount: 1,
+      servableLength: Self.trackLength
+    )
+
+    let served = try await readRange(track: 0, offset: 0, length: Self.formatSniffBytes, loader: loader)
+
+    XCTAssertEqual(served, Self.formatSniffBytes, "the opening read must be answered")
+    print(String(
+      format: "sniff, per-track window %d B: transferred %d B in %d request(s)",
+      Self.loaderSegment, probe.bytesFetched, probe.requests
+    ))
+    for r in probe.ranges {
+      print(String(format: "  asked %llu..<%llu (%llu B)", r.lower, r.upper, r.upper - r.lower))
+    }
+  }
+
+  func testFormatSniff_WithASmallArchiveBuffer_ShowsWhoChargesTheFill() async throws {
+    let loader = makeLoader(
+      trackCount: 1,
+      archiveBufferSize: Self.scaledArchiveBuffer,
+      servableLength: Self.trackLength
+    )
+
+    let served = try await readRange(track: 0, offset: 0, length: Self.formatSniffBytes, loader: loader)
+
+    XCTAssertEqual(served, Self.formatSniffBytes, "the opening read must be answered")
+    print(String(
+      format: "sniff, archive buffer %d B: transferred %d B in %d request(s)",
+      Self.scaledArchiveBuffer, probe.bytesFetched, probe.requests
+    ))
+    for r in probe.ranges {
+      print(String(format: "  asked %llu..<%llu (%llu B)", r.lower, r.upper, r.upper - r.lower))
+    }
+  }
+
+  /// Confirms the model the pair above implies: the opening read costs
+  /// `max(per-track window, archive buffer)`, because each `BufferingResource`
+  /// fetches `lowerBound ..< max(upperBound, lowerBound + bufferSize)` and so
+  /// ignores a smaller caller's bound. If that is right, shrinking ONE knob can
+  /// never help — the other floors the cost — and only shrinking both moves it.
+  ///
+  /// It matters because the obvious fix is to bypass the loader's own window,
+  /// and this says that alone buys nothing: Readium owns the archive buffer.
+  func testFormatSniff_WithBothBuffersSmall_IsTheOnlyThingThatMovesIt() async throws {
+    let loader = makeLoader(
+      perTrackBufferSize: Self.loaderSegment,
+      trackCount: 1,
+      archiveBufferSize: Self.scaledArchiveBuffer,
+      servableLength: Self.trackLength
+    )
+
+    let served = try await readRange(track: 0, offset: 0, length: Self.formatSniffBytes, loader: loader)
+
+    XCTAssertEqual(served, Self.formatSniffBytes, "the opening read must be answered")
+    print(String(
+      format: "sniff, both small (window %d B, archive %d B): transferred %d B in %d request(s)",
+      Self.loaderSegment, Self.scaledArchiveBuffer, probe.bytesFetched, probe.requests
+    ))
+    for r in probe.ranges {
+      print(String(format: "  asked %llu..<%llu (%llu B)", r.lower, r.upper, r.upper - r.lower))
+    }
+    let dataFills = probe.ranges.filter { $0.lower == 0 }
+    XCTAssertFalse(dataFills.isEmpty, "there must be a read at the track's start to measure")
+    for fill in dataFills {
+      XCTAssertLessThanOrEqual(
+        Int(fill.upper - fill.lower),
+        Self.scaledArchiveBuffer,
+        """
+        with both buffers small the opening fill must follow them. If this is \
+        6 MB the cost is floored somewhere else again and the model is wrong.
+        """
+      )
+    }
+  }
+
   /// The widest set of tracks the loader can be asked for inside one episode,
   /// derived from the player rather than restated here so the two cannot drift.
   ///
@@ -963,6 +1083,24 @@ final class LCPStreamingEgressTests: XCTestCase {
     XCTAssertTrue(loader.shouldWait(for: request), "the loader must accept a well-formed request")
     let outcome = try await request.waitUntilFinished(timeout: 20)
     XCTAssertEqual(outcome, .success, "a clamped read must finish successfully")
+    return request.respondedBytes
+  }
+
+  /// Arbitrary length, for the opening-read cases: AVFoundation's first ask is
+  /// a couple of bytes, not a loader segment.
+  private func readRange(
+    track: Int,
+    offset: Int,
+    length: Int,
+    loader: LCPResourceLoaderDelegate
+  ) async throws -> Int {
+    let request = RecordingRequest(
+      url: URL(string: "readium-lcp://track\(track)/track\(track).mp3")!,
+      range: LCPRequestedRange(offset: Int64(offset), length: length, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: request), "the loader must accept a well-formed request")
+    let outcome = try await request.waitUntilFinished(timeout: 20)
+    XCTAssertEqual(outcome, .success, "track \(track) at \(offset)+\(length) must be served")
     return request.respondedBytes
   }
 
