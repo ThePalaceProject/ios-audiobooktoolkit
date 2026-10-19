@@ -33,6 +33,79 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var bytesServed: Int { servedByteCount.value }
 
+  /// A chapter change slower than this is what a patron reports as a book that
+  /// will not start, so it is worth a line in the log they can export.
+  static let slowChapterServeThreshold: TimeInterval = 1.5
+
+  /// How many serve reports the loader keeps. A diagnostic tail, long enough to
+  /// cover the player's prefetch window and the chapter the patron left.
+  static let maxRetainedServeReports = 16
+
+  /// What each recent chapter serve asked for and what it cost, oldest first.
+  ///
+  /// Held as values rather than written only to the log so the behaviour can be
+  /// stated without an AVFoundation load, and so a reader of a slow chapter
+  /// change has the superseded serves beside the one the patron is waiting for.
+  let serveReports = LockIsolated<[ServeReport]>([])
+
+  /// One chapter serve, as the exported log reports it.
+  struct ServeReport: Equatable {
+    /// The track's href, or the URL's last component when the serve ended
+    /// before the reading order was consulted.
+    let href: String
+    /// What AVFoundation asked for, or nil for a content-information request.
+    let range: LCPRequestedRange?
+    let elapsed: TimeInterval
+    /// When the track's plaintext length resolved, relative to the serve's
+    /// start, or nil if it never did.
+    let lengthProbe: TimeInterval?
+    let originRequests: Int
+    let originBytes: Int
+    /// Bytes THIS serve handed to AVFoundation.
+    let deliveredBytes: Int
+    let wasCancelled: Bool
+
+    /// Worth a line in the exported log. Below the threshold a serve is one a
+    /// patron would not notice, and a line per segment read would bury the
+    /// ones they would.
+    var isWorthALogLine: Bool {
+      elapsed >= LCPResourceLoaderDelegate.slowChapterServeThreshold
+    }
+
+    /// What AVFoundation asked this serve for, in the terms the request used.
+    var askedFor: String {
+      guard let range else { return "content information" }
+      return range.toEnd
+        ? "the bytes from \(range.offset) to the end"
+        : "\(range.length) bytes from \(range.offset)"
+    }
+
+    /// The origin figures are a delta over this serve's own lifetime, and
+    /// serves overlap, so concurrent serves each count the traffic that flowed
+    /// while they ran. They are not additive across lines; the delivered count
+    /// is this serve's alone.
+    var description: String {
+      String(
+        format: "LCP chapter serve took %.1fs (length probe %@) for %@, which asked for %@; delivered %d bytes; archive origin cost %d request(s) / %d bytes while it ran; %@",
+        elapsed,
+        lengthProbe.map { String(format: "%.1fs", $0) } ?? "never",
+        href.isEmpty ? "an unnamed track" : href,
+        askedFor,
+        deliveredBytes,
+        originRequests,
+        originBytes,
+        wasCancelled ? "cancelled" : "finished"
+      )
+    }
+  }
+
+  private func record(_ report: ServeReport) {
+    serveReports.withValue {
+      $0.append(report)
+      $0 = Array($0.suffix(Self.maxRetainedServeReports))
+    }
+  }
+
 
 
   /// Resolved, buffered resource per track href, least-recently-used first.
@@ -337,15 +410,22 @@ private extension LCPResourceLoaderDelegate {
     }
   }
 
-  /// A chapter change slower than this is what a patron reports as a book that
-  /// will not start, so it is worth a line in the log they can export.
-  static let slowChapterServeThreshold: TimeInterval = 1.5
 
   func serve(loadingRequest: LCPStreamingLoadingRequest, with pub: Publication, slot: RequestSlot) async {
     let request = FinishOnce(loadingRequest)
     let serveStartedAt = Date()
     let originBefore = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
-    let servedBefore = servedByteCount.value
+    // Read here rather than in the report: the report is written from a `defer`
+    // that can run after AVFoundation has dropped the request.
+    let requestedRange = loadingRequest.requestedRange
+    // The track the URL names, so a serve that ends before the reading order is
+    // consulted still says which file it was for. Replaced by the resolved href
+    // once there is one.
+    let servedHref = LockIsolated(loadingRequest.requestURL?.lastPathComponent ?? "")
+    // Bytes THIS serve handed over. `servedByteCount` is loader-wide, so its
+    // delta over a serve's lifetime includes whatever other chapters delivered
+    // while it ran, and a chapter the patron has left then reads as busy.
+    let deliveredBytes = LockIsolated(0)
     // `lengthResolvedAt` separates the two halves of a cold chapter: Readium
     // must read the entry's CBC tail to learn the plaintext length before any
     // audio byte can be asked for, and that probe sits at the far end of the
@@ -353,17 +433,20 @@ private extension LCPResourceLoaderDelegate {
     // serve is measured too — the slow cases are the ones that do not finish.
     let lengthResolvedAt = LockIsolated<Date?>(nil)
     defer {
-      let elapsed = Date().timeIntervalSince(serveStartedAt)
-      if elapsed >= Self.slowChapterServeThreshold {
-        let after = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
-        ATLog(.error, String(
-          format: "LCP chapter serve took %.1fs (length probe %@); archive origin cost %d request(s) / %d bytes; loader served %d bytes (counter is loader-wide)",
-          elapsed,
-          lengthResolvedAt.value.map { String(format: "%.1fs", $0.timeIntervalSince(serveStartedAt)) } ?? "never",
-          after.requests - originBefore.requests,
-          after.bytes - originBefore.bytes,
-          servedByteCount.value - servedBefore
-        ))
+      let after = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
+      let report = ServeReport(
+        href: servedHref.value,
+        range: requestedRange,
+        elapsed: Date().timeIntervalSince(serveStartedAt),
+        lengthProbe: lengthResolvedAt.value.map { $0.timeIntervalSince(serveStartedAt) },
+        originRequests: after.requests - originBefore.requests,
+        originBytes: after.bytes - originBefore.bytes,
+        deliveredBytes: deliveredBytes.value,
+        wasCancelled: Task.isCancelled
+      )
+      record(report)
+      if report.isWorthALogLine {
+        ATLog(.error, report.description)
       }
     }
     guard let url = loadingRequest.requestURL else {
@@ -414,6 +497,7 @@ private extension LCPResourceLoaderDelegate {
     }
 
     let finalHref = validLink.href.components(separatedBy: "#").first ?? validLink.href
+    servedHref.value = finalHref
     let resolvedEntry = await trackEntry(for: pub, href: finalHref)
     lengthResolvedAt.withValue { $0 = Date() }
     guard case let .some(entry) = resolvedEntry else {
@@ -472,7 +556,8 @@ private extension LCPResourceLoaderDelegate {
       clampTrack: entry?.buffer == nil ? nil : (publication: pub, href: finalHref),
       start: start,
       count: count,
-      to: request
+      to: request,
+      delivered: deliveredBytes
     )
   }
 
@@ -484,12 +569,15 @@ private extension LCPResourceLoaderDelegate {
   /// rather than a resource because the overshoot is rare and resolving one
   /// per request would cost every well-formed read a container lookup it never
   /// uses.
+  /// `delivered` accumulates what THIS transfer handed over, which is what the
+  /// serve report states; the loader-wide counter cannot answer for one serve.
   func transfer(
     from resource: Resource,
     clampTrack: (publication: Publication, href: String)? = nil,
     start: Int,
     count: Int,
-    to request: FinishOnce
+    to request: FinishOnce,
+    delivered: LockIsolated<Int>
   ) async {
     let lastProgress = LockIsolated(Date())
     let stallTimeout = stallTimeout
@@ -543,6 +631,7 @@ private extension LCPResourceLoaderDelegate {
               request.respond(with: data)
               lastProgress.value = Date()
               servedByteCount.withValue { $0 += data.count }
+              delivered.withValue { $0 += data.count }
               totalBytesRead += data.count
               if bytesRemaining != Int.max {
                 bytesRemaining -= data.count
