@@ -195,22 +195,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   /// What the resource loader was asked for `track`, or nil when the track
-  /// cannot be named to the loader — there is no loader, or no publication to
-  /// take the href from. Nil is "unknown", not "none".
+  /// cannot be named to the loader: no loader, or no item built through it.
+  /// Nil is "unknown", not "none".
   func streamedRequests(for track: any Track) -> LoaderActivity? {
-    guard let loader = sharedResourceLoader, let href = streamingHref(for: track) else { return nil }
-    return loader.loadingRequests(forHref: href)
-  }
-
-  /// The href the streaming item for `track` was built with. Must stay the
-  /// expression `createStreamingPlayerItem` uses, because that URL is where the
-  /// loader's key comes from.
-  private func streamingHref(for track: any Track) -> String? {
-    guard let publication = streamingProvider?.getPublication(),
-          let index = tableOfContents.allTracks.firstIndex(where: { $0.key == track.key }),
-          index < publication.readingOrder.count
-    else { return nil }
-    return publication.readingOrder[index].href
+    sharedResourceLoader?.loadingRequests(forTrackKey: track.key)
   }
 
   /// Whether audio the patron can hear is coming out of the player.
@@ -358,6 +346,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   /// Ends a load the resource loader was never asked to serve.
+  ///
   /// No failure is published. The guard measures bytes the resource loader
   /// served, nothing asked it for this track, so its silence is not evidence
   /// about this chapter and an alert over it closes a book that may be fine.
@@ -1074,6 +1063,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     let asset = AVURLAsset(url: assetURL, options: assetOptions)
 
     if let sharedResourceLoader = sharedResourceLoader {
+      // The track and the URL its item reads are both in hand here, so the
+      // loader is told the pairing rather than deriving it a second way.
+      sharedResourceLoader.noteTrack(
+        key: track.key,
+        servesHref: LCPResourceLoaderDelegate.requestedHref(for: assetURL)
+      )
       objc_setAssociatedObject(
         asset,
         Self.resourceLoaderAssocKey.rawValue,

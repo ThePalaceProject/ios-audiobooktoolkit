@@ -1141,6 +1141,10 @@ final class LCPStreamingLoadDiagnosisTests: XCTestCase {
     XCTAssertNotNil(detail, "a timeout the app alerts on must carry what it measured")
     XCTAssertTrue(detail?.contains("2 loading request") == true, detail ?? "")
     XCTAssertTrue(detail?.contains("2 failed") == true, detail ?? "")
+    XCTAssertTrue(
+      detail?.contains("has no saved assets") == true,
+      "the file state must be read off the track, not assumed: \(detail ?? "")"
+    )
   }
 
   // MARK: - A load nothing is streaming ends without failing
@@ -1331,6 +1335,30 @@ final class LCPStreamingLoadDiagnosisTests: XCTestCase {
       player.rebuildRequests.isEmpty,
       "a download still in progress has nothing to hand over"
     )
+  }
+
+  /// A completion for a track the patron is not on changes nothing: rebuilding
+  /// the queue for it would interrupt the chapter playing now.
+  func testDecryptionCompletion_forATrackTheQueueIsNotOn_leavesTheQueueAlone() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    XCTAssertFalse(player.switchToLocalAssetsIfLanded(forTrackKey: "a-track-not-in-play"))
+    XCTAssertTrue(player.rebuildRequests.isEmpty)
+  }
+
+  /// `isPlayingAudibly` is stubbed in the tests above, so the shipped reading
+  /// of the player's own state is asserted here: a paused player is not
+  /// audible, whether or not it is muted.
+  func test_isPlayingAudibly_whenThePlayerIsPaused_isFalse() {
+    let player = LCPStreamingPlayerAsyncContractTests.StubbedLCPStreamingPlayer(
+      tableOfContents: toc, drmDecryptor: nil
+    )
+
+    XCTAssertEqual(player.avQueuePlayer.timeControlStatus, .paused, "Precondition")
+    XCTAssertFalse(player.avQueuePlayer.isMuted, "Precondition")
+    XCTAssertFalse(player.isPlayingAudibly, "a paused player interrupts nothing")
   }
 
   /// Where the two halves meet: the guard fires, nothing had asked the loader,

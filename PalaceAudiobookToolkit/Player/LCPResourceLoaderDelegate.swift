@@ -56,6 +56,25 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     requestActivityByHref.value[href] ?? LoaderActivity(received: 0, failed: 0)
   }
 
+  /// The href each track's items read, as the player built their URLs.
+  ///
+  /// Recorded where the track and the URL are both in hand, so the key a
+  /// caller asks with and the key the requests are counted under cannot drift.
+  /// Deriving the href from the reading order instead would be a second
+  /// expression for the same fact, and one of them is percent-decoded.
+  private let hrefByTrackKey = LockIsolated<[String: String]>([:])
+
+  func noteTrack(key trackKey: String, servesHref href: String) {
+    hrefByTrackKey.withValue { $0[trackKey] = href }
+  }
+
+  /// What was asked for the track `trackKey`, or nil when no item for it has
+  /// been built through this loader — which is unknown, not none.
+  func loadingRequests(forTrackKey trackKey: String) -> LoaderActivity? {
+    guard let href = hrefByTrackKey.value[trackKey] else { return nil }
+    return loadingRequests(forHref: href)
+  }
+
   /// The track a request names, taken from the URL rather than the reading
   /// order: a caller asking why nothing was served has to be told about
   /// requests that never reached `serve` either.

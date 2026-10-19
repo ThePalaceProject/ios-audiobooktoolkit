@@ -926,6 +926,30 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertEqual(loader.loadingRequests(forHref: Self.href).failed, 0)
   }
 
+  /// The player asks by track, because that is what it has; the loader counts
+  /// by URL, because that is what AVFoundation hands it. The pairing is
+  /// recorded when the item is built so the two cannot drift apart.
+  func testRequestCount_IsReadableByTheTrackTheItemWasBuiltFor() {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    loader.noteTrack(key: "chapter-46", servesHref: Self.href)
+
+    XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: true, range: nil
+    )))
+
+    XCTAssertEqual(loader.loadingRequests(forTrackKey: "chapter-46")?.received, 1)
+    loader.cancelAllRequests()
+  }
+
+  /// A track no item has been built for reads nil rather than zero: the two
+  /// lead to opposite verdicts in the player's load timeout.
+  func testRequestCount_ForATrackWithNoItemBuiltThroughThisLoader_IsUnknown() {
+    let loader = makeLoader(stallTimeout: 5)
+
+    XCTAssertNil(loader.loadingRequests(forTrackKey: "chapter-46"))
+  }
+
   // MARK: - A serve that fails leaves a line whatever it cost
 
   /// The threshold was the only thing deciding what reached the log, so a serve
