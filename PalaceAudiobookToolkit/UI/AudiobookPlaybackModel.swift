@@ -32,6 +32,16 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// is for a wait long enough to need explaining.
   @Published var showsLoadingPanel = false
 
+  /// Whether the chapter about to be heard is expected to be slow to start.
+  ///
+  /// Public because the host draws its own loading presentation before this
+  /// model's panel can appear, and it needs the same answer: without it the
+  /// host showed a shimmer and replaced it once a download registered, which
+  /// put the two states in the wrong order.
+  public var expectsSlowChapterStart: Bool {
+    audiobookManager.audiobook.player.expectsSlowChapterStart
+  }
+
   /// When the current wait began, and when the panel went up. Both nil when
   /// there is nothing to wait for.
   private var loadingSince: Date?
