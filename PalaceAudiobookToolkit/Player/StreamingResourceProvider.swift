@@ -59,6 +59,20 @@ public protocol StreamingResourceProvider: AnyObject {
   /// has not been taught this is unchanged.
   func plaintextLength(forHref href: String, waitingUpTo timeout: TimeInterval) async -> UInt64?
 
+  /// Whether this track's opening bytes are already on disk, so the read that
+  /// starts it costs no origin traffic.
+  ///
+  /// Asked to decide whether a chapter start is worth explaining to the
+  /// patron. A track's plaintext LENGTH cannot answer it: the app learns every
+  /// track's length from the archive directory in one pass, without reading a
+  /// byte of audio, so a known length says nothing about whether the audio is
+  /// near.
+  ///
+  /// The default is `true` — "assume the bytes are near". An unbound witness
+  /// then shows no panel rather than showing one on every chapter, because a
+  /// panel over a fast chapter is the failure this question exists to avoid.
+  func trackHeadIsCached(forHref href: String) -> Bool
+
   /// The player has started a streaming load the patron is waiting on, and
   /// will call `streamingLoadDidEnd()` when that load finishes, fails or is
   /// torn down.
@@ -93,6 +107,7 @@ public extension StreamingResourceProvider {
   func plaintextLength(forHref href: String, waitingUpTo _: TimeInterval) async -> UInt64? {
     cachedPlaintextLength(forHref: href)
   }
+  func trackHeadIsCached(forHref _: String) -> Bool { true }
 }
 
 // MARK: - StreamingCapablePlayer

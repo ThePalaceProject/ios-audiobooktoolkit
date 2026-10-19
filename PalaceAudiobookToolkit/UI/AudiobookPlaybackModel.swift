@@ -89,10 +89,17 @@ public class AudiobookPlaybackModel: ObservableObject {
       loadingSince = nil
     }
 
+    // Only asked while something is loading, and only before the panel is up:
+    // it is the escalation decision, and it reads a cache on a path that runs
+    // twice a second for the whole of playback.
+    let expectsSlowStart = (isLoading && panelShownAt == nil)
+      ? player.expectsSlowChapterStart
+      : false
+
     let visible = Self.loadingPanelIsVisible(
       isLoading: isLoading,
       transportIsWaiting: transportIsWaiting,
-      expectsSlowStart: player.expectsSlowChapterStart,
+      expectsSlowStart: expectsSlowStart,
       loadingSince: loadingSince,
       panelShownAt: panelShownAt,
       now: now,

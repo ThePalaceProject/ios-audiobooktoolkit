@@ -22,25 +22,32 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
 
   /// Predicts a slow start from positive evidence that this chapter's bytes
   /// are not nearby: the track cannot be played from disk, the archive is
-  /// remote, and no plaintext length has been learned for it yet.
+  /// remote, and its opening bytes are not in the byte-range cache.
   ///
-  /// The length is the tell that the track has been opened before. Its cache
-  /// and the byte-range cache are filled by the same first read, so a track
-  /// with a known length has had its head bytes fetched and starts from the
-  /// cache; one without has not, and pays a full archive fill — 6 MB, which is
-  /// the floor the packaged-archive format imposes (`max(per-track window,
-  /// Readium's archive buffer)`), and at a few Mbps that is the whole wait.
+  /// An earlier version keyed the last clause on whether a plaintext LENGTH
+  /// was known, reasoning that the length cache and the byte cache fill
+  /// together. They do not: the app learns every track's length from the
+  /// archive directory in one pass costing about 2.5 kB per track and no
+  /// audio, so after one resolution every track has a length and the predicate
+  /// answered "fast" for exactly the cold chapter it was built for. Measured
+  /// on device 2026-10-19: all 32 lengths resolved before playback, and no
+  /// panel appeared on a first-ever stream.
   ///
-  /// Conservative on purpose. Answering true wrongly puts a panel in front of
-  /// a chapter that was quick, which is the flicker the delay rule removed, so
-  /// every clause has to hold.
+  /// A cold opening read costs one archive fill — 6 MB, the floor
+  /// `max(per-track window, Readium's archive buffer)` imposes on a packaged
+  /// archive — and at a few Mbps that is the whole wait.
+  ///
+  /// Conservative on purpose: answering true wrongly puts a panel in front of
+  /// a quick chapter, which is the flicker the delay rule removed, so every
+  /// clause has to hold.
   public var expectsSlowChapterStart: Bool {
     guard let position = queuedTrackPosition ?? currentTrackPosition else { return false }
     guard !trackIsLocallyPlayable(position.track) else { return false }
     guard isServingRemoteArchive else { return false }
-    let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
-    guard let href else { return false }
-    return streamingProvider?.cachedPlaintextLength(forHref: href) == nil
+    guard let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
+    else { return false }
+    guard let provider = streamingProvider else { return false }
+    return !provider.trackHeadIsCached(forHref: href)
   }
 
   /// No provider means no streaming session, so there is no remote archive to

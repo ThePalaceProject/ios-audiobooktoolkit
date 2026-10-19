@@ -657,6 +657,36 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   }
 
 
+  // MARK: - Coverage
+
+  /// What a read of a track's opening bytes actually moves off the origin.
+  ///
+  /// Every buffer in the chain fetches
+  /// `lowerBound ..< max(upperBound, lowerBound + bufferSize)`, so the floor is
+  /// `max(per-track window, Readium's archive buffer)` and both are 6 MB. A
+  /// caller asking "is this track's start already cached" has to ask about a
+  /// whole fill, because a smaller question answers about a read nobody makes.
+  /// Public because the app predicts a slow chapter start from it and cannot
+  /// see the loader's own copy of the number.
+  public static let archiveFillSize: UInt64 = 6 * 1024 * 1024
+
+  /// Whether every byte of `range` for the archive at `url` is already on
+  /// disk, so reading it costs no origin traffic.
+  ///
+  /// Answers only from a store that is already open: this is asked on a UI
+  /// path, and opening one here would turn a question into work. A closed
+  /// store reads as "not cached", which predicts a slow read — the safe
+  /// direction, since the alternative is telling the patron a cold chapter
+  /// will be quick.
+  public func rangeIsFullyCached(_ range: Range<UInt64>, forArchiveAt url: HTTPURL) -> Bool {
+    guard !range.isEmpty else { return true }
+    lock.lock()
+    let store = stores[url.string]
+    lock.unlock()
+    guard let store else { return false }
+    return store.missingRanges(in: range).isEmpty
+  }
+
   // MARK: - Store lifecycle
 
   /// The store for this archive, opening it when a length is supplied.
