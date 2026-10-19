@@ -21,6 +21,74 @@ public class AudiobookPlaybackModel: ObservableObject {
   private var hasStartedDeferredPrefetch = false
 
   @Published var isWaitingForPlayer = false
+
+  /// Whether the dark loading panel is shown over the player chrome.
+  ///
+  /// Not `!player.isLoaded`, which the view used to read directly. That flag
+  /// goes false on every chapter change that is not served from disk, so a
+  /// change that resolved in a few hundred milliseconds still threw up a
+  /// full-screen panel and took it away again: the patron saw chrome, then a
+  /// panel, then the player. The chrome alone carries a short wait; the panel
+  /// is for a wait long enough to need explaining.
+  @Published var showsLoadingPanel = false
+
+  /// When the current wait began, and when the panel went up. Both nil when
+  /// there is nothing to wait for.
+  private var loadingSince: Date?
+  private var panelShownAt: Date?
+
+  /// How long a wait must last before it is worth a panel, and how long a
+  /// panel stays once shown. The second number exists because a panel that
+  /// appears and vanishes inside a blink reads as a fault in the app.
+  static let loadingPanelDelay: TimeInterval = 2.0
+  static let loadingPanelMinimumVisible: TimeInterval = 1.0
+
+  /// The panel's visibility, as a function of the wait and its own history.
+  ///
+  /// Pure so the rule can be stated without a player: the states that matter
+  /// are a short wait, a long wait, a wait that ends while the panel is young,
+  /// and a wait that ends after it has had its minimum.
+  nonisolated static func loadingPanelIsVisible(
+    isLoading: Bool,
+    loadingSince: Date?,
+    panelShownAt: Date?,
+    now: Date,
+    delay: TimeInterval,
+    minimumVisible: TimeInterval
+  ) -> Bool {
+    if let panelShownAt {
+      if isLoading { return true }
+      return now.timeIntervalSince(panelShownAt) < minimumVisible
+    }
+    guard isLoading, let loadingSince else { return false }
+    return now.timeIntervalSince(loadingSince) >= delay
+  }
+
+  /// Advances the panel's state. Called from the playback poll, so its
+  /// resolution is that poll's interval.
+  func updateLoadingPresentation(now: Date = Date()) {
+    let player = audiobookManager.audiobook.player
+    // Waiting on the transport counts as loading: `isLoaded` can be true while
+    // AVFoundation still has no audio to play, which is the window that reads
+    // as "it says it is playing but nothing happens".
+    let isLoading = !player.isLoaded || player.isWaitingForData
+    if isLoading {
+      if loadingSince == nil { loadingSince = now }
+    } else {
+      loadingSince = nil
+    }
+
+    let visible = Self.loadingPanelIsVisible(
+      isLoading: isLoading,
+      loadingSince: loadingSince,
+      panelShownAt: panelShownAt,
+      now: now,
+      delay: Self.loadingPanelDelay,
+      minimumVisible: Self.loadingPanelMinimumVisible
+    )
+    panelShownAt = visible ? (panelShownAt ?? now) : nil
+    if showsLoadingPanel != visible { showsLoadingPanel = visible }
+  }
   @Published var playbackProgress: Double = 0
   @Published public var isDownloading = false
   @Published public var overallDownloadProgress: Float = 0
@@ -519,6 +587,7 @@ public class AudiobookPlaybackModel: ObservableObject {
         if _isPlaying != currentPlayingState {
           _isPlaying = currentPlayingState
         }
+        updateLoadingPresentation()
         startDeferredPrefetchIfDue(isPlaying: currentPlayingState)
       }
       .store(in: &subscriptions)

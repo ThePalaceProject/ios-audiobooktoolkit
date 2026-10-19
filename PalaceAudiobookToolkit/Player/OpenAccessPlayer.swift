@@ -23,6 +23,13 @@ class OpenAccessPlayer: NSObject, Player {
     avQueuePlayer.rate != .zero
   }
 
+  /// The rate is set the moment `play()` is called, so `isPlaying` cannot tell
+  /// a chapter that is sounding from one AVFoundation is still fetching. This
+  /// reports the second state, which is what the UI must show as a wait.
+  var isWaitingForData: Bool {
+    avQueuePlayer.timeControlStatus == .waitingToPlayAtSpecifiedRate
+  }
+
   // MARK: - Fast UI Position Updates (0.25s interval)
   private let positionSubject = PassthroughSubject<TrackPosition, Never>()
   private var timeObserverToken: Any?

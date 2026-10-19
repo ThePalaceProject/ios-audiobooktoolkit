@@ -1380,3 +1380,51 @@ final class LCPStreamingLoadDiagnosisTests: XCTestCase {
     )
   }
 }
+
+/// The line the exported log carries for a chapter start. Two intervals,
+/// because the patron's complaint is about the gap before audio, and the serve
+/// reports can only state a request's total after it ends.
+final class LCPChapterStartReportTests: XCTestCase {
+  private func report(
+    audibleAfter: TimeInterval?,
+    firstByteAfter: TimeInterval?,
+    bytesBeforeAudio: Int,
+    observedFor: TimeInterval
+  ) -> LCPStreamingPlayer.ChapterStartReport {
+    LCPStreamingPlayer.ChapterStartReport(
+      trackKey: "9798350430943_046.mp3",
+      audibleAfter: audibleAfter,
+      firstByteAfter: firstByteAfter,
+      bytesBeforeAudio: bytesBeforeAudio,
+      observedFor: observedFor
+    )
+  }
+
+  func test_description_statesBothIntervalsAndTheBytesThatPrecededAudio() {
+    let line = report(
+      audibleAfter: 12.34,
+      firstByteAfter: 2.1,
+      bytesBeforeAudio: 6_291_456,
+      observedFor: 12.34
+    ).description
+
+    XCTAssertTrue(line.contains("9798350430943_046.mp3"), line)
+    XCTAssertTrue(line.contains("audible 12.3s after the load began"), line)
+    XCTAssertTrue(line.contains("first byte 2.1s after"), line)
+    XCTAssertTrue(line.contains("6291456 byte(s) served before audio"), line)
+  }
+
+  /// The case worth having in the log: a start that never sounded says so, and
+  /// says how long it was watched, so "never" has a number against it.
+  func test_description_whenAudioNeverStarted_saysSoAndForHowLong() {
+    let line = report(
+      audibleAfter: nil,
+      firstByteAfter: nil,
+      bytesBeforeAudio: 0,
+      observedFor: 30
+    ).description
+
+    XCTAssertTrue(line.contains("never became audible in 30.0s"), line)
+    XCTAssertTrue(line.contains("no byte reached AVFoundation"), line)
+  }
+}

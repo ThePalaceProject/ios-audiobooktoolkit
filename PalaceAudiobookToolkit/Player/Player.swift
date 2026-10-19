@@ -140,6 +140,17 @@ public enum PlaybackState {
 @MainActor
 public protocol Player: NSObject {
   var isPlaying: Bool { get }
+
+  /// Whether the transport wants to play and has no data to play.
+  ///
+  /// `isPlaying` answers intent: it is true from the moment `play()` is called,
+  /// because the rate is set then. AVFoundation's own answer to "is audio
+  /// coming out" is `timeControlStatus`, and the gap between the two is the
+  /// window a patron spends looking at a player that says it is playing in
+  /// silence. The UI asks this to tell waiting apart from playing.
+  ///
+  /// Default false: a player that cannot be in that state is never waiting.
+  var isWaitingForData: Bool { get }
   var queuesEvents: Bool { get }
   var isDrmOk: Bool { get set }
   var currentOffset: Double { get }
@@ -177,6 +188,8 @@ public protocol Player: NSObject {
 }
 
 extension Player {
+  /// A player with no transport of its own is never waiting on one.
+  public var isWaitingForData: Bool { false }
   func savePlaybackRate(rate: PlaybackRate) {
     UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
   }

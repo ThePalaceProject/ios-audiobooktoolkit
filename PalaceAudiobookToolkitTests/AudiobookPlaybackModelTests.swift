@@ -256,6 +256,74 @@ final class AudiobookPlaybackModelTests: XCTestCase {
     XCTAssertTrue(player.playAtCalls.isEmpty,
                   "premise: `isLoaded` is false, so nothing has been asked to play — the title moved on the tap alone")
   }
+
+  // MARK: - When the loading panel is shown
+  //
+  // The view used to read `!player.isLoaded` directly. That flag goes false on
+  // every chapter change not served from disk, so a change that resolved in a
+  // few hundred milliseconds still threw up a full-screen panel and took it
+  // away again: chrome, panel, player, in under a second. The rule below keeps
+  // the chrome for a short wait and reserves the panel for a long one.
+
+  private static let start = Date(timeIntervalSince1970: 1_000_000)
+
+  private func panelVisible(
+    isLoading: Bool,
+    loadingSince: TimeInterval?,
+    panelShownAt: TimeInterval?,
+    now: TimeInterval
+  ) -> Bool {
+    AudiobookPlaybackModel.loadingPanelIsVisible(
+      isLoading: isLoading,
+      loadingSince: loadingSince.map { Self.start.addingTimeInterval($0) },
+      panelShownAt: panelShownAt.map { Self.start.addingTimeInterval($0) },
+      now: Self.start.addingTimeInterval(now),
+      delay: AudiobookPlaybackModel.loadingPanelDelay,
+      minimumVisible: AudiobookPlaybackModel.loadingPanelMinimumVisible
+    )
+  }
+
+  /// The flicker case: a wait shorter than the delay never shows a panel.
+  func test_loadingPanel_forAShortWait_staysHidden() {
+    XCTAssertFalse(panelVisible(isLoading: true, loadingSince: 0, panelShownAt: nil, now: 0.5))
+  }
+
+  /// A wait the patron would otherwise think had hung gets the panel.
+  func test_loadingPanel_forAWaitPastTheDelay_appears() {
+    XCTAssertTrue(
+      panelVisible(
+        isLoading: true,
+        loadingSince: 0,
+        panelShownAt: nil,
+        now: AudiobookPlaybackModel.loadingPanelDelay
+      )
+    )
+  }
+
+  /// A panel that vanishes the instant it appears reads as a fault, so it
+  /// stays for its minimum even once the wait is over.
+  func test_loadingPanel_whenTheWaitEndsWhileThePanelIsYoung_staysUp() {
+    XCTAssertTrue(panelVisible(isLoading: false, loadingSince: nil, panelShownAt: 3, now: 3.5))
+  }
+
+  /// And goes once it has had that minimum.
+  func test_loadingPanel_whenTheWaitEndsAfterTheMinimum_hides() {
+    let shownFor = AudiobookPlaybackModel.loadingPanelMinimumVisible
+    XCTAssertFalse(
+      panelVisible(isLoading: false, loadingSince: nil, panelShownAt: 3, now: 3 + shownFor)
+    )
+  }
+
+  /// Nothing to wait for, nothing shown — whatever the clock says.
+  func test_loadingPanel_withNothingToWaitFor_staysHidden() {
+    XCTAssertFalse(panelVisible(isLoading: false, loadingSince: nil, panelShownAt: nil, now: 99))
+  }
+
+  /// A load still running keeps the panel up past the minimum; the minimum is
+  /// a floor on how long it shows, not a ceiling.
+  func test_loadingPanel_whileTheWaitContinues_staysUpBeyondTheMinimum() {
+    XCTAssertTrue(panelVisible(isLoading: true, loadingSince: 0, panelShownAt: 3, now: 60))
+  }
 }
 
 // MARK: - PP-4964 — the automatic save rides the playback clock

@@ -1000,6 +1000,58 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertTrue(report.isWorthALogLine, "and reach the log however fast it was")
   }
 
+  // MARK: - Timing a chapter start
+
+  /// What a patron waits for is the FIRST byte, and nothing measured it: the
+  /// serve reports state a request's total only once it is over. The mark
+  /// records when the first byte of a marked load reached AVFoundation.
+  func testChapterLoadMark_recordsWhenTheFirstByteWasHandedOver() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk)
+    let loader = makeLoader(stallTimeout: 5)
+    loader.markChapterLoadStart()
+    XCTAssertNil(loader.chapterLoadMark?.firstByteAt, "nothing has been served yet")
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertNotNil(loader.chapterLoadMark?.firstByteAt, "the first byte must be timed")
+    XCTAssertEqual(loader.chapterLoadMark?.bytesAtStart, 0)
+  }
+
+  /// A new chapter supersedes the old mark, so a start is never reported
+  /// against a load the patron has already left.
+  func testChapterLoadMark_whenANewLoadBegins_timesTheNewOne() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk * 2)
+    let loader = makeLoader(stallTimeout: 5)
+    loader.markChapterLoadStart()
+    let first = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: first))
+    _ = try await first.waitUntilFinished(timeout: 5)
+    let servedByFirstLoad = loader.bytesServed
+    XCTAssertGreaterThan(servedByFirstLoad, 0)
+
+    loader.markChapterLoadStart()
+
+    XCTAssertNil(loader.chapterLoadMark?.firstByteAt, "the new load has served nothing yet")
+    XCTAssertEqual(
+      loader.chapterLoadMark?.bytesAtStart,
+      servedByFirstLoad,
+      "bytes the previous chapter served are not credited to this one"
+    )
+  }
+
   // MARK: - Helpers
 
   private static func report(

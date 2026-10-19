@@ -56,7 +56,9 @@ public struct AudiobookPlayerView: View {
 
       bookmarkAddedToastView
 
-      if !playbackModel.audiobookManager.audiobook.player.isLoaded {
+      // The model decides this, not the player's flag: a chapter change that
+      // resolves quickly gets the chrome alone (see `showsLoadingPanel`).
+      if playbackModel.showsLoadingPanel {
         if loadingTimedOut {
           LoadingErrorView {
             loadingTimedOut = false

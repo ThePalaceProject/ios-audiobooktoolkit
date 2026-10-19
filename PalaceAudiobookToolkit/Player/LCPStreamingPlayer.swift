@@ -118,6 +118,86 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     streamingProvider?.streamingLoadDidEnd()
   }
 
+  // MARK: - What a chapter start spent its time on
+
+  /// One chapter start, as the exported log reports it.
+  ///
+  /// The serve reports say what a request cost in total. They cannot say how
+  /// long the patron sat looking at a player before audio came out, which is
+  /// the thing being complained about, so these two intervals are measured
+  /// directly: to the first byte reaching AVFoundation, and to audio sounding.
+  struct ChapterStartReport: Equatable {
+    let trackKey: String
+    /// Load start to audio sounding, or nil if it never did.
+    let audibleAfter: TimeInterval?
+    /// Load start to the first byte the resource loader handed over, or nil if
+    /// none did.
+    let firstByteAfter: TimeInterval?
+    let bytesBeforeAudio: Int
+    /// How long the start was observed, which is what "never" is measured in.
+    let observedFor: TimeInterval
+
+    var description: String {
+      let audible = audibleAfter.map { String(format: "audible %.1fs after the load began", $0) }
+        ?? String(format: "never became audible in %.1fs", observedFor)
+      let firstByte = firstByteAfter.map { String(format: "first byte %.1fs after", $0) }
+        ?? "no byte reached AVFoundation"
+      return "LCP chapter start for \(trackKey): \(audible); \(firstByte); "
+        + "\(bytesBeforeAudio) byte(s) served before audio"
+    }
+  }
+
+  private var chapterStartSampler: Timer?
+  private var chapterStartTrackKey: String?
+  private var chapterStartedAt: Date?
+
+  static let chapterStartSampleInterval: TimeInterval = 0.25
+
+  /// Starts timing a chapter the patron is waiting on.
+  func beginChapterStartSampling(trackKey: String, at date: Date = Date()) {
+    chapterStartSampler?.invalidate()
+    chapterStartTrackKey = trackKey
+    chapterStartedAt = date
+    sharedResourceLoader?.markChapterLoadStart(at: date)
+    chapterStartSampler = Timer.scheduledTimer(
+      withTimeInterval: Self.chapterStartSampleInterval, repeats: true
+    ) { [weak self] _ in
+      guard let self, self.isPlayingAudibly else { return }
+      self.reportChapterStart(becameAudible: true)
+    }
+  }
+
+  /// Ends the timing. Reports what happened, including a start that never
+  /// sounded, which is the case worth having in the log.
+  func endChapterStartSampling() {
+    guard chapterStartSampler != nil else { return }
+    reportChapterStart(becameAudible: false)
+  }
+
+  func chapterStartReport(becameAudible: Bool, now: Date = Date()) -> ChapterStartReport? {
+    guard let trackKey = chapterStartTrackKey, let startedAt = chapterStartedAt else { return nil }
+    let mark = sharedResourceLoader?.chapterLoadMark
+    return ChapterStartReport(
+      trackKey: trackKey,
+      audibleAfter: becameAudible ? now.timeIntervalSince(startedAt) : nil,
+      firstByteAfter: mark?.firstByteAt.map { $0.timeIntervalSince(startedAt) },
+      bytesBeforeAudio: max(0, (sharedResourceLoader?.bytesServed ?? 0) - (mark?.bytesAtStart ?? 0)),
+      observedFor: now.timeIntervalSince(startedAt)
+    )
+  }
+
+  private func reportChapterStart(becameAudible: Bool) {
+    chapterStartSampler?.invalidate()
+    chapterStartSampler = nil
+    // At `.error` like the other per-chapter lines: only error and fault reach
+    // the log a patron can export.
+    if let report = chapterStartReport(becameAudible: becameAudible) {
+      ATLog(.error, report.description)
+    }
+    chapterStartTrackKey = nil
+    chapterStartedAt = nil
+  }
+
   /// One exit from a streaming load: disarm its timeout and release the
   /// provider. Called from every path that leaves the load — loaded, failed,
   /// timed out, rebuilt, torn down — because a load left open leaves the
@@ -125,6 +205,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   func finishStreamingLoad() {
     loadTimeoutWorkItem?.cancel()
     loadTimeoutWorkItem = nil
+    endChapterStartSampling()
     endStreamingLoad()
   }
 
@@ -638,6 +719,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       // The patron is waiting on bytes for this chapter, so ask the provider
       // to yield the link to it until the load ends (PP-5367).
       beginStreamingLoad()
+      beginChapterStartSampling(trackKey: position.track.key)
       armLoadTimeout(
         for: position,
         startedAt: Date(),

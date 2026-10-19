@@ -33,6 +33,30 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var bytesServed: Int { servedByteCount.value }
 
+  /// The chapter load being timed, so a start can be reported as the two
+  /// intervals a patron actually experiences: how long until the first byte
+  /// reached AVFoundation, and how long until audio came out.
+  ///
+  /// One at a time. A new chapter load supersedes the old; the old one's
+  /// timings are already reported or lost with it.
+  private let chapterLoad = LockIsolated<ChapterLoadMark?>(nil)
+
+  struct ChapterLoadMark: Equatable, Sendable {
+    let startedAt: Date
+    let bytesAtStart: Int
+    var firstByteAt: Date?
+  }
+
+  var chapterLoadMark: ChapterLoadMark? { chapterLoad.value }
+
+  func markChapterLoadStart(at date: Date = Date()) {
+    chapterLoad.value = ChapterLoadMark(
+      startedAt: date,
+      bytesAtStart: servedByteCount.value,
+      firstByteAt: nil
+    )
+  }
+
   /// What the loader was asked for one track, and how much of it failed.
   struct LoaderActivity: Equatable {
     var received: Int
@@ -669,6 +693,8 @@ private extension LCPResourceLoaderDelegate {
     // loader is not, so touching `self` inside the task below draws a
     // concurrency diagnostic.
     let servedByteCount = servedByteCount
+    // Captured like the counter above: the box is Sendable, the loader is not.
+    let chapterLoad = chapterLoad
 
     await withTaskGroup(of: Void.self) { group in
       group.addTask {
@@ -716,6 +742,10 @@ private extension LCPResourceLoaderDelegate {
               lastProgress.value = Date()
               servedByteCount.withValue { $0 += data.count }
               delivered.withValue { $0 += data.count }
+              chapterLoad.withValue { mark in
+                guard mark != nil, mark?.firstByteAt == nil else { return }
+                mark?.firstByteAt = Date()
+              }
               totalBytesRead += data.count
               if bytesRemaining != Int.max {
                 bytesRemaining -= data.count
