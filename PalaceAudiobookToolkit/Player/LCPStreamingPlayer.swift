@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import Combine
 import Foundation
 import ObjectiveC
 import ReadiumShared
@@ -212,11 +213,91 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     return publication.readingOrder[index].href
   }
 
+  /// Whether audio the patron can hear is coming out of the player.
+  var isPlayingAudibly: Bool {
+    avQueuePlayer.timeControlStatus == .playing && !avQueuePlayer.isMuted
+  }
+
   /// Whether AVFoundation can read a queued asset without the resource loader.
   nonisolated static func assetIsLocal(_ asset: AVAsset) -> Bool {
     if let urlAsset = asset as? AVURLAsset { return urlAsset.url.isFileURL }
     return true
   }
+
+  /// Whether the queue's item for a track must be rebuilt from its files.
+  ///
+  /// Audible playback outranks the switch: a rebuild is a gap the patron hears,
+  /// and the item it replaces is playing from the loader well enough to be
+  /// audible. So the switch waits for a moment with nothing to interrupt — a
+  /// load that ended without starting, a stall, or the next chapter boundary,
+  /// which builds from live file state anyway.
+  nonisolated static func needsLocalHandover(
+    itemIsRemote: Bool,
+    trackIsLocallyPlayable: Bool,
+    isPlayingAudibly: Bool
+  ) -> Bool {
+    itemIsRemote && trackIsLocallyPlayable && !isPlayingAudibly
+  }
+
+  /// Tracks already switched over, so a track is switched at most once a
+  /// session. `buildPlayerItem` can still return a streaming item for a track
+  /// whose files are present — a multi-part composition that fails to build —
+  /// and without this bound every later stall would rebuild the queue again.
+  private var localHandoverTrackKeys = Set<String>()
+
+  /// Switches the queue to a track's own files when they landed after its item
+  /// was built. Returns whether a rebuild was asked for.
+  @discardableResult
+  func switchToLocalAssetsIfLanded(at position: TrackPosition) -> Bool {
+    let key = position.track.key
+    guard !localHandoverTrackKeys.contains(key),
+          let item = avQueuePlayer.items().first(where: { $0.trackIdentifier == key }),
+          Self.needsLocalHandover(
+            itemIsRemote: !Self.assetIsLocal(item.asset),
+            trackIsLocallyPlayable: trackIsLocallyPlayable(position.track),
+            isPlayingAudibly: isPlayingAudibly
+          )
+    else { return false }
+
+    localHandoverTrackKeys.insert(key)
+    ATLog(.info, "LCP chapter switching to its decrypted files: \(key)")
+    rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: true)
+    return true
+  }
+
+  /// The decryption-completion entry point. Only the chapter the patron is on
+  /// is switched here: rebuilding the queue for a track further down it would
+  /// interrupt the chapter playing now, and that track is built from live file
+  /// state at the boundary it is reached through.
+  @discardableResult
+  func switchToLocalAssetsIfLanded(forTrackKey key: String) -> Bool {
+    guard let position = currentTrackPosition, position.track.key == key else { return false }
+    return switchToLocalAssetsIfLanded(at: position)
+  }
+
+  /// Watches a track whose item reads through the resource loader for its own
+  /// decrypted files landing.
+  ///
+  /// `OpenAccessPlayer.buildPlayerItems` subscribes to the download task of a
+  /// track it cannot build a local item for, and that is how an open-access
+  /// book picks up a download that finishes while the player is up. This class
+  /// overrides `buildPlayerItems`, so for an LCP book nothing was subscribed
+  /// and the queue kept its streaming item until the patron changed chapter.
+  func listenForDecryptionCompletion(of track: any Track) {
+    guard let task = track.downloadTask, !decryptionWatchKeys.contains(track.key) else { return }
+    decryptionWatchKeys.insert(track.key)
+    let key = track.key
+    task.statePublisher
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] state in
+        guard case .completed = state else { return }
+        self?.switchToLocalAssetsIfLanded(forTrackKey: key)
+      }
+      .store(in: &decryptionWatchers)
+  }
+
+  private var decryptionWatchKeys = Set<String>()
+  private var decryptionWatchers = Set<AnyCancellable>()
 
   /// Whether the seek target can be played from its own files right now.
   func trackIsLocallyPlayable(_ track: any Track) -> Bool {
@@ -280,7 +361,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// No failure is published. The guard measures bytes the resource loader
   /// served, nothing asked it for this track, so its silence is not evidence
   /// about this chapter and an alert over it closes a book that may be fine.
-  /// The load is released so the patron is not left muted behind a spinner.
+  /// The load is released so the patron is not left muted behind a spinner, and
+  /// the track's own files are taken up if they landed since its item was built.
   private func concludeLoadNothingIsStreaming(
     at position: TrackPosition,
     onceCompletion: @escaping (Error?) -> Void
@@ -290,6 +372,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     suppressAudibleUntilPlaying = false
     avQueuePlayer.isMuted = false
     isLoaded = true
+    switchToLocalAssetsIfLanded(at: position)
     onceCompletion(nil)
   }
 
@@ -1003,6 +1086,10 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
       ATLog(.error, "🎵 ERROR: No resource loader available for track \(index)!")
     }
 
+    // This item reads through the loader, so the track's own files landing is
+    // what the queue has to follow.
+    listenForDecryptionCompletion(of: track)
+
     let item = AVPlayerItem(asset: asset)
     item.audioTimePitchAlgorithm = .timeDomain
     item.trackIdentifier = track.key
@@ -1267,6 +1354,8 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     // Unconditional, and before anything else drops the provider: a load left
     // open here strands the patron's background download suspended.
     finishStreamingLoad()
+    decryptionWatchers.removeAll()
+    decryptionWatchKeys.removeAll()
     super.unload()
     (sharedResourceLoader as? LCPResourceLoaderDelegate)?.shutdown()
     streamingProvider = nil

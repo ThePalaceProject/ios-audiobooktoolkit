@@ -616,6 +616,15 @@ final class LifecyclePlayer: LCPStreamingPlayer {
   var requestsReceived: Int? = 1
   var requestsFailed = 0
 
+  /// Stands in for the download task's file state. `LCPDownloadTask` reads the
+  /// filesystem and the fixture manifest carries no LCP tracks, so there is no
+  /// other seam for "the download has landed".
+  var trackIsLocal = false
+
+  /// Stands in for `AVQueuePlayer.timeControlStatus`, which cannot be driven to
+  /// `.playing` without real audio.
+  var playingAudibly = false
+
   override var loadProgressWindow: TimeInterval { window }
   override var loadCeiling: TimeInterval { ceiling }
   override var streamedBytesServed: Int {
@@ -625,6 +634,24 @@ final class LifecyclePlayer: LCPStreamingPlayer {
 
   override func streamedRequests(for _: any Track) -> LCPStreamingPlayer.LoaderActivity? {
     requestsReceived.map { LCPStreamingPlayer.LoaderActivity(received: $0, failed: requestsFailed) }
+  }
+  override func trackIsLocallyPlayable(_: any Track) -> Bool { trackIsLocal }
+  override var isPlayingAudibly: Bool { playingAudibly }
+
+  /// The positions a rebuild was asked for, in order. The handover's contract
+  /// is that it rebuilds the queue at a position, and an AVQueuePlayer discards
+  /// an item that fails to load on its own, so item identity cannot witness it.
+  var rebuildRequests: [String] = []
+
+  override func rebuildPlayerQueueAndNavigate(
+    to trackPosition: TrackPosition?,
+    shouldResumePlayback: Bool = true,
+    completion: ((Bool) -> Void)? = nil
+  ) {
+    rebuildRequests.append(trackPosition?.track.key ?? "")
+    super.rebuildPlayerQueueAndNavigate(
+      to: trackPosition, shouldResumePlayback: shouldResumePlayback, completion: completion
+    )
   }
 
   override func configurePlayer() {}
@@ -936,6 +963,23 @@ final class LCPStreamingLoadDiagnosisTests: XCTestCase {
     )
   }
 
+  /// The remote item the player itself builds for a track, in the queue.
+  ///
+  /// Built through the shipped path rather than from a bare URL: an item with
+  /// no resource loader behind it fails within milliseconds and an
+  /// AVQueuePlayer then drops it, so the queue would be empty by the time a
+  /// timer fires and the assertion would pass for the wrong reason.
+  @discardableResult
+  private func queueRemoteItem(on player: LifecyclePlayer) throws -> AVPlayerItem {
+    let item = try XCTUnwrap(player.buildPlayerItems(fromTracks: [firstTrack]).first)
+    XCTAssertFalse(
+      LCPStreamingPlayer.assetIsLocal(item.asset),
+      "Precondition: the queue must hold an item that reads through the loader"
+    )
+    player.avQueuePlayer.insert(item, after: nil)
+    return item
+  }
+
   private static func activity(received: Int, failed: Int = 0) -> LCPStreamingPlayer.LoaderActivity {
     LCPStreamingPlayer.LoaderActivity(received: received, failed: failed)
   }
@@ -1138,5 +1182,173 @@ final class LCPStreamingLoadDiagnosisTests: XCTestCase {
     XCTAssertEqual(provider.events, ["begin", "end"], "the load must be released, once")
     XCTAssertTrue(player.isLoaded, "a player that is not loading must not hold the spinner")
     XCTAssertFalse(player.avQueuePlayer.isMuted, "and must not be left silent")
+  }
+
+  // MARK: - Following the download instead of waiting for a chapter change
+
+  /// All eight cells. The two the conservative rule refuses are the point:
+  /// audible playback is never interrupted, and an item already reading from
+  /// disk has nothing to hand over.
+  func test_needsLocalHandover_tableOfAllEightCells() {
+    XCTAssertTrue(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: true, isPlayingAudibly: false),
+      "a remote item over a track that is now on disk, with nothing audible to interrupt"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: true, isPlayingAudibly: true),
+      "audible playback outranks the handover — a rebuild here is a gap the patron hears"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: false, isPlayingAudibly: false),
+      "nothing has landed yet, so there is nothing to switch to"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: true, isPlayingAudibly: false),
+      "the item already reads the file"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: false, isPlayingAudibly: false)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: true, isPlayingAudibly: true)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: false, isPlayingAudibly: true)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: false, isPlayingAudibly: true)
+    )
+  }
+
+  /// Which assets count as remote. A composition over local parts is local
+  /// although it is not a URL asset; the loader's custom scheme is remote even
+  /// when the package behind it is a local file, because AVFoundation cannot
+  /// read it without the delegate.
+  func test_assetIsLocal_overEachKindOfAssetTheQueueHolds() {
+    XCTAssertTrue(LCPStreamingPlayer.assetIsLocal(AVURLAsset(url: URL(fileURLWithPath: "/tmp/track0.mp3"))))
+    XCTAssertFalse(LCPStreamingPlayer.assetIsLocal(AVURLAsset(url: URL(string: "readium-lcp://track0/t.mp3")!)))
+    XCTAssertTrue(LCPStreamingPlayer.assetIsLocal(AVMutableComposition()))
+  }
+
+  /// The handover itself: the queue holds a remote item for a track whose audio
+  /// has since been decrypted to disk, and nothing is audible, so it is rebuilt.
+  func testHandover_whenTheDecryptedFilesHaveLanded_rebuildsTheQueue() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    player.playingAudibly = false
+    try queueRemoteItem(on: player)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertTrue(switched, "a landed decryption must be picked up without a chapter change")
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "the queue must be rebuilt at the chapter the patron is on"
+    )
+  }
+
+  /// The conservative bound: a chapter the patron can hear is never
+  /// interrupted, however stale its item is.
+  func testHandover_whileTheChapterIsAudible_leavesTheQueueAlone() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    player.playingAudibly = true
+    try queueRemoteItem(on: player)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertFalse(switched)
+    XCTAssertTrue(
+      player.rebuildRequests.isEmpty,
+      "audible playback must survive a stale item"
+    )
+  }
+
+  /// An item already reading from disk has nothing to hand over, so the queue
+  /// must not be rebuilt under it.
+  func testHandover_whenTheQueuedItemIsAlreadyLocal_doesNothing() {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    let local = AVPlayerItem(url: URL(fileURLWithPath: "/tmp/does-not-matter.mp3"))
+    local.trackIdentifier = firstTrack.key
+    player.avQueuePlayer.insert(local, after: nil)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertFalse(switched)
+    XCTAssertTrue(player.rebuildRequests.isEmpty, "an item already reading the file is left alone")
+  }
+
+  /// Once per track per session. `buildPlayerItem` can still return a streaming
+  /// item for a track whose files are present — a multi-part composition that
+  /// fails to build — and an unbounded rule would then rebuild the queue at
+  /// every stall for the rest of the book.
+  func testHandover_askedTwiceForTheSameTrack_rebuildsOnce() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    XCTAssertTrue(player.switchToLocalAssetsIfLanded(at: position))
+    try queueRemoteItem(on: player)
+
+    XCTAssertFalse(
+      player.switchToLocalAssetsIfLanded(at: position),
+      "a track that has had its handover does not get another"
+    )
+    XCTAssertEqual(player.rebuildRequests.count, 1, "and the queue is rebuilt once")
+  }
+
+  /// The decryption-completion wiring, end to end. `OpenAccessPlayer`
+  /// subscribes to a track's download task from `buildPlayerItems` for a track
+  /// it cannot build a local item for; this class overrides `buildPlayerItems`,
+  /// so for an LCP book nothing was subscribed and the queue kept its remote
+  /// item until the patron changed chapter.
+  func testDecryptionCompletion_forTheTrackBeingPlayed_switchesTheQueueOver() async throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    firstTrack.downloadTask?.statePublisher.send(.completed)
+    try await Task.sleep(nanoseconds: 200_000_000)
+
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "a decryption that completes must reach the queue without a chapter change"
+    )
+  }
+
+  /// A download state that is not completion changes nothing, so the listener
+  /// cannot be made unconditional.
+  func testDecryptionProgress_leavesTheQueueAlone() async throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    firstTrack.downloadTask?.statePublisher.send(.progress(0.5))
+    try await Task.sleep(nanoseconds: 200_000_000)
+
+    XCTAssertTrue(
+      player.rebuildRequests.isEmpty,
+      "a download still in progress has nothing to hand over"
+    )
+  }
+
+  /// Where the two halves meet: the guard fires, nothing had asked the loader,
+  /// and the audio is on disk — so the load ends by switching to the file
+  /// rather than by alerting the patron.
+  func testLoadTimeout_whenNothingAskedTheLoaderAndTheAudioIsOnDisk_switchesToTheFile() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+    beginLoad(on: player)
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "the chapter the patron is waiting for must be rebuilt from its files"
+    )
   }
 }
