@@ -586,6 +586,56 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
 /// patron is waiting for.
 ///
 /// Held strongly by each test: `LCPStreamingPlayer.streamingProvider` is weak.
+/// Every cell of the slow-start prediction.
+///
+/// The predicate's own comment says every clause has to hold, and a wrong
+/// answer either puts a full-screen panel over a fast chapter or leaves a cold
+/// one looking broken for two seconds. Both directions are asserted.
+final class LCPSlowChapterStartPredictionTests: XCTestCase {
+  private func predicts(
+    locallyPlayable: Bool,
+    remoteArchive: Bool,
+    headCached: Bool
+  ) -> Bool {
+    LCPStreamingPlayer.expectsSlowChapterStart(
+      trackIsLocallyPlayable: locallyPlayable,
+      isServingRemoteArchive: remoteArchive,
+      headIsCached: headCached
+    )
+  }
+
+  /// The case the panel exists for: nothing on disk, remote archive, and the
+  /// opening read not yet cached.
+  func testColdRemoteTrack_isPredictedSlow() {
+    XCTAssertTrue(predicts(locallyPlayable: false, remoteArchive: true, headCached: false))
+  }
+
+  /// A track playable from disk is never slow, whatever the cache says.
+  func testTrackPlayableFromDisk_isNeverPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: true, headCached: false))
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: true, headCached: true))
+  }
+
+  /// A local archive reads at disk speed; the panel would be noise.
+  func testLocalArchive_isNeverPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: false, remoteArchive: false, headCached: false))
+  }
+
+  /// The clause the earlier version got wrong. A cached opening read costs no
+  /// origin traffic, so the start is quick and must NOT raise a panel — this
+  /// is the false positive that reintroduces the flicker.
+  func testRemoteTrackWhoseHeadIsCached_isNotPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: false, remoteArchive: true, headCached: true))
+  }
+
+  /// Local playability is checked before the archive, so a track on disk in a
+  /// local package is not slow either — pinned so the order cannot invert into
+  /// a prediction that depends on the archive for an on-disk track.
+  func testOnDiskTrackInALocalArchive_isNotPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: false, headCached: false))
+  }
+}
+
 private final class SpyStreamingProvider: StreamingResourceProvider {
   var events: [String] = []
   var begins: Int { events.filter { $0 == "begin" }.count }

@@ -41,13 +41,31 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   /// a quick chapter, which is the flicker the delay rule removed, so every
   /// clause has to hold.
   public var expectsSlowChapterStart: Bool {
-    guard let position = queuedTrackPosition ?? currentTrackPosition else { return false }
-    guard !trackIsLocallyPlayable(position.track) else { return false }
-    guard isServingRemoteArchive else { return false }
-    guard let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
+    guard let position = queuedTrackPosition ?? currentTrackPosition,
+          let provider = streamingProvider,
+          let href = position.track.urls?.first.map(LCPResourceLoaderDelegate.requestedHref(for:))
     else { return false }
-    guard let provider = streamingProvider else { return false }
-    return !provider.trackHeadIsCached(forHref: href)
+    return Self.expectsSlowChapterStart(
+      trackIsLocallyPlayable: trackIsLocallyPlayable(position.track),
+      isServingRemoteArchive: isServingRemoteArchive,
+      headIsCached: provider.trackHeadIsCached(forHref: href)
+    )
+  }
+
+  /// The prediction itself, over the three facts that decide it.
+  ///
+  /// Pure so each clause can be stated and tested on its own: the property
+  /// above cannot be driven without a position, a provider and a track URL,
+  /// and a predicate whose clauses are only reachable together is a predicate
+  /// whose clauses are not really tested.
+  nonisolated static func expectsSlowChapterStart(
+    trackIsLocallyPlayable: Bool,
+    isServingRemoteArchive: Bool,
+    headIsCached: Bool
+  ) -> Bool {
+    guard !trackIsLocallyPlayable else { return false }
+    guard isServingRemoteArchive else { return false }
+    return !headIsCached
   }
 
   /// No provider means no streaming session, so there is no remote archive to
