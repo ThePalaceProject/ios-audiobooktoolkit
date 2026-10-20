@@ -848,3 +848,58 @@ final class PartialArchiveStoreTests: XCTestCase {
     }
   }
 }
+
+// MARK: - Reading a store's length without opening it
+
+/// A store's recorded length has to be readable from disk alone, so the caching
+/// client can consult an archive it has read before without first going to the
+/// network to learn how long it is.
+final class PartialArchiveStoreRecordedSizeTests: XCTestCase {
+
+  private var directory: URL!
+
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    directory = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("recorded-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  }
+
+  override func tearDownWithError() throws {
+    if let directory { try? FileManager.default.removeItem(at: directory) }
+    try super.tearDownWithError()
+  }
+
+  func testRecordedTotalSize_afterAStoreHasWritten_isTheArchiveLength() throws {
+    let length: UInt64 = 1_630_000_000
+    let store = try PartialArchiveStore.open(directory: directory, totalSize: length)
+    try store.write(Data(repeating: 0x5A, count: 4096), at: 96_460_800)
+    store.close()
+
+    XCTAssertEqual(PartialArchiveStore.recordedTotalSize(in: directory), length)
+  }
+
+  /// An archive never read before is not an error, and must not be reported as
+  /// a length of zero.
+  func testRecordedTotalSize_withNoStoreOnDisk_isNil() {
+    XCTAssertNil(PartialArchiveStore.recordedTotalSize(in: directory))
+  }
+
+  /// A journal whose header cannot be parsed names no archive, so nothing may
+  /// be vouched for.
+  func testRecordedTotalSize_withAnUnreadableHeader_isNil() throws {
+    try Data("not a journal header\n".utf8).write(
+      to: directory.appendingPathComponent("archive.ranges")
+    )
+    XCTAssertNil(PartialArchiveStore.recordedTotalSize(in: directory))
+  }
+
+  /// A header with no newline yet is a fragment of an append that did not
+  /// finish, and a fragment is not a record.
+  func testRecordedTotalSize_withAnUnterminatedHeader_isNil() throws {
+    try Data("PARV1 1630000000".utf8).write(
+      to: directory.appendingPathComponent("archive.ranges")
+    )
+    XCTAssertNil(PartialArchiveStore.recordedTotalSize(in: directory))
+  }
+}

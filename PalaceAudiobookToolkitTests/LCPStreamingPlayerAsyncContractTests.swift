@@ -586,6 +586,56 @@ final class LCPStreamingQueueWindowTests: XCTestCase {
 /// patron is waiting for.
 ///
 /// Held strongly by each test: `LCPStreamingPlayer.streamingProvider` is weak.
+/// Every cell of the slow-start prediction.
+///
+/// The predicate's own comment says every clause has to hold, and a wrong
+/// answer either puts a full-screen panel over a fast chapter or leaves a cold
+/// one looking broken for two seconds. Both directions are asserted.
+final class LCPSlowChapterStartPredictionTests: XCTestCase {
+  private func predicts(
+    locallyPlayable: Bool,
+    remoteArchive: Bool,
+    headCached: Bool
+  ) -> Bool {
+    LCPStreamingPlayer.expectsSlowChapterStart(
+      trackIsLocallyPlayable: locallyPlayable,
+      isServingRemoteArchive: remoteArchive,
+      headIsCached: headCached
+    )
+  }
+
+  /// The case the panel exists for: nothing on disk, remote archive, and the
+  /// opening read not yet cached.
+  func testColdRemoteTrack_isPredictedSlow() {
+    XCTAssertTrue(predicts(locallyPlayable: false, remoteArchive: true, headCached: false))
+  }
+
+  /// A track playable from disk is never slow, whatever the cache says.
+  func testTrackPlayableFromDisk_isNeverPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: true, headCached: false))
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: true, headCached: true))
+  }
+
+  /// A local archive reads at disk speed; the panel would be noise.
+  func testLocalArchive_isNeverPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: false, remoteArchive: false, headCached: false))
+  }
+
+  /// The clause the earlier version got wrong. A cached opening read costs no
+  /// origin traffic, so the start is quick and must NOT raise a panel — this
+  /// is the false positive that reintroduces the flicker.
+  func testRemoteTrackWhoseHeadIsCached_isNotPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: false, remoteArchive: true, headCached: true))
+  }
+
+  /// Local playability is checked before the archive, so a track on disk in a
+  /// local package is not slow either — pinned so the order cannot invert into
+  /// a prediction that depends on the archive for an on-disk track.
+  func testOnDiskTrackInALocalArchive_isNotPredictedSlow() {
+    XCTAssertFalse(predicts(locallyPlayable: true, remoteArchive: false, headCached: false))
+  }
+}
+
 private final class SpyStreamingProvider: StreamingResourceProvider {
   var events: [String] = []
   var begins: Int { events.filter { $0 == "begin" }.count }
@@ -593,34 +643,76 @@ private final class SpyStreamingProvider: StreamingResourceProvider {
 
   func getPublication() -> Publication? { nil }
   func archiveIsLocalFile() -> Bool { false }
+  var headCached = true
+  func trackHeadIsCached(forHref _: String) -> Bool { headCached }
   func streamingLoadDidBegin() { events.append("begin") }
   func streamingLoadDidEnd() { events.append("end") }
 }
 
+/// Shortens the shipped windows and stands in for the facts the player reads
+/// off the resource loader and the download task, so the real timer and the
+/// real failure path run in milliseconds.
+@MainActor
+final class LifecyclePlayer: LCPStreamingPlayer {
+  var window: TimeInterval = 0.05
+  var ceiling: TimeInterval = 10
+  /// Bytes "arriving" between two samples. Zero models a load that is
+  /// receiving nothing at all.
+  var bytesPerSample = 0
+  private var served = 0
+
+  /// Loading requests the loader has received for the track under test, and how
+  /// many of them failed. One received by default, because these tests model a
+  /// load the loader WAS asked to serve, which is the case the timeout exists
+  /// to catch.
+  var requestsReceived: Int? = 1
+  var requestsFailed = 0
+
+  /// Stands in for the download task's file state. `LCPDownloadTask` reads the
+  /// filesystem and the fixture manifest carries no LCP tracks, so there is no
+  /// other seam for "the download has landed".
+  var trackIsLocal = false
+
+  /// Stands in for `AVQueuePlayer.timeControlStatus`, which cannot be driven to
+  /// `.playing` without real audio.
+  var playingAudibly = false
+
+  override var loadProgressWindow: TimeInterval { window }
+  override var loadCeiling: TimeInterval { ceiling }
+  override var streamedBytesServed: Int {
+    served += bytesPerSample
+    return served
+  }
+
+  override func streamedRequests(for _: any Track) -> LCPStreamingPlayer.LoaderActivity? {
+    requestsReceived.map { LCPStreamingPlayer.LoaderActivity(received: $0, failed: requestsFailed) }
+  }
+  override func trackIsLocallyPlayable(_: any Track) -> Bool { trackIsLocal }
+  override var isPlayingAudibly: Bool { playingAudibly }
+
+  /// The positions a rebuild was asked for, in order. The handover's contract
+  /// is that it rebuilds the queue at a position, and an AVQueuePlayer discards
+  /// an item that fails to load on its own, so item identity cannot witness it.
+  var rebuildRequests: [String] = []
+
+  override func rebuildPlayerQueueAndNavigate(
+    to trackPosition: TrackPosition?,
+    shouldResumePlayback: Bool = true,
+    completion: ((Bool) -> Void)? = nil
+  ) {
+    rebuildRequests.append(trackPosition?.track.key ?? "")
+    super.rebuildPlayerQueueAndNavigate(
+      to: trackPosition, shouldResumePlayback: shouldResumePlayback, completion: completion
+    )
+  }
+
+  override func configurePlayer() {}
+  override func addPlayerObservers() {}
+  override func removePlayerObservers() {}
+}
+
 @MainActor
 final class LCPStreamingLoadLifecycleTests: XCTestCase {
-
-  /// Shortens the shipped windows and stands in for the resource loader's byte
-  /// counter, so the real timer and the real failure path run in milliseconds.
-  final class LifecyclePlayer: LCPStreamingPlayer {
-    var window: TimeInterval = 0.05
-    var ceiling: TimeInterval = 10
-    /// Bytes "arriving" between two samples. Zero models a load that is
-    /// receiving nothing at all.
-    var bytesPerSample = 0
-    private var served = 0
-
-    override var loadProgressWindow: TimeInterval { window }
-    override var loadCeiling: TimeInterval { ceiling }
-    override var streamedBytesServed: Int {
-      served += bytesPerSample
-      return served
-    }
-
-    override func configurePlayer() {}
-    override func addPlayerObservers() {}
-    override func removePlayerObservers() {}
-  }
 
   private var toc: AudiobookTableOfContents!
   private var firstTrack: (any Track)!
@@ -765,28 +857,36 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
 
   func test_loadTimeoutOutcome_bytesArrivingInsideTheCeiling_rearms() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 30, ceiling: 90
+      ),
       .rearm
     )
   }
 
   func test_loadTimeoutOutcome_noBytesInsideTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 30, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 1024, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 30, ceiling: 90
+      ),
       .fail
     )
   }
 
   func test_loadTimeoutOutcome_bytesArrivingPastTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 2048, bytesAtLastCheck: 1024, elapsed: 90, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 90, ceiling: 90
+      ),
       .fail
     )
   }
 
   func test_loadTimeoutOutcome_noBytesPastTheCeiling_fails() {
     XCTAssertEqual(
-      LCPStreamingPlayer.loadTimeoutOutcome(bytesServed: 1024, bytesAtLastCheck: 1024, elapsed: 120, ceiling: 90),
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 1024, bytesAtLastCheck: 1024, loaderRequestsReceived: 1, elapsed: 120, ceiling: 90
+      ),
       .fail
     )
   }
@@ -823,7 +923,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
     XCTAssertEqual(failure?.domain, "LCPStreamingPlayer")
     XCTAssertEqual(
       failure?.localizedDescription,
-      "Timed out waiting for LCP publication to load",
+      "Timed out waiting for this chapter's audio",
       "A load with no bytes must still surface the failure the app shows an alert for"
     )
   }
@@ -841,7 +941,7 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
 
     XCTAssertEqual(
       failure?.localizedDescription,
-      "Timed out waiting for LCP publication to load",
+      "Timed out waiting for this chapter's audio",
       "Progress may extend the wait, not remove its bound"
     )
     XCTAssertEqual(provider.events, ["begin", "end"], "And the provider is released on that exit too")
@@ -864,5 +964,519 @@ final class LCPStreamingLoadLifecycleTests: XCTestCase {
       return false
     }
     XCTAssertTrue(failed, "The timeout must publish .failed so the host can alert")
+  }
+}
+
+// MARK: - What the load timeout measures, and following a download that lands
+
+/// A patron played a fully downloaded LCP audiobook and the player reported
+/// "Timed out waiting for LCP publication to load" for chapter 46. The archive
+/// had opened from the local package in 0.3 s, and the guard that failed the
+/// load was comparing the resource loader's byte counter against itself. These
+/// tests pin two behaviours: the guard reports the loader's silence only when
+/// the loader was asked for that track, and a track whose decrypted audio
+/// reaches disk after its item was built is switched over without waiting for
+/// the patron to change chapter.
+@MainActor
+final class LCPStreamingLoadDiagnosisTests: XCTestCase {
+  private var toc: AudiobookTableOfContents!
+  private var firstTrack: (any Track)!
+  private var provider: SpyStreamingProvider!
+
+  override func setUp() async throws {
+    try await super.setUp()
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(
+      OpenAccessAudiobook(manifest: manifest, bookIdentifier: "lcp-diagnosis-test", decryptor: nil, token: nil)
+    )
+    toc = audiobook.tableOfContents
+    firstTrack = try XCTUnwrap(toc.allTracks.first)
+    provider = SpyStreamingProvider()
+  }
+
+  private func makePlayer() -> LifecyclePlayer {
+    let player = LifecyclePlayer(tableOfContents: toc, drmDecryptor: nil)
+    player.setStreamingProvider(provider)
+    return player
+  }
+
+  private var position: TrackPosition {
+    TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks)
+  }
+
+  private func beginLoad(on player: LifecyclePlayer, completion: @escaping (Error?) -> Void = { _ in }) {
+    player.isLoaded = false
+    player.beginStreamingLoad()
+    player.armLoadTimeout(
+      for: position,
+      startedAt: Date(),
+      bytesAtLastCheck: player.streamedBytesServed,
+      onceCompletion: completion
+    )
+  }
+
+  /// The remote item the player itself builds for a track, in the queue.
+  ///
+  /// Built through the shipped path rather than from a bare URL: an item with
+  /// no resource loader behind it fails within milliseconds and an
+  /// AVQueuePlayer then drops it, so the queue would be empty by the time a
+  /// timer fires and the assertion would pass for the wrong reason.
+  @discardableResult
+  private func queueRemoteItem(on player: LifecyclePlayer) throws -> AVPlayerItem {
+    let item = try XCTUnwrap(player.buildPlayerItems(fromTracks: [firstTrack]).first)
+    XCTAssertFalse(
+      LCPStreamingPlayer.assetIsLocal(item.asset),
+      "Precondition: the queue must hold an item that reads through the loader"
+    )
+    player.avQueuePlayer.insert(item, after: nil)
+    return item
+  }
+
+  private static func activity(received: Int, failed: Int = 0) -> LCPStreamingPlayer.LoaderActivity {
+    LCPStreamingPlayer.LoaderActivity(received: received, failed: failed)
+  }
+
+  // MARK: - The guard reports only the loader's own silence
+
+  /// The reported defect. No loading request reached the loader, so the bytes
+  /// this guard counts were never going to arrive from it, and their absence is
+  /// not a stalled transfer to be reported as one.
+  func test_loadTimeoutOutcome_noBytesAndNothingAskedTheLoader_doesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 0, elapsed: 30, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// And waiting past the ceiling does not convert it into a failure: more time
+  /// does not make the loader the source of these bytes.
+  func test_loadTimeoutOutcome_nothingAskedTheLoader_pastTheCeiling_stillDoesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 0, elapsed: 120, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// Nor do bytes counted loader-wide, which belong to whichever chapter was
+  /// being served, make a track nothing asked for into this guard's business.
+  func test_loadTimeoutOutcome_bytesElsewhere_butNothingAskedForThisTrack_doesNotFail() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: 0, elapsed: 30, ceiling: 90
+      ),
+      .notStreaming
+    )
+  }
+
+  /// The remit the guard keeps: the loader was asked for this track and has
+  /// served nothing, which is the stall it exists to catch.
+  func test_loadTimeoutOutcome_noBytesAfterTheLoaderWasAsked_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: 3, elapsed: 30, ceiling: 90
+      ),
+      .fail
+    )
+  }
+
+  /// An unknown count — no loader, or no publication to name the track to it —
+  /// keeps the previous behaviour rather than assuming either answer.
+  func test_loadTimeoutOutcome_withAnUnknownRequestCount_fails() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 0, bytesAtLastCheck: 0, loaderRequestsReceived: nil, elapsed: 30, ceiling: 90
+      ),
+      .fail
+    )
+  }
+
+  /// And an unknown count still rearms while bytes arrive, so the slow-chapter
+  /// behaviour (PP-5367) is not narrowed by the new question.
+  func test_loadTimeoutOutcome_withAnUnknownRequestCount_rearmsWhileBytesArrive() {
+    XCTAssertEqual(
+      LCPStreamingPlayer.loadTimeoutOutcome(
+        bytesServed: 2048, bytesAtLastCheck: 1024, loaderRequestsReceived: nil, elapsed: 30, ceiling: 90
+      ),
+      .rearm
+    )
+  }
+
+  // MARK: - The failure says what was measured
+
+  /// The line a patron exports has to carry the facts the verdict rests on. The
+  /// old line named the publication, which had opened in 0.3 s, and sent the
+  /// diagnosis to the archive three times.
+  func test_loadTimeoutReport_namesEveryFactTheVerdictRestsOn() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "9798350430943_046.mp3",
+      hasSavedAssets: true,
+      isForcedToStream: true,
+      bytesServed: 0,
+      loaderRequests: Self.activity(received: 0)
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("9798350430943_046.mp3"), line)
+    XCTAssertTrue(line.contains("saved assets"), line)
+    XCTAssertTrue(line.contains("forced to stream"), line)
+    XCTAssertTrue(line.contains("0 bytes"), line)
+    XCTAssertTrue(line.contains("no loading request"), line)
+  }
+
+  /// Each fact the other way round, so the line cannot be a fixed string: a
+  /// track with nothing on disk, not forced, asked for twice with one failure
+  /// reads differently in every field.
+  func test_loadTimeoutReport_readsTheOtherWayWhenTheFactsAreTheOtherWay() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: false,
+      isForcedToStream: false,
+      bytesServed: 4096,
+      loaderRequests: Self.activity(received: 2, failed: 1)
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("no saved assets"), line)
+    XCTAssertFalse(line.contains("forced to stream"), line)
+    XCTAssertTrue(line.contains("4096 bytes"), line)
+    XCTAssertTrue(line.contains("2 loading request"), line)
+    XCTAssertTrue(line.contains("1 failed"), line)
+  }
+
+  /// A fast repeated failure and a stalled transfer read the same in today's
+  /// log, because both serve zero bytes. The failure count is what separates
+  /// them, so it must appear even when every request failed.
+  func test_loadTimeoutReport_whenEveryRequestFailed_saysHowMany() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: true,
+      isForcedToStream: true,
+      bytesServed: 0,
+      loaderRequests: Self.activity(received: 4, failed: 4)
+    )
+
+    XCTAssertTrue(report.description.contains("4 failed"), report.description)
+  }
+
+  /// An unknown count must not read as zero: the two lead to opposite verdicts.
+  func test_loadTimeoutReport_whenTheRequestCountIsUnknown_saysSoRatherThanZero() {
+    let report = LCPStreamingPlayer.LoadTimeoutReport(
+      trackKey: "track9.mp3",
+      hasSavedAssets: false,
+      isForcedToStream: false,
+      bytesServed: 0,
+      loaderRequests: nil
+    )
+
+    let line = report.description
+    XCTAssertTrue(line.contains("unknown"), line)
+    XCTAssertFalse(line.contains("no loading request"), line)
+  }
+
+  /// The measurement travels with the error, so the alert the app raises can be
+  /// traced to the facts behind it without a second log export.
+  func testLoadTimeout_whenItFails_carriesTheMeasurementOnTheError() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 2
+    player.requestsFailed = 2
+    var failure: NSError?
+    beginLoad(on: player) { failure = $0 as NSError? }
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    let detail = failure?.userInfo[NSDebugDescriptionErrorKey] as? String
+    XCTAssertNotNil(detail, "a timeout the app alerts on must carry what it measured")
+    XCTAssertTrue(detail?.contains("2 loading request") == true, detail ?? "")
+    XCTAssertTrue(detail?.contains("2 failed") == true, detail ?? "")
+    XCTAssertTrue(
+      detail?.contains("has no saved assets") == true,
+      "the file state must be read off the track, not assumed: \(detail ?? "")"
+    )
+  }
+
+  // MARK: - A load nothing is streaming ends without failing
+
+  /// The patron's book: the guard fires, nothing had asked the loader, and the
+  /// load must end without an "Audiobook Unavailable" alert.
+  func testLoadTimeout_whenNothingAskedTheLoader_doesNotFailTheLoad() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    var states: [PlaybackState] = []
+    let cancellable = player.playbackStatePublisher.sink { states.append($0) }
+    defer { cancellable.cancel() }
+    var failure: Error?
+    var completions = 0
+    beginLoad(on: player) { failure = $0; completions += 1 }
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertNil(failure, "a load nothing was streaming is not this guard's to fail")
+    XCTAssertEqual(completions, 1, "the caller must still be released, not left waiting")
+    XCTAssertFalse(
+      states.contains { if case .failed = $0 { return true } else { return false } },
+      "no failure may be published, or the app alerts over a book that is playable"
+    )
+  }
+
+  /// And it ends: the provider is released and the player is neither muted nor
+  /// left on a spinner, which is what a load left open costs.
+  func testLoadTimeout_whenNothingAskedTheLoader_endsTheLoadAndClearsTheMute() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    player.avQueuePlayer.isMuted = true
+    beginLoad(on: player)
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(provider.events, ["begin", "end"], "the load must be released, once")
+    XCTAssertTrue(player.isLoaded, "a player that is not loading must not hold the spinner")
+    XCTAssertFalse(player.avQueuePlayer.isMuted, "and must not be left silent")
+  }
+
+  // MARK: - Following the download instead of waiting for a chapter change
+
+  /// All eight cells. The two the conservative rule refuses are the point:
+  /// audible playback is never interrupted, and an item already reading from
+  /// disk has nothing to hand over.
+  func test_needsLocalHandover_tableOfAllEightCells() {
+    XCTAssertTrue(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: true, isPlayingAudibly: false),
+      "a remote item over a track that is now on disk, with nothing audible to interrupt"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: true, isPlayingAudibly: true),
+      "audible playback outranks the handover — a rebuild here is a gap the patron hears"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: false, isPlayingAudibly: false),
+      "nothing has landed yet, so there is nothing to switch to"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: true, isPlayingAudibly: false),
+      "the item already reads the file"
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: false, isPlayingAudibly: false)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: true, isPlayingAudibly: true)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: false, trackIsLocallyPlayable: false, isPlayingAudibly: true)
+    )
+    XCTAssertFalse(
+      LCPStreamingPlayer.needsLocalHandover(itemIsRemote: true, trackIsLocallyPlayable: false, isPlayingAudibly: true)
+    )
+  }
+
+  /// Which assets count as remote. A composition over local parts is local
+  /// although it is not a URL asset; the loader's custom scheme is remote even
+  /// when the package behind it is a local file, because AVFoundation cannot
+  /// read it without the delegate.
+  func test_assetIsLocal_overEachKindOfAssetTheQueueHolds() {
+    XCTAssertTrue(LCPStreamingPlayer.assetIsLocal(AVURLAsset(url: URL(fileURLWithPath: "/tmp/track0.mp3"))))
+    XCTAssertFalse(LCPStreamingPlayer.assetIsLocal(AVURLAsset(url: URL(string: "readium-lcp://track0/t.mp3")!)))
+    XCTAssertTrue(LCPStreamingPlayer.assetIsLocal(AVMutableComposition()))
+  }
+
+  /// The handover itself: the queue holds a remote item for a track whose audio
+  /// has since been decrypted to disk, and nothing is audible, so it is rebuilt.
+  func testHandover_whenTheDecryptedFilesHaveLanded_rebuildsTheQueue() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    player.playingAudibly = false
+    try queueRemoteItem(on: player)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertTrue(switched, "a landed decryption must be picked up without a chapter change")
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "the queue must be rebuilt at the chapter the patron is on"
+    )
+  }
+
+  /// The conservative bound: a chapter the patron can hear is never
+  /// interrupted, however stale its item is.
+  func testHandover_whileTheChapterIsAudible_leavesTheQueueAlone() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    player.playingAudibly = true
+    try queueRemoteItem(on: player)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertFalse(switched)
+    XCTAssertTrue(
+      player.rebuildRequests.isEmpty,
+      "audible playback must survive a stale item"
+    )
+  }
+
+  /// An item already reading from disk has nothing to hand over, so the queue
+  /// must not be rebuilt under it.
+  func testHandover_whenTheQueuedItemIsAlreadyLocal_doesNothing() {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    let local = AVPlayerItem(url: URL(fileURLWithPath: "/tmp/does-not-matter.mp3"))
+    local.trackIdentifier = firstTrack.key
+    player.avQueuePlayer.insert(local, after: nil)
+
+    let switched = player.switchToLocalAssetsIfLanded(at: position)
+
+    XCTAssertFalse(switched)
+    XCTAssertTrue(player.rebuildRequests.isEmpty, "an item already reading the file is left alone")
+  }
+
+  /// Once per track per session. `buildPlayerItem` can still return a streaming
+  /// item for a track whose files are present — a multi-part composition that
+  /// fails to build — and an unbounded rule would then rebuild the queue at
+  /// every stall for the rest of the book.
+  func testHandover_askedTwiceForTheSameTrack_rebuildsOnce() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    XCTAssertTrue(player.switchToLocalAssetsIfLanded(at: position))
+    try queueRemoteItem(on: player)
+
+    XCTAssertFalse(
+      player.switchToLocalAssetsIfLanded(at: position),
+      "a track that has had its handover does not get another"
+    )
+    XCTAssertEqual(player.rebuildRequests.count, 1, "and the queue is rebuilt once")
+  }
+
+  /// The decryption-completion wiring, end to end. `OpenAccessPlayer`
+  /// subscribes to a track's download task from `buildPlayerItems` for a track
+  /// it cannot build a local item for; this class overrides `buildPlayerItems`,
+  /// so for an LCP book nothing was subscribed and the queue kept its remote
+  /// item until the patron changed chapter.
+  func testDecryptionCompletion_forTheTrackBeingPlayed_switchesTheQueueOver() async throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    firstTrack.downloadTask?.statePublisher.send(.completed)
+    try await Task.sleep(nanoseconds: 200_000_000)
+
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "a decryption that completes must reach the queue without a chapter change"
+    )
+  }
+
+  /// A download state that is not completion changes nothing, so the listener
+  /// cannot be made unconditional.
+  func testDecryptionProgress_leavesTheQueueAlone() async throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    firstTrack.downloadTask?.statePublisher.send(.progress(0.5))
+    try await Task.sleep(nanoseconds: 200_000_000)
+
+    XCTAssertTrue(
+      player.rebuildRequests.isEmpty,
+      "a download still in progress has nothing to hand over"
+    )
+  }
+
+  /// A completion for a track the patron is not on changes nothing: rebuilding
+  /// the queue for it would interrupt the chapter playing now.
+  func testDecryptionCompletion_forATrackTheQueueIsNotOn_leavesTheQueueAlone() throws {
+    let player = makePlayer()
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+
+    XCTAssertFalse(player.switchToLocalAssetsIfLanded(forTrackKey: "a-track-not-in-play"))
+    XCTAssertTrue(player.rebuildRequests.isEmpty)
+  }
+
+  /// `isPlayingAudibly` is stubbed in the tests above, so the shipped reading
+  /// of the player's own state is asserted here: a paused player is not
+  /// audible, whether or not it is muted.
+  func test_isPlayingAudibly_whenThePlayerIsPaused_isFalse() {
+    let player = LCPStreamingPlayerAsyncContractTests.StubbedLCPStreamingPlayer(
+      tableOfContents: toc, drmDecryptor: nil
+    )
+
+    XCTAssertEqual(player.avQueuePlayer.timeControlStatus, .paused, "Precondition")
+    XCTAssertFalse(player.avQueuePlayer.isMuted, "Precondition")
+    XCTAssertFalse(player.isPlayingAudibly, "a paused player interrupts nothing")
+  }
+
+  /// Where the two halves meet: the guard fires, nothing had asked the loader,
+  /// and the audio is on disk — so the load ends by switching to the file
+  /// rather than by alerting the patron.
+  func testLoadTimeout_whenNothingAskedTheLoaderAndTheAudioIsOnDisk_switchesToTheFile() async throws {
+    let player = makePlayer()
+    player.bytesPerSample = 0
+    player.requestsReceived = 0
+    player.trackIsLocal = true
+    try queueRemoteItem(on: player)
+    beginLoad(on: player)
+
+    try await Task.sleep(nanoseconds: 300_000_000)
+
+    XCTAssertEqual(
+      player.rebuildRequests, [firstTrack.key],
+      "the chapter the patron is waiting for must be rebuilt from its files"
+    )
+  }
+}
+
+/// The line the exported log carries for a chapter start. Two intervals,
+/// because the patron's complaint is about the gap before audio, and the serve
+/// reports can only state a request's total after it ends.
+final class LCPChapterStartReportTests: XCTestCase {
+  private func report(
+    audibleAfter: TimeInterval?,
+    firstByteAfter: TimeInterval?,
+    bytesBeforeAudio: Int,
+    observedFor: TimeInterval
+  ) -> LCPStreamingPlayer.ChapterStartReport {
+    LCPStreamingPlayer.ChapterStartReport(
+      trackKey: "9798350430943_046.mp3",
+      audibleAfter: audibleAfter,
+      firstByteAfter: firstByteAfter,
+      bytesBeforeAudio: bytesBeforeAudio,
+      observedFor: observedFor
+    )
+  }
+
+  func test_description_statesBothIntervalsAndTheBytesThatPrecededAudio() {
+    let line = report(
+      audibleAfter: 12.34,
+      firstByteAfter: 2.1,
+      bytesBeforeAudio: 6_291_456,
+      observedFor: 12.34
+    ).description
+
+    XCTAssertTrue(line.contains("9798350430943_046.mp3"), line)
+    XCTAssertTrue(line.contains("audible 12.3s after the load began"), line)
+    XCTAssertTrue(line.contains("first byte 2.1s after"), line)
+    XCTAssertTrue(line.contains("6291456 byte(s) served before audio"), line)
+  }
+
+  /// The case worth having in the log: a start that never sounded says so, and
+  /// says how long it was watched, so "never" has a number against it.
+  func test_description_whenAudioNeverStarted_saysSoAndForHowLong() {
+    let line = report(
+      audibleAfter: nil,
+      firstByteAfter: nil,
+      bytesBeforeAudio: 0,
+      observedFor: 30
+    ).description
+
+    XCTAssertTrue(line.contains("never became audible in 30.0s"), line)
+    XCTAssertTrue(line.contains("no byte reached AVFoundation"), line)
   }
 }

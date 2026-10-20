@@ -33,6 +33,170 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var bytesServed: Int { servedByteCount.value }
 
+  /// The chapter load being timed, so a start can be reported as the two
+  /// intervals a patron actually experiences: how long until the first byte
+  /// reached AVFoundation, and how long until audio came out.
+  ///
+  /// One at a time. A new chapter load supersedes the old; the old one's
+  /// timings are already reported or lost with it.
+  private let chapterLoad = LockIsolated<ChapterLoadMark?>(nil)
+
+  struct ChapterLoadMark: Equatable, Sendable {
+    let startedAt: Date
+    let bytesAtStart: Int
+    var firstByteAt: Date?
+  }
+
+  var chapterLoadMark: ChapterLoadMark? { chapterLoad.value }
+
+  func markChapterLoadStart(at date: Date = Date()) {
+    chapterLoad.value = ChapterLoadMark(
+      startedAt: date,
+      bytesAtStart: servedByteCount.value,
+      firstByteAt: nil
+    )
+  }
+
+  /// What the loader was asked for one track, and how much of it failed.
+  struct LoaderActivity: Equatable {
+    var received: Int
+    var failed: Int
+  }
+
+  /// Loading requests handed over per track, and the ones that ended in an
+  /// error.
+  ///
+  /// `bytesServed` cannot tell a loader that is serving nothing from a loader
+  /// nothing has asked, because both read zero, and the player's load timeout
+  /// decides whether to fail a chapter on that difference. The failure count
+  /// separates the other pair that reads alike: a request failing in
+  /// milliseconds, repeatedly, costs the same chapter as one transfer that
+  /// stalls.
+  private let requestActivityByHref = LockIsolated<[String: LoaderActivity]>([:])
+
+  /// What was asked for `href`, in the spelling the player builds the item's
+  /// URL from.
+  func loadingRequests(forHref href: String) -> LoaderActivity {
+    requestActivityByHref.value[href] ?? LoaderActivity(received: 0, failed: 0)
+  }
+
+  /// The href each track's items read, as the player built their URLs.
+  ///
+  /// Recorded where the track and the URL are both in hand, so the key a
+  /// caller asks with and the key the requests are counted under cannot drift.
+  /// Deriving the href from the reading order instead would be a second
+  /// expression for the same fact, and one of them is percent-decoded.
+  private let hrefByTrackKey = LockIsolated<[String: String]>([:])
+
+  func noteTrack(key trackKey: String, servesHref href: String) {
+    hrefByTrackKey.withValue { $0[trackKey] = href }
+  }
+
+  /// What was asked for the track `trackKey`, or nil when no item for it has
+  /// been built through this loader — which is unknown, not none.
+  func loadingRequests(forTrackKey trackKey: String) -> LoaderActivity? {
+    guard let href = hrefByTrackKey.value[trackKey] else { return nil }
+    return loadingRequests(forHref: href)
+  }
+
+  /// The track a request names, taken from the URL rather than the reading
+  /// order: a caller asking why nothing was served has to be told about
+  /// requests that never reached `serve` either.
+  static func requestedHref(for url: URL) -> String {
+    let path = url.path
+    return path.hasPrefix("/") ? String(path.dropFirst()) : path
+  }
+
+  /// How long a chapter waits for a resolution already running to reach its
+  /// track before it falls back to Readium's probe.
+  ///
+  /// The resolution takes the track a chapter is waiting on first and needs two
+  /// small reads for it, measured at about 0.8s each on device. The probe it
+  /// falls back to cost 10.9-18.3s and 18.6 MB in the same measurement, so a
+  /// wait of this length is worth taking and its worst case is no worse than
+  /// what it replaces.
+  static let lengthWaitTimeout: TimeInterval = 6
+
+  /// A chapter change slower than this is what a patron reports as a book that
+  /// will not start, so it is worth a line in the log they can export.
+  static let slowChapterServeThreshold: TimeInterval = 1.5
+
+  /// How many serve reports the loader keeps. A diagnostic tail, long enough to
+  /// cover the player's prefetch window and the chapter the patron left.
+  static let maxRetainedServeReports = 16
+
+  /// What each recent chapter serve asked for and what it cost, oldest first.
+  ///
+  /// Held as values rather than written only to the log so the behaviour can be
+  /// stated without an AVFoundation load, and so a reader of a slow chapter
+  /// change has the superseded serves beside the one the patron is waiting for.
+  let serveReports = LockIsolated<[ServeReport]>([])
+
+  /// One chapter serve, as the exported log reports it.
+  struct ServeReport: Equatable {
+    /// The track's href, or the URL's last component when the serve ended
+    /// before the reading order was consulted.
+    let href: String
+    /// What AVFoundation asked for, or nil for a content-information request.
+    let range: LCPRequestedRange?
+    let elapsed: TimeInterval
+    /// When the track's plaintext length resolved, relative to the serve's
+    /// start, or nil if it never did.
+    let lengthProbe: TimeInterval?
+    let originRequests: Int
+    let originBytes: Int
+    /// Bytes THIS serve handed to AVFoundation.
+    let deliveredBytes: Int
+    let wasCancelled: Bool
+    /// Why the serve ended the request with an error, or nil when it did not.
+    let failure: String?
+
+    /// Worth a line in the exported log.
+    ///
+    /// A fast successful serve is one a patron would not notice, and a line per
+    /// segment read would bury the ones they would. A serve that failed or was
+    /// cancelled costs the chapter whatever it cost in time — a failed item is
+    /// pushed onto the streaming path and the queue rebuilt — so the duration
+    /// is not what decides it.
+    var isWorthALogLine: Bool {
+      failure != nil || wasCancelled
+        || elapsed >= LCPResourceLoaderDelegate.slowChapterServeThreshold
+    }
+
+    /// What AVFoundation asked this serve for, in the terms the request used.
+    var askedFor: String {
+      guard let range else { return "content information" }
+      return range.toEnd
+        ? "the bytes from \(range.offset) to the end"
+        : "\(range.length) bytes from \(range.offset)"
+    }
+
+    /// The origin figures are a delta over this serve's own lifetime, and
+    /// serves overlap, so concurrent serves each count the traffic that flowed
+    /// while they ran. They are not additive across lines; the delivered count
+    /// is this serve's alone.
+    var description: String {
+      String(
+        format: "LCP chapter serve took %.1fs (length probe %@) for %@, which asked for %@; delivered %d bytes; archive origin cost %d request(s) / %d bytes while it ran; %@",
+        elapsed,
+        lengthProbe.map { String(format: "%.1fs", $0) } ?? "never",
+        href.isEmpty ? "an unnamed track" : href,
+        askedFor,
+        deliveredBytes,
+        originRequests,
+        originBytes,
+        failure.map { "failed: \($0)" } ?? (wasCancelled ? "cancelled" : "finished")
+      )
+    }
+  }
+
+  private func record(_ report: ServeReport) {
+    serveReports.withValue {
+      $0.append(report)
+      $0 = Array($0.suffix(Self.maxRetainedServeReports))
+    }
+  }
+
 
 
   /// Resolved, buffered resource per track href, least-recently-used first.
@@ -170,6 +334,13 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
         userInfo: [NSLocalizedDescriptionKey: "Invalid URL scheme"]
       ))
       return false
+    }
+
+    // Counted here rather than in `serve`: what the player asks is whether
+    // anything ever asked the loader for a track, which includes a request
+    // that never reached a serve at all.
+    requestActivityByHref.withValue {
+      $0[Self.requestedHref(for: url), default: LoaderActivity(received: 0, failed: 0)].received += 1
     }
 
     if let publication = provider?.getPublication() {
@@ -337,8 +508,55 @@ private extension LCPResourceLoaderDelegate {
     }
   }
 
+
   func serve(loadingRequest: LCPStreamingLoadingRequest, with pub: Publication, slot: RequestSlot) async {
     let request = FinishOnce(loadingRequest)
+    let serveStartedAt = Date()
+    // Keyed the way the player will ask for it, and read before the reading
+    // order is consulted so a serve that never gets there still counts against
+    // the right track.
+    let requestHref = loadingRequest.requestURL.map(Self.requestedHref(for:)) ?? ""
+    let originBefore = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
+    // Read here rather than in the report: the report is written from a `defer`
+    // that can run after AVFoundation has dropped the request.
+    let requestedRange = loadingRequest.requestedRange
+    // The track the URL names, so a serve that ends before the reading order is
+    // consulted still says which file it was for. Replaced by the resolved href
+    // once there is one.
+    let servedHref = LockIsolated(loadingRequest.requestURL?.lastPathComponent ?? "")
+    // Bytes THIS serve handed over. `servedByteCount` is loader-wide, so its
+    // delta over a serve's lifetime includes whatever other chapters delivered
+    // while it ran, and a chapter the patron has left then reads as busy.
+    let deliveredBytes = LockIsolated(0)
+    // `lengthResolvedAt` separates the two halves of a cold chapter: Readium
+    // must read the entry's CBC tail to learn the plaintext length before any
+    // audio byte can be asked for, and that probe sits at the far end of the
+    // entry from the audio. Reported from a `defer` so a cancelled or failed
+    // serve is measured too — the slow cases are the ones that do not finish.
+    let lengthResolvedAt = LockIsolated<Date?>(nil)
+    defer {
+      let after = provider?.archiveOriginActivity() ?? (requests: 0, bytes: 0)
+      let report = ServeReport(
+        href: servedHref.value,
+        range: requestedRange,
+        elapsed: Date().timeIntervalSince(serveStartedAt),
+        lengthProbe: lengthResolvedAt.value.map { $0.timeIntervalSince(serveStartedAt) },
+        originRequests: after.requests - originBefore.requests,
+        originBytes: after.bytes - originBefore.bytes,
+        deliveredBytes: deliveredBytes.value,
+        wasCancelled: Task.isCancelled,
+        failure: request.failure
+      )
+      record(report)
+      if request.failure != nil {
+        requestActivityByHref.withValue {
+          $0[requestHref, default: LoaderActivity(received: 0, failed: 0)].failed += 1
+        }
+      }
+      if report.isWorthALogLine {
+        ATLog(.error, report.description)
+      }
+    }
     guard let url = loadingRequest.requestURL else {
       request.fail(NSError(
         domain: "LCPResourceLoader", code: 1,
@@ -387,7 +605,10 @@ private extension LCPResourceLoaderDelegate {
     }
 
     let finalHref = validLink.href.components(separatedBy: "#").first ?? validLink.href
-    guard case let .some(entry) = await trackEntry(for: pub, href: finalHref) else {
+    servedHref.value = finalHref
+    let resolvedEntry = await trackEntry(for: pub, href: finalHref)
+    lengthResolvedAt.withValue { $0 = Date() }
+    guard case let .some(entry) = resolvedEntry else {
       return // cancelled
     }
 
@@ -443,7 +664,8 @@ private extension LCPResourceLoaderDelegate {
       clampTrack: entry?.buffer == nil ? nil : (publication: pub, href: finalHref),
       start: start,
       count: count,
-      to: request
+      to: request,
+      delivered: deliveredBytes
     )
   }
 
@@ -455,12 +677,15 @@ private extension LCPResourceLoaderDelegate {
   /// rather than a resource because the overshoot is rare and resolving one
   /// per request would cost every well-formed read a container lookup it never
   /// uses.
+  /// `delivered` accumulates what THIS transfer handed over, which is what the
+  /// serve report states; the loader-wide counter cannot answer for one serve.
   func transfer(
     from resource: Resource,
     clampTrack: (publication: Publication, href: String)? = nil,
     start: Int,
     count: Int,
-    to request: FinishOnce
+    to request: FinishOnce,
+    delivered: LockIsolated<Int>
   ) async {
     let lastProgress = LockIsolated(Date())
     let stallTimeout = stallTimeout
@@ -468,6 +693,8 @@ private extension LCPResourceLoaderDelegate {
     // loader is not, so touching `self` inside the task below draws a
     // concurrency diagnostic.
     let servedByteCount = servedByteCount
+    // Captured like the counter above: the box is Sendable, the loader is not.
+    let chapterLoad = chapterLoad
 
     await withTaskGroup(of: Void.self) { group in
       group.addTask {
@@ -514,6 +741,11 @@ private extension LCPResourceLoaderDelegate {
               request.respond(with: data)
               lastProgress.value = Date()
               servedByteCount.withValue { $0 += data.count }
+              delivered.withValue { $0 += data.count }
+              chapterLoad.withValue { mark in
+                guard mark != nil, mark?.firstByteAt == nil else { return }
+                mark?.firstByteAt = Date()
+              }
               totalBytesRead += data.count
               if bytesRemaining != Int.max {
                 bytesRemaining -= data.count
@@ -615,6 +847,16 @@ private extension LCPResourceLoaderDelegate {
   /// the CALLING request was cancelled first, so a cancelled request is never
   /// mistaken for a failed one and finished on its behalf.
   func trackEntry(for publication: Publication, href: String) async -> TrackEntry?? {
+    // The ask the provider reads as "this chapter is waiting", and the answer
+    // that saves the probe. Only asked when there is no entry for the track
+    // yet: an entry carries its length, so a built track needs no wait.
+    var supplied = provider?.cachedPlaintextLength(forHref: href)
+    if supplied == nil, !bufferedTracks.withValue({ $0.contains { $0.href == href } }) {
+      supplied = await provider?.plaintextLength(
+        forHref: href, waitingUpTo: Self.lengthWaitTimeout
+      )
+    }
+    let knownLengthWasAbsent = supplied == nil
     let build = bufferedTracks.withValue { cache -> Task<TrackEntry?, Never> in
       if let index = cache.firstIndex(where: { $0.href == href }) {
         let entry = cache.remove(at: index)
@@ -624,12 +866,24 @@ private extension LCPResourceLoaderDelegate {
       let size = perTrackBufferSize
       // Read before the task so the task captures a Bool, not the provider.
       let bufferThisTrack = provider?.archiveIsLocalFile() != true
+      // Likewise read before the task. A known length skips
+      // `estimatedLength()` entirely, and that call is the expensive one: it
+      // reads the entry's CBC tail, which sits a whole chapter away from the
+      // audio, and was measured costing 17.8-28.8 MB of origin traffic to
+      // serve no audio at all.
+      let knownLength = supplied
       let task = Task<TrackEntry?, Never> {
         guard let resolved = Self.resource(for: publication, href: href) else {
           return nil
         }
-        guard case let .success(.some(length)) = await resolved.estimatedLength() else {
-          return nil
+        let length: UInt64
+        if let knownLength {
+          length = knownLength
+        } else {
+          guard case let .success(.some(probed)) = await resolved.estimatedLength() else {
+            return nil
+          }
+          length = probed
         }
         return TrackEntry(
           buffer: bufferThisTrack ? resolved.buffered(size: size) : nil,
@@ -651,6 +905,11 @@ private extension LCPResourceLoaderDelegate {
     // on work it no longer wants instead of holding its slot (PP-5240).
     guard let built = await Self.value(of: build) else {
       return nil // this caller was cancelled; the build stands for the next one
+    }
+    if let built, knownLengthWasAbsent {
+      // Outside the task deliberately: the provider is not `Sendable`, and the
+      // existing comments above keep it out of the task for that reason.
+      provider?.cachePlaintextLength(built.length, forHref: href)
     }
     if built == nil {
       bufferedTracks.withValue { cache in
@@ -869,6 +1128,11 @@ final class RequestSlot: @unchecked Sendable {
 final class FinishOnce: @unchecked Sendable {
   private let request: LCPStreamingLoadingRequest
   private let finished = LockIsolated(false)
+  private let failureDescription = LockIsolated<String?>(nil)
+
+  /// Why this request was failed, or nil if it was not. Read from the report
+  /// `defer` in `serve`, which runs after every exit including the failing ones.
+  var failure: String? { failureDescription.value }
 
   init(_ request: LCPStreamingLoadingRequest) {
     self.request = request
@@ -884,7 +1148,10 @@ final class FinishOnce: @unchecked Sendable {
   }
 
   func fail(_ error: Error) {
-    if claim() { request.finishLoading(with: error) }
+    if claim() {
+      failureDescription.value = (error as NSError).localizedDescription
+      request.finishLoading(with: error)
+    }
   }
 
   private func claim() -> Bool {

@@ -611,7 +611,466 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertEqual(outcome, .success)
   }
 
+  // MARK: - Where the length comes from
+
+  /// A resolution for this archive reads a track's length in two small ranges.
+  /// Readium's own probe reads the entry's CBC tail through the shared window,
+  /// measured on device at 18.6 MB of origin traffic to deliver two bytes. So
+  /// when the provider says an answer is coming, the loader waits for it and
+  /// the probe is never run.
+  func testContentInfo_whenTheProviderSuppliesTheLength_doesNotProbeTheArchive() async throws {
+    probe.length = 9_999
+    provider.suppliedLength = 4_073
+    provider.lengthWait = 0.2
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_073, "the length the resolution supplied is served")
+    XCTAssertEqual(probe.lengthLookups, 0, "the archive tail is never read for a length already coming")
+    XCTAssertEqual(
+      provider.waitsAsked.first,
+      LCPResourceLoaderDelegate.lengthWaitTimeout,
+      "the loader states how long it is prepared to wait"
+    )
+  }
+
+  /// With no resolution running there is nothing to wait for — a local package,
+  /// or a book whose resolution has already finished without this track. The
+  /// probe is the only remaining answer and the chapter must still play.
+  func testContentInfo_whenNoLengthIsComing_fallsBackToTheArchiveProbe() async throws {
+    probe.length = 4_096
+    provider.suppliedLength = nil
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_096)
+    XCTAssertEqual(probe.lengthLookups, 1, "the probe answers when nothing else will")
+  }
+
+  /// A length the probe had to learn must be remembered, or the next session
+  /// pays the same megabytes for the same answer.
+  func testContentInfo_whenTheProbeLearnedTheLength_isWrittenBackToTheProvider() async throws {
+    probe.length = 4_096
+    provider.suppliedLength = nil
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(provider.writes.map(\.href), [Self.href])
+    XCTAssertEqual(provider.writes.map(\.length), [4_096])
+  }
+
+  /// A length the provider supplied is already stored there, so writing it
+  /// back says nothing and would hide whether the probe ever ran.
+  func testContentInfo_whenTheProviderSuppliedTheLength_isNotWrittenBack() async throws {
+    probe.length = 9_999
+    provider.suppliedLength = 4_073
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.contentLength, 4_073)
+    XCTAssertTrue(provider.writes.isEmpty, "nothing new was learned, so nothing is written")
+  }
+
+  // MARK: - What a serve records
+
+  /// The exported log has to say which track a slow serve was for and what
+  /// AVFoundation asked of it. Without those two fields a chapter the patron
+  /// is waiting for and one they have already left read the same.
+  func testServe_RecordsTheTrackTheRangeAndWhatItDelivered() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk * 2)
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    let report = try XCTUnwrap(loader.serveReports.value.last)
+    XCTAssertEqual(report.href, Self.href)
+    XCTAssertEqual(report.range, LCPRequestedRange(offset: 0, length: chunk, toEnd: false))
+    XCTAssertEqual(report.deliveredBytes, chunk)
+    XCTAssertFalse(report.wasCancelled)
+    XCTAssertTrue(
+      report.description.contains(Self.href),
+      "the line a patron exports must name the track: \(report.description)"
+    )
+  }
+
+  /// A chapter the patron has left is recognisable by two fields together: it
+  /// was cancelled, and it delivered less than it was asked for.
+  func testServe_WhenCancelledMidTransfer_RecordsTheCancelAndWhatItHadDelivered() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk * 8)
+    probe.readDelay = 0.05
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 8, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    try await waitUntil(timeout: 5) { request.respondedBytes > 0 }
+    loader.didCancel(request)
+
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+    let report = try XCTUnwrap(loader.serveReports.value.last)
+    XCTAssertTrue(report.wasCancelled)
+    XCTAssertGreaterThan(report.deliveredBytes, 0)
+    XCTAssertLessThan(report.deliveredBytes, chunk * 8)
+    XCTAssertTrue(
+      report.description.contains("cancelled"),
+      "a cancelled serve must say so: \(report.description)"
+    )
+  }
+
+  /// Two chapters transferring at once must each report their own bytes. The
+  /// loader-wide counter credited a serve with every byte that arrived while
+  /// it ran, which is what made a superseded chapter read as busy.
+  func testServe_WithASecondTrackTransferringAtTheSameTime_ReportsOnlyItsOwnBytes() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk)
+    let otherProbe = ResourceProbe()
+    otherProbe.length = UInt64(chunk * 8)
+    otherProbe.readDelay = 0.05
+    provider.addTrack(href: "track1.mp3", probe: otherProbe)
+    let loader = makeLoader(stallTimeout: 5)
+    let other = FakeLoadingRequest(
+      url: Self.otherTrackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 8, toEnd: false)
+    )
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: other))
+    try await waitUntil(timeout: 5) { other.respondedBytes > 0 }
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    try await waitUntil(timeout: 5) { loader.serveReports.value.contains { $0.href == Self.href } }
+
+    let report = try XCTUnwrap(loader.serveReports.value.first { $0.href == Self.href })
+    XCTAssertEqual(
+      report.deliveredBytes,
+      chunk,
+      "the other track's bytes belong to the other track's report"
+    )
+    loader.cancelAllRequests()
+    otherProbe.releaseAll()
+  }
+
+  /// A content-information request asks for no bytes at all, so reporting zero
+  /// delivered bytes would read as a transfer that produced nothing. What it
+  /// costs is the length lookup, and the line says that instead.
+  func testServe_ForContentInformationOnly_SaysSoRatherThanReportingAnEmptyTransfer() async throws {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    let report = try XCTUnwrap(loader.serveReports.value.last)
+    XCTAssertNil(report.range)
+    XCTAssertEqual(report.deliveredBytes, 0)
+    XCTAssertNotNil(report.lengthProbe, "the length lookup is what this request spends its time on")
+    XCTAssertTrue(
+      report.description.contains("content information"),
+      "a request that asked for no bytes must not read as an empty transfer: \(report.description)"
+    )
+  }
+
+  /// Which serves reach the log. The threshold is the boundary a patron
+  /// notices, so it belongs to the report rather than to the call site, and a
+  /// serve exactly at it counts as slow.
+  func testServeReport_IsWorthALogLineFromTheThresholdUp() {
+    let threshold = LCPResourceLoaderDelegate.slowChapterServeThreshold
+
+    XCTAssertFalse(Self.report(elapsed: threshold - 0.1).isWorthALogLine)
+    XCTAssertTrue(Self.report(elapsed: threshold).isWorthALogLine)
+    XCTAssertTrue(Self.report(elapsed: threshold + 1).isWorthALogLine)
+  }
+
+  /// The retained reports are a diagnostic tail, not a history: a long
+  /// listening session must not keep one per chapter serve for the life of the
+  /// player.
+  func testServeReports_KeepOnlyTheMostRecent() async throws {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    for _ in 0..<(LCPResourceLoaderDelegate.maxRetainedServeReports + 3) {
+      let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+      XCTAssertTrue(loader.shouldWait(for: request))
+      let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    }
+
+    try await waitUntil(timeout: 5) {
+      loader.serveReports.value.count >= LCPResourceLoaderDelegate.maxRetainedServeReports
+    }
+    XCTAssertEqual(
+      loader.serveReports.value.count,
+      LCPResourceLoaderDelegate.maxRetainedServeReports
+    )
+  }
+
+  // MARK: - What the loader was asked for, per track
+
+  /// The byte counter cannot tell a loader that is serving nothing from a
+  /// loader nothing has asked, because both read zero. The player's load
+  /// timeout decides whether to fail a chapter on that difference, so the
+  /// loader counts what it was handed, per track.
+  func testRequestCount_CountsEveryLoadingRequestPerTrack() async throws {
+    probe.length = 4096
+    let otherProbe = ResourceProbe()
+    otherProbe.length = 4096
+    provider.addTrack(href: "track1.mp3", probe: otherProbe)
+    let loader = makeLoader(stallTimeout: 5)
+
+    for _ in 0..<2 {
+      XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+        url: Self.trackURL, needsContentInformation: true, range: nil
+      )))
+    }
+    XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: true, range: nil
+    )))
+
+    XCTAssertEqual(loader.loadingRequests(forHref: Self.href).received, 2)
+    XCTAssertEqual(loader.loadingRequests(forHref: "track1.mp3").received, 1)
+    loader.cancelAllRequests()
+    otherProbe.releaseAll()
+  }
+
+  /// A track nothing has asked for reads zero, which is the answer the player
+  /// acts on: there were never going to be bytes for it.
+  func testRequestCount_ForATrackNothingAskedFor_IsZero() {
+    let loader = makeLoader(stallTimeout: 5)
+
+    XCTAssertEqual(loader.loadingRequests(forHref: "track7.mp3").received, 0)
+  }
+
+  /// A URL this loader does not serve is not a request for any track, so it
+  /// must not make one look busy.
+  func testRequestCount_DoesNotCountAURLThisLoaderDoesNotServe() {
+    let loader = makeLoader(stallTimeout: 5)
+    let foreign = FakeLoadingRequest(
+      url: URL(string: "https://example.com/track0.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertFalse(loader.shouldWait(for: foreign))
+    XCTAssertEqual(loader.loadingRequests(forHref: "track0.mp3").received, 0)
+  }
+
+  /// A fast repeated failure and a stalled transfer both serve zero bytes. The
+  /// failure count is what tells them apart, so the loader keeps it per track.
+  func testRequestCount_WhenAServeFails_CountsTheFailureAgainstTheTrack() async throws {
+    let loader = makeLoader(stallTimeout: 5)
+    let missing = FakeLoadingRequest(
+      url: URL(string: "readium-lcp://track9/absent.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: missing))
+    let outcome = try await missing.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .failure(domain: "LCPResourceLoader", code: 2))
+    try await waitUntil(timeout: 5) {
+      loader.loadingRequests(forHref: "absent.mp3").failed == 1
+    }
+    XCTAssertEqual(loader.loadingRequests(forHref: "absent.mp3").received, 1)
+  }
+
+  /// A serve that succeeds must not be counted as a failure, or the count that
+  /// separates a failing track from a slow one says nothing.
+  func testRequestCount_WhenAServeSucceeds_CountsNoFailure() async throws {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(url: Self.trackURL, needsContentInformation: true, range: nil)
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+    XCTAssertEqual(outcome, .success)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    XCTAssertEqual(loader.loadingRequests(forHref: Self.href).failed, 0)
+  }
+
+  /// The player asks by track, because that is what it has; the loader counts
+  /// by URL, because that is what AVFoundation hands it. The pairing is
+  /// recorded when the item is built so the two cannot drift apart.
+  func testRequestCount_IsReadableByTheTrackTheItemWasBuiltFor() {
+    probe.length = 4096
+    let loader = makeLoader(stallTimeout: 5)
+    loader.noteTrack(key: "chapter-46", servesHref: Self.href)
+
+    XCTAssertTrue(loader.shouldWait(for: FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: true, range: nil
+    )))
+
+    XCTAssertEqual(loader.loadingRequests(forTrackKey: "chapter-46")?.received, 1)
+    loader.cancelAllRequests()
+  }
+
+  /// A track no item has been built for reads nil rather than zero: the two
+  /// lead to opposite verdicts in the player's load timeout.
+  func testRequestCount_ForATrackWithNoItemBuiltThroughThisLoader_IsUnknown() {
+    let loader = makeLoader(stallTimeout: 5)
+
+    XCTAssertNil(loader.loadingRequests(forTrackKey: "chapter-46"))
+  }
+
+  // MARK: - A serve that fails leaves a line whatever it cost
+
+  /// The threshold was the only thing deciding what reached the log, so a serve
+  /// that failed in a few milliseconds left no trace — and a failed item is
+  /// then forced onto the streaming path and rebuilt, which can repeat without
+  /// a single line in the exported log.
+  func testServeReport_AFailedServeIsWorthALogLineHoweverFastItWas() {
+    XCTAssertTrue(Self.report(elapsed: 0.01, failure: "Track not found in reading order").isWorthALogLine)
+  }
+
+  /// A cancelled serve too: a chapter the patron left is how a superseded read
+  /// ends, and it is the context for the serve they are waiting on.
+  func testServeReport_ACancelledServeIsWorthALogLineHoweverFastItWas() {
+    XCTAssertTrue(Self.report(elapsed: 0.01, wasCancelled: true).isWorthALogLine)
+  }
+
+  /// And a fast serve that neither failed nor was cancelled stays out of the
+  /// log, or a line per segment read buries the ones that matter.
+  func testServeReport_AFastSuccessfulServeStaysOutOfTheLog() {
+    XCTAssertFalse(Self.report(elapsed: 0.01).isWorthALogLine)
+  }
+
+  /// The line has to name the failure, not only its existence: the cause is
+  /// what distinguishes a missing track from a transport error.
+  func testServeReport_NamesTheFailureInTheLine() {
+    let line = Self.report(elapsed: 0.01, failure: "Track not found in reading order").description
+
+    XCTAssertTrue(line.contains("failed"), line)
+    XCTAssertTrue(line.contains("Track not found in reading order"), line)
+  }
+
+  /// Driven through the shipped path, so the recording is asserted over the
+  /// real failure exit rather than over a hand-built report.
+  func testServe_WhenTheTrackIsNotInTheReadingOrder_RecordsTheFailure() async throws {
+    let loader = makeLoader(stallTimeout: 5)
+    let missing = FakeLoadingRequest(
+      url: URL(string: "readium-lcp://track9/absent.mp3")!,
+      needsContentInformation: true,
+      range: nil
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: missing))
+    _ = try await missing.waitUntilFinished(timeout: 5)
+    try await waitUntil(timeout: 5) { !loader.serveReports.value.isEmpty }
+
+    let report = try XCTUnwrap(loader.serveReports.value.last)
+    XCTAssertNotNil(report.failure, "a serve that failed must say so in its report")
+    XCTAssertTrue(report.isWorthALogLine, "and reach the log however fast it was")
+  }
+
+  // MARK: - Timing a chapter start
+
+  /// What a patron waits for is the FIRST byte, and nothing measured it: the
+  /// serve reports state a request's total only once it is over. The mark
+  /// records when the first byte of a marked load reached AVFoundation.
+  func testChapterLoadMark_recordsWhenTheFirstByteWasHandedOver() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk)
+    let loader = makeLoader(stallTimeout: 5)
+    loader.markChapterLoadStart()
+    XCTAssertNil(loader.chapterLoadMark?.firstByteAt, "nothing has been served yet")
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertNotNil(loader.chapterLoadMark?.firstByteAt, "the first byte must be timed")
+    XCTAssertEqual(loader.chapterLoadMark?.bytesAtStart, 0)
+  }
+
+  /// A new chapter supersedes the old mark, so a start is never reported
+  /// against a load the patron has already left.
+  func testChapterLoadMark_whenANewLoadBegins_timesTheNewOne() async throws {
+    let chunk = 128 * 1024
+    probe.length = UInt64(chunk * 2)
+    let loader = makeLoader(stallTimeout: 5)
+    loader.markChapterLoadStart()
+    let first = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: first))
+    _ = try await first.waitUntilFinished(timeout: 5)
+    let servedByFirstLoad = loader.bytesServed
+    XCTAssertGreaterThan(servedByFirstLoad, 0)
+
+    loader.markChapterLoadStart()
+
+    XCTAssertNil(loader.chapterLoadMark?.firstByteAt, "the new load has served nothing yet")
+    XCTAssertEqual(
+      loader.chapterLoadMark?.bytesAtStart,
+      servedByFirstLoad,
+      "bytes the previous chapter served are not credited to this one"
+    )
+  }
+
   // MARK: - Helpers
+
+  private static func report(
+    elapsed: TimeInterval,
+    wasCancelled: Bool = false,
+    failure: String? = nil
+  ) -> LCPResourceLoaderDelegate.ServeReport {
+    LCPResourceLoaderDelegate.ServeReport(
+      href: href,
+      range: nil,
+      elapsed: elapsed,
+      lengthProbe: nil,
+      originRequests: 0,
+      originBytes: 0,
+      deliveredBytes: 0,
+      wasCancelled: wasCancelled,
+      failure: failure
+    )
+  }
 
   private func waitUntil(timeout: TimeInterval, _ condition: @escaping () -> Bool) async throws {
     let deadline = Date().addingTimeInterval(timeout)
@@ -851,6 +1310,11 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
   private let lock = NSLock()
   private var hrefs: [String] = []
   private var publication: Publication
+  private var _suppliedLength: UInt64?
+  private var _lengthWait: TimeInterval = 0
+  private var _waitsAsked: [TimeInterval] = []
+  private var _writes: [(href: String, length: UInt64)] = []
+  private var _stored: [String: UInt64] = [:]
 
   init(probe: ResourceProbe, href: String) {
     container.add(href: href, probe: probe)
@@ -867,6 +1331,50 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
   }
 
   func getPublication() -> Publication? { lock.withLock { publication } }
+
+  /// What a resolution running for this archive will supply, after `lengthWait`.
+  /// nil means nothing is coming, which is what sends the loader to the probe.
+  var suppliedLength: UInt64? {
+    get { lock.withLock { _suppliedLength } }
+    set { lock.withLock { _suppliedLength = newValue } }
+  }
+
+  var lengthWait: TimeInterval {
+    get { lock.withLock { _lengthWait } }
+    set { lock.withLock { _lengthWait = newValue } }
+  }
+
+  /// The timeouts the loader asked to wait, in order.
+  var waitsAsked: [TimeInterval] { lock.withLock { _waitsAsked } }
+
+  /// What the loader asked to be remembered, in order. Recorded but not
+  /// served back: a write that changed later answers would change what the
+  /// other tests here measure.
+  var writes: [(href: String, length: UInt64)] { lock.withLock { _writes } }
+
+  func cachePlaintextLength(_ length: UInt64, forHref href: String) {
+    lock.withLock { _writes.append((href: href, length: length)) }
+  }
+
+  /// Empty unless a test stores one, which is the state the loader meets on a
+  /// first open.
+  func cachedPlaintextLength(forHref href: String) -> UInt64? {
+    lock.withLock { _stored[href] }
+  }
+
+  func store(length: UInt64, forHref href: String) {
+    lock.withLock { _stored[href] = length }
+  }
+
+  func plaintextLength(forHref href: String, waitingUpTo timeout: TimeInterval) async -> UInt64? {
+    let (supplied, wait): (UInt64?, TimeInterval) = lock.withLock {
+      _waitsAsked.append(timeout)
+      return (_suppliedLength, _lengthWait)
+    }
+    guard let supplied else { return nil }
+    if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+    return supplied
+  }
 
   // The protocol requires these without a default so no conformer can
   // silently skip them; this fake is not exercising the yield behaviour.

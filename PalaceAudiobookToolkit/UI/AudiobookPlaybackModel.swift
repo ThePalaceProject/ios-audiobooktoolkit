@@ -15,7 +15,143 @@ import SwiftUI
 @MainActor
 public class AudiobookPlaybackModel: ObservableObject {
   @Published private var reachability = Reachability()
+  /// When this book was opened, so the prefetch's grace window is measured from
+  /// the moment the patron started waiting.
+  private let openedAt = Date()
+  private var hasStartedDeferredPrefetch = false
+
   @Published var isWaitingForPlayer = false
+
+  /// Whether the dark loading panel is shown over the player chrome.
+  ///
+  /// Not `!player.isLoaded`, which the view used to read directly. That flag
+  /// goes false on every chapter change that is not served from disk, so a
+  /// change that resolved in a few hundred milliseconds still threw up a
+  /// full-screen panel and took it away again: the patron saw chrome, then a
+  /// panel, then the player. The chrome alone carries a short wait; the panel
+  /// is for a wait long enough to need explaining.
+  @Published var showsLoadingPanel = false
+
+  /// Whether the chapter about to be heard is expected to be slow to start.
+  ///
+  /// Public because the host draws its own loading presentation before this
+  /// model's panel can appear, and it needs the same answer: without it the
+  /// host showed a shimmer and replaced it once a download registered, which
+  /// put the two states in the wrong order.
+  public var expectsSlowChapterStart: Bool {
+    audiobookManager.audiobook.player.expectsSlowChapterStart
+  }
+
+  /// When the current wait began, and when the panel went up. Both nil when
+  /// there is nothing to wait for.
+  private var loadingSince: Date?
+  private var panelShownAt: Date?
+  /// Whether this load has already had its panel and given it back.
+  ///
+  /// The panel hands over to the chrome when the transport has bytes, which
+  /// happens while the load is still running — so without this the next poll
+  /// finds no panel, a load still in progress and a slow-start prediction, and
+  /// puts the panel straight back. The patron sees it blink about once a
+  /// second. One panel per load; a new load clears this.
+  private var panelRetired = false
+
+  /// How long a wait must last before it is worth a panel, and how long a
+  /// panel stays once shown. The second number exists because a panel that
+  /// appears and vanishes inside a blink reads as a fault in the app.
+  static let loadingPanelDelay: TimeInterval = 2.0
+  static let loadingPanelMinimumVisible: TimeInterval = 1.0
+
+  /// The panel's visibility, as a function of the wait and its own history.
+  ///
+  /// Pure so the rule can be stated without a player: the states that matter
+  /// are a short wait, a long wait, a wait that ends while the panel is young,
+  /// and a wait that ends after it has had its minimum.
+  nonisolated static func loadingPanelIsVisible(
+    isLoading: Bool,
+    transportIsWaiting: Bool,
+    expectsSlowStart: Bool,
+    panelRetired: Bool,
+    loadingSince: Date?,
+    panelShownAt: Date?,
+    now: Date,
+    delay: TimeInterval,
+    minimumVisible: TimeInterval
+  ) -> Bool {
+    if let panelShownAt {
+      // Hand back to the chrome as soon as the transport has bytes, not when
+      // the load is declared finished. That moment is about a second before
+      // audio, so the patron sees the player settle and then hears it, instead
+      // of a panel sitting over a player that is ready.
+      if transportIsWaiting { return true }
+      return now.timeIntervalSince(panelShownAt) < minimumVisible
+    }
+    // Shown once per load. Re-showing after the hand-over is what makes it
+    // blink, because the load outlives the transport becoming ready.
+    guard !panelRetired else { return false }
+    guard isLoading, let loadingSince else { return false }
+    // A start predicted slow earns the panel at once: waiting two seconds to
+    // say "this is loading" is two seconds of a player that looks broken.
+    // Everything else must prove it is slow by lasting.
+    if expectsSlowStart { return true }
+    return now.timeIntervalSince(loadingSince) >= delay
+  }
+
+  /// Raises the panel for a chapter the patron has just chosen, before the
+  /// player has begun loading it.
+  ///
+  /// The wait starts when the patron taps, not when the transport notices, so
+  /// the panel is the first thing shown for a chapter predicted slow and the
+  /// chrome follows it. A chapter predicted quick raises nothing, which is
+  /// what keeps this from flashing over a cached chapter.
+  private func presentPanelForSelectedChapter(_ position: TrackPosition, now: Date = Date()) {
+    guard audiobookManager.audiobook.player.expectsSlowChapterStart(at: position) else { return }
+    loadingSince = now
+    panelRetired = false
+    panelShownAt = now
+    if !showsLoadingPanel { showsLoadingPanel = true }
+  }
+
+  /// Advances the panel's state. Called from the playback poll, so its
+  /// resolution is that poll's interval.
+  func updateLoadingPresentation(now: Date = Date()) {
+    let player = audiobookManager.audiobook.player
+    // Waiting on the transport counts as loading: `isLoaded` can be true while
+    // AVFoundation still has no audio to play, which is the window that reads
+    // as "it says it is playing but nothing happens".
+    let transportIsWaiting = player.isWaitingForData
+    let isLoading = !player.isLoaded || transportIsWaiting
+    if isLoading {
+      if loadingSince == nil {
+        loadingSince = now
+        panelRetired = false
+      }
+    } else {
+      loadingSince = nil
+      panelRetired = false
+    }
+
+    // Only asked while something is loading, and only before the panel is up:
+    // it is the escalation decision, and it reads a cache on a path that runs
+    // twice a second for the whole of playback.
+    let expectsSlowStart = (isLoading && panelShownAt == nil)
+      ? player.expectsSlowChapterStart
+      : false
+
+    let visible = Self.loadingPanelIsVisible(
+      isLoading: isLoading,
+      transportIsWaiting: transportIsWaiting,
+      expectsSlowStart: expectsSlowStart,
+      panelRetired: panelRetired,
+      loadingSince: loadingSince,
+      panelShownAt: panelShownAt,
+      now: now,
+      delay: Self.loadingPanelDelay,
+      minimumVisible: Self.loadingPanelMinimumVisible
+    )
+    if panelShownAt != nil && !visible { panelRetired = true }
+    panelShownAt = visible ? (panelShownAt ?? now) : nil
+    if showsLoadingPanel != visible { showsLoadingPanel = visible }
+  }
   @Published var playbackProgress: Double = 0
   @Published public var isDownloading = false
   @Published public var overallDownloadProgress: Float = 0
@@ -136,6 +272,13 @@ public class AudiobookPlaybackModel: ObservableObject {
         // title on a chapter that is not playing.
         self.navigationTargetTrackKey = nil
       }
+
+      // Decide the panel now rather than on the next poll, and decide it for
+      // the chapter just chosen rather than the one being left. The poll runs
+      // twice a second, so a slow chapter showed the player's chrome first and
+      // the panel after it, which reads as going backwards — player, loading
+      // screen, player.
+      presentPanelForSelectedChapter(selectedLocation)
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
         let target = selectedLocation
@@ -275,7 +418,56 @@ public class AudiobookPlaybackModel: ObservableObject {
     setupBindings()
     subscribeToPublisher()
     setupReactivePlaybackStateMonitoring()
-    self.audiobookManager.networkService.fetch()
+
+    // First open takes the same decision a chapter selection does. Without
+    // this the panel could only arrive on the playback poll, by which time the
+    // player has drawn its chrome, and the patron sees the skeleton and then a
+    // loading screen over the top of it.
+    if let currentLocation { presentPanelForSelectedChapter(currentLocation) }
+  }
+
+  /// Whether to prefetch and decrypt whole tracks as the book opens.
+  ///
+  /// Over a remote archive the prefetch reads whole tracks, three at a time,
+  /// across the link the chapter the patron is waiting on also has to cross,
+  /// and it buys nothing a streaming session needs: playback is served from
+  /// byte ranges, and Palace fetches the whole archive separately for offline
+  /// use (PP-5135). Once that archive is local the prefetch costs no egress,
+  /// so the gate is the remoteness of the archive, not the use of streaming.
+  static func shouldPrefetchTracks(servingRemoteArchive: Bool) -> Bool {
+    !servingRemoteArchive
+  }
+
+  /// How long the first chapter may keep the link to itself before the prefetch
+  /// starts regardless.
+  ///
+  /// A bound, not a wait on playback alone: a vendor whose player needs a track
+  /// on disk before it can play would never report playing, and a prefetch
+  /// gated only on playback would then never run at all — the book would never
+  /// reach the device.
+  static let deferredPrefetchGrace: TimeInterval = 5
+
+  /// Whether to start the deferred whole-track prefetch now.
+  ///
+  /// Three full-track transfers starting as the book opens cross the same link
+  /// the first chapter needs, for every vendor rather than only LCP. They are
+  /// deferred, never skipped: playback starting means the chapter has what it
+  /// needs, and `deferredPrefetchGrace` covers the case where playback cannot
+  /// start until tracks are present.
+  static func shouldStartDeferredPrefetch(
+    isPlaying: Bool,
+    secondsSinceOpen: TimeInterval,
+    alreadyStarted: Bool,
+    servingRemoteArchive: Bool,
+    grace: TimeInterval = deferredPrefetchGrace
+  ) -> Bool {
+    guard !alreadyStarted else { return false }
+    guard shouldPrefetchTracks(servingRemoteArchive: servingRemoteArchive) else { return false }
+    return isPlaying || secondsSinceOpen >= grace
+  }
+
+  private static func isServingRemoteArchive(_ manager: AudiobookManager) -> Bool {
+    (manager.audiobook.player as? StreamingCapablePlayer)?.isServingRemoteArchive ?? false
   }
 
   // MARK: - Public helpers
@@ -283,6 +475,9 @@ public class AudiobookPlaybackModel: ObservableObject {
   public func jumpToInitialLocation(_ position: TrackPosition) {
     pendingLocation = position
     currentLocation = position
+    // Resuming into the middle of a book is a first open too, and the chapter
+    // resumed into is the one whose bytes decide the wait.
+    presentPanelForSelectedChapter(position)
   }
 
   public func beginSaveSuppression(for seconds: TimeInterval) {
@@ -471,8 +666,24 @@ public class AudiobookPlaybackModel: ObservableObject {
         if _isPlaying != currentPlayingState {
           _isPlaying = currentPlayingState
         }
+        updateLoadingPresentation()
+        startDeferredPrefetchIfDue(isPlaying: currentPlayingState)
       }
       .store(in: &subscriptions)
+
+  }
+
+  /// Evaluated on the existing playback poll, so the prefetch starts on the
+  /// first tick after playback begins or after the grace window.
+  private func startDeferredPrefetchIfDue(isPlaying: Bool) {
+    guard Self.shouldStartDeferredPrefetch(
+      isPlaying: isPlaying,
+      secondsSinceOpen: Date().timeIntervalSince(openedAt),
+      alreadyStarted: hasStartedDeferredPrefetch,
+      servingRemoteArchive: Self.isServingRemoteArchive(audiobookManager)
+    ) else { return }
+    hasStartedDeferredPrefetch = true
+    audiobookManager.networkService.fetch()
   }
 
   private func setupBindings() {

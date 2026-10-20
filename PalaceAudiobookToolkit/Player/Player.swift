@@ -140,6 +140,41 @@ public enum PlaybackState {
 @MainActor
 public protocol Player: NSObject {
   var isPlaying: Bool { get }
+
+  /// Whether the transport wants to play and has no data to play.
+  ///
+  /// `isPlaying` answers intent: it is true from the moment `play()` is called,
+  /// because the rate is set then. AVFoundation's own answer to "is audio
+  /// coming out" is `timeControlStatus`, and the gap between the two is the
+  /// window a patron spends looking at a player that says it is playing in
+  /// silence. The UI asks this to tell waiting apart from playing.
+  ///
+  /// Default false: a player that cannot be in that state is never waiting.
+  var isWaitingForData: Bool { get }
+
+  /// Whether the chapter now loading is expected to take long enough that the
+  /// patron should be told, rather than left watching chrome that does nothing.
+  ///
+  /// A prediction, asked at the moment the load starts, because the
+  /// alternative — waiting to see — is what makes a cold start look broken: the
+  /// panel arrives after the patron has already decided something is wrong.
+  /// Being a prediction, it can be wrong, so a player answers true only from
+  /// positive evidence that the bytes are not nearby. Measured on device
+  /// 2026-10-19: a cold streamed chapter moved 12-31 MB and took 2-10 s, while
+  /// one served from the byte-range cache cost no origin bytes and 0.0 s.
+  ///
+  /// Default false: a player that cannot be slow this way never predicts it,
+  /// and the wait-and-see rule still covers it.
+  var expectsSlowChapterStart: Bool { get }
+
+  /// The same prediction for a chapter the patron has just chosen but which
+  /// has not begun loading yet.
+  ///
+  /// The property above answers about the chapter now loading, which at the
+  /// moment of a selection is still the one being left. Asked here so the
+  /// panel can be decided when the patron taps, rather than after the player
+  /// has already drawn its chrome for the new chapter.
+  func expectsSlowChapterStart(at position: TrackPosition) -> Bool
   var queuesEvents: Bool { get }
   var isDrmOk: Bool { get set }
   var currentOffset: Double { get }
@@ -177,6 +212,12 @@ public protocol Player: NSObject {
 }
 
 extension Player {
+  /// A player with no transport of its own is never waiting on one.
+  public var isWaitingForData: Bool { false }
+
+  /// Local audio is never predicted slow; the wait-and-see rule still applies.
+  public var expectsSlowChapterStart: Bool { false }
+  public func expectsSlowChapterStart(at _: TrackPosition) -> Bool { false }
   func savePlaybackRate(rate: PlaybackRate) {
     UserDefaults.standard.set(rate.rawValue, forKey: "playback_rate")
   }
