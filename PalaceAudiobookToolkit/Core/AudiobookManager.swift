@@ -84,7 +84,7 @@ public protocol AudiobookManager {
   func downloadProgress(for chapter: Chapter) -> Double
   func retryDownload()
 
-  @discardableResult func saveLocation(_ location: TrackPosition) -> Result<Void, Error>?
+  func saveLocation(_ location: TrackPosition)
   func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?)
   func deleteBookmark(at location: TrackPosition, completion: ((Bool) -> Void)?)
   func fetchBookmarks(completion: (([TrackPosition]) -> Void)?)
@@ -785,23 +785,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     cancellables.removeAll()
   }
 
-  @discardableResult
-  public func saveLocation(_ location: TrackPosition) -> Result<Void, Error>? {
-    var result: Result<Void, Error>?
-
-    bookmarkDelegate?.saveListeningPosition(at: location) { serverId in
-      if let _ = serverId {
-        result = .success(())
-      } else {
-        result = .failure(NSError(
-          domain: OpenAccessPlayerErrorDomain,
-          code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "Failed to post current location."]
-        ))
-        ATLog(.error, "Failed to post current location.")
-      }
-    }
-    return result
+  /// Fire-and-forget. The delegate's completion arrives asynchronously, so no
+  /// outcome can be returned here. A nil server ID is the normal result of a
+  /// throttled or queued write, and the delegate logs real sync failures itself.
+  public func saveLocation(_ location: TrackPosition) {
+    bookmarkDelegate?.saveListeningPosition(at: location, completion: nil)
   }
 
   public func saveBookmark(at location: TrackPosition, completion: ((_ result: SaveBookmarkResult) -> Void)?) {
