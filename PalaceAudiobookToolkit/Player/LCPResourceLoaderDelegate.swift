@@ -612,13 +612,13 @@ private extension LCPResourceLoaderDelegate {
       return // cancelled
     }
 
-    // With no length the buffer cannot clamp its read-ahead, so this request
-    // reads unbuffered rather than being refused: a tail fetch that failed
-    // once must not turn into a chapter that will not play. It costs this
-    // request the saving, not the patron the book.
-    let readSource: Resource? = entry?.buffer ?? Self.resource(for: pub, href: finalHref)
-
     let trackLength = entry?.length
+
+    // With no entry this request reads unbuffered rather than being refused.
+    // A CBC read still needs the length, so it succeeds only if Readium's own
+    // tail fetch now does; the next request builds a fresh entry either way.
+    let readSource: Resource? = entry?.buffer
+      ?? Self.resource(for: pub, href: finalHref, knownLength: trackLength)
 
     // Content-information phase. No timer runs here: the length lookup is a
     // network round trip for CBC resources, and a fixed timer at this point
@@ -661,7 +661,7 @@ private extension LCPResourceLoaderDelegate {
     // length/size mismatch can still find the real end (PP-4542).
     await transfer(
       from: readSource,
-      clampTrack: entry?.buffer == nil ? nil : (publication: pub, href: finalHref),
+      clampTrack: entry?.buffer == nil ? nil : (publication: pub, href: finalHref, length: trackLength),
       start: start,
       count: count,
       to: request,
@@ -681,7 +681,7 @@ private extension LCPResourceLoaderDelegate {
   /// serve report states; the loader-wide counter cannot answer for one serve.
   func transfer(
     from resource: Resource,
-    clampTrack: (publication: Publication, href: String)? = nil,
+    clampTrack: (publication: Publication, href: String, length: UInt64?)? = nil,
     start: Int,
     count: Int,
     to request: FinishOnce,
@@ -707,7 +707,7 @@ private extension LCPResourceLoaderDelegate {
           func clampRead(_ range: Range<UInt64>) async throws -> Data {
             if resolvedClampSource == nil {
               resolvedClampSource = .some(
-                clampTrack.flatMap { Self.resource(for: $0.publication, href: $0.href) }
+                clampTrack.flatMap { Self.resource(for: $0.publication, href: $0.href, knownLength: $0.length) }
               )
             }
             guard let raw = resolvedClampSource.flatMap({ $0 }) else {
@@ -873,7 +873,7 @@ private extension LCPResourceLoaderDelegate {
       // serve no audio at all.
       let knownLength = supplied
       let task = Task<TrackEntry?, Never> {
-        guard let resolved = Self.resource(for: publication, href: href) else {
+        guard let resolved = Self.resource(for: publication, href: href, knownLength: knownLength) else {
           return nil
         }
         let length: UInt64
@@ -920,6 +920,20 @@ private extension LCPResourceLoaderDelegate {
       }
     }
     return .some(built)
+  }
+
+  /// `resource(for:href:)`, given its plaintext length when that is known.
+  ///
+  /// Readium's CBC resource otherwise learns the length by fetching the entry's
+  /// last blocks before it decrypts any range. On a streamed package that is a
+  /// read a chapter away from the audio, measured at 18.6 MB to serve two bytes,
+  /// and it cannot be cancelled once started (PP-5398).
+  static func resource(for publication: Publication, href: String, knownLength: UInt64?) -> Resource? {
+    let resolved = resource(for: publication, href: href)
+    guard let knownLength, let lengthAccepting = resolved as? KnownLengthAcceptingResource else {
+      return resolved
+    }
+    return lengthAccepting.withKnownLength(knownLength)
   }
 
   static func resource(for publication: Publication, href: String) -> Resource? {

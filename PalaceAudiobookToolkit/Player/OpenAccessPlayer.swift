@@ -726,13 +726,7 @@ class OpenAccessPlayer: NSObject, Player {
         insertTrackAndNavigate(to: position, completion: completion)
       } else {
         // Fall back to full rebuild only when necessary
-        rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { [weak self] success in
-          if success {
-            self?.performSeek(to: position, completion: completion)
-          } else {
-            completion?(nil)
-          }
-        }
+        rebuildAndSeek(to: position, completion: completion)
       }
     }
   }
@@ -793,13 +787,30 @@ class OpenAccessPlayer: NSObject, Player {
 
       navigateToPosition(position, in: avQueuePlayer.items(), completion: completion)
     } else {
-      rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { [weak self] success in
-        if success {
-          self?.performSeek(to: position, completion: completion)
-        } else {
-          completion?(nil)
-        }
+      rebuildAndSeek(to: position, completion: completion)
+    }
+  }
+
+  /// Rebuilds the queue around `position` and seeks there.
+  ///
+  /// Until the seek lands the target is the reported position, so a second
+  /// skip counts from it rather than from an item that has not loaded yet,
+  /// which is how repeated skips walked back a whole track each (PP-5401).
+  private func rebuildAndSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    queuedTrackPosition = position
+    let finish: (TrackPosition?) -> Void = { [weak self] result in
+      // A later skip has replaced the target; its own seek clears it.
+      if self?.queuedTrackPosition == position {
+        self?.queuedTrackPosition = nil
       }
+      completion?(result)
+    }
+    rebuildPlayerQueueAndNavigate(to: position, shouldResumePlayback: false) { [weak self] success in
+      guard let self, success else {
+        finish(nil)
+        return
+      }
+      performSeek(to: position, completion: finish)
     }
   }
 
@@ -1269,6 +1280,41 @@ class OpenAccessPlayer: NSObject, Player {
     }
     task.resume()
   }
+
+  public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    let epsilon: TimeInterval = 0.1
+    let maxSafeTimestamp = position.track.duration - epsilon
+    let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
+
+    if position.timestamp >= (position.track.duration - epsilon) &&
+      tableOfContents.tracks.nextTrack(position.track) == nil
+    {
+      handlePlaybackEnd(currentTrack: position.track, completion: completion)
+      return
+    }
+
+    let shouldPlay = avQueuePlayer.rate > 0
+    avQueuePlayer.pause()
+
+    let cmTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+    avQueuePlayer.seek(to: cmTime) { [weak self] success in
+      guard let self = self else {
+        completion?(nil)
+        return
+      }
+      
+      if success {
+        if shouldPlay {
+          self.avQueuePlayer.play()
+        }
+        self.restorePlaybackRate()
+        let actualPosition = TrackPosition(track: position.track, timestamp: safeTimestamp, tracks: position.tracks)
+        completion?(actualPosition)
+      } else {
+        completion?(nil)
+      }
+    }
+  }
 }
 
 extension OpenAccessPlayer {
@@ -1395,41 +1441,6 @@ extension OpenAccessPlayer {
         }
       }
     default: ()
-    }
-  }
-
-  public func performSeek(to position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
-    let epsilon: TimeInterval = 0.1
-    let maxSafeTimestamp = position.track.duration - epsilon
-    let safeTimestamp = min(position.timestamp, maxSafeTimestamp)
-
-    if position.timestamp >= (position.track.duration - epsilon) &&
-      tableOfContents.tracks.nextTrack(position.track) == nil
-    {
-      handlePlaybackEnd(currentTrack: position.track, completion: completion)
-      return
-    }
-
-    let shouldPlay = avQueuePlayer.rate > 0
-    avQueuePlayer.pause()
-
-    let cmTime = CMTime(seconds: safeTimestamp, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-    avQueuePlayer.seek(to: cmTime) { [weak self] success in
-      guard let self = self else {
-        completion?(nil)
-        return
-      }
-      
-      if success {
-        if shouldPlay {
-          self.avQueuePlayer.play()
-        }
-        self.restorePlaybackRate()
-        let actualPosition = TrackPosition(track: position.track, timestamp: safeTimestamp, tracks: position.tracks)
-        completion?(actualPosition)
-      } else {
-        completion?(nil)
-      }
     }
   }
 
