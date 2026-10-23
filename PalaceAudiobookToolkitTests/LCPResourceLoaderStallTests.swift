@@ -339,7 +339,16 @@ final class LCPResourceLoaderStallTests: XCTestCase {
       perTrackBufferSize: 64 * 1024
     )
 
-    try await serveRange(offset: 0, length: 1_024, on: loader)
+    // A CBC read cannot decrypt without the length, so with nothing to supply
+    // it this request fails. What matters is that the failure is not cached.
+    let failing = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: 1_024, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: failing))
+    let failedOutcome = try await failing.waitUntilFinished(timeout: 5)
+    XCTAssertNotEqual(failedOutcome, .success)
 
     probe.lengthFails = false
     let readsBeforeRecovery = probe.reads
@@ -414,15 +423,10 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     )
   }
 
-  /// A tail fetch that fails on a REBUILD must not be cached either.
-  ///
-  /// `lengths` answers from its per-href cache on a rebuild, so the length
-  /// guard passes while the fresh instance's own fetch can still fail. That
-  /// instance memoizes the failure, and Readium then fails every ranged read
-  /// through it, so caching it would leave the chapter unplayable until the
-  /// bound evicted it. The miss path already drops such an entry; this pins
-  /// the hit path to the same contract.
-  func testLength_WhenTheRebuildsOwnFetchFails_TheEntryIsNotCached() async throws {
+  /// A track rebuilt after eviction reads with the length the provider kept,
+  /// so its fresh resource never fetches the tail: the rebuild serves bytes
+  /// even while that fetch would fail, and costs no second lookup (PP-5398).
+  func testLength_WhenARebuiltTracksLengthIsKept_TheRebuildNeedsNoTailFetch() async throws {
     probe.length = 65_536
     let other = ResourceProbe()
     other.length = 65_536
@@ -435,25 +439,25 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     )
 
     try await serveRange(offset: 0, length: 1_024, on: loader)
+    // The provider keeps the learned length, as the app's provider does.
+    provider.store(length: 65_536, forHref: Self.href)
     try await serveRange(offset: 0, length: 1_024, on: loader, url: Self.otherTrackURL)
+    let lookupsBeforeRebuild = probe.lengthLookups
 
-    // Rebuild this track while its own tail fetch fails. `lengths` still has
-    // the answer, so only the instance's fetch fails.
+    // Rebuild this track while a tail fetch would fail.
     probe.lengthFails = true
-    try await serveRange(offset: 0, length: 1_024, on: loader)
-    probe.lengthFails = false
-
-    // A poisoned entry would be reused here and fail every ranged read.
-    let readsBeforeRecovery = probe.reads
+    let readsBeforeRebuild = probe.reads
     let first = try await serveRange(offset: 0, length: 1_024, on: loader)
     let second = try await serveRange(offset: 1_024, length: 1_024, on: loader)
-    XCTAssertEqual(first, 1_024, "the recovered buffer serves bytes, not an error")
-    XCTAssertEqual(second, 1_024, "the recovered buffer serves bytes, not an error")
+    probe.lengthFails = false
 
+    XCTAssertEqual(first, 1_024, "the rebuilt track serves bytes, not an error")
+    XCTAssertEqual(second, 1_024, "the rebuilt track serves bytes, not an error")
+    XCTAssertEqual(probe.lengthLookups, lookupsBeforeRebuild, "the kept length spares the rebuild its tail fetch")
     XCTAssertEqual(
-      probe.reads - readsBeforeRecovery,
+      probe.reads - readsBeforeRebuild,
       1,
-      "the failed rebuild is dropped, so a working buffer replaces it; 2 would mean the track stayed unbuffered, more would mean the poisoned entry was reused"
+      "the rebuilt buffer serves the second read from memory"
     )
   }
 
@@ -636,6 +640,28 @@ final class LCPResourceLoaderStallTests: XCTestCase {
       LCPResourceLoaderDelegate.lengthWaitTimeout,
       "the loader states how long it is prepared to wait"
     )
+  }
+
+  /// The case a chapter change actually hits: AVFoundation's first data request
+  /// is two bytes, and a read of a CBC resource fetches the entry's tail before
+  /// it decrypts anything. The length the provider supplied must reach the
+  /// resource the bytes are read from, or that read pays the 18.6 MB anyway.
+  func testDataRequest_whenTheProviderSuppliesTheLength_doesNotProbeTheArchive() async throws {
+    probe.length = 9_999
+    provider.suppliedLength = 4_073
+    let loader = makeLoader(stallTimeout: 5)
+    let request = FakeLoadingRequest(
+      url: Self.trackURL,
+      needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: 2, toEnd: false)
+    )
+
+    XCTAssertTrue(loader.shouldWait(for: request))
+    let outcome = try await request.waitUntilFinished(timeout: 5)
+
+    XCTAssertEqual(outcome, .success)
+    XCTAssertEqual(request.respondedBytes, 2)
+    XCTAssertEqual(probe.lengthLookups, 0, "a supplied length spares the read its tail fetch")
   }
 
   /// With no resolution running there is nothing to wait for — a local package,
@@ -1258,25 +1284,39 @@ private final class ResourceProbe: @unchecked Sendable {
   }
 }
 
-private final class FakeResource: Resource {
+private final class FakeResource: KnownLengthAcceptingResource {
   let probe: ResourceProbe
   private let memo = LengthMemo()
-  init(probe: ResourceProbe) { self.probe = probe }
+  private let knownLength: UInt64?
+  init(probe: ResourceProbe, knownLength: UInt64? = nil) {
+    self.probe = probe
+    self.knownLength = knownLength
+  }
 
   let sourceURL: AbsoluteURL? = nil
   func properties() async -> ReadResult<ResourceProperties> { .success(ResourceProperties()) }
+
+  func withKnownLength(_ length: UInt64) -> Resource {
+    FakeResource(probe: probe, knownLength: length)
+  }
 
   /// Memoized per instance, as Readium's CBC resource is: it holds its tail
   /// fetch in a `lazy var`, so asking one instance twice costs one fetch while
   /// a fresh instance costs another. The probe counts fetches, so without this
   /// the fakes would report network the real stack never performs.
   func estimatedLength() async -> ReadResult<UInt64?> {
+    if let knownLength { return .success(knownLength) }
     if let held = memo.value { return held }
     let result = await probe.estimatedLength()
     memo.value = result
     return result
   }
+  /// Readium's CBC resource awaits its plaintext length before decrypting any
+  /// range, so a read costs the tail fetch unless the length was supplied.
   func stream(range: Range<UInt64>?, consume: @escaping (Data) -> Void) async -> ReadResult<Void> {
+    if case let .failure(error) = await estimatedLength() {
+      return .failure(error)
+    }
     switch await probe.read(range) {
     case let .success(data):
       consume(data)
