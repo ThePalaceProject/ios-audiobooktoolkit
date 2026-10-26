@@ -65,7 +65,14 @@ public typealias ArchiveRangeStoreFactory = (HTTPURL, UInt64?) throws -> Archive
 /// and not in the player's resource loader: that loader is handed the
 /// LCP-decrypted bytes of one ZIP entry at entry-relative offsets, which are
 /// not archive bytes and cannot be assembled into an archive.
-public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
+///
+/// `@unchecked Sendable` so a fill can be carried into a task that outlives the
+/// request which started it (see `ArchiveFill`). It states what the type already
+/// does: every mutable field is reached only under `lock` or on `storeQueue`,
+/// and `upstream` and `storeFactory` are immutable. `upstream` is already
+/// called from eight concurrent loader requests today, so the conformance
+/// asserts nothing new about it.
+public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable, @unchecked Sendable {
 
   // MARK: - Decisions
 
@@ -136,6 +143,14 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   /// trips and a whole-window fetch is both simpler and faster.
   public static let gapFillMaxMissingFraction = 2
 
+  /// Longest a detached fill may run before it is abandoned.
+  ///
+  /// A fill outlives the request that started it, so nothing else would ever
+  /// return its cache slot. Chosen above the slowest serve measured on device
+  /// (28.3s) and in the same range as URLSession's 60s request-inactivity
+  /// default, so it bounds a trickle without cutting a legitimately slow window.
+  public static let defaultMaxFillDuration: TimeInterval = 60
+
   /// How long a store-open failure is honoured before another attempt.
   ///
   /// A failure to open the store is usually transient — a momentary disk
@@ -153,6 +168,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   private let maxConcurrentCachedRequests: Int
   private let maxGapRequestsPerRead: Int
   private let storeRetryInterval: TimeInterval
+  private let maxFillDuration: TimeInterval
   private let monotonicNow: @Sendable () -> TimeInterval
 
   /// Store calls are synchronous blocking file I/O. Reached from `stream`,
@@ -168,6 +184,11 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   /// Monotonic time before which this archive's store is not reopened.
   private var storeRetryNotBefore: [String: TimeInterval] = [:]
   private var cachedRequestsInFlight = 0
+  /// Windows being fetched right now, per archive. Bounded by the same cache
+  /// slot a fetch already had to reserve: a fill takes that slot over from the
+  /// request that started it and releases it when it commits, so detaching the
+  /// fetch does not widen the transient-memory bound the slot cap exists to set.
+  private var fillsInFlight: [String: [ArchiveFill]] = [:]
 
   public init(
     upstream: HTTPClient,
@@ -179,6 +200,8 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       .defaultMaxGapRequestsPerRead,
     storeRetryInterval: TimeInterval = PartialArchiveCachingHTTPClient
       .defaultStoreRetryInterval,
+    maxFillDuration: TimeInterval = PartialArchiveCachingHTTPClient
+      .defaultMaxFillDuration,
     // Monotonic, not wall clock: an NTP correction or a user clock change can
     // move `Date()` by hours, which would either strand the archive uncached
     // or reopen it on every request. Injectable so the retry bound is driven
@@ -193,6 +216,7 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     self.maxConcurrentCachedRequests = maxConcurrentCachedRequests
     self.maxGapRequestsPerRead = maxGapRequestsPerRead
     self.storeRetryInterval = storeRetryInterval
+    self.maxFillDuration = maxFillDuration
     self.monotonicNow = monotonicNow
   }
 
@@ -454,69 +478,23 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
       guard let store else {
         return await streamFromOrigin(request: req, consume: consume)
       }
-      // Presence is confirmed from the journal, which costs no buffer, BEFORE
-      // any byte is handed to `consume`. Once a chunk has been delivered the
-      // request can no longer be restarted upstream without serving those
-      // bytes twice, so the check that used to be "read it all and compare
-      // lengths" has to happen first instead.
-      let stillMissing = await onStoreQueue({ store.missingRanges(in: range) })
-      guard stillMissing.isEmpty else {
-        // The record and the file disagree. Never serve what we cannot prove
-        // we hold — a hole reads back as zeros of the right length and nothing
-        // downstream would notice. Go to the origin instead.
-        log(.warning, "partial archive cache: a range recorded present is no longer held — refetching")
+      guard let served = await serveWhollyFromStore(
+        req: req, range: range, store: store, consume: consume
+      ) else {
         return await streamFromOrigin(request: req, consume: consume)
       }
-
-      // Served in chunks rather than as one `Data`. Readium asks for
-      // everything from an offset with an open-ended `bytes=start-`, which
-      // `requestedRange` resolves to the archive's full length, so a
-      // fully-present tail of a 1-2 GB archive was a single allocation of that
-      // size — in a client that caps every other buffer at
-      // `maxCacheableRangeLength` because this device has a backgrounded
-      // out-of-memory crash on record.
-      var servedCount = 0
-      var cursor = range.lowerBound
-      while cursor < range.upperBound {
-        let want = Int(min(UInt64(maxCacheableRangeLength), range.upperBound - cursor))
-        let chunkRange = cursor ..< cursor + UInt64(want)
-        let chunk = await onStoreQueue({ try? store.read(chunkRange) })
-        guard let chunk, chunk.count == want else {
-          if servedCount == 0 {
-            log(.warning, "partial archive cache: a range recorded present could not be read — refetching")
-            return await streamFromOrigin(request: req, consume: consume)
-          }
-          // Bytes are already downstream, so the origin cannot be used without
-          // duplicating them. Fail the request and let the caller reissue it.
-          log(.warning, "partial archive cache: a served range became unreadable part way through — failing the request")
-          let unreadable = PartialArchiveStoreError.notPresent(missing: [chunkRange])
-          return .failure(.other(unreadable))
-        }
-        if case let .failure(error) = consume(chunk, Double(servedCount + chunk.count) / Double(range.count)) {
-          return .failure(error)
-        }
-        servedCount += chunk.count
-        cursor += UInt64(chunk.count)
-      }
-
-      recordStoreServe(bytes: servedCount)
-      return .success(HTTPResponse(
-        request: req,
-        url: req.url,
-        status: HTTPStatus(rawValue: 206) ?? .ok,
-        headers: [
-          "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(store.totalSize)",
-          "Content-Length": "\(servedCount)"
-        ],
-        mediaType: nil,
-        body: nil
-      ))
+      return served
 
     case let .fetchAndStore(range):
       os_log("LCPCACHE miss %{public}llu-%{public}llu %{public}d", log: lcpCacheLog, type: .default,
              range.lowerBound, range.upperBound, range.count)
-      defer { releaseCacheSlot() }
-      return await fetchAndStore(req: req, key: key, range: range, store: store, consume: consume)
+      // No `defer` here: the slot follows the fetch. `fetchAndStore` releases it
+      // when it joins an existing fill, and hands it to the fill it starts
+      // otherwise, so the bound still counts windows being buffered rather than
+      // requests waiting on them.
+      return await fetchAndStore(
+        req: req, key: key, range: range, store: store, consume: consume, ownsCacheSlot: true
+      )
 
     case let .fillGaps(requested, missing):
       os_log("LCPCACHE gapfill %{public}llu-%{public}llu %{public}d in %{public}d gap(s)",
@@ -582,6 +560,79 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
     }
   }
 
+  // MARK: - Serving
+
+  /// Serves `range` from the store, or returns nil if the store cannot prove it
+  /// holds all of it and nothing has been delivered yet.
+  ///
+  /// nil means "ask the origin, no byte has gone downstream". A returned
+  /// `.failure` means bytes already reached the caller and the request cannot be
+  /// retried, so the two are not interchangeable.
+  private func serveWhollyFromStore(
+    req: HTTPRequest,
+    range: Range<UInt64>,
+    store: ArchiveRangeStore,
+    consume: @escaping (Data, Double?) -> HTTPResult<Void>
+  ) async -> HTTPResult<HTTPResponse>? {
+    // Presence is confirmed from the journal, which costs no buffer, BEFORE
+    // any byte is handed to `consume`. Once a chunk has been delivered the
+    // request can no longer be restarted upstream without serving those
+    // bytes twice, so the check that used to be "read it all and compare
+    // lengths" has to happen first instead.
+    let stillMissing = await onStoreQueue({ store.missingRanges(in: range) })
+    guard stillMissing.isEmpty else {
+      // The record and the file disagree. Never serve what we cannot prove
+      // we hold — a hole reads back as zeros of the right length and nothing
+      // downstream would notice. Go to the origin instead.
+      log(.warning, "partial archive cache: a range recorded present is no longer held — refetching")
+      return nil
+    }
+
+    // Served in chunks rather than as one `Data`. Readium asks for
+    // everything from an offset with an open-ended `bytes=start-`, which
+    // `requestedRange` resolves to the archive's full length, so a
+    // fully-present tail of a 1-2 GB archive was a single allocation of that
+    // size — in a client that caps every other buffer at
+    // `maxCacheableRangeLength` because this device has a backgrounded
+    // out-of-memory crash on record.
+    var servedCount = 0
+    var cursor = range.lowerBound
+    while cursor < range.upperBound {
+      let want = Int(min(UInt64(maxCacheableRangeLength), range.upperBound - cursor))
+      let chunkRange = cursor ..< cursor + UInt64(want)
+      let chunk = await onStoreQueue({ try? store.read(chunkRange) })
+      guard let chunk, chunk.count == want else {
+        if servedCount == 0 {
+          log(.warning, "partial archive cache: a range recorded present could not be read — refetching")
+          return nil
+        }
+        // Bytes are already downstream, so the origin cannot be used without
+        // duplicating them. Fail the request and let the caller reissue it.
+        log(.warning, "partial archive cache: a served range became unreadable part way through — failing the request")
+        let unreadable = PartialArchiveStoreError.notPresent(missing: [chunkRange])
+        return .failure(.other(unreadable))
+      }
+      if case let .failure(error) = consume(chunk, Double(servedCount + chunk.count) / Double(range.count)) {
+        return .failure(error)
+      }
+      servedCount += chunk.count
+      cursor += UInt64(chunk.count)
+    }
+
+    recordStoreServe(bytes: servedCount)
+    return .success(HTTPResponse(
+      request: req,
+      url: req.url,
+      status: HTTPStatus(rawValue: 206) ?? .ok,
+      headers: [
+        "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(store.totalSize)",
+        "Content-Length": "\(servedCount)"
+      ],
+      mediaType: nil,
+      body: nil
+    ))
+  }
+
   // MARK: - Fetching
 
   /// Fetches a whole range, hands it to the caller as it arrives, and keeps it.
@@ -589,6 +640,106 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   /// Shared by the whole-window fetch and by gap filling's fallbacks, so there is
   /// one admission and one write path rather than two that can drift apart.
   private func fetchAndStore(
+    req: HTTPRequest,
+    key: String,
+    range: Range<UInt64>,
+    store: ArchiveRangeStore?,
+    consume: @escaping (Data, Double?) -> HTTPResult<Void>,
+    ownsCacheSlot: Bool = false
+  ) async -> HTTPResult<HTTPResponse> {
+    // A window already crossing the link is not fetched twice. The joiner waits
+    // for it and then reads its own sub-range out of the store, which is what
+    // makes a burst of taps inside one window cost one fetch rather than one
+    // each.
+    if let existing = fill(forKey: key, covering: range) {
+      // Released before waiting, not after: a joiner buffers nothing, so
+      // holding a slot through someone else's fetch would starve the chapter.
+      if ownsCacheSlot { releaseCacheSlot() }
+      os_log("LCPCACHE join %{public}llu-%{public}llu into %{public}llu-%{public}llu",
+             log: lcpCacheLog, type: .default,
+             range.lowerBound, range.upperBound,
+             existing.range.lowerBound, existing.range.upperBound)
+      await existing.relay.waitForCommit()
+      if let store,
+         let served = await serveWhollyFromStore(
+           req: req, range: range, store: store, consume: consume
+         ) {
+        return served
+      }
+      // The fill did not leave these bytes behind — it failed, or the store
+      // refused them. Fetch them directly rather than reporting someone else's
+      // outcome as this request's.
+      return await fetchDirectly(req: req, key: key, range: range, store: store, consume: consume)
+    }
+
+    guard ownsCacheSlot else {
+      // A gap fetch, whose caller holds the slot for the whole read. Detaching
+      // it would let the read return while its own fills were still running,
+      // and the gap path's next step reads the window it just filled.
+      return await fetchDirectly(req: req, key: key, range: range, store: store, consume: consume)
+    }
+
+    let relay = FillRelay(originator: consume)
+    // Registered before the fetch starts. The other order lets a fast fill
+    // deregister an entry that has not been added yet, which strands it in the
+    // table and sends every later overlapping request through a join that can
+    // never be satisfied.
+    register(ArchiveFill(range: range, relay: relay), forKey: key)
+    // `Task`, not a child task: an unstructured task does not inherit
+    // cancellation, which is the whole point — the fetch has to survive the
+    // tap that cancelled the request so its bytes reach the store.
+    Task { [self] in
+      // Bounded, because the fill no longer dies with its caller. The session
+      // this runs on is built with `DefaultHTTPClient()` and no resource
+      // timeout, so `timeoutIntervalForResource` is URLSession's 7-day default:
+      // a body that trickles rather than stalls would hold a cache slot for as
+      // long as it liked, and before this change AVFoundation cancelling the
+      // request was what returned that slot. The cap restores an upper bound,
+      // well clear of the slowest serve measured on device (28.3s).
+      let fetch = Task { [self] in
+        await fetchDirectly(
+          req: req, key: key, range: range, store: store,
+          consume: { chunk, progress in relay.forward(chunk, progress) }
+        )
+      }
+      let bound = Task {
+        try? await Task.sleep(nanoseconds: UInt64(maxFillDuration * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        fetch.cancel()
+      }
+      let result = await fetch.value
+      bound.cancel()
+      // The originating request is the chapter the patron is waiting on, so it
+      // is released as soon as the body is delivered.
+      relay.finishBody(with: result)
+      // `fetchDirectly` queues its commit rather than awaiting it, so the write
+      // need not have run yet. A joiner released now would read the window
+      // before it landed and fetch it again, losing the only thing joining
+      // buys. `storeQueue` is serial, so this empty hop runs after that commit.
+      _ = await onStoreQueue { true }
+      deregisterFill(forKey: key, range: range)
+      // The slot the request handed over, released once the buffer is gone.
+      releaseCacheSlot()
+      relay.finishCommit()
+    }
+
+    // Wait for the fill, but let go at once if this request is cancelled: the
+    // fill keeps running, and the caller stops being handed chunks.
+    await withTaskCancellationHandler {
+      await relay.waitAsOriginator()
+    } onCancel: {
+      relay.detachOriginator()
+    }
+
+    if let result = relay.result { return result }
+    // Cancelled: the fill is still running and will commit on its own. Report
+    // this request as cancelled rather than inventing a response for it.
+    return .failure(.cancelled)
+  }
+
+  /// The original fetch: stream the window, hand it to the caller as it
+  /// arrives, and store it if the response proves where it belongs.
+  private func fetchDirectly(
     req: HTTPRequest,
     key: String,
     range: Range<UInt64>,
@@ -738,6 +889,165 @@ public final class PartialArchiveCachingHTTPClient: HTTPClient, Loggable {
   }
 
   private enum StoreKeyError: Error { case notAnHTTPURL(String) }
+
+  // MARK: - Fills in flight
+
+  /// An origin fetch of one window, outliving the request that started it.
+  ///
+  /// A skip burst cancels one range request per tap, every 0.2-0.3s, while a
+  /// fill over a slow origin needs 2-5s for its first byte. A fetch tied to its
+  /// caller's task is therefore cancelled before it can commit anything, the
+  /// bytes it already paid for are dropped, and the next tap starts from
+  /// nothing — so no tap ever produces audio (PP-5401). Registering the fill
+  /// lets it finish and commit, and lets the next tap wait for it rather than
+  /// open a second request for bytes already crossing the link.
+  private struct ArchiveFill {
+    let range: Range<UInt64>
+    let relay: FillRelay
+  }
+
+  /// Carries one fill's chunks to whichever caller is still attached, and tells
+  /// a caller when the fill is done.
+  ///
+  /// Two callers need different things from the same fetch. The request that
+  /// started it wants the bytes streamed as they arrive, exactly as before. A
+  /// request that joined wants the whole of its own sub-range, which it reads
+  /// from the store once the fill lands. So the relay forwards only to the
+  /// originator, and `wait()` is what a joiner — and the originator on
+  /// cancellation — suspends on.
+  final class FillRelay: @unchecked Sendable {
+    private let lock = NSLock()
+    private var originator: ((Data, Double?) -> HTTPResult<Void>)?
+    /// Joiners. Released only when the fill finishes, because a joiner that
+    /// woke early would read the window before it was committed and fetch it
+    /// again — the one thing joining exists to prevent.
+    private var joinWaiters: [CheckedContinuation<Void, Never>] = []
+    /// The originating request. Released when the fill finishes OR when that
+    /// request is cancelled, so a cancelled tap does not sit through the rest
+    /// of a 5-28s fetch holding its caller open.
+    private var originatorWaiter: CheckedContinuation<Void, Never>?
+    private var isFinished = false
+    private var isCommitted = false
+    private var _result: HTTPResult<HTTPResponse>?
+
+    /// The fill's own outcome, available once it has finished.
+    var result: HTTPResult<HTTPResponse>? { lock.withLock { _result } }
+
+    init(originator: @escaping (Data, Double?) -> HTTPResult<Void>) {
+      self.originator = originator
+    }
+
+    /// Hands a chunk to the originating caller if it is still listening.
+    ///
+    /// A detached originator is not an error and must not fail the fill: the
+    /// whole point is that the window keeps being fetched after the request
+    /// that asked for it has gone.
+    func forward(_ chunk: Data, _ progress: Double?) -> HTTPResult<Void> {
+      let sink = lock.withLock { originator }
+      guard let sink else { return .success(()) }
+      return sink(chunk, progress)
+    }
+
+    /// Stops forwarding and releases the originating request only.
+    func detachOriginator() {
+      let resumed: CheckedContinuation<Void, Never>? = lock.withLock {
+        originator = nil
+        let pending = originatorWaiter
+        originatorWaiter = nil
+        return pending
+      }
+      resumed?.resume()
+    }
+
+    /// The body is delivered: records the outcome and releases the originating
+    /// request, which must not wait for the commit.
+    ///
+    /// Two signals, not one, because the two waiters need opposite things. The
+    /// originator is the chapter the patron is waiting on and the commit ends in
+    /// two `F_FULLFSYNC`s against a sparse multi-gigabyte file, so making it
+    /// wait would put the slowest step on the read path — which
+    /// `PartialArchiveCacheWritePathTests` pins against. A joiner is about to
+    /// read the window out of the store, so for it the commit is the whole
+    /// point.
+    func finishBody(with result: HTTPResult<HTTPResponse>) {
+      let origin: CheckedContinuation<Void, Never>? = lock.withLock {
+        guard !isFinished else { return nil }
+        isFinished = true
+        _result = result
+        originator = nil
+        let pending = originatorWaiter
+        originatorWaiter = nil
+        return pending
+      }
+      origin?.resume()
+    }
+
+    /// The window is on disk: releases the joiners, exactly once.
+    func finishCommit() {
+      let joined: [CheckedContinuation<Void, Never>] = lock.withLock {
+        guard !isCommitted else { return [] }
+        isCommitted = true
+        let pending = joinWaiters
+        joinWaiters = []
+        return pending
+      }
+      joined.forEach { $0.resume() }
+    }
+
+    /// Suspends a joiner until the window has been committed to the store.
+    func waitForCommit() async {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        let committedAlready = lock.withLock {
+          if isCommitted { return true }
+          joinWaiters.append(continuation)
+          return false
+        }
+        if committedAlready { continuation.resume() }
+      }
+    }
+
+    /// Suspends the originating request until the fill finishes or it is
+    /// detached. Only ever called once, by the request that created the relay.
+    func waitAsOriginator() async {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        let settled = lock.withLock {
+          if isFinished || originator == nil { return true }
+          originatorWaiter = continuation
+          return false
+        }
+        if settled { continuation.resume() }
+      }
+    }
+  }
+
+  /// A registered fill whose window contains `range`, if there is one.
+  ///
+  /// Containment, not equality: Readium's windows are 6 MB and a skip tap moves
+  /// the offset 330-460 kB, so consecutive taps land inside the window the
+  /// previous tap is already fetching. Equality would match none of them.
+  private func fill(forKey key: String, covering range: Range<UInt64>) -> ArchiveFill? {
+    lock.lock()
+    defer { lock.unlock() }
+    return fillsInFlight[key]?.first {
+      $0.range.lowerBound <= range.lowerBound && $0.range.upperBound >= range.upperBound
+    }
+  }
+
+  private func register(_ fill: ArchiveFill, forKey key: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    fillsInFlight[key, default: []].append(fill)
+  }
+
+  private func deregisterFill(forKey key: String, range: Range<UInt64>) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard var fills = fillsInFlight[key] else { return }
+    if let index = fills.firstIndex(where: { $0.range == range }) {
+      fills.remove(at: index)
+    }
+    if fills.isEmpty { fillsInFlight.removeValue(forKey: key) } else { fillsInFlight[key] = fills }
+  }
 
   /// Internal rather than private so the bound can be driven directly in a
   /// test: it is stateful, so nothing pure observes whether the counter
