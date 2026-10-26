@@ -48,6 +48,23 @@ class OpenAccessPlayer: NSObject, Player {
   var isLoaded: Bool = false
   var queuedTrackPosition: TrackPosition?
 
+  // MARK: - Gathering a run of skip taps
+
+  /// How long a run of skip taps is gathered before the one seek they are owed.
+  ///
+  /// A real burst is a tap every 0.2-0.3s while a streamed seek needs seconds
+  /// to land, so one seek per tap means none of them lands and the patron gets
+  /// no audio (PP-5401). Set to 0 to seek on every tap, which is what the
+  /// deterministic tests do. `FindawayPlayer` holds its own 0.5s buffer window
+  /// for the same reason; this is the AVFoundation players' version of it.
+  var skipCoalesceWindow: TimeInterval = OpenAccessPlayer.defaultSkipCoalesceWindow
+  static let defaultSkipCoalesceWindow: TimeInterval = 0.4
+  /// Seconds of skip gathered since the burst's first tap was seeked.
+  private(set) var pendingSkipInterval: TimeInterval = 0
+  private var skipWaiters: [CheckedContinuation<TrackPosition?, Never>] = []
+  private var skipBurstTask: Task<Void, Never>?
+  private var isSkipBurstOpen = false
+
   var currentOffset: Double {
     guard let currentTrackPosition, let currentChapter else {
       return 0.0
@@ -410,6 +427,7 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   func unload() {
+    drainPendingSkips()
     // `resetPlayerQueue`, not `removeAllItems`: end observers are registered
     // per item, and `removePlayerObservers` below covers only the session
     // notifications and the KVO observations. The handler reads the item off
@@ -707,6 +725,22 @@ class OpenAccessPlayer: NSObject, Player {
       return nil
     }
 
+    // A burst of taps becomes one trailing seek. The first tap is still seeked
+    // at once, so a single skip is as immediate as it ever was; only the taps
+    // that arrive while the burst is open are gathered.
+    if skipCoalesceWindow > 0, isSkipBurstOpen {
+      pendingSkipInterval += timeInterval
+      return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
+        skipWaiters.append(continuation)
+        openSkipBurstWindow()
+      }
+    }
+
+    if skipCoalesceWindow > 0 {
+      isSkipBurstOpen = true
+      openSkipBurstWindow()
+    }
+
     let newPosition = currentTrackPosition + timeInterval
     return await withCheckedContinuation { (continuation: CheckedContinuation<TrackPosition?, Never>) in
       seekTo(position: newPosition, completion: Self.makeOnceCompletion(
@@ -714,6 +748,68 @@ class OpenAccessPlayer: NSObject, Player {
         duplicateWarning: "OpenAccessPlayer.skipPlayhead: seek completion fired more than once; ignoring duplicate"
       ))
     }
+  }
+
+  /// Starts, or extends, the window in which further taps are gathered.
+  ///
+  /// Extending on every tap is what makes a continuous burst collapse: the
+  /// trailing seek happens once the patron stops tapping, not once per tap.
+  private func openSkipBurstWindow() {
+    skipBurstTask?.cancel()
+    skipBurstTask = Task { [weak self] in
+      guard let window = self?.skipCoalesceWindow else { return }
+      try? await Task.sleep(nanoseconds: UInt64(window * 1_000_000_000))
+      guard !Task.isCancelled else { return }
+      self?.closeSkipBurst()
+    }
+  }
+
+  /// Performs the one seek a burst's gathered taps are owed, and answers them
+  /// all with its result.
+  ///
+  /// The target is computed here rather than per tap because
+  /// `currentTrackPosition` already reports `queuedTrackPosition` while a seek
+  /// is in flight (see `rebuildAndSeek`), so the gathered total applied now
+  /// lands where the last tap would have asked to go.
+  private func closeSkipBurst() {
+    skipBurstTask = nil
+    isSkipBurstOpen = false
+
+    let gathered = pendingSkipInterval
+    let waiting = skipWaiters
+    pendingSkipInterval = 0
+    skipWaiters = []
+
+    guard !waiting.isEmpty else { return }
+    guard gathered != 0, let base = currentTrackPosition ?? lastKnownPosition else {
+      waiting.forEach { $0.resume(returning: currentTrackPosition ?? lastKnownPosition) }
+      return
+    }
+
+    seekTo(position: base + gathered, completion: Self.makeOnceCompletion(
+      { (result: TrackPosition?) in waiting.forEach { $0.resume(returning: result) } },
+      duplicateWarning: "OpenAccessPlayer.closeSkipBurst: seek completion fired more than once; ignoring duplicate"
+    ))
+  }
+
+  /// Answers any gathered taps and stops the window.
+  ///
+  /// A parked `CheckedContinuation` that is never resumed traps, so teardown
+  /// has to drain them rather than drop them.
+  ///
+  /// Answers nil, and deliberately does not read `currentTrackPosition`: that
+  /// getter writes `lastKnownPosition` as a side effect, so asking it here
+  /// would let teardown overwrite the position the patron is meant to come back
+  /// to (`EndObserverRetentionTests` pins that). nil is also the honest answer
+  /// — a gathered tap that is dropped never seeked anywhere.
+  func drainPendingSkips() {
+    skipBurstTask?.cancel()
+    skipBurstTask = nil
+    isSkipBurstOpen = false
+    let waiting = skipWaiters
+    skipWaiters = []
+    pendingSkipInterval = 0
+    waiting.forEach { $0.resume(returning: nil) }
   }
 
   public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
