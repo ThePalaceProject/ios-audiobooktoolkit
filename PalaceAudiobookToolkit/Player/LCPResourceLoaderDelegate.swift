@@ -25,8 +25,14 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   ///
   /// Separate from `inflightTasks` because a serve's href is not known until
   /// the reading order has been consulted, which happens after registration.
-  /// Guarded by `inflightQueue` like the tasks it refers to.
-  private var transferringTracks: [(id: ObjectIdentifier, href: String)] = []
+  /// `LockIsolated` rather than `inflightQueue` because this is read from the
+  /// serve tasks themselves, and a `sync` there would block a cooperative-pool
+  /// thread.
+  private let transferringTracks = LockIsolated<[(id: ObjectIdentifier, href: String)]>([])
+
+  /// The most distinct tracks seen reading at once, for tests to assert the
+  /// bound actually bounds rather than merely being present.
+  private let peakTransferringTracks = LockIsolated<Int>(0)
   private let concurrencySemaphore = DispatchSemaphore(value: 8)
 
   /// Total decrypted bytes this loader has handed to AVFoundation, across every
@@ -260,8 +266,39 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   static let defaultPerTrackBufferSize = 6 * 1024 * 1024
   static let defaultMaxBufferedTracks = 4
 
+  /// How many distinct tracks may be in their byte-transfer phase at once.
+  ///
+  /// Its own knob rather than `maxBufferedTracks`, which is a memory budget
+  /// (four buffers of 6 MB, measured by `LCPStreamingEgressTests`). The two
+  /// default to the same number because a track reading without a resident
+  /// buffer pays a whole archive fill per displaced read, but they answer
+  /// different questions: lowering the memory budget should not silently
+  /// tighten admission, and raising it for hit rate should not loosen it.
+  ///
+  /// It must stay at or above the player's queue window plus the preloaded
+  /// following chapter, or a track the patron is waiting for would be held
+  /// back. `LCPStreamingPlayer.queueWindow` queues one item and
+  /// `preloadFollowingChapter` adds one more, so two is the floor today.
+  static let defaultMaxTransferringTracks = 4
+
+  /// The longest a transfer waits for newer tracks before reading anyway.
+  ///
+  /// Bounded, and short relative to the 20-55 s serves this bound exists to
+  /// prevent, so a track wrongly held back costs seconds rather than the
+  /// unbounded wait that cancelling it would have cost.
+  static let defaultMaxTransferYield: TimeInterval = 8
+
+  /// How often a held transfer re-checks whether it may read.
+  ///
+  /// A poll rather than a parked continuation: the wait is bounded and
+  /// re-evaluated, so there is no awaiter to leak and nothing to signal. The
+  /// interval is irrelevant against transfers measured in seconds.
+  static let transferYieldPollInterval: UInt64 = 50_000_000
+
   private let perTrackBufferSize: Int
   private let maxBufferedTracks: Int
+  private let maxTransferringTracks: Int
+  private let maxTransferYield: TimeInterval
   private let publicationWaitTimeout: TimeInterval
 
   init(
@@ -269,12 +306,16 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     stallTimeout: TimeInterval = 90,
     perTrackBufferSize: Int = LCPResourceLoaderDelegate.defaultPerTrackBufferSize,
     maxBufferedTracks: Int = LCPResourceLoaderDelegate.defaultMaxBufferedTracks,
+    maxTransferringTracks: Int = LCPResourceLoaderDelegate.defaultMaxTransferringTracks,
+    maxTransferYield: TimeInterval = LCPResourceLoaderDelegate.defaultMaxTransferYield,
     publicationWaitTimeout: TimeInterval = LCPResourceLoaderDelegate.defaultPublicationWaitTimeout
   ) {
     self.provider = provider
     self.stallTimeout = stallTimeout
     self.perTrackBufferSize = perTrackBufferSize
     self.maxBufferedTracks = maxBufferedTracks
+    self.maxTransferringTracks = maxTransferringTracks
+    self.maxTransferYield = maxTransferYield
     self.publicationWaitTimeout = publicationWaitTimeout
     super.init()
   }
@@ -287,54 +328,91 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     }
     inflightQueue.async(flags: .barrier) { [weak self] in
       self?.inflightTasks.removeAll()
-      self?.transferringTracks.removeAll()
     }
+    transferringTracks.withValue { $0.removeAll() }
   }
 
   func clearCaches() {
     bufferedTracks.value = []
   }
 
-  /// Records that a serve has entered its byte-transfer phase, and abandons the
-  /// serves for tracks that have fallen outside the buffered window.
+  /// Test hook: the most distinct tracks that have read concurrently.
   ///
-  /// Abandoning means cancelling without finishing, which is what `didCancel`
-  /// already does: a request AVFoundation has moved off needs no answer, and
-  /// failing it would risk dead-ending an item the patron may return to.
-  private func beginTransfer(id: ObjectIdentifier, href: String) {
-    let stale: [(id: ObjectIdentifier, href: String)] = inflightQueue.sync(flags: .barrier) {
-      transferringTracks.removeAll { $0.id == id }
-      transferringTracks.insert((id: id, href: href), at: 0)
+  /// Exposed because "the bound is present" and "the bound bounds" are
+  /// different claims, and only this distinguishes them.
+  var peakTransferringTrackCount: Int { peakTransferringTracks.value }
 
-      let abandon = Set(TrackServeWindow.hrefsToAbandon(
-        recencyOrder: transferringTracks.map(\.href),
-        window: maxBufferedTracks
-      ))
-      guard !abandon.isEmpty else { return [] }
-
-      let outside = transferringTracks.filter { abandon.contains($0.href) }
-      transferringTracks.removeAll { abandon.contains($0.href) }
-      return outside
-    }
-
-    guard !stale.isEmpty else { return }
-    let abandonedHrefs = Set(stale.map(\.href))
-    ATLog(
-      .info,
-      "🎵 ResourceLoader: abandoning \(stale.count) serve(s) for \(abandonedHrefs.count) track(s) outside the \(maxBufferedTracks)-track window"
-    )
-    inflightQueue.sync {
-      for entry in stale {
-        inflightTasks[entry.id]?.cancel()
+  /// Takes a reading slot for `href`, waiting at most `maxTransferYield`.
+  ///
+  /// The concurrency slot `serve` gives back admits requests into the lookup
+  /// phase only, so nothing bounded how many transfers ran at once: a skip
+  /// burst left serves for chapters the player had moved past still reading.
+  /// The loader buffers `maxBufferedTracks` tracks, and reads spread over more
+  /// tracks than are buffered evict the window needed next, so every displaced
+  /// read pays for a whole archive fill and the chapter the patron waits for
+  /// competes with chapters they have left (PP-5398).
+  ///
+  /// The bound counts distinct TRACKS, not requests: AVFoundation issues
+  /// several ranges for one track, and the buffer is per track, so ranges of a
+  /// track already reading are admitted at once and never hold each other
+  /// back.
+  ///
+  /// It waits rather than cancelling. PP-5240 records why: a request the player
+  /// is still waiting on must keep being served, because cancelling it leaves
+  /// it unanswered and playback stalls when the buffer runs out. Cancelling
+  /// here would also take the stall watchdog with it, since that is a sibling
+  /// task of the reader, so a wrongly-chosen track would hang with no error
+  /// instead of failing with one.
+  ///
+  /// Past the deadline it reads anyway. The slot is an optimisation, not a
+  /// gate: the worst case is the unbounded concurrency this exists to reduce,
+  /// never a request nothing answers. The wait also happens before `transfer`
+  /// arms its stall timer, so waiting is never read as a transfer that
+  /// delivered no bytes.
+  private func admitTransfer(id: ObjectIdentifier, href: String) async {
+    let deadline = Date().addingTimeInterval(maxTransferYield)
+    while true {
+      if registerTransfer(id: id, href: href, respectingBound: true) { return }
+      if Date() >= deadline {
+        registerTransfer(id: id, href: href, respectingBound: false)
+        return
+      }
+      do {
+        try await Task.sleep(nanoseconds: Self.transferYieldPollInterval)
+      } catch {
+        return // cancelled; `serve` returns without reading
       }
     }
   }
 
-  /// Drops a finished transfer from the window.
-  private func endTransfer(id: ObjectIdentifier) {
-    inflightQueue.async(flags: .barrier) { [weak self] in
-      self?.transferringTracks.removeAll { $0.id == id }
+  /// Registers a transfer, optionally only if the bound allows it.
+  @discardableResult
+  private func registerTransfer(id: ObjectIdentifier, href: String, respectingBound: Bool) -> Bool {
+    let admitted: Bool = transferringTracks.withValue { tracks in
+      let distinct = Set(tracks.map(\.href))
+      if respectingBound,
+         !distinct.contains(href),
+         distinct.count >= maxTransferringTracks {
+        return false
+      }
+      tracks.removeAll { $0.id == id }
+      tracks.append((id: id, href: href))
+      return true
     }
+    if admitted {
+      let distinct = Set(transferringTracks.value.map(\.href)).count
+      peakTransferringTracks.withValue { $0 = max($0, distinct) }
+    }
+    return admitted
+  }
+
+  /// Drops a finished or cancelled transfer, freeing its slot.
+  ///
+  /// Synchronous, and called from `didCancel` as well as from the serve's own
+  /// exit: an entry that outlives its transfer holds a slot against tracks that
+  /// are still reading, which would cause the stall this bound prevents.
+  private func endTransfer(id: ObjectIdentifier) {
+    transferringTracks.withValue { $0.removeAll { $0.id == id } }
   }
 
   /// The object that owns the in-flight requests and caches cancels them.
@@ -470,6 +548,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// cancellation contract requires.
   func didCancel(_ loadingRequest: LCPStreamingLoadingRequest) {
     let id = ObjectIdentifier(loadingRequest)
+    endTransfer(id: id)
     inflightQueue.sync {
       inflightTasks[id]?.cancel()
     }
@@ -709,8 +788,9 @@ private extension LCPResourceLoaderDelegate {
     // the chapter the patron waited for competing with chapters they had
     // already left (PP-5398).
     let serveID = ObjectIdentifier(loadingRequest)
-    beginTransfer(id: serveID, href: finalHref)
     defer { endTransfer(id: serveID) }
+    await admitTransfer(id: serveID, href: finalHref)
+    if Task.isCancelled { return }
 
     let start = max(0, Int(range.offset))
     var count = range.length
