@@ -99,7 +99,12 @@ private final class HeldOpenOriginClient: HTTPClient, @unchecked Sendable {
   /// cancelled, so a fetch still tied to its caller would park in it forever
   /// and the test would hang instead of failing. A hang reports as silence.
   private var _released = false
-  private var released: Bool { lock.withLock { _released } }
+  /// Ranges released on their own, for a test that needs one of two fills to
+  /// finish while the other is still open.
+  private var _releasedRanges: [Range<UInt64>] = []
+  private func isReleased(_ range: Range<UInt64>) -> Bool {
+    lock.withLock { _released || _releasedRanges.contains(range) }
+  }
 
   let totalSize: UInt64
   /// Byte value written for a given offset, so a serve can be checked exactly.
@@ -108,6 +113,7 @@ private final class HeldOpenOriginClient: HTTPClient, @unchecked Sendable {
   init(totalSize: UInt64) { self.totalSize = totalSize }
 
   func release() { lock.withLock { _released = true } }
+  func release(_ range: Range<UInt64>) { lock.withLock { _releasedRanges.append(range) } }
 
   func stream(
     request: any HTTPRequestConvertible,
@@ -138,7 +144,7 @@ private final class HeldOpenOriginClient: HTTPClient, @unchecked Sendable {
     // rather than hanging. The deadline is a backstop against a bug in the
     // test itself parking the whole suite.
     let deadline = Date().addingTimeInterval(10)
-    while !released, Date() < deadline {
+    while !isReleased(asked), Date() < deadline {
       if Task.isCancelled {
         lock.withLock { _observedCancellation = true }
         return .failure(HTTPError.cancelled)
@@ -185,11 +191,20 @@ final class PartialArchiveFillSurvivalTests: XCTestCase {
 
   private let archive = HTTPURL(string: "https://example.invalid/burst.lcpa")!
 
+  /// `slots` is raised only by the two-fill test: with the production cap of 2
+  /// both fills hold a slot, and a third request would be passed through
+  /// uncached for want of one — which has nothing to do with what that test is
+  /// about.
   private func makeClient(
     upstream: HTTPClient,
-    store: ArchiveRangeStore
+    store: ArchiveRangeStore,
+    slots: Int = PartialArchiveCachingHTTPClient.defaultMaxConcurrentCachedRequests
   ) -> PartialArchiveCachingHTTPClient {
-    PartialArchiveCachingHTTPClient(upstream: upstream, storeFactory: { _, _ in store })
+    PartialArchiveCachingHTTPClient(
+      upstream: upstream,
+      storeFactory: { _, _ in store },
+      maxConcurrentCachedRequests: slots
+    )
   }
 
   private func request(_ range: Range<UInt64>) -> HTTPRequest {
@@ -407,6 +422,57 @@ final class PartialArchiveFillSurvivalTests: XCTestCase {
     origin.release()
     _ = await first.value
     _ = await second.value
+  }
+
+  // MARK: - The registry must drop the fill that finished
+
+  /// One fill finishing must not take another fill's registration with it.
+  ///
+  /// `deregisterFill` matches on the range. Matching the wrong way round
+  /// removes a fill that is still running and leaves the finished one behind,
+  /// so later taps inside the running window stop joining it and pay for the
+  /// same bytes again — the exact cost this change exists to remove. A mutation
+  /// run turned that `==` into `!=` and nothing failed, because every other
+  /// test here drives one fill at a time.
+  func test_oneFillFinishing_leavesTheOtherFillJoinable() async {
+    let total: UInt64 = 16384
+    let firstWindow: Range<UInt64> = 0 ..< 4096
+    let secondWindow: Range<UInt64> = 8192 ..< 12288
+    let insideSecond: Range<UInt64> = 9216 ..< 10240
+    let store = RecordingRangeStore(totalSize: total)
+    let origin = HeldOpenOriginClient(totalSize: total)
+    let client = makeClient(upstream: origin, store: store, slots: 4)
+
+    let first = Task {
+      await client.stream(request: request(firstWindow)) { _, _ in .success(()) }
+    }
+    await fulfillment(of: [origin.firstChunkOut], timeout: 5)
+
+    let second = Task {
+      await client.stream(request: self.request(secondWindow)) { _, _ in .success(()) }
+    }
+    guard await poll(timeout: 5, until: { origin.callCount >= 2 }) else {
+      return XCTFail("premise: the second window must reach the origin too")
+    }
+
+    // Let only the first window finish. Its deregistration must not disturb
+    // the second, which is still open.
+    origin.release(firstWindow)
+    _ = await first.value
+
+    let third = Task {
+      await client.stream(request: self.request(insideSecond)) { _, _ in .success(()) }
+    }
+    let askedAgain = await poll(timeout: 2, until: { origin.callCount >= 3 })
+
+    XCTAssertFalse(
+      askedAgain,
+      "\(insideSecond) is inside the still-running \(secondWindow) and must join it; the origin was asked \(origin.rangesAsked)"
+    )
+
+    origin.release()
+    _ = await second.value
+    _ = await third.value
   }
 
   // MARK: - Helpers
