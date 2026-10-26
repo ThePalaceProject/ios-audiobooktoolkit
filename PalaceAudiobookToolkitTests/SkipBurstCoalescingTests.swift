@@ -193,12 +193,15 @@ final class SkipBurstCoalescingTests: XCTestCase {
 
     player.unload()
 
+    // Released before awaiting: a tap that was seeked rather than gathered
+    // would otherwise sit on a rebuild nobody releases, and the test would
+    // hang instead of failing its assertion.
+    player.releaseAllRebuilds()
+
     for tap in gathered {
       let landed = await tap.value
       XCTAssertNil(landed, "a tap dropped at teardown never seeked, so it has no position to report")
     }
-
-    player.releaseAllRebuilds()
     _ = await first.value
   }
 
@@ -228,8 +231,8 @@ final class SkipBurstCoalescingTests: XCTestCase {
     XCTAssertEqual(player.lastKnownPosition?.timestamp, 42,
                    "teardown must not move the saved timestamp")
 
-    for tap in gathered { _ = await tap.value }
     player.releaseAllRebuilds()
+    for tap in gathered { _ = await tap.value }
     _ = await first.value
   }
 
