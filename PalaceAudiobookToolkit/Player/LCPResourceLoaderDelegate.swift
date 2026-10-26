@@ -19,6 +19,14 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   private let stallTimeout: TimeInterval
   private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
   private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+
+  /// The track each serve now in its byte-transfer phase is reading, most
+  /// recently started first.
+  ///
+  /// Separate from `inflightTasks` because a serve's href is not known until
+  /// the reading order has been consulted, which happens after registration.
+  /// Guarded by `inflightQueue` like the tasks it refers to.
+  private var transferringTracks: [(id: ObjectIdentifier, href: String)] = []
   private let concurrencySemaphore = DispatchSemaphore(value: 8)
 
   /// Total decrypted bytes this loader has handed to AVFoundation, across every
@@ -279,11 +287,54 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     }
     inflightQueue.async(flags: .barrier) { [weak self] in
       self?.inflightTasks.removeAll()
+      self?.transferringTracks.removeAll()
     }
   }
 
   func clearCaches() {
     bufferedTracks.value = []
+  }
+
+  /// Records that a serve has entered its byte-transfer phase, and abandons the
+  /// serves for tracks that have fallen outside the buffered window.
+  ///
+  /// Abandoning means cancelling without finishing, which is what `didCancel`
+  /// already does: a request AVFoundation has moved off needs no answer, and
+  /// failing it would risk dead-ending an item the patron may return to.
+  private func beginTransfer(id: ObjectIdentifier, href: String) {
+    let stale: [(id: ObjectIdentifier, href: String)] = inflightQueue.sync(flags: .barrier) {
+      transferringTracks.removeAll { $0.id == id }
+      transferringTracks.insert((id: id, href: href), at: 0)
+
+      let abandon = Set(TrackServeWindow.hrefsToAbandon(
+        recencyOrder: transferringTracks.map(\.href),
+        window: maxBufferedTracks
+      ))
+      guard !abandon.isEmpty else { return [] }
+
+      let outside = transferringTracks.filter { abandon.contains($0.href) }
+      transferringTracks.removeAll { abandon.contains($0.href) }
+      return outside
+    }
+
+    guard !stale.isEmpty else { return }
+    let abandonedHrefs = Set(stale.map(\.href))
+    ATLog(
+      .info,
+      "🎵 ResourceLoader: abandoning \(stale.count) serve(s) for \(abandonedHrefs.count) track(s) outside the \(maxBufferedTracks)-track window"
+    )
+    inflightQueue.sync {
+      for entry in stale {
+        inflightTasks[entry.id]?.cancel()
+      }
+    }
+  }
+
+  /// Drops a finished transfer from the window.
+  private func endTransfer(id: ObjectIdentifier) {
+    inflightQueue.async(flags: .barrier) { [weak self] in
+      self?.transferringTracks.removeAll { $0.id == id }
+    }
   }
 
   /// The object that owns the in-flight requests and caches cancels them.
@@ -650,6 +701,16 @@ private extension LCPResourceLoaderDelegate {
     // The concurrency limit admits requests into the lookup phase; a transfer
     // gives its slot back so a long read cannot hold the resource-loader queue.
     slot.release()
+
+    // The slot above admits requests into the lookup phase only, so nothing
+    // bounded how many transfers ran at once. The loader buffers
+    // `maxBufferedTracks` tracks, and reads spread wider than that evict the
+    // window needed next, so a skip burst both thrashed the buffers and left
+    // the chapter the patron waited for competing with chapters they had
+    // already left (PP-5398).
+    let serveID = ObjectIdentifier(loadingRequest)
+    beginTransfer(id: serveID, href: finalHref)
+    defer { endTransfer(id: serveID) }
 
     let start = max(0, Int(range.offset))
     var count = range.length

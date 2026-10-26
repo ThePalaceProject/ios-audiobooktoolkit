@@ -465,6 +465,112 @@ final class LCPResourceLoaderStallTests: XCTestCase {
 
   /// AVFoundation cancels a request it no longer needs. The reader must stop
   /// reading, and must not finish a request AVFoundation has cancelled.
+  // MARK: - Track window
+
+  /// A serve for a track that has fallen outside the buffered window stops.
+  ///
+  /// The concurrency slot is given back before the data phase, so nothing
+  /// bounded how many transfers ran at once: a skip burst left serves for
+  /// chapters the player had moved past still reading, which both thrashed the
+  /// per-track buffers and made the chapter the patron waited for compete with
+  /// chapters they had left (PP-5398).
+  func testTrackWindow_WhenMoreTracksAreServedThanAreBuffered_TheOldestStopsReading() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    let probe2 = ResourceProbe()
+    for p in [probe!, probe1, probe2] {
+      p.length = UInt64(chunk * 32)
+      p.readDelay = 0.05
+    }
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+    provider.addTrack(href: "track2.mp3", probe: probe2)
+
+    // Two, so a third track crosses the window without needing a long setup.
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2
+    )
+
+    func startServe(_ url: URL) -> FakeLoadingRequest {
+      let request = FakeLoadingRequest(
+        url: url,
+        needsContentInformation: false,
+        range: LCPRequestedRange(offset: 0, length: chunk * 32, toEnd: false)
+      )
+      XCTAssertTrue(loader.shouldWait(for: request))
+      return request
+    }
+
+    let oldest = startServe(Self.trackURL)
+    try await waitUntil(timeout: 5) { oldest.respondedBytes > 0 }
+    let middle = startServe(Self.otherTrackURL)
+    try await waitUntil(timeout: 5) { middle.respondedBytes > 0 }
+
+    let newest = startServe(URL(string: "readium-lcp://track2/track2.mp3")!)
+    try await waitUntil(timeout: 5) { newest.respondedBytes > 0 }
+
+    // A quiet period, as in the cancellation tests above: the claim is that
+    // nothing further arrives, and only elapsed time can witness that.
+    let oldestAtCross = oldest.respondedBytes
+    try await Task.sleep(nanoseconds: 700_000_000)
+
+    XCTAssertLessThanOrEqual(
+      oldest.respondedBytes, oldestAtCross + chunk,
+      "the abandoned track must stop reading; at most the read in flight may land"
+    )
+    XCTAssertNil(
+      oldest.outcome,
+      "an abandoned serve is left for AVFoundation to drop, as didCancel does, not failed"
+    )
+    XCTAssertGreaterThan(
+      newest.respondedBytes, 0,
+      "the track the patron is waiting for must keep reading"
+    )
+    XCTAssertLessThan(oldest.respondedBytes, chunk * 32, "the abandoned serve did not run to completion")
+  }
+
+  /// Serving no more tracks than are buffered abandons nothing.
+  ///
+  /// The bound must not touch the steady state: the queued chapter and the
+  /// preloaded following one are both legitimate and must both keep reading.
+  func testTrackWindow_WhenTheTracksServedFitTheWindow_BothKeepReading() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    for p in [probe!, probe1] {
+      p.length = UInt64(chunk * 16)
+      p.readDelay = 0.05
+    }
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2
+    )
+
+    let current = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 16, toEnd: false)
+    )
+    let following = FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 16, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: current))
+    try await waitUntil(timeout: 5) { current.respondedBytes > 0 }
+    XCTAssertTrue(loader.shouldWait(for: following))
+    try await waitUntil(timeout: 5) { following.respondedBytes > 0 }
+
+    let currentAtStart = current.respondedBytes
+    try await waitUntil(timeout: 5) { current.respondedBytes > currentAtStart }
+
+    XCTAssertNil(current.outcome, "neither serve is finished early")
+    XCTAssertGreaterThan(following.respondedBytes, 0, "the preloaded next chapter must keep reading")
+  }
+
   func testDidCancel_DuringTheDataPhase_StopsTheReader() async throws {
     let chunk = 128 * 1024
     probe.length = UInt64(chunk * 8)
