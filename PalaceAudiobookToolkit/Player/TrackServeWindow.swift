@@ -35,7 +35,9 @@ enum TrackServeWindow {
       distinct.append(href)
     }
 
-    guard distinct.count > window else { return [] }
-    return Array(distinct[window...])
+    // `dropFirst` rather than a slice behind a count guard: it is already
+    // empty when fewer tracks are in flight than the window holds, so there is
+    // no bound to get wrong and no index to go out of range.
+    return Array(distinct.dropFirst(window))
   }
 }
