@@ -786,12 +786,19 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     }
     provider.addTrack(href: "track1.mp3", probe: probe1)
 
+    // A long yield is what makes the bound testable here. With the default
+    // ceiling a tightened bound would hold the second track, then admit it
+    // once the first had already finished — the two would never co-reside,
+    // the barriers would still pass, and the kill would rest on the
+    // undocumented relation "track shorter than the yield". At 10s a
+    // tightened bound holds past the 5s barrier and fails outright.
     let loader = LCPResourceLoaderDelegate(
       provider: provider,
       stallTimeout: 5,
       perTrackBufferSize: chunk,
       maxBufferedTracks: 2,
-      maxTransferringTracks: 2
+      maxTransferringTracks: 2,
+      maxTransferYield: 10
     )
 
     let current = FakeLoadingRequest(
@@ -807,11 +814,10 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertTrue(loader.shouldWait(for: following))
     try await waitUntil(timeout: 5) { following.respondedBytes > 0 }
 
-    // Without this the test only shows nothing was cancelled: a bound of 1
-    // would hold `following` for the yield and then admit it anyway, well
-    // inside the 5s barrier, so both still make progress and the test passes.
-    // The peak is what distinguishes "the bound is present" from "the bound
-    // bounds".
+    // The barriers above only show that nothing was cancelled. This asserts
+    // the window itself: both tracks fit, so both must have been registered
+    // at the same instant, which is what "the bound bounds" means and what a
+    // progress check cannot distinguish from "the bound is merely present".
     XCTAssertEqual(loader.peakTransferringTrackCount, 2,
                    "both tracks fit the window, so both must have been transferring at once")
 
