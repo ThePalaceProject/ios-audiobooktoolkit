@@ -19,6 +19,20 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   private let stallTimeout: TimeInterval
   private let inflightQueue = DispatchQueue(label: "com.palace.lcp-streaming.inflight", attributes: .concurrent)
   private var inflightTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+
+  /// The track each serve now in its byte-transfer phase is reading, most
+  /// recently started first.
+  ///
+  /// Separate from `inflightTasks` because a serve's href is not known until
+  /// the reading order has been consulted, which happens after registration.
+  /// `LockIsolated` rather than `inflightQueue` because this is read from the
+  /// serve tasks themselves, and a `sync` there would block a cooperative-pool
+  /// thread.
+  private let transferringTracks = LockIsolated<[(id: ObjectIdentifier, href: String)]>([])
+
+  /// The most distinct tracks seen reading at once, for tests to assert the
+  /// bound actually bounds rather than merely being present.
+  private let peakTransferringTracks = LockIsolated<Int>(0)
   private let concurrencySemaphore = DispatchSemaphore(value: 8)
 
   /// Total decrypted bytes this loader has handed to AVFoundation, across every
@@ -49,12 +63,29 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var chapterLoadMark: ChapterLoadMark? { chapterLoad.value }
 
-  func markChapterLoadStart(at date: Date = Date()) {
+  /// The track the patron is currently waiting on, or last waited on.
+  ///
+  /// Replaced only by the next chapter mark, never cleared when a chapter
+  /// finishes loading: the read-ahead over the rest of the current track is
+  /// legitimate and has to keep its exemption after the chapter is audible.
+  private let preferredTrackKey = LockIsolated<String?>(nil)
+
+  func markChapterLoadStart(trackKey: String? = nil, at date: Date = Date()) {
+    if let trackKey {
+      preferredTrackKey.value = trackKey
+    }
     chapterLoad.value = ChapterLoadMark(
       startedAt: date,
       bytesAtStart: servedByteCount.value,
       firstByteAt: nil
     )
+  }
+
+  /// The href of the track the patron is waiting on, in the spelling admission
+  /// compares against, or nil when no chapter has been marked.
+  private var preferredHref: String? {
+    guard let key = preferredTrackKey.value else { return nil }
+    return readingOrderHrefByTrackKey.value[key]
   }
 
   /// What the loader was asked for one track, and how much of it failed.
@@ -88,8 +119,21 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// expression for the same fact, and one of them is percent-decoded.
   private let hrefByTrackKey = LockIsolated<[String: String]>([:])
 
-  func noteTrack(key trackKey: String, servesHref href: String) {
+  /// The href each track reads in the READING ORDER's spelling, which is what
+  /// a serve resolves and so what admission compares against.
+  ///
+  /// Kept apart from `hrefByTrackKey` rather than replacing it: that map is
+  /// keyed to match `requestActivityByHref`, which counts under
+  /// `requestedHref(for:)`, and `URL.path` percent-decodes. One map cannot
+  /// answer both questions, and silently answering the wrong one would leave
+  /// the admission exemption never matching.
+  private let readingOrderHrefByTrackKey = LockIsolated<[String: String]>([:])
+
+  func noteTrack(key trackKey: String, servesHref href: String, readingOrderHref: String? = nil) {
     hrefByTrackKey.withValue { $0[trackKey] = href }
+    if let readingOrderHref {
+      readingOrderHrefByTrackKey.withValue { $0[trackKey] = readingOrderHref }
+    }
   }
 
   /// What was asked for the track `trackKey`, or nil when no item for it has
@@ -252,8 +296,47 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   static let defaultPerTrackBufferSize = 6 * 1024 * 1024
   static let defaultMaxBufferedTracks = 4
 
+  /// How many distinct tracks may be in their byte-transfer phase at once.
+  ///
+  /// Its own knob rather than `maxBufferedTracks`, which is a memory budget
+  /// (four buffers of 6 MB, measured by `LCPStreamingEgressTests`). The two
+  /// default to the same number because a track reading without a resident
+  /// buffer pays a whole archive fill per displaced read, but they answer
+  /// different questions: lowering the memory budget should not silently
+  /// tighten admission, and raising it for hit rate should not loosen it.
+  ///
+  /// It must stay at or above the player's queue window plus the preloaded
+  /// following chapter, or a track the patron is waiting for would be held
+  /// back. `LCPStreamingPlayer.queueWindow` queues one item and
+  /// `preloadFollowingChapter` adds one more, so two is the floor today.
+  static let defaultMaxTransferringTracks = 4
+
+  /// The longest a transfer waits for a reading slot before reading anyway.
+  ///
+  /// The track the patron is waiting on is exempt from the bound, so a hold
+  /// only ever delays read-ahead. This is the ceiling on the harm when the
+  /// exemption does not apply — a stale key, or a track nobody marked — and it
+  /// sits below `slowChapterServeThreshold`, so a hold alone cannot account for
+  /// a chapter the log calls slow.
+  ///
+  /// Derived rather than written as a second literal: the slow-serve predicate
+  /// compares with `>=`, so an equal value would make a maximal hold log itself
+  /// as a slow serve and seed the diagnostic this ticket was investigated from.
+  /// The two were briefly equal. Subtracting keeps them from drifting back
+  /// together without needing a test to notice.
+  static let defaultMaxTransferYield: TimeInterval = slowChapterServeThreshold - 0.1
+
+  /// How often a held transfer re-checks whether it may read.
+  ///
+  /// A poll rather than a parked continuation: the wait is bounded and
+  /// re-evaluated, so there is no awaiter to leak and nothing to signal. The
+  /// interval is irrelevant against transfers measured in seconds.
+  static let transferYieldPollInterval: UInt64 = 50_000_000
+
   private let perTrackBufferSize: Int
   private let maxBufferedTracks: Int
+  private let maxTransferringTracks: Int
+  private let maxTransferYield: TimeInterval
   private let publicationWaitTimeout: TimeInterval
 
   init(
@@ -261,12 +344,16 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     stallTimeout: TimeInterval = 90,
     perTrackBufferSize: Int = LCPResourceLoaderDelegate.defaultPerTrackBufferSize,
     maxBufferedTracks: Int = LCPResourceLoaderDelegate.defaultMaxBufferedTracks,
+    maxTransferringTracks: Int = LCPResourceLoaderDelegate.defaultMaxTransferringTracks,
+    maxTransferYield: TimeInterval = LCPResourceLoaderDelegate.defaultMaxTransferYield,
     publicationWaitTimeout: TimeInterval = LCPResourceLoaderDelegate.defaultPublicationWaitTimeout
   ) {
     self.provider = provider
     self.stallTimeout = stallTimeout
     self.perTrackBufferSize = perTrackBufferSize
     self.maxBufferedTracks = maxBufferedTracks
+    self.maxTransferringTracks = maxTransferringTracks
+    self.maxTransferYield = maxTransferYield
     self.publicationWaitTimeout = publicationWaitTimeout
     super.init()
   }
@@ -280,10 +367,101 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
     inflightQueue.async(flags: .barrier) { [weak self] in
       self?.inflightTasks.removeAll()
     }
+    transferringTracks.withValue { $0.removeAll() }
   }
 
   func clearCaches() {
     bufferedTracks.value = []
+  }
+
+  /// Test hook: the most distinct tracks that have read concurrently.
+  ///
+  /// Exposed because "the bound is present" and "the bound bounds" are
+  /// different claims, and only this distinguishes them.
+  var peakTransferringTrackCount: Int { peakTransferringTracks.value }
+
+  /// Takes a reading slot for `href`, waiting at most `maxTransferYield`.
+  ///
+  /// The concurrency slot `serve` gives back admits requests into the lookup
+  /// phase only, so nothing bounded how many transfers ran at once: a skip
+  /// burst left serves for chapters the player had moved past still reading.
+  /// The loader buffers `maxBufferedTracks` tracks, and reads spread over more
+  /// tracks than are buffered evict the window needed next, so every displaced
+  /// read pays for a whole archive fill and the chapter the patron waits for
+  /// competes with chapters they have left (PP-5398).
+  ///
+  /// The bound counts distinct TRACKS, not requests: AVFoundation issues
+  /// several ranges for one track, and the buffer is per track, so ranges of a
+  /// track already reading are admitted at once and never hold each other
+  /// back.
+  ///
+  /// It waits rather than cancelling. PP-5240 records why: a request the player
+  /// is still waiting on must keep being served, because cancelling it leaves
+  /// it unanswered and playback stalls when the buffer runs out. Cancelling
+  /// here would also take the stall watchdog with it, since that is a sibling
+  /// task of the reader, so a wrongly-chosen track would hang with no error
+  /// instead of failing with one.
+  ///
+  /// Past the deadline it reads anyway. The slot is an optimisation, not a
+  /// gate: the worst case is the unbounded concurrency this exists to reduce,
+  /// never a request nothing answers. The wait also happens before `transfer`
+  /// arms its stall timer, so waiting is never read as a transfer that
+  /// delivered no bytes.
+  private func admitTransfer(id: ObjectIdentifier, href: String) async {
+    let deadline = Date().addingTimeInterval(maxTransferYield)
+    while true {
+      if registerTransfer(id: id, href: href, respectingBound: true) { return }
+      if Date() >= deadline {
+        registerTransfer(id: id, href: href, respectingBound: false)
+        return
+      }
+      do {
+        try await Task.sleep(nanoseconds: Self.transferYieldPollInterval)
+      } catch {
+        return // cancelled; `serve` returns without reading
+      }
+    }
+  }
+
+  /// Registers a transfer, optionally only if the bound allows it.
+  ///
+  /// The track the patron is waiting on is admitted whatever the bound says.
+  /// Without that exemption the bound is first-come-first-served, and in the
+  /// burst it exists for the incumbents are read-ahead and abandoned tracks
+  /// while the newcomer is the chapter someone is waiting to hear: holding it
+  /// would add silence to the symptom (PP-5398).
+  @discardableResult
+  private func registerTransfer(id: ObjectIdentifier, href: String, respectingBound: Bool) -> Bool {
+    let preferred = preferredHref
+    // The distinct count is taken inside the same critical section that
+    // appends. Sampling after the lock dropped could miss a track whose
+    // transfer ended in between, and that under-reports — the direction that
+    // lets an exact `peak == 1` assertion pass while two tracks really read.
+    let admittedDistinct: Int? = transferringTracks.withValue { tracks in
+      let distinct = Set(tracks.map(\.href))
+      if respectingBound,
+         href != preferred,
+         !distinct.contains(href),
+         distinct.count >= maxTransferringTracks {
+        return nil
+      }
+      tracks.removeAll { $0.id == id }
+      tracks.append((id: id, href: href))
+      return Set(tracks.map(\.href)).count
+    }
+    if let admittedDistinct {
+      peakTransferringTracks.withValue { $0 = max($0, admittedDistinct) }
+    }
+    return admittedDistinct != nil
+  }
+
+  /// Drops a finished or cancelled transfer, freeing its slot.
+  ///
+  /// Synchronous, and called from `didCancel` as well as from the serve's own
+  /// exit: an entry that outlives its transfer holds a slot against tracks that
+  /// are still reading, which would cause the stall this bound prevents.
+  private func endTransfer(id: ObjectIdentifier) {
+    transferringTracks.withValue { $0.removeAll { $0.id == id } }
   }
 
   /// The object that owns the in-flight requests and caches cancels them.
@@ -419,6 +597,7 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// cancellation contract requires.
   func didCancel(_ loadingRequest: LCPStreamingLoadingRequest) {
     let id = ObjectIdentifier(loadingRequest)
+    endTransfer(id: id)
     inflightQueue.sync {
       inflightTasks[id]?.cancel()
     }
@@ -650,6 +829,17 @@ private extension LCPResourceLoaderDelegate {
     // The concurrency limit admits requests into the lookup phase; a transfer
     // gives its slot back so a long read cannot hold the resource-loader queue.
     slot.release()
+
+    // The slot above admits requests into the lookup phase only, so nothing
+    // bounded how many transfers ran at once. The loader buffers
+    // `maxBufferedTracks` tracks, and reads spread wider than that evict the
+    // window needed next, so a skip burst both thrashed the buffers and left
+    // the chapter the patron waited for competing with chapters they had
+    // already left (PP-5398).
+    let serveID = ObjectIdentifier(loadingRequest)
+    defer { endTransfer(id: serveID) }
+    await admitTransfer(id: serveID, href: finalHref)
+    if Task.isCancelled { return }
 
     let start = max(0, Int(range.offset))
     var count = range.length

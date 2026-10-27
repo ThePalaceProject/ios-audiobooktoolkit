@@ -461,6 +461,376 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     )
   }
 
+  // MARK: - Track window
+
+  /// A track the patron is not waiting on is held back while others read, and
+  /// is still served afterwards.
+  ///
+  /// The concurrency slot is given back before the data phase, so nothing
+  /// bounded how many transfers ran at once and a skip burst left serves for
+  /// chapters the player had moved past competing with the one the patron was
+  /// waiting for (PP-5398). Holding rather than cancelling is the point: a
+  /// cancelled request is left unanswered and the stall watchdog dies with it,
+  /// so a wrongly-chosen track would hang instead of failing (PP-5240).
+  func testTransferBound_ATrackOutsideTheWindow_IsHeldThenStillServed() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    let probe2 = ResourceProbe()
+    for p in [probe!, probe1, probe2] {
+      p.length = UInt64(chunk * 4)
+      p.readDelay = 0.05
+    }
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+    provider.addTrack(href: "track2.mp3", probe: probe2)
+
+    // One track at a time, so the tracks outside the window must take the
+    // single reading slot in turn.
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 1,
+      maxTransferringTracks: 1,
+      maxTransferYield: 10
+    )
+
+    func startServe(_ url: URL) -> FakeLoadingRequest {
+      let request = FakeLoadingRequest(
+        url: url,
+        needsContentInformation: false,
+        range: LCPRequestedRange(offset: 0, length: chunk * 4, toEnd: false)
+      )
+      XCTAssertTrue(loader.shouldWait(for: request))
+      return request
+    }
+
+    let first = startServe(Self.trackURL)
+    let second = startServe(Self.otherTrackURL)
+    let third = startServe(URL(string: "readium-lcp://track2/track2.mp3")!)
+
+    // The load-bearing half: three tracks were demanded at once and only one
+    // ever read. Without this the test passes whether or not the bound fires.
+    try await waitUntil(timeout: 10) { first.respondedBytes > 0 }
+    XCTAssertEqual(loader.peakTransferringTrackCount, 1,
+                   "three tracks were demanded; the bound admits one at a time")
+
+    // Every one is answered. Under cancellation the held ones would never
+    // finish, which is the failure PP-5240 records.
+    for request in [first, second, third] {
+      let outcome = try await request.waitUntilFinished(timeout: 30)
+      XCTAssertEqual(outcome, .success,
+                     "a held transfer must still be served, not left unanswered")
+      XCTAssertEqual(request.respondedBytes, chunk * 4, "and must deliver every byte asked for")
+    }
+  }
+
+  /// The track the patron is waiting on reads at once, however full the bound is.
+  ///
+  /// Without the exemption the bound is first-come-first-served, so in a
+  /// chapter burst the newcomer held back is the chapter someone is waiting to
+  /// hear while the incumbents are read-ahead. The yield here is long enough
+  /// that a held transfer could not reach the deadline inside the timeout, so
+  /// the test fails if the exemption never fires.
+  func testPreferredTrack_WhenEverySlotIsHeld_IsAdmittedAtOnce() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    probe!.length = UInt64(chunk * 200)
+    probe!.readDelay = 0.05
+    probe1.length = UInt64(chunk)
+    probe1.readDelay = 0
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 20,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2,
+      maxTransferringTracks: 1,
+      maxTransferYield: 10
+    )
+
+    // Fill the one slot and keep it filled for the rest of the test.
+    let longReader = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 200, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: longReader))
+    try await waitUntil(timeout: 5) { longReader.respondedBytes > 0 }
+
+    // The patron taps through to the track track1.mp3 serves.
+    loader.noteTrack(key: "chapter-2", servesHref: "track1.mp3", readingOrderHref: "track1.mp3")
+    loader.markChapterLoadStart(trackKey: "chapter-2")
+
+    let preferred = FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: preferred))
+
+    // One second against a ten-second yield: delivery this soon can only mean
+    // it was admitted rather than held to the deadline.
+    try await waitUntil(timeout: 1) { preferred.respondedBytes > 0 }
+    XCTAssertEqual(loader.peakTransferringTrackCount, 2,
+                   "the preferred track must read alongside the slot holder, not behind it")
+  }
+
+  /// The exemption matches a track whose href carries a percent escape.
+  ///
+  /// The map the player fills is keyed for a different consumer and holds the
+  /// percent-DECODED path, while a serve resolves the reading order's own
+  /// spelling. Matching the wrong one costs nothing on a fixture named
+  /// `track1.mp3`, where both spellings agree, and silently never fires in
+  /// production. This is the fixture where they disagree.
+  func testPreferredTrack_WithAPercentEscapedHref_IsStillAdmittedAtOnce() async throws {
+    let chunk = 128 * 1024
+    let escapedHref = "my%20track.mp3"
+    let probe1 = ResourceProbe()
+    probe!.length = UInt64(chunk * 200)
+    probe!.readDelay = 0.05
+    probe1.length = UInt64(chunk)
+    probe1.readDelay = 0
+    provider.addTrack(href: escapedHref, probe: probe1)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 20,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2,
+      maxTransferringTracks: 1,
+      maxTransferYield: 10
+    )
+
+    let longReader = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 200, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: longReader))
+    try await waitUntil(timeout: 5) { longReader.respondedBytes > 0 }
+
+    // What the player records: the decoded path for the activity counters, and
+    // the reading order's spelling for admission.
+    let escapedURL = URL(string: "readium-lcp://track1/\(escapedHref)")!
+    loader.noteTrack(
+      key: "chapter-2",
+      servesHref: LCPResourceLoaderDelegate.requestedHref(for: escapedURL),
+      readingOrderHref: escapedHref
+    )
+    loader.markChapterLoadStart(trackKey: "chapter-2")
+
+    let preferred = FakeLoadingRequest(
+      url: escapedURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: preferred))
+
+    try await waitUntil(timeout: 1) { preferred.respondedBytes > 0 }
+    XCTAssertEqual(loader.peakTransferringTrackCount, 2,
+                   "an escaped href must match the reading order's spelling, not the decoded path")
+  }
+
+  /// A track nobody marked is still subject to the bound.
+  ///
+  /// The exemption has to be narrow: if it admitted everything the bound would
+  /// be gone, and read-ahead would pile up again.
+  func testPreferredTrack_ATrackThatIsNotPreferred_IsStillHeld() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    probe!.length = UInt64(chunk * 200)
+    probe!.readDelay = 0.05
+    probe1.length = UInt64(chunk)
+    probe1.readDelay = 0
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 20,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2,
+      maxTransferringTracks: 1,
+      maxTransferYield: 10
+    )
+
+    let longReader = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 200, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: longReader))
+    try await waitUntil(timeout: 5) { longReader.respondedBytes > 0 }
+
+    // Marked, but for a different track than the one that asks.
+    loader.noteTrack(key: "chapter-9", servesHref: "track9.mp3", readingOrderHref: "track9.mp3")
+    loader.markChapterLoadStart(trackKey: "chapter-9")
+
+    let held = FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    let bytesBefore = longReader.respondedBytes
+    XCTAssertTrue(loader.shouldWait(for: held))
+
+    // Wait on something that is false on entry: the slot holder delivering
+    // more than it had when `held` was submitted. That proves reading time
+    // passed, which a barrier already true on entry would not, and the
+    // exempted case needs less than this to deliver its first byte.
+    try await waitUntil(timeout: 5) { longReader.respondedBytes > bytesBefore }
+
+    XCTAssertEqual(held.respondedBytes, 0,
+                   "a track the patron is not waiting on must not skip the bound")
+    XCTAssertEqual(loader.peakTransferringTrackCount, 1,
+                   "the exemption must apply to the marked track only")
+  }
+
+  /// Being held back is bounded, so a track never waits forever for a slot.
+  ///
+  /// The slot is an optimisation, not a gate: past the deadline the transfer
+  /// reads anyway. Without that, one long reader would stall every other track
+  /// behind it.
+  func testTransferBound_WhenASlotNeverFreesUp_TheHeldTransferReadsAnyway() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    probe!.length = UInt64(chunk * 200)
+    probe!.readDelay = 0.05
+    probe1.length = UInt64(chunk)
+    probe1.readDelay = 0
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 20,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 1,
+      maxTransferringTracks: 1,
+      maxTransferYield: 0.3
+    )
+
+    let longReader = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 200, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: longReader))
+    try await waitUntil(timeout: 5) { longReader.respondedBytes > 0 }
+
+    let held = FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: held))
+
+    let heldOutcome = try await held.waitUntilFinished(timeout: 10)
+    XCTAssertEqual(heldOutcome, .success,
+                   "the hold must expire rather than keep a request waiting indefinitely")
+    XCTAssertEqual(held.respondedBytes, chunk)
+  }
+
+  /// A finished transfer gives its slot back.
+  ///
+  /// Without deregistration the bound fills with tracks that are no longer
+  /// reading, and then holds back a track while nothing else is transferring,
+  /// causing the stall it exists to prevent.
+  func testTransferBound_AfterTransfersFinish_ALaterTrackIsNotHeldBack() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    let probe2 = ResourceProbe()
+    for p in [probe!, probe1] {
+      p.length = UInt64(chunk)
+      p.readDelay = 0
+    }
+    probe2.length = UInt64(chunk * 2)
+    probe2.readDelay = 0
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+    provider.addTrack(href: "track2.mp3", probe: probe2)
+
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 1,
+      maxTransferringTracks: 1,
+      // Long enough that a leaked slot shows up as a timeout rather than being
+      // papered over by the deadline expiring.
+      maxTransferYield: 30
+    )
+
+    for url in [Self.trackURL, Self.otherTrackURL] {
+      let request = FakeLoadingRequest(
+        url: url, needsContentInformation: false,
+        range: LCPRequestedRange(offset: 0, length: chunk, toEnd: false)
+      )
+      XCTAssertTrue(loader.shouldWait(for: request))
+      let outcome = try await request.waitUntilFinished(timeout: 10)
+      XCTAssertEqual(outcome, .success)
+    }
+
+    let later = FakeLoadingRequest(
+      url: URL(string: "readium-lcp://track2/track2.mp3")!, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 2, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: later))
+
+    let laterOutcome = try await later.waitUntilFinished(timeout: 10)
+    XCTAssertEqual(laterOutcome, .success,
+                   "slots from finished transfers must be released")
+    XCTAssertEqual(later.respondedBytes, chunk * 2)
+  }
+
+  /// Serving no more tracks than the window holds delays nothing.
+  ///
+  /// The bound must not touch the steady state: the queued chapter and the
+  /// preloaded following one are both legitimate and must both keep reading.
+  func testTransferBound_WhenTheTracksServedFitTheWindow_BothKeepReading() async throws {
+    let chunk = 128 * 1024
+    let probe1 = ResourceProbe()
+    for p in [probe!, probe1] {
+      p.length = UInt64(chunk * 16)
+      p.readDelay = 0.05
+    }
+    provider.addTrack(href: "track1.mp3", probe: probe1)
+
+    // A long yield is what makes the bound testable here. With the default
+    // ceiling a tightened bound would hold the second track, then admit it at
+    // the deadline while the first still ran — peak 2 and a passing barrier,
+    // so the mutant survived. At 10s the deadline can no longer rescue a held
+    // track inside the 5s barrier, so a tightened bound fails whatever the
+    // fixture length: a track shorter than the barrier finishes before the
+    // held one is admitted, so the two never co-reside and the peak assertion
+    // fails; a track outliving the barrier keeps the slot, so the barrier
+    // itself fails.
+    let loader = LCPResourceLoaderDelegate(
+      provider: provider,
+      stallTimeout: 5,
+      perTrackBufferSize: chunk,
+      maxBufferedTracks: 2,
+      maxTransferringTracks: 2,
+      maxTransferYield: 10
+    )
+
+    let current = FakeLoadingRequest(
+      url: Self.trackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 16, toEnd: false)
+    )
+    let following = FakeLoadingRequest(
+      url: Self.otherTrackURL, needsContentInformation: false,
+      range: LCPRequestedRange(offset: 0, length: chunk * 16, toEnd: false)
+    )
+    XCTAssertTrue(loader.shouldWait(for: current))
+    try await waitUntil(timeout: 5) { current.respondedBytes > 0 }
+    XCTAssertTrue(loader.shouldWait(for: following))
+    try await waitUntil(timeout: 5) { following.respondedBytes > 0 }
+
+    // The barriers above only show that nothing was cancelled. This asserts
+    // the window itself: both tracks fit, so both must have been registered
+    // at the same instant, which is what "the bound bounds" means and what a
+    // progress check cannot distinguish from "the bound is merely present".
+    XCTAssertEqual(loader.peakTransferringTrackCount, 2,
+                   "both tracks fit the window, so both must have been transferring at once")
+
+    let currentAtStart = current.respondedBytes
+    try await waitUntil(timeout: 5) { current.respondedBytes > currentAtStart }
+
+    XCTAssertNil(current.outcome, "neither serve is finished early")
+    XCTAssertGreaterThan(following.respondedBytes, 0, "the preloaded next chapter must keep reading")
+  }
+
   // MARK: - Cancellation
 
   /// AVFoundation cancels a request it no longer needs. The reader must stop

@@ -212,7 +212,7 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     chapterStartSampler?.invalidate()
     chapterStartTrackKey = trackKey
     chapterStartedAt = date
-    sharedResourceLoader?.markChapterLoadStart(at: date)
+    sharedResourceLoader?.markChapterLoadStart(trackKey: trackKey, at: date)
     chapterStartSampler = Timer.scheduledTimer(
       withTimeInterval: Self.chapterStartSampleInterval, repeats: true
     ) { [weak self] _ in
@@ -1181,9 +1181,17 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
   }
 
   private func createStreamingPlayerItem(for track: any Track, index: Int) -> AVPlayerItem {
+    /// The reading-order href this item reads, in the reading order's own
+    /// spelling, or nil when there is no publication to read it from.
+    ///
+    /// Taken from the reading order rather than back out of the URL: `URL.path`
+    /// percent-decodes, and admission compares against the reading-order
+    /// spelling, so a track whose href carries an escape would never match.
+    var readingOrderHref: String?
     let assetURL: URL = {
       if let publication = streamingProvider?.getPublication(), index < publication.readingOrder.count {
         let readingOrderLink = publication.readingOrder[index]
+        readingOrderHref = readingOrderLink.href.components(separatedBy: "#").first ?? readingOrderLink.href
         let customURL = URL(string: "readium-lcp://track\(index)/\(readingOrderLink.href)")!
         ATLog(.debug, "🎵 Creating streaming item \(index) with custom URL: \(customURL.absoluteString)")
         return customURL
@@ -1199,11 +1207,12 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     let asset = AVURLAsset(url: assetURL, options: assetOptions)
 
     if let sharedResourceLoader = sharedResourceLoader {
-      // The track and the URL its item reads are both in hand here, so the
+      // The track and the href its item reads are both in hand here, so the
       // loader is told the pairing rather than deriving it a second way.
       sharedResourceLoader.noteTrack(
         key: track.key,
-        servesHref: LCPResourceLoaderDelegate.requestedHref(for: assetURL)
+        servesHref: LCPResourceLoaderDelegate.requestedHref(for: assetURL),
+        readingOrderHref: readingOrderHref
       )
       objc_setAssociatedObject(
         asset,
