@@ -317,11 +317,14 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// only ever delays read-ahead. This is the ceiling on the harm when the
   /// exemption does not apply — a stale key, or a track nobody marked — and it
   /// sits below `slowChapterServeThreshold`, so a hold alone cannot account for
-  /// a chapter the log calls slow. The margin is deliberate and pinned by a
-  /// test: the slow-serve predicate is `>=`, so an equal value would make a
-  /// maximal hold log itself as a slow serve and seed the diagnostic this
-  /// ticket was investigated from.
-  static let defaultMaxTransferYield: TimeInterval = 1.4
+  /// a chapter the log calls slow.
+  ///
+  /// Derived rather than written as a second literal: the slow-serve predicate
+  /// compares with `>=`, so an equal value would make a maximal hold log itself
+  /// as a slow serve and seed the diagnostic this ticket was investigated from.
+  /// The two were briefly equal. Subtracting keeps them from drifting back
+  /// together without needing a test to notice.
+  static let defaultMaxTransferYield: TimeInterval = slowChapterServeThreshold - 0.1
 
   /// How often a held transfer re-checks whether it may read.
   ///
@@ -430,23 +433,26 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   @discardableResult
   private func registerTransfer(id: ObjectIdentifier, href: String, respectingBound: Bool) -> Bool {
     let preferred = preferredHref
-    let admitted: Bool = transferringTracks.withValue { tracks in
+    // The distinct count is taken inside the same critical section that
+    // appends. Sampling after the lock dropped could miss a track whose
+    // transfer ended in between, and that under-reports — the direction that
+    // lets an exact `peak == 1` assertion pass while two tracks really read.
+    let admittedDistinct: Int? = transferringTracks.withValue { tracks in
       let distinct = Set(tracks.map(\.href))
       if respectingBound,
          href != preferred,
          !distinct.contains(href),
          distinct.count >= maxTransferringTracks {
-        return false
+        return nil
       }
       tracks.removeAll { $0.id == id }
       tracks.append((id: id, href: href))
-      return true
+      return Set(tracks.map(\.href)).count
     }
-    if admitted {
-      let distinct = Set(transferringTracks.value.map(\.href)).count
-      peakTransferringTracks.withValue { $0 = max($0, distinct) }
+    if let admittedDistinct {
+      peakTransferringTracks.withValue { $0 = max($0, admittedDistinct) }
     }
-    return admitted
+    return admittedDistinct != nil
   }
 
   /// Drops a finished or cancelled transfer, freeing its slot.

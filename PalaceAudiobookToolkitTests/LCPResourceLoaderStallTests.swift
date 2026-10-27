@@ -807,6 +807,14 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     XCTAssertTrue(loader.shouldWait(for: following))
     try await waitUntil(timeout: 5) { following.respondedBytes > 0 }
 
+    // Without this the test only shows nothing was cancelled: a bound of 1
+    // would hold `following` for the yield and then admit it anyway, well
+    // inside the 5s barrier, so both still make progress and the test passes.
+    // The peak is what distinguishes "the bound is present" from "the bound
+    // bounds".
+    XCTAssertEqual(loader.peakTransferringTrackCount, 2,
+                   "both tracks fit the window, so both must have been transferring at once")
+
     let currentAtStart = current.respondedBytes
     try await waitUntil(timeout: 5) { current.respondedBytes > currentAtStart }
 
@@ -1781,20 +1789,6 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
         readingOrder: hrefs.map { Link(href: $0, mediaType: .mp3) }
       ),
       container: container
-    )
-  }
-
-  /// A maximal hold must not log itself as a slow chapter serve.
-  ///
-  /// The slow-serve predicate is `elapsed >= slowChapterServeThreshold`, so an
-  /// equal yield would put a self-inflicted line into the diagnostic the
-  /// regression pass reads to find real stalls. Both constants were unpinned
-  /// until this test, and they were briefly equal.
-  func testTheMaximalHold_doesNotRegisterAsASlowChapterServe() {
-    XCTAssertLessThan(
-      LCPResourceLoaderDelegate.defaultMaxTransferYield,
-      LCPResourceLoaderDelegate.slowChapterServeThreshold,
-      "a hold of the full yield must stay under the slow-serve threshold, which compares with >="
     )
   }
 }
