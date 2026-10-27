@@ -787,11 +787,14 @@ final class LCPResourceLoaderStallTests: XCTestCase {
     provider.addTrack(href: "track1.mp3", probe: probe1)
 
     // A long yield is what makes the bound testable here. With the default
-    // ceiling a tightened bound would hold the second track, then admit it
-    // once the first had already finished — the two would never co-reside,
-    // the barriers would still pass, and the kill would rest on the
-    // undocumented relation "track shorter than the yield". At 10s a
-    // tightened bound holds past the 5s barrier and fails outright.
+    // ceiling a tightened bound would hold the second track, then admit it at
+    // the deadline while the first still ran — peak 2 and a passing barrier,
+    // so the mutant survived. At 10s the deadline can no longer rescue a held
+    // track inside the 5s barrier, so a tightened bound fails whatever the
+    // fixture length: a track shorter than the barrier finishes before the
+    // held one is admitted, so the two never co-reside and the peak assertion
+    // fails; a track outliving the barrier keeps the slot, so the barrier
+    // itself fails.
     let loader = LCPResourceLoaderDelegate(
       provider: provider,
       stallTimeout: 5,
