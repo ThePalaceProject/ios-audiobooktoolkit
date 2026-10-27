@@ -63,12 +63,29 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
 
   var chapterLoadMark: ChapterLoadMark? { chapterLoad.value }
 
-  func markChapterLoadStart(at date: Date = Date()) {
+  /// The track the patron is currently waiting on, or last waited on.
+  ///
+  /// Replaced only by the next chapter mark, never cleared when a chapter
+  /// finishes loading: the read-ahead over the rest of the current track is
+  /// legitimate and has to keep its exemption after the chapter is audible.
+  private let preferredTrackKey = LockIsolated<String?>(nil)
+
+  func markChapterLoadStart(trackKey: String? = nil, at date: Date = Date()) {
+    if let trackKey {
+      preferredTrackKey.value = trackKey
+    }
     chapterLoad.value = ChapterLoadMark(
       startedAt: date,
       bytesAtStart: servedByteCount.value,
       firstByteAt: nil
     )
+  }
+
+  /// The href of the track the patron is waiting on, in the spelling admission
+  /// compares against, or nil when no chapter has been marked.
+  private var preferredHref: String? {
+    guard let key = preferredTrackKey.value else { return nil }
+    return readingOrderHrefByTrackKey.value[key]
   }
 
   /// What the loader was asked for one track, and how much of it failed.
@@ -102,8 +119,21 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// expression for the same fact, and one of them is percent-decoded.
   private let hrefByTrackKey = LockIsolated<[String: String]>([:])
 
-  func noteTrack(key trackKey: String, servesHref href: String) {
+  /// The href each track reads in the READING ORDER's spelling, which is what
+  /// a serve resolves and so what admission compares against.
+  ///
+  /// Kept apart from `hrefByTrackKey` rather than replacing it: that map is
+  /// keyed to match `requestActivityByHref`, which counts under
+  /// `requestedHref(for:)`, and `URL.path` percent-decodes. One map cannot
+  /// answer both questions, and silently answering the wrong one would leave
+  /// the admission exemption never matching.
+  private let readingOrderHrefByTrackKey = LockIsolated<[String: String]>([:])
+
+  func noteTrack(key trackKey: String, servesHref href: String, readingOrderHref: String? = nil) {
     hrefByTrackKey.withValue { $0[trackKey] = href }
+    if let readingOrderHref {
+      readingOrderHrefByTrackKey.withValue { $0[trackKey] = readingOrderHref }
+    }
   }
 
   /// What was asked for the track `trackKey`, or nil when no item for it has
@@ -281,12 +311,14 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// `preloadFollowingChapter` adds one more, so two is the floor today.
   static let defaultMaxTransferringTracks = 4
 
-  /// The longest a transfer waits for newer tracks before reading anyway.
+  /// The longest a transfer waits for a reading slot before reading anyway.
   ///
-  /// Bounded, and short relative to the 20-55 s serves this bound exists to
-  /// prevent, so a track wrongly held back costs seconds rather than the
-  /// unbounded wait that cancelling it would have cost.
-  static let defaultMaxTransferYield: TimeInterval = 8
+  /// The track the patron is waiting on is exempt from the bound, so a hold
+  /// only ever delays read-ahead. This is the ceiling on the harm when the
+  /// exemption does not apply — a stale key, or a track nobody marked — and it
+  /// sits below `slowChapterServeThreshold`, so a hold alone cannot account for
+  /// a chapter the log calls slow.
+  static let defaultMaxTransferYield: TimeInterval = 1.5
 
   /// How often a held transfer re-checks whether it may read.
   ///
@@ -386,11 +418,19 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   }
 
   /// Registers a transfer, optionally only if the bound allows it.
+  ///
+  /// The track the patron is waiting on is admitted whatever the bound says.
+  /// Without that exemption the bound is first-come-first-served, and in the
+  /// burst it exists for the incumbents are read-ahead and abandoned tracks
+  /// while the newcomer is the chapter someone is waiting to hear: holding it
+  /// would add silence to the symptom (PP-5398).
   @discardableResult
   private func registerTransfer(id: ObjectIdentifier, href: String, respectingBound: Bool) -> Bool {
+    let preferred = preferredHref
     let admitted: Bool = transferringTracks.withValue { tracks in
       let distinct = Set(tracks.map(\.href))
       if respectingBound,
+         href != preferred,
          !distinct.contains(href),
          distinct.count >= maxTransferringTracks {
         return false
