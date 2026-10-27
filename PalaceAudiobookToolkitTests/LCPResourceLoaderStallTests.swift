@@ -1783,4 +1783,18 @@ private final class FakeProvider: StreamingResourceProvider, @unchecked Sendable
       container: container
     )
   }
+
+  /// A maximal hold must not log itself as a slow chapter serve.
+  ///
+  /// The slow-serve predicate is `elapsed >= slowChapterServeThreshold`, so an
+  /// equal yield would put a self-inflicted line into the diagnostic the
+  /// regression pass reads to find real stalls. Both constants were unpinned
+  /// until this test, and they were briefly equal.
+  func testTheMaximalHold_doesNotRegisterAsASlowChapterServe() {
+    XCTAssertLessThan(
+      LCPResourceLoaderDelegate.defaultMaxTransferYield,
+      LCPResourceLoaderDelegate.slowChapterServeThreshold,
+      "a hold of the full yield must stay under the slow-serve threshold, which compares with >="
+    )
+  }
 }

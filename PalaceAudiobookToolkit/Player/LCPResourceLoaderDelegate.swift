@@ -317,8 +317,11 @@ final class LCPResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate {
   /// only ever delays read-ahead. This is the ceiling on the harm when the
   /// exemption does not apply — a stale key, or a track nobody marked — and it
   /// sits below `slowChapterServeThreshold`, so a hold alone cannot account for
-  /// a chapter the log calls slow.
-  static let defaultMaxTransferYield: TimeInterval = 1.5
+  /// a chapter the log calls slow. The margin is deliberate and pinned by a
+  /// test: the slow-serve predicate is `>=`, so an equal value would make a
+  /// maximal hold log itself as a slow serve and seed the diagnostic this
+  /// ticket was investigated from.
+  static let defaultMaxTransferYield: TimeInterval = 1.4
 
   /// How often a held transfer re-checks whether it may read.
   ///
