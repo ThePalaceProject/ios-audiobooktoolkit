@@ -762,8 +762,11 @@ class FindawayPlayer: NSObject, Player {
     isPlaybackDesired = true
     switch queuedPlayerState {
     case .none:
-      if var position = currentTrackPosition {
-        position.timestamp = 0
+      // Nothing queued: the engine holds the playhead. Hosts call play() on
+      // return to the foreground (PP-5506), so a playing engine is left alone
+      // and an idle one reloads where it is, never at the chapter start.
+      guard !isPlaying else { return }
+      if let position = currentTrackPosition {
         queuedPlayerState = .play((previous: nil, destination: position))
       }
     case let .queued(manipulation):
