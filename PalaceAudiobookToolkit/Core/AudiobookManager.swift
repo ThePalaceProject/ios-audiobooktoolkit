@@ -680,7 +680,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           return
         }
 
-        if nowPlayingWriter != nil, let currentChapter = try? tableOfContents.chapter(forPosition: position) {
+        if let currentChapter = try? tableOfContents.chapter(forPosition: position) {
           if lastKnownChapter?.title != currentChapter.title {
             lastKnownChapter = currentChapter
             ATLog(.debug, "🔄 Chapter changed - updating lock screen")

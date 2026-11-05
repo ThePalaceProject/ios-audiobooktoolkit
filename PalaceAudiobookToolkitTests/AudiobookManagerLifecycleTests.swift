@@ -381,6 +381,21 @@ final class AudiobookManagerNowPlayingWriterTests: XCTestCase {
     XCTAssertEqual(MPNowPlayingInfoCenter.default().nowPlayingInfo?.count, 1)
   }
 
+  /// Entering a new chapter refreshes Now Playing within about a second,
+  /// without waiting for the next position-driven heartbeat.
+  func testChapterChange_whilePlaying_isWrittenWithoutAPositionTick() throws {
+    let spy = NowPlayingWriterSpy()
+    manager.nowPlayingWriter = spy
+    player.isPlaying = true
+    player.currentTrackPosition = try position(5.0)
+
+    let written = expectation(description: "chapter monitor wrote Now Playing")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { written.fulfill() }
+    wait(for: [written], timeout: 5.0)
+
+    XCTAssertGreaterThanOrEqual(spy.infoWrites.count, 1)
+  }
+
   /// The lock-screen timer rebuild on backgrounding also tells the time
   /// tracker that playback is running; that call must survive timer changes.
   func testBackgrounding_whilePlaying_reportsPlaybackStartedToTracker() throws {
