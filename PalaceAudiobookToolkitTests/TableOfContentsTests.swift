@@ -367,17 +367,54 @@ final class ChapterLookupIndexTests: XCTestCase {
     XCTAssertFalse(toc.isChapterLookupIndexed)
   }
 
+  /// The last chapter's track keeps its id but claims a later index, so the
+  /// list stays in order and only the id check can refuse it.
   func testIndex_isNotBuilt_whenATrackIDMapsToTwoIndexes() throws {
     var toc = try Self.makeTOC(.alice)
-    let original = toc.toc[2].position
-    let impostor = try XCTUnwrap(TrackFactory.createTrack(
-      from: toc.manifest, title: nil, urlString: original.track.urls?.first?.absoluteString, audiobookID: "index",
-      index: original.track.index + 100, duration: original.track.duration, token: nil,
-      key: original.track.key
-    ))
-    toc.toc[2].position = TrackPosition(track: impostor, timestamp: original.timestamp, tracks: original.tracks)
+    let last = toc.toc.count - 1
+    let original = toc.toc[last].position
+    let impostor = try Self.makeTrack(like: original.track, in: toc, index: original.track.index + 100, key: original.track.key)
+    toc.toc[last].position = TrackPosition(track: impostor, timestamp: original.timestamp, tracks: original.tracks)
     toc.rebuildChapterIndex()
     XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  /// A different track claims the last chapter track's index; the order holds
+  /// (equal indexes compare as neither smaller), so only the index check can
+  /// refuse it.
+  func testIndex_isNotBuilt_whenAnIndexMapsToTwoTrackIDs() throws {
+    var toc = try Self.makeTOC(.alice)
+    let last = toc.toc.count - 1
+    let original = toc.toc[last].position
+    let impostor = try Self.makeTrack(like: original.track, in: toc, index: original.track.index, key: "impostor-key")
+    toc.toc[last].position = TrackPosition(track: impostor, timestamp: original.timestamp, tracks: original.tracks)
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  func testIndex_isNotBuilt_whenAChapterStartIsNaN() throws {
+    var toc = try Self.makeTOC(.alice)
+    toc.toc[3].position.timestamp = .nan
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  /// Without stored ends (Findaway and Overdrive lists) a chapter ends where
+  /// the next one starts, whatever its own duration says.
+  func testIndexedLookup_withoutStoredEnds_matchesLinearScan() throws {
+    var toc = try Self.makeTOC(.alice)
+    for index in toc.toc.indices {
+      toc.toc[index].endPosition = nil
+      toc.toc[index].duration = 1.0
+    }
+    toc.rebuildChapterIndex()
+    XCTAssertTrue(toc.isChapterLookupIndexed)
+
+    for position in Self.probePositions(toc) {
+      let expected = try? Self.referenceChapter(in: toc.toc, forPosition: position, preferChapterEndingHere: false)
+      let actual = try? toc.chapter(forPosition: position)
+      XCTAssertEqual(actual?.id, expected?.id, "track \(position.track.index) @ \(position.timestamp)")
+    }
   }
 
   func testIndex_isNotBuilt_forEmptyTOC() throws {
@@ -418,6 +455,13 @@ final class ChapterLookupIndexTests: XCTestCase {
   }
 
   // MARK: - Helpers
+
+  private static func makeTrack(like track: any Track, in toc: AudiobookTableOfContents, index: Int, key: String) throws -> any Track {
+    try XCTUnwrap(TrackFactory.createTrack(
+      from: toc.manifest, title: nil, urlString: track.urls?.first?.absoluteString, audiobookID: "index",
+      index: index, duration: track.duration, token: nil, key: key
+    ))
+  }
 
   private static func makeTOC(_ json: ManifestJSON) throws -> AudiobookTableOfContents {
     let manifest = try Manifest.from(jsonFileName: json.rawValue, bundle: Bundle(for: ChapterLookupIndexTests.self))
