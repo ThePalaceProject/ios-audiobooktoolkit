@@ -128,6 +128,15 @@ var sharedLogHandler: LogHandler? {
   set { _sharedLogHandler.value = newValue }
 }
 
+/// The lowest level `ATLog` builds a message for in release builds so it can pass it
+/// to `sharedLogHandler`. Warnings and errors are always built, for NSLog.
+private let _sharedLogHandlerMinimumLevel = LockIsolated<LogLevel>(.info)
+
+var sharedLogHandlerMinimumLevel: LogLevel {
+  get { _sharedLogHandlerMinimumLevel.value }
+  set { _sharedLogHandlerMinimumLevel.value = newValue }
+}
+
 // MARK: - AudiobookPositionCalculator
 
 /// Handles precise position calculations for all audiobook types
@@ -405,6 +414,13 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   }
 
   public static func setLogHandler(_ handler: @escaping LogHandler) {
+    setLogHandler(minimumLevel: .info, handler)
+  }
+
+  /// - Parameter minimumLevel: the lowest level the handler uses. In release builds,
+  ///   `ATLog` does not build messages below it.
+  public static func setLogHandler(minimumLevel: LogLevel, _ handler: @escaping LogHandler) {
+    sharedLogHandlerMinimumLevel = minimumLevel
     sharedLogHandler = handler
   }
 

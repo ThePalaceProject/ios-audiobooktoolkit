@@ -30,20 +30,48 @@ private func levelToString(_ level: LogLevel) -> String {
   }
 }
 
+/// Whether any output will use a line at `level`, decided before the message is built.
+/// DEBUG builds write every level but `.debug` to os_log. Release builds write warnings
+/// and errors with NSLog, and pass the rest to the host's handler when one is installed
+/// at or below that level.
+func atLogUsesMessage(at level: LogLevel, isDebugBuild: Bool, handlerMinimumLevel: LogLevel?) -> Bool {
+  guard level != .debug else {
+    return false
+  }
+  if isDebugBuild || level == .warn || level == .error {
+    return true
+  }
+  guard let handlerMinimumLevel else {
+    return false
+  }
+  return level.rawValue >= handlerMinimumLevel.rawValue
+}
+
+/// The installed handler's minimum level, or nil when no handler is installed.
+func atLogHandlerMinimumLevel() -> LogLevel? {
+  sharedLogHandler == nil ? nil : sharedLogHandlerMinimumLevel
+}
+
+/// `message` is an autoclosure so a discarded level does not pay for its string
+/// interpolation; per-tick callers such as the Now Playing update log at `.info`.
 public func ATLog(
   file: String = #file,
   line: Int = #line,
   _ level: LogLevel,
-  _ message: String,
+  _ message: @autoclosure () -> String,
   error: Error? = nil
 ) {
-  // PERFORMANCE FIX: Only log in debug builds and limit excessive logging
   #if DEBUG
-  // Skip debug logs entirely in debug builds to improve performance
-  guard level != .debug else {
+  let isDebugBuild = true
+  #else
+  let isDebugBuild = false
+  #endif
+  guard atLogUsesMessage(at: level, isDebugBuild: isDebugBuild, handlerMinimumLevel: atLogHandlerMinimumLevel()) else {
     return
   }
+  let message = message()
 
+  #if DEBUG
   // Throttle frequent logging to prevent console spam
   if shouldThrottleLogging(level: level, message: message) {
     return
