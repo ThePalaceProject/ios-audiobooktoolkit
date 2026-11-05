@@ -38,6 +38,16 @@ public protocol AudiobookBookmarkDelegate {
   func saveListeningPositionSync(at position: TrackPosition)
 }
 
+// MARK: - NowPlayingInfoWriting
+
+/// The two `MPNowPlayingInfoCenter` properties the toolkit writes.
+public protocol NowPlayingInfoWriting: AnyObject {
+  var nowPlayingInfo: [String: Any]? { get set }
+  var playbackState: MPNowPlayingPlaybackState { get set }
+}
+
+extension MPNowPlayingInfoCenter: NowPlayingInfoWriting {}
+
 // MARK: - AudiobookManager
 
 /// Isolated with the playback layer it owns.
@@ -76,6 +86,9 @@ public protocol AudiobookManager {
 
   func updateNowPlayingInfo(_ position: TrackPosition?)
 
+  /// Where the toolkit writes Now Playing info; nil when the host writes it.
+  var nowPlayingWriter: NowPlayingInfoWriting? { get }
+
   static func setLogHandler(_ handler: @escaping LogHandler)
 
   func play()
@@ -99,6 +112,32 @@ public extension AudiobookManager {
   /// the historical 30s skip until a host injects patron-configured values.
   var skipForwardInterval: TimeInterval { DefaultAudiobookManager.skipTimeInterval }
   var skipBackInterval: TimeInterval { DefaultAudiobookManager.skipTimeInterval }
+  var nowPlayingWriter: NowPlayingInfoWriting? { MPNowPlayingInfoCenter.default() }
+}
+
+// MARK: - PlaybackSnapshot
+
+/// The playback values a position tick needs, read together so a consumer
+/// resolves the chapter once per tick instead of once per value.
+public struct PlaybackSnapshot {
+  public let position: TrackPosition?
+  public let chapter: Chapter?
+  public let chapterOffset: TimeInterval
+  public let chapterDuration: TimeInterval
+}
+
+public extension AudiobookManager {
+  /// The values of `currentChapter`, `currentOffset` and `currentDuration`,
+  /// with `currentChapter` read once.
+  var playbackSnapshot: PlaybackSnapshot {
+    let chapter = currentChapter
+    return PlaybackSnapshot(
+      position: audiobook.player.currentTrackPosition,
+      chapter: chapter,
+      chapterOffset: currentOffset,
+      chapterDuration: chapter?.duration ?? currentDuration
+    )
+  }
 }
 
 // MARK: - BookmarkError
@@ -380,6 +419,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   /// fires ~4×/s) to a lock-screen-appropriate cadence. HelpSpot 17865.
   private var lastNowPlayingHeartbeat: Date = .distantPast
 
+  /// Where the toolkit writes lock-screen Now Playing info; the system center by
+  /// default. A host that writes Now Playing itself sets this to nil, so the
+  /// host is the only writer and the toolkit skips building the entry.
+  public var nowPlayingWriter: NowPlayingInfoWriting? = MPNowPlayingInfoCenter.default()
+
   // MARK: - Initialization
 
   public init(
@@ -636,7 +680,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           return
         }
 
-        if let currentChapter = try? tableOfContents.chapter(forPosition: position) {
+        if nowPlayingWriter != nil, let currentChapter = try? tableOfContents.chapter(forPosition: position) {
           if lastKnownChapter?.title != currentChapter.title {
             lastKnownChapter = currentChapter
             ATLog(.debug, "🔄 Chapter changed - updating lock screen")
@@ -672,6 +716,8 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   }
 
   private func checkForChapterChange(at position: TrackPosition) {
+    // The chapter is tracked only to refresh Now Playing.
+    guard nowPlayingWriter != nil else { return }
     let hasChanged = hasChapterChanged(from: lastKnownChapter, to: position)
     if hasChanged {
       ATLog(.debug, "🔄 [AudiobookManager] Chapter boundary crossed - immediate lock screen update")
@@ -694,6 +740,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   }
 
   public func updateNowPlayingInfo(_ position: TrackPosition?) {
+    guard let nowPlayingWriter else { return }
     guard let currentTrackPosition = position else {
       ATLog(.debug, "🔒 [AudiobookManager] updateNowPlayingInfo called with nil position")
       return
@@ -701,7 +748,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
     ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo START - track timestamp: \(currentTrackPosition.timestamp)")
 
-    var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+    var nowPlayingInfo = nowPlayingWriter.nowPlayingInfo ?? [String: Any]()
 
     let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
     let chapterTitle = chapter?.title ?? currentTrackPosition.track.title
@@ -759,10 +806,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     // when the app is suspending. Otherwise the write can be cut mid-flight
     // and the lock-screen view goes stale until next resume.
     let bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "PalaceAudiobookNowPlayingWrite") { }
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    nowPlayingWriter.nowPlayingInfo = nowPlayingInfo
 
     // CRITICAL: Also set the playback state explicitly for CarPlay
-    MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    nowPlayingWriter.playbackState = isPlaying ? .playing : .paused
 
     if bgTaskID != .invalid {
       UIApplication.shared.endBackgroundTask(bgTaskID)
@@ -797,7 +844,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     mediaControlPublisher.tearDown()
     audiobook.player.unload()
     networkService.cleanup()
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    nowPlayingWriter?.nowPlayingInfo = nil
     cancellables.removeAll()
   }
 
