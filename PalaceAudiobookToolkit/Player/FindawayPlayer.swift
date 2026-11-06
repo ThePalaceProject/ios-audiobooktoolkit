@@ -288,27 +288,27 @@ class FindawayPlayer: NSObject, Player {
       return seekPosition
     }
 
-    var position: TrackPosition?
-    if let queuedPosition = queuedPlayhead() {
-      position = queuedPosition
-    } else {
-      guard let currentChapter = audioEngine?.playbackEngine?.currentLoadedChapter(),
-            let currentTrack = tableOfContents.tracks.track(
-              forPart: Int(currentChapter.partNumber),
-              sequence: Int(currentChapter.chapterNumber)
-            )
-      else {
-        return nil
-      }
+    return queuedPlayhead() ?? enginePosition
+  }
 
-      position = TrackPosition(
-        track: currentTrack,
-        timestamp: Double(currentOffset),
-        tracks: tableOfContents.tracks
-      )
+  /// The chapter and offset the AudioEngine reports as loaded, or nil when it
+  /// has none. Internal so tests can stand in for the engine, which is a
+  /// process-wide SDK singleton.
+  var enginePosition: TrackPosition? {
+    guard let currentChapter = audioEngine?.playbackEngine?.currentLoadedChapter(),
+          let currentTrack = tableOfContents.tracks.track(
+            forPart: Int(currentChapter.partNumber),
+            sequence: Int(currentChapter.chapterNumber)
+          )
+    else {
+      return nil
     }
 
-    return position
+    return TrackPosition(
+      track: currentTrack,
+      timestamp: Double(currentOffset),
+      tracks: tableOfContents.tracks
+    )
   }
 
   private var bookIsLoaded: Bool {
@@ -762,8 +762,11 @@ class FindawayPlayer: NSObject, Player {
     isPlaybackDesired = true
     switch queuedPlayerState {
     case .none:
-      if var position = currentTrackPosition {
-        position.timestamp = 0
+      // Nothing queued: the engine holds the playhead. Hosts call play() on
+      // return to the foreground (PP-5506), so a playing engine is left alone
+      // and an idle one reloads where it is, never at the chapter start.
+      guard !isPlaying else { return }
+      if let position = currentTrackPosition {
         queuedPlayerState = .play((previous: nil, destination: position))
       }
     case let .queued(manipulation):
@@ -962,7 +965,9 @@ class FindawayPlayer: NSObject, Player {
     DispatchQueue.main.asyncAfter(deadline: dispatchDeadline(), execute: workItem)
   }
 
-  private func loadAndRequestPlayback(_ position: TrackPosition) {
+  /// Asks the AudioEngine for a full unload and reload at `position`. Internal
+  /// so tests can observe the load without driving the shared SDK.
+  func loadAndRequestPlayback(_ position: TrackPosition) {
     guard let track = position.track as? FindawayTrack else {
       ATLog(.error, "🎮 [FindawayPlayer] loadAndRequestPlayback - track is not FindawayTrack")
       return

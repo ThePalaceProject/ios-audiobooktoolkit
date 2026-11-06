@@ -510,7 +510,95 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
                    "Announced position must be the pending start position, not the engine's offset")
   }
 
+  // MARK: - play() with nothing queued (PP-5506)
+
+  /// A bare `play()` on a chapter the engine has open resumes from the engine's
+  /// offset. Palace calls `play()` on every return to the foreground, and a
+  /// reload at offset 0 there moved a patron from 1:21 back to the chapter start.
+  func testPlay_withNothingQueued_reloadsAtTheEngineOffsetNotTheChapterStart() async throws {
+    let (player, chapter) = try await makeIdlePlayerOnPartOneChapterNine()
+    player.engineReading = TrackPosition(track: chapter, timestamp: 81, tracks: player.tableOfContents.tracks)
+    let reloaded = expectation(description: "play() reloads the idle engine")
+    player.onLoad = { _ in reloaded.fulfill() }
+
+    player.play()
+
+    // Stop standing in for the engine, so what remains is what play() queued.
+    player.engineReading = nil
+    let queued = try XCTUnwrap(player.currentTrackPosition, "play() on an idle player must queue a load")
+    XCTAssertEqual(queued.track.key, chapter.key, "play() must stay on the chapter the engine has open")
+    XCTAssertEqual(queued.timestamp, 81, accuracy: 0.001, "play() must not move the position back to the chapter start")
+
+    await fulfillment(of: [reloaded], timeout: 30)
+    let reload = try XCTUnwrap(player.loads.last)
+    XCTAssertEqual(player.loads.count, 2, "Exactly one reload follows the initial load")
+    XCTAssertEqual(reload.track.key, chapter.key, "The reload must target the chapter the engine has open")
+    XCTAssertEqual(reload.timestamp, 81, accuracy: 0.001, "The engine must be reloaded at its offset, not the chapter start")
+  }
+
+  /// `play()` while the engine is already playing changes nothing: a reload
+  /// would cut the audio and restart it even at the right offset.
+  func testPlay_whileTheEngineIsPlaying_queuesNothing() async throws {
+    let (player, chapter) = try await makeIdlePlayerOnPartOneChapterNine()
+    player.engineReading = TrackPosition(track: chapter, timestamp: 81, tracks: player.tableOfContents.tracks)
+    player.enginePlaying = true
+
+    player.play()
+
+    player.engineReading = nil
+    XCTAssertNil(player.currentTrackPosition, "play() while playing must not queue a reload")
+  }
+
+  /// A verified player on Part 1 Chapter 9 whose initial load has run, so
+  /// `queuedPlayerState` is `.none`: the state of a player that is already playing.
+  /// Waits on the load itself rather than polling, and the engine is a stand-in,
+  /// so neither the SDK singleton nor another test's load can change the outcome.
+  private func makeIdlePlayerOnPartOneChapterNine() async throws -> (EngineStandInFindawayPlayer, any Track) {
+    let toc = try Self.makeFindawayTOC()
+    let chapter = try XCTUnwrap(toc.tracks.track(forPart: 1, sequence: 9))
+    let verification = FindawayDatabaseVerification()
+    verification.verified = true
+    let player = EngineStandInFindawayPlayer(
+      currentPosition: TrackPosition(track: chapter, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      databaseVerification: verification
+    )
+    let loaded = expectation(description: "the debounced initial load runs")
+    player.onLoad = { _ in loaded.fulfill() }
+
+    try await player.play(at: TrackPosition(track: chapter, timestamp: 0, tracks: toc.tracks))
+    await fulfillment(of: [loaded], timeout: 30)
+    player.onLoad = nil
+
+    XCTAssertEqual(player.loads.count, 1, "Precondition: the initial load must run once")
+    XCTAssertNil(player.currentTrackPosition, "Precondition: the initial load must leave nothing queued")
+    return (player, chapter)
+  }
+
   // MARK: - Test doubles
+
+  /// Stands in for the AudioEngine: engine readings come from the test and
+  /// loads are recorded instead of reaching the SDK. The queued playhead still
+  /// comes from the real player, so a test can tell the two apart.
+  final class EngineStandInFindawayPlayer: FindawayPlayer {
+    var engineReading: TrackPosition?
+    var enginePlaying = false
+    private(set) var loads: [TrackPosition] = []
+    var onLoad: ((TrackPosition) -> Void)?
+
+    override var enginePosition: TrackPosition? {
+      engineReading
+    }
+
+    override var isPlaying: Bool {
+      enginePlaying
+    }
+
+    override func loadAndRequestPlayback(_ position: TrackPosition) {
+      loads.append(position)
+      onLoad?(position)
+    }
+  }
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
   /// `currentTrackPosition` so skipPlayhead / move(to:) math runs against
