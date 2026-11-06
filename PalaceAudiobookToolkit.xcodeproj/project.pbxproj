@@ -35,6 +35,7 @@
 		57BA34B48CF1DE75A96218EA /* ByteRangeSetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B44DBCBF13F0C8199642D3 /* ByteRangeSetTests.swift */; };
 		58214769E7BE15BC228CAA64 /* MainActorCallbackContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F73C71DF00765117546FE12E /* MainActorCallbackContractTests.swift */; };
 		5894CDCBD1F302C6DF3A49B2 /* WeakLockIsolated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01E087E9ED55ACB14C0910DF /* WeakLockIsolated.swift */; };
+		622EB7CBB1F41FF169AA8BBC /* OpenAccessPlayerTokenRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A2D3A577D2360ABA4A506FD /* OpenAccessPlayerTokenRefreshTests.swift */; };
 		64EF6FD2B05B1F3409967F5B /* FindawayDownloadEngineGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0873ED7E066863822184CA2A /* FindawayDownloadEngineGateTests.swift */; };
 		67533CF369D86D77A0B22FD3 /* ATLogMessageEvaluationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD27E80303FD3AAF4155E73 /* ATLogMessageEvaluationTests.swift */; };
 		70FFAEEF8D873A07F7D9AE2A /* DownloadConcurrencyContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8863C21EB9E57E5393A358AA /* DownloadConcurrencyContractTests.swift */; };
@@ -250,6 +251,7 @@
 		44273C33D2A6561243E0041A /* FindawayPlayerAsyncContractTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FindawayPlayerAsyncContractTests.swift; sourceTree = "<group>"; };
 		4452655AD767DC161D958F1E /* SparseArchiveHoleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SparseArchiveHoleTests.swift; sourceTree = "<group>"; };
 		457284DE2A302254EE52DBB6 /* PartialArchiveCacheWritePathTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PartialArchiveCacheWritePathTests.swift; sourceTree = "<group>"; };
+		4A2D3A577D2360ABA4A506FD /* OpenAccessPlayerTokenRefreshTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OpenAccessPlayerTokenRefreshTests.swift; sourceTree = "<group>"; };
 		54FCA237FF72BF6A18BF3A58 /* LCPResourceLoaderColdLoadRetryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LCPResourceLoaderColdLoadRetryTests.swift; sourceTree = "<group>"; };
 		55EC8FD39297DE87F10C0AA0 /* PartialArchiveFillSurvivalTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PartialArchiveFillSurvivalTests.swift; sourceTree = "<group>"; };
 		5BBADD184265476297FF1CF4 /* LCPResourceLoaderStallTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LCPResourceLoaderStallTests.swift; sourceTree = "<group>"; };
@@ -552,6 +554,7 @@
 				55EC8FD39297DE87F10C0AA0 /* PartialArchiveFillSurvivalTests.swift */,
 				7F291EC65F9A006E06C0E268 /* SkipBurstCoalescingTests.swift */,
 				DBD27E80303FD3AAF4155E73 /* ATLogMessageEvaluationTests.swift */,
+				4A2D3A577D2360ABA4A506FD /* OpenAccessPlayerTokenRefreshTests.swift */,
 			);
 			path = PalaceAudiobookToolkitTests;
 			sourceTree = "<group>";
@@ -1104,6 +1107,7 @@
 				FB0EA3483679B9F3D47A166E /* PartialArchiveFillSurvivalTests.swift in Sources */,
 				08E0933CEA26BAE0A9F8B557 /* SkipBurstCoalescingTests.swift in Sources */,
 				67533CF369D86D77A0B22FD3 /* ATLogMessageEvaluationTests.swift in Sources */,
+				622EB7CBB1F41FF169AA8BBC /* OpenAccessPlayerTokenRefreshTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
