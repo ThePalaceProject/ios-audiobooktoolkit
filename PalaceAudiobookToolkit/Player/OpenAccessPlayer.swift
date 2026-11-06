@@ -1348,7 +1348,9 @@ class OpenAccessPlayer: NSObject, Player {
     let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
       guard let self else { return }
 
-      defer { self.isRefreshingToken = false }
+      // isRefreshingToken is main-actor state; this callback runs on the
+      // URLSession delegate queue.
+      defer { DispatchQueue.main.async { self.isRefreshingToken = false } }
 
       let statusCode = (response as? HTTPURLResponse)?.statusCode
       guard let data, error == nil,
