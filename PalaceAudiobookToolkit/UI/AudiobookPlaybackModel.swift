@@ -302,9 +302,15 @@ public class AudiobookPlaybackModel: ObservableObject {
   var skipBackInterval: TimeInterval { audiobookManager.skipBackInterval }
 
   var offset: TimeInterval {
-    if let currentLocation = currentLocation,
-       let currentChapter = audiobookManager.currentChapter
-    {
+    offset(in: audiobookManager.currentChapter)
+  }
+
+  var duration: TimeInterval {
+    duration(of: audiobookManager.currentChapter)
+  }
+
+  private func offset(in currentChapter: Chapter?) -> TimeInterval {
+    if let currentLocation = currentLocation, let currentChapter {
       do {
         let chapterOffset = try currentLocation - currentChapter.position
         return max(0.0, chapterOffset)
@@ -315,8 +321,8 @@ public class AudiobookPlaybackModel: ObservableObject {
     return audiobookManager.currentOffset
   }
 
-  var duration: TimeInterval {
-    audiobookManager.currentChapter?.duration ?? audiobookManager.currentDuration
+  private func duration(of currentChapter: Chapter?) -> TimeInterval {
+    currentChapter?.duration ?? audiobookManager.currentDuration
   }
 
   var timeLeft: TimeInterval {
@@ -672,12 +678,15 @@ public class AudiobookPlaybackModel: ObservableObject {
       .store(in: &subscriptions)
   }
 
+  /// Runs on every position tick, so the chapter is read once for both values.
   private func updateProgress() {
+    let chapter = audiobookManager.currentChapter
+    let duration = duration(of: chapter)
     guard duration > 0 else {
       playbackProgress = 0
       return
     }
-    playbackProgress = offset / duration
+    playbackProgress = offset(in: chapter) / duration
   }
 
   // No `deinit`. `Set<AnyCancellable>` cancels each subscription when it
@@ -1003,6 +1012,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   }
 
   private func updateLockScreenCoverArtwork(image: UIImage?) {
+    guard let writer = audiobookManager.nowPlayingWriter else { return }
     DispatchQueue.main.async {
       if let image = image {
         // MediaPlayer invokes AND tears down this request handler on its OWN
@@ -1021,9 +1031,9 @@ public class AudiobookPlaybackModel: ObservableObject {
           artworkImage
         }
 
-        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+        var info = writer.nowPlayingInfo ?? [String: Any]()
         info[MPMediaItemPropertyArtwork] = itemArtwork
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        writer.nowPlayingInfo = info
       }
     }
   }

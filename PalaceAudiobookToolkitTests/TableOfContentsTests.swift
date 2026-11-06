@@ -312,3 +312,229 @@ class TableOfContentsTests: XCTestCase {
     )
   }
 }
+
+// MARK: - Indexed chapter lookup
+
+/// `chapter(forPosition:)` answers from a sorted index; these tests compare it
+/// with the linear scan it replaced, kept below as `referenceChapter`, so a
+/// boundary rule (PP-4948, PP-4951) cannot drift without a failure here.
+@MainActor
+final class ChapterLookupIndexTests: XCTestCase {
+  /// Every fixture, every chapter boundary and a grid inside every track, both
+  /// tie-breaks: the indexed lookup returns the chapter the linear scan returns.
+  func testIndexedLookup_matchesLinearScan_acrossFixturesAndBoundaries() throws {
+    var comparisons = 0
+    var indexedFixtures = 0
+    for manifestJSON in ManifestJSON.allCases {
+      let manifest = try Manifest.from(jsonFileName: manifestJSON.rawValue, bundle: Bundle(for: type(of: self)))
+      let tracks = Tracks(manifest: manifest, audiobookID: "index-\(manifestJSON.rawValue)", token: nil)
+      let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+      if toc.isChapterLookupIndexed { indexedFixtures += 1 }
+
+      for position in Self.probePositions(toc) {
+        for prefer in [false, true] {
+          let expected = try? Self.referenceChapter(in: toc.toc, forPosition: position, preferChapterEndingHere: prefer)
+          let actual = try? toc.chapter(forPosition: position, preferChapterEndingHere: prefer)
+          XCTAssertEqual(
+            actual?.id, expected?.id,
+            "\(manifestJSON.rawValue) track \(position.track.index) @ \(position.timestamp) prefer=\(prefer): indexed '\(actual?.title ?? "nil")' vs linear '\(expected?.title ?? "nil")'"
+          )
+          comparisons += 1
+        }
+      }
+    }
+    XCTAssertGreaterThan(indexedFixtures, ManifestJSON.allCases.count / 2, "Most fixtures must use the index, or this compares the scan with itself.")
+    XCTAssertGreaterThan(comparisons, 10_000)
+  }
+
+  /// A stored end that overshoots the next start by rounding is the case a
+  /// binary search over starts would answer differently; the index refuses it.
+  func testIndex_isNotBuilt_whenAChapterEndPassesTheNextStart() throws {
+    var toc = try Self.makeTOC(.alice)
+    let next = toc.toc[1].position
+    toc.toc[0].endPosition = TrackPosition(track: next.track, timestamp: next.timestamp + 1e-9, tracks: next.tracks)
+    toc.rebuildChapterIndex()
+
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+    let atNextStart = try toc.chapter(forPosition: next)
+    XCTAssertEqual(atNextStart.id, toc.toc[0].id, "Linear scan returns the first match, the overlapping chapter.")
+  }
+
+  func testIndex_isNotBuilt_whenStartsAreOutOfOrder() throws {
+    var toc = try Self.makeTOC(.alice)
+    toc.toc.swapAt(1, 2)
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  /// The last chapter's track keeps its id but claims a later index, so the
+  /// list stays in order and only the id check can refuse it.
+  func testIndex_isNotBuilt_whenATrackIDMapsToTwoIndexes() throws {
+    var toc = try Self.makeTOC(.alice)
+    let last = toc.toc.count - 1
+    let original = toc.toc[last].position
+    let impostor = try Self.makeTrack(like: original.track, in: toc, index: original.track.index + 100, key: original.track.key)
+    toc.toc[last].position = TrackPosition(track: impostor, timestamp: original.timestamp, tracks: original.tracks)
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  /// A different track claims the last chapter track's index; the order holds
+  /// (equal indexes compare as neither smaller), so only the index check can
+  /// refuse it.
+  func testIndex_isNotBuilt_whenAnIndexMapsToTwoTrackIDs() throws {
+    var toc = try Self.makeTOC(.alice)
+    let last = toc.toc.count - 1
+    let original = toc.toc[last].position
+    let impostor = try Self.makeTrack(like: original.track, in: toc, index: original.track.index, key: "impostor-key")
+    toc.toc[last].position = TrackPosition(track: impostor, timestamp: original.timestamp, tracks: original.tracks)
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  func testIndex_isNotBuilt_whenAChapterStartIsNaN() throws {
+    var toc = try Self.makeTOC(.alice)
+    toc.toc[3].position.timestamp = .nan
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+  }
+
+  /// Without stored ends (Findaway and Overdrive lists) a chapter ends where
+  /// the next one starts, whatever its own duration says.
+  func testIndexedLookup_withoutStoredEnds_matchesLinearScan() throws {
+    var toc = try Self.makeTOC(.alice)
+    for index in toc.toc.indices {
+      toc.toc[index].endPosition = nil
+      toc.toc[index].duration = 1.0
+    }
+    toc.rebuildChapterIndex()
+    XCTAssertTrue(toc.isChapterLookupIndexed)
+
+    for position in Self.probePositions(toc) {
+      let expected = try? Self.referenceChapter(in: toc.toc, forPosition: position, preferChapterEndingHere: false)
+      let actual = try? toc.chapter(forPosition: position)
+      XCTAssertEqual(actual?.id, expected?.id, "track \(position.track.index) @ \(position.timestamp)")
+    }
+  }
+
+  func testIndex_isNotBuilt_forEmptyTOC() throws {
+    var toc = try Self.makeTOC(.alice)
+    toc.toc = []
+    toc.rebuildChapterIndex()
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+    XCTAssertThrowsError(try toc.chapter(forPosition: Self.probePositions(try Self.makeTOC(.alice))[0]))
+  }
+
+  /// Changing the list after load drops the index, so a lookup cannot answer
+  /// from the old order.
+  func testEditingTOC_dropsIndex_andLookupFollowsTheNewList() throws {
+    var toc = try Self.makeTOC(.alice)
+    XCTAssertTrue(toc.isChapterLookupIndexed)
+    let probe = toc.toc[3].position
+    toc.toc.remove(at: 3)
+
+    XCTAssertFalse(toc.isChapterLookupIndexed)
+    let expected = try Self.referenceChapter(in: toc.toc, forPosition: probe, preferChapterEndingHere: false)
+    XCTAssertEqual(try toc.chapter(forPosition: probe).id, expected.id)
+  }
+
+  /// A position whose track id is known under another index is outside the
+  /// order the index relies on; the lookup must still match the scan.
+  func testLookup_withInconsistentPositionTrack_matchesLinearScan() throws {
+    let toc = try Self.makeTOC(.alice)
+    let original = toc.toc[4].position
+    let impostor = try XCTUnwrap(TrackFactory.createTrack(
+      from: toc.manifest, title: nil, urlString: original.track.urls?.first?.absoluteString, audiobookID: "index",
+      index: 0, duration: original.track.duration, token: nil, key: original.track.key
+    ))
+    for timestamp in [0.0, 1.0, original.track.duration - 0.2, Double.nan] {
+      let position = TrackPosition(track: impostor, timestamp: timestamp, tracks: original.tracks)
+      let expected = try? Self.referenceChapter(in: toc.toc, forPosition: position, preferChapterEndingHere: false)
+      XCTAssertEqual((try? toc.chapter(forPosition: position))?.id, expected?.id, "timestamp \(timestamp)")
+    }
+  }
+
+  // MARK: - Helpers
+
+  private static func makeTrack(like track: any Track, in toc: AudiobookTableOfContents, index: Int, key: String) throws -> any Track {
+    try XCTUnwrap(TrackFactory.createTrack(
+      from: toc.manifest, title: nil, urlString: track.urls?.first?.absoluteString, audiobookID: "index",
+      index: index, duration: track.duration, token: nil, key: key
+    ))
+  }
+
+  private static func makeTOC(_ json: ManifestJSON) throws -> AudiobookTableOfContents {
+    let manifest = try Manifest.from(jsonFileName: json.rawValue, bundle: Bundle(for: ChapterLookupIndexTests.self))
+    return AudiobookTableOfContents(manifest: manifest, tracks: Tracks(manifest: manifest, audiobookID: "index", token: nil))
+  }
+
+  /// Chapter starts and ends with offsets either side of the 0.1 s equality and
+  /// 0.5 s end tolerances, plus a grid and out-of-range points on every track.
+  private static func probePositions(_ toc: AudiobookTableOfContents) -> [TrackPosition] {
+    let tracks = toc.tracks
+    var positions: [TrackPosition] = []
+    let nudges = [-1.0, -0.51, -0.5, -0.49, -0.1, -0.05, -1e-9, 0, 1e-9, 0.05, 0.1, 0.49, 0.5, 0.51, 1.0]
+    var anchors: [TrackPosition] = []
+    for (index, chapter) in toc.toc.enumerated() {
+      anchors.append(chapter.position)
+      if let end = chapter.endPosition { anchors.append(end) }
+      if index + 1 == toc.toc.count {
+        anchors.append(chapter.position + (chapter.duration ?? chapter.position.track.duration))
+      }
+    }
+    for anchor in anchors {
+      for nudge in nudges {
+        positions.append(TrackPosition(track: anchor.track, timestamp: anchor.timestamp + nudge, tracks: tracks))
+      }
+    }
+    for track in tracks.tracks {
+      let duration = track.duration
+      for step in 0...40 {
+        positions.append(TrackPosition(track: track, timestamp: duration * Double(step) / 40, tracks: tracks))
+      }
+      for timestamp in [-5.0, duration + 5, duration - 0.25, .infinity] {
+        positions.append(TrackPosition(track: track, timestamp: timestamp, tracks: tracks))
+      }
+    }
+    return positions
+  }
+
+  /// The linear scan as it stood before the index, kept as the oracle.
+  private static func referenceChapter(
+    in toc: [Chapter],
+    forPosition position: TrackPosition,
+    preferChapterEndingHere: Bool
+  ) throws -> Chapter {
+    for (index, chapter) in toc.enumerated() {
+      let chapterStart = chapter.position
+      let chapterDuration = chapter.duration ?? chapter.position.track.duration
+      let isLastChapter = index + 1 >= toc.count
+
+      let chapterEndPosition: TrackPosition
+      if let endPos = chapter.endPosition {
+        chapterEndPosition = endPos
+      } else if !isLastChapter {
+        chapterEndPosition = toc[index + 1].position
+      } else {
+        chapterEndPosition = chapter.position + chapterDuration
+      }
+
+      let isAfterStart = position >= chapterStart
+      let isBeforeEnd = position < chapterEndPosition
+      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
+                            abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
+
+      if isAfterStart && (isBeforeEnd || ((isLastChapter || preferChapterEndingHere) && isAtChapterEnd)) {
+        return chapter
+      }
+    }
+
+    let closest = toc.min { chapter1, chapter2 in
+      let dist1 = abs((try? position - chapter1.position) ?? Double.greatestFiniteMagnitude)
+      let dist2 = abs((try? position - chapter2.position) ?? Double.greatestFiniteMagnitude)
+      return dist1 < dist2
+    }
+    guard let closest else { throw ChapterError.noChapterFoundForPosition }
+    return closest
+  }
+}

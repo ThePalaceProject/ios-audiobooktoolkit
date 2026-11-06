@@ -23,7 +23,14 @@ protocol AudiobookTableOfContentsProtocol {
 public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   public var manifest: Manifest
   public var tracks: Tracks
-  public var toc: [Chapter]
+  /// Any change drops the lookup index, so `chapter(forPosition:)` falls back
+  /// to the linear scan rather than answer from a stale index. The index is not
+  /// rebuilt here because building the list mutates it once per chapter.
+  public var toc: [Chapter] {
+    didSet { chapterIndex = nil }
+  }
+
+  private var chapterIndex: ChapterIndex?
 
   var count: Int {
     toc.count
@@ -51,6 +58,8 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
       calculateEndPositions()
     }
 
+    rebuildChapterIndex()
+
     // DEBUG: Dump full TOC structure for debugging
     ATLog(.debug, "AudiobookTableOfContents initialized with \(toc.count) chapters and \(tracks.count) tracks")
     for (index, chapter) in toc.enumerated() {
@@ -64,6 +73,14 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
   func track(forKey key: String) -> (any Track)? {
     tracks.track(forKey: key)
+  }
+
+  mutating func rebuildChapterIndex() {
+    chapterIndex = ChapterIndex(toc: toc)
+  }
+
+  var isChapterLookupIndexed: Bool {
+    chapterIndex != nil
   }
 
   private mutating func loadTocFromTocItems(_ tocItems: [TOCItem]) {
@@ -361,37 +378,63 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   ///     neither of which this parameter reaches. The full picture, including
   ///     what has and has not been measured, is `docs/followups.md` item 21;
   ///     the decision is PP-4951. Do not act on this comment alone.
+  ///
+  /// The default tie-break is answered from `ChapterIndex` in O(log n) when the
+  /// chapter list is ordered; the result is identical to the linear scan (see
+  /// `ChapterIndex` for why). `preferChapterEndingHere` and unordered lists use
+  /// the scan.
   func chapter(
     forPosition position: TrackPosition,
     preferChapterEndingHere: Bool = false
   ) throws -> Chapter {
-    for (index, chapter) in toc.enumerated() {
-      let chapterStart = chapter.position
-      let chapterDuration = chapter.duration ?? chapter.position.track.duration
-      let isLastChapter = index + 1 >= toc.count
-
-      let chapterEndPosition: TrackPosition
-      if let endPos = chapter.endPosition {
-        chapterEndPosition = endPos
-      } else {
-        if !isLastChapter {
-          let nextChapter = toc[index + 1]
-          chapterEndPosition = nextChapter.position
-        } else {
-          chapterEndPosition = chapter.position + chapterDuration
+    if !preferChapterEndingHere, let chapterIndex {
+      switch chapterIndex.candidate(for: position) {
+      case let .chapter(candidate):
+        if chapterMatches(at: candidate, position: position, preferChapterEndingHere: false) {
+          return toc[candidate]
         }
-      }
-
-      let isAfterStart = position >= chapterStart
-      let isBeforeEnd = position < chapterEndPosition
-      let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
-                            abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
-
-      if isAfterStart && (isBeforeEnd || ((isLastChapter || preferChapterEndingHere) && isAtChapterEnd)) {
-        return chapter
+        return try closestChapter(to: position)
+      case .noneStartsAtOrBefore:
+        return try closestChapter(to: position)
+      case .unindexable:
+        break
       }
     }
 
+    for index in toc.indices
+      where chapterMatches(at: index, position: position, preferChapterEndingHere: preferChapterEndingHere) {
+      return toc[index]
+    }
+
+    return try closestChapter(to: position)
+  }
+
+  /// End of the chapter at `index`: its stored end, else the next chapter's
+  /// start, else (last chapter) its start plus its duration.
+  private func chapterEnd(at index: Int) -> TrackPosition {
+    let chapter = toc[index]
+    if let endPos = chapter.endPosition {
+      return endPos
+    }
+    if index + 1 < toc.count {
+      return toc[index + 1].position
+    }
+    return chapter.position + (chapter.duration ?? chapter.position.track.duration)
+  }
+
+  private func chapterMatches(at index: Int, position: TrackPosition, preferChapterEndingHere: Bool) -> Bool {
+    let isLastChapter = index + 1 >= toc.count
+    let chapterEndPosition = chapterEnd(at: index)
+
+    let isAfterStart = position >= toc[index].position
+    let isBeforeEnd = position < chapterEndPosition
+    let isAtChapterEnd = (position.track.key == chapterEndPosition.track.key &&
+                          abs(position.timestamp - chapterEndPosition.timestamp) < 0.5)
+
+    return isAfterStart && (isBeforeEnd || ((isLastChapter || preferChapterEndingHere) && isAtChapterEnd))
+  }
+
+  private func closestChapter(to position: TrackPosition) throws -> Chapter {
     // Fallback: find closest chapter by position distance
     let closestChapter = toc.min { chapter1, chapter2 in
       let dist1 = abs((try? position - chapter1.position) ?? Double.greatestFiniteMagnitude)
@@ -483,6 +526,81 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
   subscript(index: Int) -> Chapter {
     toc[index]
+  }
+}
+
+// MARK: - ChapterIndex
+
+/// Sorted chapter starts, so the default chapter lookup is a binary search.
+///
+/// It is built only when the linear scan's first match is provably the one
+/// candidate the search finds. `TrackPosition.<` compares `track.id` first and
+/// then `track.index`, so it is a total order on (track index, timestamp) only
+/// when every id maps to one index and timestamps are not NaN. Given that
+/// order, starts that never decrease and non-last ends that never pass the
+/// next start, a position can fall inside at most the last chapter whose start
+/// is at or before it: every earlier chapter ends at or before that start, and
+/// every later one starts after the position. The last chapter's end is not
+/// stored because it is computed from a track duration at lookup time.
+struct ChapterIndex {
+  enum Candidate: Equatable {
+    case chapter(Int)
+    case noneStartsAtOrBefore
+    case unindexable
+  }
+
+  private let starts: [TrackPosition]
+  private let indexByTrackID: [AnyHashable: Int]
+  private let trackIDByIndex: [Int: AnyHashable]
+
+  init?(toc: [Chapter]) {
+    guard !toc.isEmpty else { return nil }
+    var indexByTrackID: [AnyHashable: Int] = [:]
+    var trackIDByIndex: [Int: AnyHashable] = [:]
+
+    func register(_ position: TrackPosition) -> Bool {
+      guard !position.timestamp.isNaN else { return false }
+      let id = AnyHashable(position.track.id)
+      let index = position.track.index
+      if let known = indexByTrackID[id], known != index { return false }
+      if let known = trackIDByIndex[index], known != id { return false }
+      indexByTrackID[id] = index
+      trackIDByIndex[index] = id
+      return true
+    }
+
+    for (offset, chapter) in toc.enumerated() {
+      guard register(chapter.position) else { return nil }
+      guard offset + 1 < toc.count else { break }
+      let next = toc[offset + 1].position
+      let end = chapter.endPosition ?? next
+      guard register(end), register(next) else { return nil }
+      guard !(next < chapter.position), !(next < end) else { return nil }
+    }
+
+    starts = toc.map(\.position)
+    self.indexByTrackID = indexByTrackID
+    self.trackIDByIndex = trackIDByIndex
+  }
+
+  /// The last chapter whose start is at or before `position`.
+  func candidate(for position: TrackPosition) -> Candidate {
+    guard !position.timestamp.isNaN else { return .unindexable }
+    let id = AnyHashable(position.track.id)
+    if let known = indexByTrackID[id], known != position.track.index { return .unindexable }
+    if let known = trackIDByIndex[position.track.index], known != id { return .unindexable }
+
+    var low = 0
+    var high = starts.count
+    while low < high {
+      let mid = (low + high) / 2
+      if position < starts[mid] {
+        high = mid
+      } else {
+        low = mid + 1
+      }
+    }
+    return low == 0 ? .noneStartsAtOrBefore : .chapter(low - 1)
   }
 }
 
