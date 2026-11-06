@@ -206,7 +206,7 @@ class OpenAccessPlayer: NSObject, Player {
   private var isObservingPlayerStatus = false
   private var bearerToken: String?
   private var fulfillURL: URL?
-  private var isRefreshingToken = false
+  private(set) var isRefreshingToken = false
   private var wasPlayingBeforeInterruption = false
   /// KVO on `avQueuePlayer.currentItem` so we can re-arm `currentItemStatusObservation`
   /// every time the player advances to a new item. Without this, a chapter
@@ -1332,7 +1332,7 @@ class OpenAccessPlayer: NSObject, Player {
   }
 
   /// Refreshes the bearer token from the stored CM fulfill URL and rebuilds the player queue.
-  private func refreshBearerTokenAndRebuildQueue() {
+  func refreshBearerTokenAndRebuildQueue() {
     guard let fulfillURL, !isRefreshingToken else { return }
 
     isRefreshingToken = true
@@ -1348,7 +1348,9 @@ class OpenAccessPlayer: NSObject, Player {
     let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
       guard let self else { return }
 
-      defer { self.isRefreshingToken = false }
+      // isRefreshingToken is main-actor state; this callback runs on the
+      // URLSession delegate queue.
+      defer { DispatchQueue.main.async { self.isRefreshingToken = false } }
 
       let statusCode = (response as? HTTPURLResponse)?.statusCode
       guard let data, error == nil,
