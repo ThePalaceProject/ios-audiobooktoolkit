@@ -100,10 +100,6 @@ public struct AudiobookPlayerView: View {
     .toolbar(.hidden, for: .tabBar)
     .font(.body)
     .onAppear {
-      NotificationCenter.default.post(
-        name: Notification.Name("TPPAccessibilityScreenTransition"),
-        object: nil
-      )
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
         isTitleFocused = true
       }
