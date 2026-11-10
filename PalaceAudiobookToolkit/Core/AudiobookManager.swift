@@ -124,6 +124,16 @@ public struct PlaybackSnapshot {
   public let chapter: Chapter?
   public let chapterOffset: TimeInterval
   public let chapterDuration: TimeInterval
+
+  /// Time left in the chapter, never negative.
+  public var timeLeft: TimeInterval {
+    max(chapterDuration - chapterOffset, 0)
+  }
+
+  /// The chapter title, else the track title.
+  public var title: String? {
+    chapter?.title ?? position?.track.title
+  }
 }
 
 public extension AudiobookManager {
@@ -253,7 +263,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private var cancellables = Set<AnyCancellable>()
   public var statePublisher = PassthroughSubject<AudiobookManagerState, Never>()
   public var audiobookBookmarksPublisher = CurrentValueSubject<[TrackPosition], Never>([])
-  private var mediaControlPublisher: MediaControlPublisher
+  private(set) var mediaControlPublisher: MediaControlPublisher
   private var playbackTrackerDelegate: AudiobookPlaybackTrackerDelegate?
   public var playbackCompletionHandler: (() -> Void)?
   private let accessibilityAnnouncements = AudiobookAccessibilityAnnouncementCenter()
@@ -317,8 +327,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       // queue. So this path can hand an off-main callback to a @MainActor caller
       // exactly like the DRM branch did; it is timing-dependent rather than
       // deterministic, which is precisely why it went unnoticed.
-      openAccessPlayer.seekTo(position: targetPosition) { adjustedPosition in
-        Task { await MainActor.run { completion(adjustedPosition) } }
+      openAccessPlayer.seekTo(position: targetPosition) { [weak self] adjustedPosition in
+        Task { @MainActor in
+          self?.updateNowPlayingInfo(adjustedPosition)
+          completion(adjustedPosition)
+        }
       }
     } else {
       // Deliver on the main actor. Callers of this public API are `@MainActor`
@@ -335,7 +348,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
       Task {
         do {
           try await audiobook.player.play(at: targetPosition)
-          await MainActor.run { completion(targetPosition) }
+          await MainActor.run {
+            updateNowPlayingInfo(targetPosition)
+            completion(targetPosition)
+          }
         } catch {
           await MainActor.run { completion(nil) }
         }
@@ -353,7 +369,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     Task {
       do {
         try await audiobook.player.play(at: position)
-        await MainActor.run { completion?(nil) }
+        await MainActor.run {
+          updateNowPlayingInfo(position)
+          completion?(nil)
+        }
       } catch {
         await MainActor.run { completion?(error) }
       }
@@ -365,7 +384,10 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   public func skipPlayhead(_ interval: TimeInterval, completion: ((TrackPosition?) -> Void)? = nil) {
     Task {
       let result = await audiobook.player.skipPlayhead(interval)
-      await MainActor.run { completion?(result) }
+      await MainActor.run {
+        updateNowPlayingInfo(result)
+        completion?(result)
+      }
     }
   }
 
@@ -405,19 +427,24 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   public var needsDownloadRetry: Bool = false
 
-  /// `AnyCancellable`, not bare `Cancellable`, on purpose: the concrete type
-/// guarantees cancellation when it deallocates, which is what lets this type
-/// have no `deinit`.
-  public private(set) var timer: AnyCancellable?
-  private var uiUpdateTimer: Cancellable?
-  private var lastKnownChapter: Chapter?
+  /// The player's position ticks are the only clock here: `.positionUpdated`,
+  /// chapter changes and Now Playing are all derived from them (PP-5504). The
+  /// ticks come from the playback clock, so they keep arriving while the screen
+  /// is locked, where main-runloop timers are coalesced (HelpSpot 17865).
+  private var lastPositionUpdateAt: TimeInterval?
+  private var lastNowPlayingWrite: NowPlayingWriteMark?
 
-  private var chapterMonitorTimer: AnyCancellable?
+  /// Resolves the chapter for a position. Tests replace it to count lookups.
+  lazy var resolveChapter: (TrackPosition) -> Chapter? = { [weak self] position in
+    guard let self else { return nil }
+    return try? tableOfContents.chapter(forPosition: position)
+  }
 
-  /// Last time the player-driven lock-screen heartbeat wrote now-playing info.
-  /// Rate-limits `setupNowPlayingHeartbeat`'s `positionPublisher` sink (which
-  /// fires ~4×/s) to a lock-screen-appropriate cadence. HelpSpot 17865.
-  private var lastNowPlayingHeartbeat: Date = .distantPast
+  /// Monotonic clock for the tick-driven cadences. Replaced by tests.
+  var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+
+  /// Read when a tick decides whether `.positionUpdated` is due. Replaced by tests.
+  var applicationState: () -> UIApplication.State = { UIApplication.shared.applicationState }
 
   /// Where the toolkit writes lock-screen Now Playing info; the system center by
   /// default. A host that writes Now Playing itself sets this to nil, so the
@@ -443,16 +470,11 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     super.init()
     setupBindings()
     subscribeToPlayer()
-    setupNowPlayingInfoTimer()
-    setupNowPlayingHeartbeat()
-    setupChapterMonitorTimer()
+    subscribeToPositionTicks()
+    reportPlaybackRunningToTracker()
     subscribeToMediaControlCommands()
     calculateOverallDownloadProgress()
     setupAppStateObserver()
-
-    if let currentPosition = audiobook.player.currentTrackPosition {
-      lastKnownChapter = try? tableOfContents.chapter(forPosition: currentPosition)
-    }
 
     ATLog(.debug, "AudiobookManager initialized with enhanced position system and energy optimizations")
   }
@@ -474,15 +496,13 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.debug, "⚡ App became active - restarting optimized timer (HelpSpot 17865)")
+        ATLog(.debug, "⚡ App became active - publishing refreshed position (HelpSpot 17865)")
 
-        // HelpSpot 17865: rebuild the timer FIRST (so the .active 2s cadence
-        // is restored), then defer one main-runloop tick before reading the
-        // player's currentTrackPosition. The previous order (publish-then-
-        // rebuild) raced a stale cached timestamp against the player's
-        // resumed clock and the slider visibly jumped forward by the suspend
-        // duration. Deferring lets the underlying engine refresh first.
-        setupNowPlayingInfoTimer()
+        // HelpSpot 17865: defer one main-runloop tick before reading the
+        // player's currentTrackPosition. Reading it at once raced a stale
+        // cached timestamp against the player's resumed clock and the slider
+        // jumped forward by the suspend duration.
+        reportPlaybackRunningToTracker()
 
         DispatchQueue.main.async { [weak self] in
           guard let self = self else { return }
@@ -511,7 +531,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
       .sink { [weak self] _ in
         guard let self = self else { return }
-        ATLog(.debug, "⚡ App entered background - rebuilding timer at background interval (HelpSpot 17865)")
+        ATLog(.debug, "⚡ App entered background - saving final position")
 
         // Final position save when entering background
         if let currentPosition = audiobook.player.currentTrackPosition {
@@ -519,12 +539,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
           ATLog(.debug, "🔒 Final position save on background: \(currentPosition.timestamp)")
         }
 
-        // HelpSpot 17865: do NOT nil-out the timer here. Rebuild it via
-        // setupNowPlayingInfoTimer() so the .background switch arm (15s
-        // interval, line ~443) becomes reachable and the lock-screen writer
-        // keeps firing. iOS audio-session entitlement permits this cadence
-        // while audio is actively playing.
-        setupNowPlayingInfoTimer()
+        reportPlaybackRunningToTracker()
       }
       .store(in: &cancellables)
     
@@ -603,219 +618,174 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
 
   // MARK: - Now Playing Info
 
-  /// Player-clock lock-screen heartbeat (HelpSpot 17865 / Crashlytics code 403).
-  ///
-  /// `setupNowPlayingInfoTimer` refreshes MPNowPlayingInfoCenter from a
-  /// main-runloop `Timer.publish(in: .common)`. iOS coalesces and suspends such
-  /// timers during long screen-locked background playback, so the lock screen
-  /// goes dry >30s while audio keeps playing and the ios-core NowPlayingCoordinator
-  /// logs the dry-stream (~23k events through 3.2.3).
-  ///
-  /// `positionPublisher` is fed by the player's AVPlayer periodic-time observer,
-  /// which the OS guarantees to fire while audio is actually playing — including
-  /// backgrounded and locked, because it is driven by the playback clock rather
-  /// than the runloop. Drive the lock-screen writer off it too, so the heartbeat
-  /// survives runloop coalescing. Rate-limited to a lock-screen cadence via
-  /// `lastNowPlayingHeartbeat` (the stream itself fires ~4×/s).
-  ///
-  /// Lock-screen only: the in-app slider already subscribes to `positionPublisher`
-  /// (AudiobookPlaybackModel), so this deliberately does NOT re-publish
-  /// `.positionUpdated` — that avoids perturbing the slider path and the
-  /// foreground resume-jump fix in `setupAppStateObserver`.
-  private func setupNowPlayingHeartbeat() {
+  /// What the last Now Playing write showed, so a tick can tell whether
+  /// anything a patron sees has changed since.
+  struct NowPlayingWriteMark: Equatable {
+    let chapterID: String?
+    let rate: PlaybackRate
+    let isPlaying: Bool
+    let writtenAt: TimeInterval
+  }
+
+  /// The longest a playing session goes without a Now Playing write. The lock
+  /// screen advances elapsed time itself from the rate, so the keep-alive only
+  /// corrects drift; a change a patron can see is written on the tick it happens.
+  static let nowPlayingKeepAlive: TimeInterval = 10
+
+  /// Whether a tick should write Now Playing: on the first write, a chapter,
+  /// rate or play/pause change, or once the keep-alive has passed while playing.
+  static func nowPlayingWriteIsDue(
+    last: NowPlayingWriteMark?,
+    chapterID: String?,
+    rate: PlaybackRate,
+    isPlaying: Bool,
+    now: TimeInterval,
+    keepAlive: TimeInterval = nowPlayingKeepAlive
+  ) -> Bool {
+    guard let last else { return true }
+    if last.chapterID != chapterID || last.rate != rate || last.isPlaying != isPlaying {
+      return true
+    }
+    return isPlaying && now - last.writtenAt >= keepAlive
+  }
+
+  /// How often a tick re-publishes `.positionUpdated` while playing. These are
+  /// the cadences of the timer this replaced; hosts and the playback model rely
+  /// on the event arriving at about this rate, not on every tick.
+  static func positionUpdateInterval(for state: UIApplication.State) -> TimeInterval {
+    switch state {
+    case .active: 2.0
+    case .inactive: 10.0
+    case .background: 15.0
+    @unknown default: 5.0
+    }
+  }
+
+  /// One subscription to the player's position ticks drives everything that
+  /// used to have its own timer.
+  private func subscribeToPositionTicks() {
     audiobook.player.positionPublisher
-      .receive(on: RunLoop.main)
+      .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
-        guard let self, self.audiobook.player.isPlaying else { return }
-        let now = Date()
-        guard now.timeIntervalSince(self.lastNowPlayingHeartbeat) >= 2.0 else { return }
-        self.lastNowPlayingHeartbeat = now
-        self.updateNowPlayingInfo(position)
+        self?.handlePositionTick(position)
       }
       .store(in: &cancellables)
   }
 
-  private func setupNowPlayingInfoTimer() {
-    timer?.cancel()
-    timer = nil
+  /// Handles one tick. With a Now Playing writer it resolves the chapter once;
+  /// with none (the host writes Now Playing) it resolves nothing.
+  func handlePositionTick(_ position: TrackPosition) {
+    let isPlaying = audiobook.player.isPlaying
+    let now = uptime()
 
-    let appState = UIApplication.shared.applicationState
-    let interval: TimeInterval
-
-    switch appState {
-    case .active:
-      interval = 2.0 // Reduced from 1 second to 2 seconds (50% reduction)
-    case .inactive:
-      interval = 10.0 // Reduce frequency when inactive
-    case .background:
-      interval = 15.0 // Keep running but very infrequently for lock screen sync
-      ATLog(.debug, "⚡ Timer running at 15s intervals for background lock screen updates")
-    @unknown default:
-      interval = 5.0
+    if isPlaying {
+      let interval = Self.positionUpdateInterval(for: applicationState())
+      if lastPositionUpdateAt.map({ now - $0 >= interval }) ?? true {
+        lastPositionUpdateAt = now
+        statePublisher.send(.positionUpdated(position))
+      }
     }
 
-    // Only start time tracking if player is actually playing
-    // This prevents overcounting when setupNowPlayingInfoTimer() is called
-    // during init or app foreground transitions while not playing
+    guard nowPlayingWriter != nil else { return }
+    let snapshot = snapshot(for: position)
+    let rate = audiobook.player.playbackRate
+    guard Self.nowPlayingWriteIsDue(
+      last: lastNowPlayingWrite,
+      chapterID: snapshot.chapter?.id,
+      rate: rate,
+      isPlaying: isPlaying,
+      now: now
+    ) else { return }
+    writeNowPlaying(snapshot, rate: rate, isPlaying: isPlaying, now: now)
+  }
+
+  /// The playback state at `position`, with the chapter resolved once.
+  ///
+  /// Offset and duration follow the rules `chapterOffset(for:)` and the old Now
+  /// Playing write used: the offset is clamped to the chapter, and a position
+  /// with no chapter falls back to its clamped track timestamp.
+  func snapshot(for position: TrackPosition) -> PlaybackSnapshot {
+    let chapter = resolveChapter(position)
+    let duration = chapter?.duration ?? position.track.duration
+    let offset: TimeInterval
+    if let chapter, let raw = try? position - TrackPosition(
+      track: chapter.position.track,
+      timestamp: chapter.position.timestamp,
+      tracks: position.tracks
+    ) {
+      offset = max(0, min(raw, duration))
+    } else {
+      offset = max(0, min(position.timestamp, Self.safeNowPlayingDuration(duration)))
+    }
+    return PlaybackSnapshot(position: position, chapter: chapter, chapterOffset: offset, chapterDuration: duration)
+  }
+
+  /// CarPlay rejects a zero or negative duration, so Now Playing gets at least one second.
+  private static func safeNowPlayingDuration(_ duration: TimeInterval) -> TimeInterval {
+    max(1.0, abs(duration))
+  }
+
+  /// Tells the time tracker that playback is running, at the lifecycle points
+  /// where the replaced timer was rebuilt.
+  private func reportPlaybackRunningToTracker() {
     if audiobook.player.isPlaying {
       playbackTrackerDelegate?.playbackStarted()
     }
-
-    // Both timers read the player on the main thread they fire on: player
-    // state is main-actor, and FindawayPlayer's seek state is written there
-    // (PP-5349).
-    timer = Timer.publish(every: interval, on: .main, in: .common)
-      .autoconnect()
-      .compactMap { [weak self] _ -> TrackPosition? in
-        guard let self = self, audiobook.player.isPlaying else {
-          return nil
-        }
-        return audiobook.player.currentTrackPosition
-      }
-      .removeDuplicates { oldPosition, newPosition in
-        abs(oldPosition.timestamp - newPosition.timestamp) < 0.5
-      }
-      .sink { [weak self] position in
-        guard let self = self else {
-          return
-        }
-
-        if let currentChapter = try? tableOfContents.chapter(forPosition: position) {
-          if lastKnownChapter?.title != currentChapter.title {
-            lastKnownChapter = currentChapter
-            ATLog(.debug, "🔄 Chapter changed - updating lock screen")
-          }
-        }
-
-        statePublisher.send(.positionUpdated(position))
-        updateNowPlayingInfo(position)
-      }
   }
 
-  private func setupChapterMonitorTimer() {
-    chapterMonitorTimer?.cancel()
-    chapterMonitorTimer = nil
-
-    chapterMonitorTimer = Timer.publish(every: 1.0, on: .main, in: .common) // Check every second
-      .autoconnect()
-      .compactMap { [weak self] _ -> TrackPosition? in
-        guard let self = self,
-              audiobook.player.isPlaying,
-              let position = audiobook.player.currentTrackPosition
-        else {
-          return nil
-        }
-        return position
-      }
-      .sink { [weak self] position in
-        guard let self = self else {
-          return
-        }
-        checkForChapterChange(at: position)
-      }
-  }
-
-  private func checkForChapterChange(at position: TrackPosition) {
-    // The chapter is tracked only to refresh Now Playing.
-    guard nowPlayingWriter != nil else { return }
-    let hasChanged = hasChapterChanged(from: lastKnownChapter, to: position)
-    if hasChanged {
-      ATLog(.debug, "🔄 [AudiobookManager] Chapter boundary crossed - immediate lock screen update")
-      updateNowPlayingInfo(position)
-      lastKnownChapter = try? tableOfContents.chapter(forPosition: position)
-    }
-  }
-
-  private func hasChapterChanged(from lastChapter: Chapter?, to position: TrackPosition) -> Bool {
-    guard let currentChapter = try? tableOfContents.chapter(forPosition: position) else {
-      return false
-    }
-
-    guard let lastChapter = lastChapter else {
-      return true
-    }
-
-    return lastChapter.title != currentChapter.title ||
-      lastChapter.position.track.key != currentChapter.position.track.key
-  }
-
+  /// Writes Now Playing for `position` now. Called on events a patron sees at
+  /// once: play, pause, seek, skip, rate change and returning to the foreground.
   public func updateNowPlayingInfo(_ position: TrackPosition?) {
-    guard let nowPlayingWriter else { return }
-    guard let currentTrackPosition = position else {
+    guard nowPlayingWriter != nil else { return }
+    guard let position else {
       ATLog(.debug, "🔒 [AudiobookManager] updateNowPlayingInfo called with nil position")
       return
     }
+    writeNowPlaying(
+      snapshot(for: position),
+      rate: audiobook.player.playbackRate,
+      isPlaying: audiobook.player.isPlaying,
+      now: uptime()
+    )
+  }
 
-    ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo START - track timestamp: \(currentTrackPosition.timestamp)")
+  private func writeNowPlaying(_ snapshot: PlaybackSnapshot, rate: PlaybackRate, isPlaying: Bool, now: TimeInterval) {
+    guard let nowPlayingWriter, let position = snapshot.position else { return }
+
+    let chapterDuration = Self.safeNowPlayingDuration(snapshot.chapterDuration)
+    let chapterElapsed = min(max(snapshot.chapterOffset, 0), chapterDuration)
 
     var nowPlayingInfo = nowPlayingWriter.nowPlayingInfo ?? [String: Any]()
-
-    let chapter = try? tableOfContents.chapter(forPosition: currentTrackPosition)
-    let chapterTitle = chapter?.title ?? currentTrackPosition.track.title
-    
-    // Get chapter duration - ensure it's valid and positive
-    let rawDuration = chapter?.duration ?? currentTrackPosition.track.duration
-    let chapterDuration = max(1.0, abs(rawDuration)) // Ensure positive, at least 1 second
-    
-    ATLog(.info, "🔒 [AudiobookManager] Chapter: '\(chapterTitle ?? "nil")', rawDuration: \(rawDuration), safeDuration: \(chapterDuration)")
-    
-    // Get chapter-relative elapsed time (already clamped in chapterOffset)
-    var chapterElapsed: Double
-    if let offset = try? tableOfContents.chapterOffset(for: currentTrackPosition) {
-      chapterElapsed = offset
-      ATLog(.info, "🔒 [AudiobookManager] Got chapterOffset: \(offset)")
-    } else {
-      // Fallback: use track timestamp, but clamp it
-      chapterElapsed = max(0, min(currentTrackPosition.timestamp, chapterDuration))
-      ATLog(.warn, "🔒 [AudiobookManager] chapterOffset failed, using clamped timestamp: \(chapterElapsed)")
-    }
-    
-    // FINAL SAFETY: Ensure elapsed is NEVER greater than duration
-    // This is the last line of defense against negative time remaining
-    if chapterElapsed > chapterDuration {
-      ATLog(.error, "🔒 [AudiobookManager] CORRECTING: elapsed (\(chapterElapsed)) > duration (\(chapterDuration))")
-      chapterElapsed = chapterDuration
-    }
-    if chapterElapsed < 0 {
-      ATLog(.error, "🔒 [AudiobookManager] CORRECTING: elapsed (\(chapterElapsed)) < 0")
-      chapterElapsed = 0
-    }
-    
-    let timeRemaining = chapterDuration - chapterElapsed
-    ATLog(.info, "🔒 [AudiobookManager] FINAL VALUES - elapsed: \(chapterElapsed)s, duration: \(chapterDuration)s, remaining: \(timeRemaining)s")
-
-    nowPlayingInfo[MPMediaItemPropertyTitle] = chapterTitle
+    nowPlayingInfo[MPMediaItemPropertyTitle] = snapshot.title ?? position.track.title
     nowPlayingInfo[MPMediaItemPropertyArtist] = metadata.title
     nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = metadata.authors?.joined(separator: ", ")
     nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = chapterElapsed
     nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = chapterDuration
-    
-    // Set media type for CarPlay compatibility
+    // CarPlay reads the media type to show the audiobook layout.
     nowPlayingInfo[MPMediaItemPropertyMediaType] = MPMediaType.audioBook.rawValue
 
-    let playbackRate = PlaybackRate.convert(rate: audiobook.player.playbackRate)
-    let isPlaying = audiobook.player.isPlaying
+    let playbackRate = PlaybackRate.convert(rate: rate)
     nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackRate
-    // Always use 1.0 as the rate when playing (CarPlay expects this)
+    // CarPlay expects a zero rate while paused.
     nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(playbackRate) : 0.0
-    
-    ATLog(.info, "🔒 [AudiobookManager] Setting nowPlayingInfo - isPlaying: \(isPlaying), rate: \(playbackRate)")
 
-    // HelpSpot 17865: wrap the MPNowPlayingInfoCenter write in a background
-    // task envelope so the system grants us enough wall-time to complete it
-    // when the app is suspending. Otherwise the write can be cut mid-flight
-    // and the lock-screen view goes stale until next resume.
+    // HelpSpot 17865: wrap the write in a background task so the system grants
+    // enough time to finish it while the app is suspending.
     let bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "PalaceAudiobookNowPlayingWrite") { }
     nowPlayingWriter.nowPlayingInfo = nowPlayingInfo
-
-    // CRITICAL: Also set the playback state explicitly for CarPlay
+    // CarPlay reads the playback state, not only the rate.
     nowPlayingWriter.playbackState = isPlaying ? .playing : .paused
-
     if bgTaskID != .invalid {
       UIApplication.shared.endBackgroundTask(bgTaskID)
     }
 
-    ATLog(.info, "🔒 [AudiobookManager] updateNowPlayingInfo COMPLETE - playbackState: \(isPlaying ? "playing" : "paused")")
+    lastNowPlayingWrite = NowPlayingWriteMark(
+      chapterID: snapshot.chapter?.id,
+      rate: rate,
+      isPlaying: isPlaying,
+      writtenAt: now
+    )
+    ATLog(.debug, "🔒 [AudiobookManager] Now Playing written - elapsed: \(chapterElapsed)s, duration: \(chapterDuration)s, playing: \(isPlaying)")
   }
 
   // MARK: - Audiobook Actions
@@ -943,7 +913,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
     playbackTrackerDelegate?.playbackStarted()
 
     updateNowPlayingInfo(trackPosition)
-    lastKnownChapter = try? tableOfContents.chapter(forPosition: trackPosition)
   }
 
   private func handlePlaybackStopped(_ trackPosition: TrackPosition) {
@@ -1018,7 +987,6 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   private func handlePlayerUnloaded() {
     playbackTrackerDelegate?.playbackStopped()
     mediaControlPublisher.tearDown()
-    timer?.cancel()
     statePublisher.send(.playbackUnloaded)
   }
 
@@ -1095,15 +1063,15 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
         case let .changePlaybackRate(rate):
           if let playbackRate = PlaybackRate(rawValue: Int(rate * 100)) {
             audiobook.player.playbackRate = playbackRate
+            updateNowPlayingInfo(audiobook.player.currentTrackPosition)
           }
         }
       }
       .store(in: &cancellables)
   }
 
-  // No `deinit`. Everything it used to cancel cancels itself: `AnyCancellable`
-  // — including the two timers, now typed as such — cancels on dealloc, and so
-  // does every element of `Set<AnyCancellable>`. Reaching for those non-Sendable
+  // No `deinit`. Every element of `Set<AnyCancellable>` cancels itself on
+  // dealloc. Reaching for those non-Sendable
   // properties from a nonisolated deinit is an error in the Swift 6 language
   // mode, and the code was redundant even before that.
 }

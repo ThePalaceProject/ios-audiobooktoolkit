@@ -6,6 +6,7 @@
 //  Copyright © 2023 The Palace Project. All rights reserved.
 //
 
+import AVFoundation
 import Combine
 import MediaPlayer
 import SwiftUI
@@ -49,7 +50,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// Whether this load has already had its panel and given it back.
   ///
   /// The panel hands over to the chrome when the transport has bytes, which
-  /// happens while the load is still running — so without this the next poll
+  /// happens while the load is still running — so without this the next evaluation
   /// finds no panel, a load still in progress and a slow-start prediction, and
   /// puts the panel straight back. The patron sees it blink about once a
   /// second. One panel per load; a new load clears this.
@@ -111,8 +112,9 @@ public class AudiobookPlaybackModel: ObservableObject {
     if !showsLoadingPanel { showsLoadingPanel = true }
   }
 
-  /// Advances the panel's state. Called from the playback poll, so its
-  /// resolution is that poll's interval.
+  /// Advances the panel's state. Called on player events, on ticks while a
+  /// panel is up, and from the loading watch, so its resolution while loading
+  /// is `loadWatchInterval`.
   func updateLoadingPresentation(now: Date = Date()) {
     let player = audiobookManager.audiobook.player
     // Waiting on the transport counts as loading: `isLoaded` can be true while
@@ -131,8 +133,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     }
 
     // Only asked while something is loading, and only before the panel is up:
-    // it is the escalation decision, and it reads a cache on a path that runs
-    // twice a second for the whole of playback.
+    // it is the escalation decision, and it reads a cache.
     let expectsSlowStart = (isLoading && panelShownAt == nil)
       ? player.expectsSlowChapterStart
       : false
@@ -174,13 +175,14 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// stall or burst it. Replaced by tests.
   var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
   /// Wall clock for the suppression windows: saves (`beginSaveSuppression`),
-  /// transient positions after a skip or seek, and the playback-state poll.
+  /// transient positions after a skip or seek, and play-state syncing.
   /// Replaced by tests so a window can lapse without waiting in real time.
   var wallClock: () -> Date = { Date() }
   /// How long a chapter selection holds the display on its target track when
   /// no position for that track arrives. Replaced by tests that must not race it.
   var navigationHoldTimeout: TimeInterval = 3.0
-  private var suppressPlaybackPollUntil: Date?
+  private var suppressPlayStateSyncUntil: Date?
+  private var playStateResync: DispatchWorkItem?
   // While a skip/seek is settling, the SDK buffers→resumes and briefly emits
   // transient position/`.playbackBegan` events (chapter start, chapter end,
   // momentarily-not-playing). Holding the display at the user's skip target
@@ -199,7 +201,22 @@ public class AudiobookPlaybackModel: ObservableObject {
   private func suppressTransientPlaybackUpdates(for seconds: TimeInterval) {
     let until = wallClock().addingTimeInterval(seconds)
     suppressPositionUpdatesUntil = until
-    suppressPlaybackPollUntil = until
+    suppressPlayStateSync(for: seconds)
+  }
+
+  /// Holds play-state syncing off for `seconds`, then syncs once, so a state
+  /// event that arrived inside the window is not lost.
+  private func suppressPlayStateSync(for seconds: TimeInterval) {
+    suppressPlayStateSyncUntil = wallClock().addingTimeInterval(seconds)
+    playStateResync?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      playStateResync = nil
+      suppressPlayStateSyncUntil = nil
+      playStateMayHaveChanged()
+    }
+    playStateResync = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
   }
 
   /// PP-5205: the track the patron explicitly navigated to, held until a position
@@ -273,12 +290,12 @@ public class AudiobookPlaybackModel: ObservableObject {
         self.navigationTargetTrackKey = nil
       }
 
-      // Decide the panel now rather than on the next poll, and decide it for
-      // the chapter just chosen rather than the one being left. The poll runs
-      // twice a second, so a slow chapter showed the player's chrome first and
-      // the panel after it, which reads as going backwards — player, loading
-      // screen, player.
+      // Decide the panel now, and decide it for the chapter just chosen rather
+      // than the one being left. Deciding it later showed a slow chapter's
+      // chrome first and the panel after it, which reads as going backwards —
+      // player, loading screen, player.
       presentPanelForSelectedChapter(selectedLocation)
+      watchForLoading()
 
       if audiobookManager.audiobook.player.isLoaded && !isWaitingForPlayer {
         let target = selectedLocation
@@ -423,13 +440,14 @@ public class AudiobookPlaybackModel: ObservableObject {
 
     setupBindings()
     subscribeToPublisher()
-    setupReactivePlaybackStateMonitoring()
+    observePlayStateChanges()
 
     // First open takes the same decision a chapter selection does. Without
-    // this the panel could only arrive on the playback poll, by which time the
-    // player has drawn its chrome, and the patron sees the skeleton and then a
-    // loading screen over the top of it.
+    // this the panel could only arrive on the first evaluation, by which time
+    // the player has drawn its chrome, and the patron sees the skeleton and
+    // then a loading screen over the top of it.
     if let currentLocation { presentPanelForSelectedChapter(currentLocation) }
+    watchForLoading()
   }
 
   /// Whether to prefetch and decrypt whole tracks as the book opens.
@@ -484,6 +502,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     // Resuming into the middle of a book is a first open too, and the chapter
     // resumed into is the one whose bytes decide the wait.
     presentPanelForSelectedChapter(position)
+    watchForLoading()
   }
 
   public func beginSaveSuppression(for seconds: TimeInterval) {
@@ -530,12 +549,18 @@ public class AudiobookPlaybackModel: ObservableObject {
           isWaitingForPlayer = false
           _isPlaying = true
           isNavigating = false
+          rearmStallWatch()
+          watchForLoading()
+          startDeferredPrefetchIfDue(isPlaying: true)
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
             Task { [weak self] in
               _ = try? await self?.audiobookManager.audiobook.player.play(at: target)
             }
           }
+
+        case .playbackStopped:
+          playStateMayHaveChanged()
 
         case let .playbackCompleted(position):
           isWaitingForPlayer = false
@@ -559,6 +584,7 @@ public class AudiobookPlaybackModel: ObservableObject {
             // where stopping belongs and where it still happens.
             updateProgress()
           }
+          watchForLoading()
           if let target = pendingLocation, audiobookManager.audiobook.player.isLoaded {
             pendingLocation = nil
             Task { [weak self] in
@@ -569,10 +595,13 @@ public class AudiobookPlaybackModel: ObservableObject {
         case .playbackUnloaded:
           _isPlaying = false
           isNavigating = false
+          stopWatching()
         case let .playbackFailed(position, error):
           isWaitingForPlayer = false
           _isPlaying = false
           isNavigating = false
+          rearmStallWatch()
+          watchForLoading()
 
           let nsError = error as NSError?
           let openAccessError = OpenAccessPlayerError.forPlaybackFailure(error)
@@ -624,6 +653,11 @@ public class AudiobookPlaybackModel: ObservableObject {
       .receive(on: DispatchQueue.main)
       .sink { [weak self] position in
         guard let self = self else { return }
+        syncPlayState()
+        rearmStallWatch()
+        // The watch runs whenever a panel is up, so this covers a panel too.
+        if loadWatch != nil { updateLoadingPresentation(now: wallClock()) }
+        startDeferredPrefetchIfDue(isPlaying: _isPlaying)
         // Hold the user's skip target while the seek settles; ignore the
         // transient positions the SDK emits during the buffer→resume.
         if !acceptPositionUpdate(position) { return }
@@ -636,25 +670,146 @@ public class AudiobookPlaybackModel: ObservableObject {
     audiobookManager.fetchBookmarks { _ in }
   }
 
-  private func setupReactivePlaybackStateMonitoring() {
-    Timer.publish(every: 0.5, on: .main, in: .common)
-      .autoconnect()
+  /// The play state, the loading panel and the deferred prefetch follow player
+  /// events and position ticks rather than a poll (PP-5504). Two events change
+  /// play state without a player state event: an audio interruption, where
+  /// AVFoundation pauses the player itself, and a return to the foreground.
+  private func observePlayStateChanges() {
+    NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+      .merge(with: NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification))
+      .receive(on: DispatchQueue.main)
       .sink { [weak self] _ in
-        guard let self = self else { return }
-        if let suppress = suppressPlaybackPollUntil, wallClock() < suppress { return }
-        let currentPlayingState = audiobookManager.audiobook.player.isPlaying
-        if _isPlaying != currentPlayingState {
-          _isPlaying = currentPlayingState
-        }
-        updateLoadingPresentation()
-        startDeferredPrefetchIfDue(isPlaying: currentPlayingState)
+        self?.playStateMayHaveChanged()
       }
       .store(in: &subscriptions)
 
+    let grace = Self.deferredPrefetchGrace - Date().timeIntervalSince(openedAt)
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      prefetchGraceWork = nil
+      startDeferredPrefetchIfDue(isPlaying: _isPlaying)
+    }
+    prefetchGraceWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + max(grace, 0), execute: work)
   }
 
-  /// Evaluated on the existing playback poll, so the prefetch starts on the
-  /// first tick after playback begins or after the grace window.
+  /// The grace-window prefetch check. Held so `stop()` can cancel it: the host
+  /// keeps this model after the patron closes the book.
+  private var prefetchGraceWork: DispatchWorkItem?
+
+  /// Re-reads the player after an event that may have moved it.
+  private func playStateMayHaveChanged() {
+    syncPlayState()
+    watchForLoading()
+    rearmStallWatch()
+    startDeferredPrefetchIfDue(isPlaying: _isPlaying)
+  }
+
+  /// Copies the player's play state, except inside a suppression window, where
+  /// a skip or a play/pause tap is still settling.
+  private func syncPlayState() {
+    if let suppress = suppressPlayStateSyncUntil, wallClock() < suppress { return }
+    let playing = audiobookManager.audiobook.player.isPlaying
+    if _isPlaying != playing { _isPlaying = playing }
+  }
+
+  // MARK: - Loading watch
+
+  /// Re-evaluates the loading panel every `loadWatchInterval` while a load is
+  /// in view, and stops once nothing is loading. Nil in steady playback and
+  /// while paused.
+  private var loadWatch: AnyCancellable?
+  /// A load watch keeps running at least until here after the event that
+  /// started it, so a load that begins just after the event is still seen.
+  private var loadWatchKeepUntil: Date?
+  static let loadWatchInterval: TimeInterval = 0.5
+
+  /// Fires when ticks stop for `stallWatchDelay` while playing, which is how a
+  /// stall mid-chapter shows itself: the player still reports playing, but its
+  /// clock has stopped. One timer source, created once; each tick moves its
+  /// deadline, which queues nothing, so steady playback costs no callbacks.
+  /// Disarmed while paused.
+  private var stallTimer: DispatchSourceTimer?
+  var stallWatchDelay: TimeInterval = AudiobookPlaybackModel.loadingPanelDelay
+
+  /// Whether the loading watch is running. Read by tests.
+  var isWatchingForLoading: Bool { loadWatch != nil }
+  /// Whether the stall watch is armed. Read by tests.
+  private(set) var isWatchingForStall = false
+  /// How many times the stall watch has fired. Read by tests.
+  private(set) var stallWatchFireCount = 0
+
+  /// Evaluates the panel now and keeps a watch on it for at least
+  /// `loadingPanelDelay`, or for as long as a load is in view.
+  private func watchForLoading() {
+    loadWatchKeepUntil = wallClock().addingTimeInterval(Self.loadingPanelDelay)
+    updateLoadingPresentation(now: wallClock())
+    if loadWatch == nil {
+      loadWatch = Timer.publish(every: Self.loadWatchInterval, on: .main, in: .common)
+        .autoconnect()
+        .sink { [weak self] _ in self?.loadWatchFired() }
+    }
+  }
+
+  private func loadWatchFired() {
+    let now = wallClock()
+    updateLoadingPresentation(now: now)
+    syncPlayState()
+    startDeferredPrefetchIfDue(isPlaying: _isPlaying)
+    let loadInView = loadingSince != nil || panelShownAt != nil || showsLoadingPanel
+    if !loadInView, loadWatchKeepUntil.map({ now >= $0 }) ?? true {
+      loadWatch = nil
+      loadWatchKeepUntil = nil
+    }
+  }
+
+  private func rearmStallWatch() {
+    guard _isPlaying else {
+      disarmStallWatch()
+      return
+    }
+    let timer = stallTimer ?? makeStallTimer()
+    timer.schedule(deadline: .now() + stallWatchDelay, repeating: .never)
+    isWatchingForStall = true
+  }
+
+  private func makeStallTimer() -> DispatchSourceTimer {
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.setEventHandler { [weak self, weak timer] in
+      MainActor.assumeIsolated {
+        guard let self else {
+          timer?.cancel()
+          return
+        }
+        self.stallWatchFired()
+      }
+    }
+    timer.schedule(deadline: .distantFuture, repeating: .never)
+    timer.resume()
+    stallTimer = timer
+    return timer
+  }
+
+  private func stallWatchFired() {
+    isWatchingForStall = false
+    stallWatchFireCount += 1
+    watchForLoading()
+  }
+
+  private func disarmStallWatch() {
+    stallTimer?.schedule(deadline: .distantFuture, repeating: .never)
+    isWatchingForStall = false
+  }
+
+  private func stopWatching() {
+    loadWatch = nil
+    loadWatchKeepUntil = nil
+    stallTimer?.cancel()
+    stallTimer = nil
+    isWatchingForStall = false
+  }
+
+  /// Evaluated on playback events and ticks, and once at the grace window.
   private func startDeferredPrefetchIfDue(isPlaying: Bool) {
     guard Self.shouldStartDeferredPrefetch(
       isPlaying: isPlaying,
@@ -663,6 +818,8 @@ public class AudiobookPlaybackModel: ObservableObject {
       servingRemoteArchive: Self.isServingRemoteArchive(audiobookManager)
     ) else { return }
     hasStartedDeferredPrefetch = true
+    prefetchGraceWork?.cancel()
+    prefetchGraceWork = nil
     audiobookManager.networkService.fetch()
   }
 
@@ -693,7 +850,8 @@ public class AudiobookPlaybackModel: ObservableObject {
   // deallocates, and everything else this used to do belonged to other objects.
 
   func playPause() {
-    suppressPlaybackPollUntil = wallClock().addingTimeInterval(1.0)
+    suppressPlayStateSync(for: 1.0)
+    watchForLoading()
     let wasPlaying = isPlaying
     if wasPlaying {
       audiobookManager.pause()
@@ -722,6 +880,10 @@ public class AudiobookPlaybackModel: ObservableObject {
 
   func stop() {
     _isPlaying = false
+    stopWatching()
+    playStateResync?.cancel()
+    prefetchGraceWork?.cancel()
+    prefetchGraceWork = nil
     persistLocation()
     audiobookManager.unload()
     subscriptions.removeAll()
