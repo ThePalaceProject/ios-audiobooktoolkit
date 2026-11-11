@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import Combine
 import XCTest
 @testable import PalaceAudiobookToolkit
 
@@ -634,7 +635,9 @@ final class AudiobookPlaybackModelPlayStateTests: XCTestCase {
     player = nil
   }
 
-  private func makeModel() throws {
+  private func makeModel(
+    loadWatchTicks: @escaping () -> AnyPublisher<Date, Never> = AudiobookPlaybackModel.loadWatchTimerTicks
+  ) throws {
     let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
     let audiobook = try XCTUnwrap(OpenAccessAudiobook(manifest: manifest, bookIdentifier: "play-state", decryptor: nil, token: nil))
     player = ThreadRecordingPlayerMock(tableOfContents: audiobook.tableOfContents)
@@ -646,7 +649,7 @@ final class AudiobookPlaybackModelPlayStateTests: XCTestCase {
       networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
     )
     manager.nowPlayingWriter = nil
-    model = AudiobookPlaybackModel(audiobookManager: manager)
+    model = AudiobookPlaybackModel(audiobookManager: manager, loadWatchTicks: loadWatchTicks)
     // Past the open's watch window, so only the events under test start a watch.
     wallNow = Date().addingTimeInterval(100)
     model.wallClock = { [unowned self] in wallNow }
@@ -746,11 +749,21 @@ final class AudiobookPlaybackModelPlayStateTests: XCTestCase {
   }
 
   /// The loading watch outlives its minimum window while a load is in view.
-  func test_loadInView_keepsTheLoadingWatchRunningPastItsWindow() {
+  /// Ticks are sent by hand, so a slow run loop cannot end or stall the watch.
+  func test_loadInView_keepsTheLoadingWatchRunningPastItsWindow() throws {
+    model.stop()
+    let ticks = PassthroughSubject<Date, Never>()
+    try makeModel(loadWatchTicks: { ticks.eraseToAnyPublisher() })
     player.isLoaded = false
-    wait(1.2)
 
-    XCTAssertTrue(model.isWatchingForLoading)
+    ticks.send(wallNow)
+    ticks.send(wallNow)
+
+    XCTAssertTrue(model.isWatchingForLoading, "a load in view must keep the watch past its window")
+
+    player.isLoaded = true
+    ticks.send(wallNow)
+    XCTAssertFalse(model.isWatchingForLoading, "premise: the window has passed, so only the load kept the watch")
   }
 
   /// A tick after the load ends hides the panel on that tick.
