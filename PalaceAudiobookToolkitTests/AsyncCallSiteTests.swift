@@ -44,13 +44,22 @@ final class AsyncCallSiteTests: XCTestCase {
     return (model, mockPlayer)
   }
 
-  /// Wait until `predicate` returns true or `timeout` elapses. Uses
-  /// XCTestExpectation-based polling at 10ms to keep CI deterministic.
-  private func waitUntil(timeout: TimeInterval = 1.0, _ predicate: @escaping () -> Bool) async {
+  /// Polls `predicate` every 10 ms and fails the test if it is still false
+  /// after `timeout`, so a missed condition reports itself instead of
+  /// surfacing later as an unrelated assertion.
+  private func waitUntil(
+    timeout: TimeInterval = 5.0,
+    file: StaticString = #filePath,
+    line: UInt = #line,
+    _ predicate: @escaping () -> Bool
+  ) async {
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
       if predicate() { return }
       try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    if !predicate() {
+      XCTFail("condition not met within \(timeout)s", file: file, line: line)
     }
   }
 
@@ -126,6 +135,8 @@ final class AsyncCallSiteTests: XCTestCase {
     await waitUntil { player.skipPlayheadCalls.count == 1 }
     XCTAssertEqual(player.skipPlayheadCalls.first, 45,
                    "skipForward must use the configured forward interval (45), not 30 or the back value")
+    // A skip that starts while the previous one is still settling is ignored.
+    await waitUntil { !model.isWaitingForPlayer }
 
     model.skipBack()
     await waitUntil { player.skipPlayheadCalls.count == 2 }

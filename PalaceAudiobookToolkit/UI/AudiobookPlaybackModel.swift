@@ -426,8 +426,15 @@ public class AudiobookPlaybackModel: ObservableObject {
     audiobookManager.networkService.tracks
   }
 
-  public init(audiobookManager: AudiobookManager) {
+  public convenience init(audiobookManager: AudiobookManager) {
+    self.init(audiobookManager: audiobookManager, loadWatchTicks: AudiobookPlaybackModel.loadWatchTimerTicks)
+  }
+
+  /// `loadWatchTicks` makes the clock each loading watch runs on. Tests pass
+  /// ticks they send themselves, so a watch never depends on run-loop timing.
+  init(audiobookManager: AudiobookManager, loadWatchTicks: @escaping () -> AnyPublisher<Date, Never>) {
     self.audiobookManager = audiobookManager
+    makeLoadWatchTicks = loadWatchTicks
     if let firstTrack = audiobookManager.audiobook.tableOfContents.allTracks.first {
       currentLocation = TrackPosition(
         track: firstTrack,
@@ -723,6 +730,13 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// started it, so a load that begins just after the event is still seen.
   private var loadWatchKeepUntil: Date?
   static let loadWatchInterval: TimeInterval = 0.5
+  private let makeLoadWatchTicks: () -> AnyPublisher<Date, Never>
+
+  static func loadWatchTimerTicks() -> AnyPublisher<Date, Never> {
+    Timer.publish(every: loadWatchInterval, on: .main, in: .common)
+      .autoconnect()
+      .eraseToAnyPublisher()
+  }
 
   /// Fires when ticks stop for `stallWatchDelay` while playing, which is how a
   /// stall mid-chapter shows itself: the player still reports playing, but its
@@ -745,8 +759,7 @@ public class AudiobookPlaybackModel: ObservableObject {
     loadWatchKeepUntil = wallClock().addingTimeInterval(Self.loadingPanelDelay)
     updateLoadingPresentation(now: wallClock())
     if loadWatch == nil {
-      loadWatch = Timer.publish(every: Self.loadWatchInterval, on: .main, in: .common)
-        .autoconnect()
+      loadWatch = makeLoadWatchTicks()
         .sink { [weak self] _ in self?.loadWatchFired() }
     }
   }
