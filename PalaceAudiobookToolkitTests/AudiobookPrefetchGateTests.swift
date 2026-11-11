@@ -71,6 +71,49 @@ final class AudiobookPrefetchGateTests: XCTestCase {
     }
   }
 
+  /// Playback starting means the chapter has what it needs, so the prefetch
+  /// starts on that event rather than on a later poll.
+  func test_playbackBegins_startsThePrefetchAtOnce() throws {
+    let (model, spy) = try makeModel(id: "pp5504-begin", servingRemoteArchive: false)
+    let player = try XCTUnwrap(model.audiobookManager.audiobook.player as? PlayerMock)
+    let tracks = model.audiobookManager.audiobook.tableOfContents
+    player.isPlaying = true
+
+    player.playbackStatePublisher.send(.started(TrackPosition(track: tracks.allTracks[0], timestamp: 0, tracks: tracks.tracks)))
+    let settled = expectation(description: "event delivered")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { settled.fulfill() }
+    wait(for: [settled], timeout: 2)
+
+    XCTAssertEqual(spy.fetchCallCount, 1)
+  }
+
+  private func waitPastTheGraceWindow() {
+    let grace = AudiobookPlaybackModel.deferredPrefetchGrace
+    let waited = expectation(description: "past the grace window")
+    DispatchQueue.main.asyncAfter(deadline: .now() + grace + 0.5) { waited.fulfill() }
+    wait(for: [waited], timeout: grace + 5)
+  }
+
+  /// A book left open without playing reaches the device once the grace window ends.
+  func test_withoutPlayback_prefetchStartsAtTheGraceWindow() throws {
+    let (model, spy) = try makeModel(id: "pp5504-grace", servingRemoteArchive: false)
+
+    waitPastTheGraceWindow()
+
+    withExtendedLifetime(model) { XCTAssertEqual(spy.fetchCallCount, 1) }
+  }
+
+  /// The host keeps the model after `stop()`, so a book closed inside the grace
+  /// window must not prefetch afterwards.
+  func test_stopBeforeTheGraceWindow_startsNoPrefetch() throws {
+    let (model, spy) = try makeModel(id: "pp5504-stop", servingRemoteArchive: false)
+
+    model.stop()
+    waitPastTheGraceWindow()
+
+    withExtendedLifetime(model) { XCTAssertEqual(spy.fetchCallCount, 0) }
+  }
+
   func test_openingANonStreamingBook_doesNotPrefetchYet() throws {
     let (model, spy) = try makeModel(id: "pp5367-plain", servingRemoteArchive: nil)
     withExtendedLifetime(model) {

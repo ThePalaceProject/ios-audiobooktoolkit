@@ -5,20 +5,9 @@
 //  Regression coverage for HelpSpot 17865 — Audiobook NowPlaying freeze on
 //  background → foreground.
 //
-//  These tests pin two behaviors:
-//  (1) didEnterBackgroundNotification must REBUILD the timer (so the lock-screen
-//      MPNowPlayingInfoCenter writer keeps firing at the .background cadence)
-//      — NOT cancel it outright as a prior commit did.
-//  (2) didBecomeActiveNotification must NOT publish a stale cached position
-//      ahead of the player's resumed clock — the slider would otherwise jump
-//      forward by the suspend duration. Position publish is now deferred a tick
-//      so the player can refresh its internal clock first.
-//
-//  The third behavior from the contract (UIApplication.beginBackgroundTask wrap
-//  around the MPNowPlayingInfoCenter write at AudiobookManager.swift:~594) is
-//  exercised indirectly: this target has no UIApplication shim, and the main
-//  repo's NowPlayingCoordinatorBackgroundTests in ios-core covers the writer
-//  side. Documented as skip below.
+//  Pins that a foreground return publishes the player's refreshed position,
+//  and that the lock screen is refreshed from the player's position ticks,
+//  which keep arriving while the screen is locked.
 //
 //  Copyright © 2026 The Palace Project. All rights reserved.
 //
@@ -35,7 +24,7 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
 
   /// Builds a DefaultAudiobookManager from the `alice_manifest.json` test
   /// resource. Mirrors `AudiobookNavigationView`'s preview factory but in test
-  /// scope so we exercise the real notification observers + timer machinery.
+  /// scope so we exercise the real notification observers.
   private func makeManager() throws -> (DefaultAudiobookManager, PlayerMock) {
     try makeManager(playerType: PlayerMock.self)
   }
@@ -65,51 +54,12 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
     audiobook.player = mock
   }
 
-  // MARK: - Test 1: didEnterBackgroundNotification rebuilds, does not cancel
-
-  /// HelpSpot 17865 — When the app enters background, the lock-screen writer
-  /// must keep running (at the .background 15s cadence). Prior to this fix
-  /// the notification handler did `timer?.cancel(); timer = nil`, which
-  /// stranded MPNowPlayingInfoCenter — patrons reported their lock-screen
-  /// scrubber froze, and on resume the slider snapped forward.
-  ///
-  /// In a unit-test environment `UIApplication.shared.applicationState` is
-  /// `.background` (XCTest runs headless), so the rebuild actually re-creates
-  /// the timer at the 15s interval. We assert the timer is non-nil after the
-  /// notification — i.e. that the cancel-and-leave-nil bug is gone.
-  func testBackgroundNotification_rebuildsTimerAtBackgroundInterval() throws {
-    let (manager, player) = try makeManager()
-    player.isPlaying = true
-
-    // Sanity: timer is alive after init.
-    XCTAssertNotNil(manager.timer, "Timer should be set up on init.")
-
-    // Act: post the lifecycle notification.
-    NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
-
-    // The notification handler is wired via Combine .sink which delivers
-    // synchronously on the same queue when no scheduler is interposed, but
-    // setupNowPlayingInfoTimer schedules a Timer.publish on .main. Give it
-    // a runloop tick to settle.
-    let settled = XCTestExpectation(description: "Background handler settled")
-    DispatchQueue.main.async {
-      settled.fulfill()
-    }
-    wait(for: [settled], timeout: 1.0)
-
-    // Assert: timer was rebuilt, not nilled-out. Pre-fix this was nil.
-    XCTAssertNotNil(
-      manager.timer,
-      "didEnterBackgroundNotification must REBUILD the timer (background interval), not cancel-and-leave-nil. HelpSpot 17865."
-    )
-  }
-
   // MARK: - Test 2: didBecomeActiveNotification defers position publish
 
   /// HelpSpot 17865 — When returning to foreground, immediately publishing
   /// `audiobook.player.currentTrackPosition` races a stale cached value
   /// against the player's resumed clock. Patrons see the slider jump forward
-  /// by the suspend duration. The fix is to rebuild the timer first, defer a
+  /// by the suspend duration. The fix is to defer a
   /// tick for the player to refresh, and only then publish the position.
   ///
   /// We model the "stale → fresh" race by configuring the mock player to
@@ -174,93 +124,41 @@ final class AudiobookManagerLifecycleTests: XCTestCase {
     throw XCTSkip("Skipped per contract: toolkit lacks UIApplication shim; main-repo NowPlayingCoordinatorBackgroundTests covers writer-side beginBackgroundTask discipline.")
   }
 
-  // MARK: - Test 4: player positionPublisher drives the lock screen independently
-  //
-  // HelpSpot 17865 residual (Crashlytics code 403, "NowPlayingCoordinator dry
-  // while isPlaying"): the wall-clock `timer` that refreshes MPNowPlayingInfoCenter
-  // is a main-runloop `.common` timer. iOS coalesces/suspends it during long
-  // screen-locked background playback, so the lock screen goes stale >30s and
-  // the ios-core watchdog logs the dry-stream (~23k events through 3.2.3).
-  //
-  // The player's AVPlayer periodic-time observer (`positionPublisher`) is
-  // OS-guaranteed to fire while audio is actually playing — including
-  // backgrounded/locked — because it is driven by the playback clock, not the
-  // runloop. This test pins that the manager ALSO drives the lock-screen writer
-  // off `positionPublisher`, so a position emission refreshes now-playing even
-  // when the wall-clock timer is not the source (the background case, modeled
-  // here by cancelling `timer` before emitting).
-  func testPositionPublisher_refreshesLockScreen_whenWallClockTimerSilent() throws {
+  // MARK: - Test 4: player positionPublisher drives the lock screen
+
+  /// HelpSpot 17865: the lock screen is refreshed from the player's position
+  /// ticks, which the playback clock keeps delivering while the screen is
+  /// locked; main-runloop timers are coalesced there.
+  func testPositionPublisher_refreshesLockScreen() throws {
     let (manager, player) = try makeManager()
 
     let firstTrack = manager.tableOfContents.allTracks.first
     XCTAssertNotNil(firstTrack, "Test fixture must have at least one track.")
     guard let track = firstTrack else { return }
 
-    // Model the background case: the coalescible wall-clock timer is not firing,
-    // so it cannot be the source of any lock-screen refresh.
-    manager.timer?.cancel()
-
-    // Clear the process-wide now-playing info so a non-nil read afterwards can
-    // only have come from the heartbeat we are exercising.
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    // A spy rather than the system center: the first system-center access in
+    // a parallel test clone can take over ten seconds.
+    let writer = NowPlayingWriterSpy()
+    manager.nowPlayingWriter = writer
 
     let position = TrackPosition(track: track, timestamp: 42.0, tracks: manager.tableOfContents.tracks)
     player.isPlaying = true
     player.currentTrackPosition = position
 
-    // The heartbeat delivers on the main runloop; give it a tick to settle.
-    let settled = XCTestExpectation(description: "Heartbeat settled")
+    // Ticks are delivered on the main queue; let it drain.
+    let settled = XCTestExpectation(description: "Tick delivered")
     player._emitPosition(position)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { settled.fulfill() }
     wait(for: [settled], timeout: 2.0)
 
-    let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-    XCTAssertNotNil(
-      info,
-      "positionPublisher emission while playing must refresh MPNowPlayingInfoCenter even with the wall-clock timer cancelled — the lock-screen heartbeat must not depend solely on the coalescible main-runloop timer. HelpSpot 17865 / code 403."
+    let info = try XCTUnwrap(
+      writer.infoWrites.last ?? nil,
+      "A position tick while playing must refresh Now Playing. HelpSpot 17865 / code 403."
     )
-
-    let expectedElapsed = (try? manager.tableOfContents.chapterOffset(for: position))
-    if let expectedElapsed, let actualElapsed = info?[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double {
-      XCTAssertEqual(
-        actualElapsed,
-        expectedElapsed,
-        accuracy: 0.001,
-        "The refreshed lock-screen elapsed time must reflect the emitted position."
-      )
-    }
-  }
-
-  // MARK: - Test 5: the periodic timers read player state on the main thread
-
-  /// The lock-screen and chapter-monitor timers read `isPlaying` and
-  /// `currentTrackPosition` on the main thread, where that state is written (PP-5349).
-  func testPeriodicTimers_readPlayerStateOnMainThread() throws {
-    let (manager, player) = try makeManager(playerType: ThreadRecordingPlayerMock.self)
-    guard let track = manager.tableOfContents.allTracks.first else {
-      return XCTFail("Test fixture must have at least one track.")
-    }
-    player.isPlaying = true
-    player.currentTrackPosition = TrackPosition(track: track, timestamp: 5.0, tracks: manager.tableOfContents.tracks)
-    player.resetReads()
-
-    // `.positionUpdated` comes from the lock-screen timer here (didBecomeActive
-    // also sends it, but nothing posts that in this test). The timeout covers
-    // the timer's background cadence of 15s.
-    let published = XCTestExpectation(description: "Lock-screen timer published a position")
-    published.assertForOverFulfill = false
-    let cancellable = manager.statePublisher.sink { state in
-      if case .positionUpdated = state { published.fulfill() }
-    }
-    defer { cancellable.cancel() }
-
-    wait(for: [published], timeout: 25.0)
-
-    // A lock-screen tick reads the player three times, so a fourth read means
-    // the one-second chapter monitor also ran.
-    let reads = player.reads
-    XCTAssertGreaterThanOrEqual(reads.total, 4, "The timers did not read the player, so the thread check below proves nothing.")
-    XCTAssertEqual(reads.offMain, 0, "\(reads.offMain) of \(reads.total) timer reads of player state ran off the main thread.")
+    let expectedElapsed = try manager.tableOfContents.chapterOffset(for: position)
+    let actualElapsed = try XCTUnwrap(info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double)
+    XCTAssertEqual(actualElapsed, expectedElapsed, accuracy: 0.001,
+                   "The refreshed lock-screen elapsed time must reflect the emitted position.")
   }
 }
 
@@ -327,7 +225,6 @@ final class AudiobookManagerNowPlayingWriterTests: XCTestCase {
   }
 
   override func tearDown() {
-    manager?.timer?.cancel()
     manager = nil
     player = nil
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -381,23 +278,7 @@ final class AudiobookManagerNowPlayingWriterTests: XCTestCase {
     XCTAssertEqual(MPNowPlayingInfoCenter.default().nowPlayingInfo?.count, 1)
   }
 
-  /// Entering a new chapter refreshes Now Playing within about a second,
-  /// without waiting for the next position-driven heartbeat.
-  func testChapterChange_whilePlaying_isWrittenWithoutAPositionTick() throws {
-    let spy = NowPlayingWriterSpy()
-    manager.nowPlayingWriter = spy
-    player.isPlaying = true
-    player.currentTrackPosition = try position(5.0)
-
-    let written = expectation(description: "chapter monitor wrote Now Playing")
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { written.fulfill() }
-    wait(for: [written], timeout: 5.0)
-
-    XCTAssertGreaterThanOrEqual(spy.infoWrites.count, 1)
-  }
-
-  /// The lock-screen timer rebuild on backgrounding also tells the time
-  /// tracker that playback is running; that call must survive timer changes.
+  /// Backgrounding while playing tells the time tracker that playback is running.
   func testBackgrounding_whilePlaying_reportsPlaybackStartedToTracker() throws {
     player.isPlaying = true
     let before = tracker.started
@@ -459,7 +340,6 @@ final class PlaybackSnapshotTests: XCTestCase {
       audiobook: audiobook,
       networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
     )
-    manager.timer?.cancel()
     return (manager, player)
   }
 
@@ -538,4 +418,325 @@ final class PlaybackSnapshotTests: XCTestCase {
 
     XCTAssertEqual(model.playbackProgress, 0)
   }
+}
+
+// MARK: - One playback clock
+
+/// The player's position ticks are the manager's only clock (PP-5504): each
+/// tick resolves the chapter once, and Now Playing is written on a change a
+/// patron can see or after a 10 s keep-alive, never on a timer.
+@MainActor
+final class PlaybackClockTests: XCTestCase {
+  private var manager: DefaultAudiobookManager!
+  private var player: PlayerMock!
+  private var writer: NowPlayingWriterSpy!
+  private var now: TimeInterval = 1_000
+  private var lookups = 0
+
+  override func setUp() async throws {
+    try makeManager(playerType: PlayerMock.self)
+  }
+
+  override func tearDown() async throws {
+    manager = nil
+    player = nil
+    writer = nil
+  }
+
+  private func makeManager<P: PlayerMock>(playerType: P.Type) throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(OpenAccessAudiobook(manifest: manifest, bookIdentifier: "playback-clock", decryptor: nil, token: nil))
+    player = P(tableOfContents: audiobook.tableOfContents)
+    audiobook.player = player
+    manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Clock Test", authors: ["Author"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    writer = NowPlayingWriterSpy()
+    manager.nowPlayingWriter = writer
+    manager.uptime = { [unowned self] in now }
+    manager.applicationState = { .active }
+    let toc = manager.tableOfContents
+    manager.resolveChapter = { [unowned self] position in
+      lookups += 1
+      return try? toc.chapter(forPosition: position)
+    }
+  }
+
+  private func chapter(_ index: Int) -> Chapter {
+    manager.tableOfContents.toc[index]
+  }
+
+  private func drainMainQueue() {
+    let drained = expectation(description: "main queue drained")
+    DispatchQueue.main.async { drained.fulfill() }
+    wait(for: [drained], timeout: 2)
+  }
+
+  /// Player state events are delivered through `RunLoop.main`.
+  private func settleRunLoop() {
+    let settled = expectation(description: "run loop settled")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { settled.fulfill() }
+    wait(for: [settled], timeout: 2)
+  }
+
+  /// Emits one tick at `position`, `at` seconds on the test clock.
+  private func tick(_ position: TrackPosition, at time: TimeInterval) {
+    now = time
+    player._emitPosition(position)
+    drainMainQueue()
+  }
+
+  private var writtenTitles: [String?] {
+    writer.infoWrites.map { $0?[MPMediaItemPropertyTitle] as? String }
+  }
+
+  func testPositionTick_withWriter_resolvesTheChapterExactlyOncePerTick() {
+    player.isPlaying = true
+    let position = chapter(0).position + 1
+
+    for second in 0..<5 {
+      tick(position, at: 1_000 + Double(second) * 0.25)
+    }
+
+    XCTAssertEqual(lookups, 5)
+  }
+
+  /// A host that writes Now Playing itself pays for no chapter lookup per tick.
+  func testPositionTick_withoutWriter_resolvesNoChapter() {
+    manager.nowPlayingWriter = nil
+    player.isPlaying = true
+
+    tick(chapter(0).position + 1, at: 1_000)
+    tick(chapter(0).position + 2, at: 1_001)
+
+    XCTAssertEqual(lookups, 0)
+  }
+
+  func testChapterCrossing_whilePlaying_isWrittenOnTheTickThatCrossesIt() {
+    player.isPlaying = true
+
+    tick(chapter(0).position + 1, at: 1_000)
+    tick(chapter(0).position + 2, at: 1_001)
+    XCTAssertEqual(writtenTitles, [chapter(0).title])
+
+    tick(chapter(1).position + 0.5, at: 1_002)
+
+    XCTAssertEqual(writtenTitles, [chapter(0).title, chapter(1).title])
+  }
+
+  /// Steady playback at four ticks a second for 60 s: a write at the start and
+  /// one per 10 s keep-alive, so seven in all.
+  func testSteadyPlayback_writesOncePerKeepAliveInterval() {
+    player.isPlaying = true
+    let position = chapter(0).position + 1
+
+    for index in 0...240 {
+      tick(position, at: 1_000 + Double(index) * 0.25)
+    }
+
+    XCTAssertEqual(writer.infoWrites.count, 7)
+  }
+
+  func testRateChange_whilePlaying_isWrittenOnTheNextTick() throws {
+    player.isPlaying = true
+    tick(chapter(0).position + 1, at: 1_000)
+
+    player.playbackRate = .doubleTime
+    tick(chapter(0).position + 2, at: 1_001)
+
+    XCTAssertEqual(writer.infoWrites.count, 2)
+    let rate = try XCTUnwrap(writer.infoWrites.last??[MPNowPlayingInfoPropertyPlaybackRate] as? Double)
+    XCTAssertEqual(rate, Double(PlaybackRate.convert(rate: .doubleTime)), accuracy: 0.001)
+  }
+
+  func testPauseThenPlay_eachWritesAtOnce() {
+    player.isPlaying = true
+    let position = chapter(0).position + 1
+    tick(position, at: 1_000)
+
+    player.isPlaying = false
+    player.playbackStatePublisher.send(.stopped(position))
+    settleRunLoop()
+    player.isPlaying = true
+    player.playbackStatePublisher.send(.started(position))
+    settleRunLoop()
+
+    XCTAssertEqual(writer.stateWrites, [.playing, .paused, .playing])
+  }
+
+  private var lastWrittenElapsed: Double? {
+    writer.infoWrites.last??[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double
+  }
+
+  /// `playAtPosition` starts playback, so it writes the new chapter as playing.
+  func testPlayAtPosition_writesTheNewChapterAtOnce() {
+    player.isPlaying = false
+    let target = chapter(3).position + 4
+    let done = expectation(description: "seek completed")
+
+    manager.playAtPosition(target) { _ in done.fulfill() }
+    wait(for: [done], timeout: 2)
+
+    XCTAssertEqual(writtenTitles.last, chapter(3).title)
+    XCTAssertEqual(writer.stateWrites.last, .playing)
+  }
+
+  /// A skip while paused produces no tick, so the skip itself writes.
+  func testSkip_whilePaused_writesTheNewPositionAtOnce() throws {
+    player.isPlaying = false
+    player.skipPlayheadResult = .some(chapter(2).position + 3)
+    let done = expectation(description: "skip completed")
+
+    manager.skipPlayhead(30) { _ in done.fulfill() }
+    wait(for: [done], timeout: 2)
+
+    XCTAssertEqual(writtenTitles.last, chapter(2).title)
+    XCTAssertEqual(try XCTUnwrap(lastWrittenElapsed), 3, accuracy: 0.001)
+    XCTAssertEqual(writer.stateWrites.last, .paused)
+  }
+
+  /// The slider seek on players other than `OpenAccessPlayer` goes through
+  /// `play(at:)`; its target is written at once.
+  func testSeekWithSlider_otherPlayers_writesTheTargetAtOnce() throws {
+    var target = chapter(2)
+    target.duration = 200
+    player.currentChapter = target
+    let done = expectation(description: "seek completed")
+
+    manager.seekWithSlider(value: 0.5) { _ in done.fulfill() }
+    wait(for: [done], timeout: 2)
+
+    XCTAssertEqual(writtenTitles.last, chapter(2).title)
+    XCTAssertEqual(try XCTUnwrap(lastWrittenElapsed), 100, accuracy: 0.001)
+  }
+
+  func testSeekWithSlider_openAccessPlayer_whilePaused_writesAtOnce() throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(OpenAccessAudiobook(manifest: manifest, bookIdentifier: "slider-oa", decryptor: nil, token: nil))
+    let toc = audiobook.tableOfContents
+    let openAccess = SeekStubOpenAccessPlayer(tableOfContents: toc)
+    let start = toc.toc[2].position
+    openAccess.lastKnownPosition = start + 1
+    openAccess.seekResult = start + 5
+    audiobook.player = openAccess
+    let oaManager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Slider", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: toc.allTracks)
+    )
+    let oaWriter = NowPlayingWriterSpy()
+    oaManager.nowPlayingWriter = oaWriter
+    let done = expectation(description: "seek completed")
+
+    oaManager.seekWithSlider(value: 0.1) { _ in done.fulfill() }
+    wait(for: [done], timeout: 2)
+
+    let info = try XCTUnwrap(oaWriter.infoWrites.last ?? nil)
+    XCTAssertEqual(info[MPMediaItemPropertyTitle] as? String, toc.toc[2].title)
+    XCTAssertEqual(try XCTUnwrap(info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double), 5, accuracy: 0.001)
+    XCTAssertEqual(oaWriter.stateWrites.last, .paused)
+  }
+
+  /// A rate change from the lock screen or CarPlay writes without waiting for a tick.
+  func testChangePlaybackRateCommand_writesWithoutATick() throws {
+    player.isPlaying = false
+    player.currentTrackPosition = chapter(1).position + 2
+
+    manager.mediaControlPublisher.commandPublisher.send(.changePlaybackRate(2.0))
+
+    XCTAssertEqual(writer.infoWrites.count, 1)
+    let rate = try XCTUnwrap(writer.infoWrites.last??[MPNowPlayingInfoPropertyDefaultPlaybackRate] as? Float)
+    XCTAssertEqual(rate, PlaybackRate.convert(rate: .doubleTime), accuracy: 0.001)
+  }
+
+  /// `.positionUpdated` keeps the cadence of the timer it replaced: once per
+  /// 2 s of ticks while the app is active.
+  func testPositionTicks_whilePlaying_publishPositionUpdatedOncePerInterval() {
+    player.isPlaying = true
+    var published = 0
+    let cancellable = manager.statePublisher.sink { state in
+      if case .positionUpdated = state { published += 1 }
+    }
+    defer { cancellable.cancel() }
+
+    for index in 0...16 {
+      tick(chapter(0).position + 1, at: 1_000 + Double(index) * 0.25)
+    }
+
+    XCTAssertEqual(published, 3)
+  }
+
+  func testPositionTicks_whilePaused_publishNoPositionUpdated() {
+    player.isPlaying = false
+    var published = 0
+    let cancellable = manager.statePublisher.sink { state in
+      if case .positionUpdated = state { published += 1 }
+    }
+    defer { cancellable.cancel() }
+
+    tick(chapter(0).position + 1, at: 1_000)
+    tick(chapter(0).position + 1, at: 1_003)
+
+    XCTAssertEqual(published, 0)
+  }
+
+  /// With no ticks, nothing runs: no timer reads the player while it is paused.
+  func testPaused_withoutTicks_nothingReadsThePlayer() throws {
+    try makeManager(playerType: ThreadRecordingPlayerMock.self)
+    let recorder = try XCTUnwrap(player as? ThreadRecordingPlayerMock)
+    recorder.isPlaying = false
+    // Let init-time download events, which read the player once, settle first.
+    settleRunLoop()
+    recorder.resetReads()
+
+    let waited = expectation(description: "waited past the old timer intervals")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { waited.fulfill() }
+    wait(for: [waited], timeout: 5)
+
+    XCTAssertEqual(recorder.reads.total, 0)
+    XCTAssertTrue(writer.infoWrites.isEmpty)
+  }
+
+  /// The snapshot's time left equals the duration less `chapterOffset(for:)`,
+  /// the computation Now Playing used before, on every fixture.
+  func testSnapshotTimeLeft_matchesChapterOffsetComputation_acrossFixtures() throws {
+    for fixture in ManifestJSON.allCases {
+      let manifest = try Manifest.from(jsonFileName: fixture.rawValue, bundle: Bundle(for: type(of: self)))
+      guard let audiobook = OpenAccessAudiobook(manifest: manifest, bookIdentifier: "time-left-\(fixture.rawValue)", decryptor: nil, token: nil) else { continue }
+      let fixtureManager = DefaultAudiobookManager(
+        metadata: AudiobookMetadata(title: "Time Left", authors: ["A"]),
+        audiobook: audiobook,
+        networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+      )
+      let toc = fixtureManager.tableOfContents
+      for chapter in toc.toc {
+        let duration = chapter.duration ?? chapter.position.track.duration
+        for offset in [0, duration / 2, duration, duration + 100] {
+          let position = TrackPosition(track: chapter.position.track, timestamp: chapter.position.timestamp + offset, tracks: toc.tracks)
+          guard let resolved = try? toc.chapter(forPosition: position),
+                let elapsed = try? toc.chapterOffset(for: position) else { continue }
+          let expected = max((resolved.duration ?? position.track.duration) - elapsed, 0)
+
+          let snapshot = fixtureManager.snapshot(for: position)
+
+          XCTAssertEqual(snapshot.chapter?.id, resolved.id, "\(fixture.rawValue) '\(chapter.title)' +\(offset)")
+          XCTAssertEqual(snapshot.timeLeft, expected, accuracy: 0.0001, "\(fixture.rawValue) '\(chapter.title)' +\(offset)")
+        }
+      }
+    }
+  }
+}
+
+/// Completes every seek at once with `seekResult`, without an AVQueuePlayer queue.
+final class SeekStubOpenAccessPlayer: OpenAccessPlayer {
+  var seekResult: TrackPosition?
+
+  override public func seekTo(position: TrackPosition, completion: ((TrackPosition?) -> Void)?) {
+    completion?(seekResult)
+  }
+
+  override func configurePlayer() {}
+  override func addPlayerObservers() {}
 }

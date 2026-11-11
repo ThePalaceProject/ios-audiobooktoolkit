@@ -5,6 +5,7 @@
 //  Regression coverage for PP-4156 — download indicator visibility.
 //
 
+import AVFoundation
 import XCTest
 @testable import PalaceAudiobookToolkit
 
@@ -610,5 +611,196 @@ final class AudiobookPlaybackModelAutosaveTests: XCTestCase {
     let saved = try XCTUnwrap(h.spy.savedPositions.first,
       "the first tick after the window is already due and must write")
     XCTAssertEqual(saved.timestamp, 20.25, accuracy: 0.001)
+  }
+}
+
+// MARK: - Play state without a poll
+
+/// The model follows player events and ticks instead of a twice-a-second poll
+/// (PP-5504): nothing runs while paused, and a stall shows as ticks stopping.
+@MainActor
+final class AudiobookPlaybackModelPlayStateTests: XCTestCase {
+  private var player: ThreadRecordingPlayerMock!
+  private var model: AudiobookPlaybackModel!
+  private var wallNow = Date()
+
+  override func setUp() async throws {
+    try makeModel()
+  }
+
+  override func tearDown() async throws {
+    model?.stop()
+    model = nil
+    player = nil
+  }
+
+  private func makeModel() throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(OpenAccessAudiobook(manifest: manifest, bookIdentifier: "play-state", decryptor: nil, token: nil))
+    player = ThreadRecordingPlayerMock(tableOfContents: audiobook.tableOfContents)
+    player.isLoaded = true
+    audiobook.player = player
+    let manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "Play State", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    manager.nowPlayingWriter = nil
+    model = AudiobookPlaybackModel(audiobookManager: manager)
+    // Past the open's watch window, so only the events under test start a watch.
+    wallNow = Date().addingTimeInterval(100)
+    model.wallClock = { [unowned self] in wallNow }
+  }
+
+  private var position: TrackPosition {
+    let tracks = model.audiobookManager.audiobook.tableOfContents
+    return TrackPosition(track: tracks.allTracks[0], timestamp: 5, tracks: tracks.tracks)
+  }
+
+  private func wait(_ seconds: TimeInterval) {
+    let waited = expectation(description: "waited \(seconds)s")
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { waited.fulfill() }
+    wait(for: [waited], timeout: seconds + 5)
+  }
+
+  private func startPlaying() {
+    player.isPlaying = true
+    player.playbackStatePublisher.send(.started(position))
+    wait(0.1)
+  }
+
+  func test_pausedAndLoaded_nothingReadsThePlayerOnceTheOpenSettles() {
+    player.isPlaying = false
+    wait(0.7)
+    player.resetReads()
+
+    wait(1.2)
+
+    XCTAssertEqual(player.reads.total, 0)
+    XCTAssertFalse(model.isWatchingForLoading)
+    XCTAssertFalse(model.isWatchingForStall)
+  }
+
+  func test_stoppedEvent_showsPausedAtOnce() {
+    startPlaying()
+    XCTAssertTrue(model.isPlaying, "premise: the start event marked the model playing")
+
+    player.isPlaying = false
+    player.playbackStatePublisher.send(.stopped(position))
+    wait(0.1)
+
+    XCTAssertFalse(model.isPlaying)
+    XCTAssertFalse(model.isWatchingForStall)
+  }
+
+  /// AVFoundation pauses the player itself for an interruption and sends no
+  /// state event, so the interruption notice is what updates the button.
+  func test_audioInterruption_whilePlaying_showsPausedAtOnce() {
+    startPlaying()
+    player.isPlaying = false
+
+    NotificationCenter.default.post(
+      name: AVAudioSession.interruptionNotification,
+      object: nil,
+      userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue]
+    )
+    wait(0.1)
+
+    XCTAssertFalse(model.isPlaying)
+  }
+
+  /// A stop inside a skip's settling window is held off, then applied when the
+  /// window ends.
+  func test_stoppedEvent_insideASkipWindow_isAppliedWhenTheWindowEnds() {
+    model.wallClock = { Date() }
+    startPlaying()
+    model.skipForward()
+    player.isPlaying = false
+    player.playbackStatePublisher.send(.stopped(position))
+    wait(0.2)
+    XCTAssertTrue(model.isPlaying, "the stop must wait for the skip window")
+
+    wait(1.5)
+
+    XCTAssertFalse(model.isPlaying)
+  }
+
+  /// A stall mid-chapter: the player still reports playing but its ticks stop.
+  /// The stall watch starts the loading watch, which then raises the panel.
+  func test_ticksStop_whilePlaying_raisesTheLoadingPanel() {
+    model.stallWatchDelay = 1.0
+    startPlaying()
+    player._emitPosition(position)
+    wallNow += 3
+    wait(0.7)
+    XCTAssertFalse(model.isWatchingForLoading, "premise: the start event's watch has ended")
+
+    player.isLoaded = false
+    wait(0.6)
+    XCTAssertTrue(model.isWatchingForLoading, "the stall watch must start the loading watch")
+    XCTAssertEqual(model.stallWatchFireCount, 1)
+    wallNow += AudiobookPlaybackModel.loadingPanelDelay + 0.1
+    wait(0.6)
+
+    XCTAssertTrue(model.showsLoadingPanel)
+  }
+
+  /// The loading watch outlives its minimum window while a load is in view.
+  func test_loadInView_keepsTheLoadingWatchRunningPastItsWindow() {
+    player.isLoaded = false
+    wait(1.2)
+
+    XCTAssertTrue(model.isWatchingForLoading)
+  }
+
+  /// A tick after the load ends hides the panel on that tick.
+  func test_tickAfterTheLoadEnds_hidesThePanelAtOnce() {
+    player.isLoaded = false
+    player.playbackStatePublisher.send(.stopped(position))
+    wait(0.1)
+    wallNow += AudiobookPlaybackModel.loadingPanelDelay + 0.1
+    wait(0.6)
+    XCTAssertTrue(model.showsLoadingPanel, "premise: the panel is up")
+
+    wallNow += AudiobookPlaybackModel.loadingPanelMinimumVisible + 0.1
+    player.isLoaded = true
+    player._emitPosition(position)
+    wait(0.02)
+
+    XCTAssertFalse(model.showsLoadingPanel)
+  }
+
+  /// Play state syncs again from the instant the play/pause window ends.
+  func test_tickAtTheEndOfThePlayPauseWindow_syncsPlayState() {
+    startPlaying()
+    model.playPause()
+    XCTAssertFalse(model.isPlaying, "premise: the tap paused")
+    player.isPlaying = true
+
+    wallNow += 1.0
+    player._emitPosition(position)
+    wait(0.02)
+
+    XCTAssertTrue(model.isPlaying)
+  }
+
+  /// In steady playback each tick moves the stall deadline, so the watch never fires.
+  func test_steadyTicks_whilePlaying_neverStartTheLoadingWatch() {
+    model.stallWatchDelay = 1.0
+    startPlaying()
+    player._emitPosition(position)
+    wallNow += 3
+    wait(0.6)
+    XCTAssertFalse(model.isWatchingForLoading, "premise: the start event's watch has ended")
+
+    // Two seconds of ticks, twice the stall delay.
+    for _ in 0..<8 {
+      player._emitPosition(position)
+      wait(0.25)
+    }
+
+    XCTAssertFalse(model.isWatchingForLoading)
+    XCTAssertTrue(model.isWatchingForStall)
+    XCTAssertEqual(model.stallWatchFireCount, 0, "a tick must move the stall deadline, not queue a callback")
   }
 }
