@@ -96,8 +96,10 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   /// The default-tie-break chapter for `position`, or nil where
   /// `chapter(forPosition:)` throws. Every reader of one position tick asks for
   /// the same position, so the last answer is kept and the tick costs one
-  /// lookup (PP-5504). A position matches on everything the lookup reads from
-  /// it: its track's id and index, its track list and its exact timestamp.
+  /// lookup (PP-5504). The key is the position's track id and index, its track
+  /// list and its exact timestamp. Track durations are not in the key: reading
+  /// an Overdrive track's duration starts its load. So a duration that resolves
+  /// while the position stays the same reaches the answer at the next tick or seek.
   func memoizedChapter(forPosition position: TrackPosition) -> Chapter? {
     guard let lookupMemo else { return try? chapter(forPosition: position) }
     let key = ChapterLookupMemo.Key(position)
