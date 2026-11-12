@@ -740,3 +740,221 @@ final class SeekStubOpenAccessPlayer: OpenAccessPlayer {
   override func configurePlayer() {}
   override func addPlayerObservers() {}
 }
+
+// MARK: - One chapter lookup per tick
+
+/// Drives a production player's position from the test and sends its ticks.
+@MainActor
+protocol TickDrivenPlayer: Player {
+  func move(to position: TrackPosition)
+  func tick(_ position: TrackPosition)
+}
+
+/// The production open-access chapter and offset getters, fed by test ticks.
+final class TickDrivenOpenAccessPlayer: OpenAccessPlayer, TickDrivenPlayer {
+  private let ticks = PassthroughSubject<TrackPosition, Never>()
+  override var positionPublisher: AnyPublisher<TrackPosition, Never> { ticks.eraseToAnyPublisher() }
+  override func configurePlayer() {}
+  override func addPlayerObservers() {}
+
+  func move(to position: TrackPosition) { queuedTrackPosition = position }
+  func tick(_ position: TrackPosition) {
+    move(to: position)
+    ticks.send(position)
+  }
+}
+
+/// The LCP streaming player measured in PP-5504, with its own `currentOffset`.
+final class TickDrivenLCPStreamingPlayer: LCPStreamingPlayer, TickDrivenPlayer {
+  private let ticks = PassthroughSubject<TrackPosition, Never>()
+  override var positionPublisher: AnyPublisher<TrackPosition, Never> { ticks.eraseToAnyPublisher() }
+  override func configurePlayer() {}
+  override func addPlayerObservers() {}
+  override func removePlayerObservers() {}
+
+  func move(to position: TrackPosition) { queuedTrackPosition = position }
+  func tick(_ position: TrackPosition) {
+    move(to: position)
+    ticks.send(position)
+  }
+}
+
+/// The production Findaway chapter getter over a playhead the test sets. The
+/// playhead is overridden whole because the player starts with a queued pause
+/// that only the AudioEngine clears.
+final class TickDrivenFindawayPlayer: FindawayPlayer, TickDrivenPlayer {
+  private let ticks = PassthroughSubject<TrackPosition, Never>()
+  private var engineReading: TrackPosition?
+  override var positionPublisher: AnyPublisher<TrackPosition, Never> { ticks.eraseToAnyPublisher() }
+  override var currentTrackPosition: TrackPosition? { engineReading }
+
+  func move(to position: TrackPosition) { engineReading = position }
+  func tick(_ position: TrackPosition) {
+    move(to: position)
+    ticks.send(position)
+  }
+}
+
+/// Every reader of one position tick — the manager, the playback model and the
+/// values the Palace host reads from them — shares one chapter lookup (PP-5504).
+@MainActor
+final class OneChapterLookupPerTickTests: XCTestCase {
+  private var manager: DefaultAudiobookManager!
+  private var model: AudiobookPlaybackModel!
+  private var player: (any TickDrivenPlayer)!
+
+  override func tearDown() async throws {
+    model = nil
+    manager = nil
+    player = nil
+  }
+
+  private enum PlayerKind { case openAccess, lcpStreaming, findaway }
+
+  private func makeSession(_ kind: PlayerKind, nowPlayingWriter: NowPlayingInfoWriting? = nil) throws {
+    let manifest = try Manifest.from(jsonFileName: "alice_manifest", bundle: Bundle(for: type(of: self)))
+    let audiobook = try XCTUnwrap(OpenAccessAudiobook(manifest: manifest, bookIdentifier: "one-lookup", decryptor: nil, token: nil))
+    switch kind {
+    case .openAccess:
+      player = TickDrivenOpenAccessPlayer(tableOfContents: audiobook.tableOfContents)
+    case .lcpStreaming:
+      player = TickDrivenLCPStreamingPlayer(tableOfContents: audiobook.tableOfContents, drmDecryptor: nil)
+    case .findaway:
+      player = TickDrivenFindawayPlayer(tableOfContents: audiobook.tableOfContents)
+    }
+    audiobook.player = player
+    manager = DefaultAudiobookManager(
+      metadata: AudiobookMetadata(title: "One Lookup", authors: ["A"]),
+      audiobook: audiobook,
+      networkService: DefaultAudiobookNetworkService(tracks: audiobook.tableOfContents.allTracks)
+    )
+    manager.nowPlayingWriter = nowPlayingWriter
+    model = AudiobookPlaybackModel(audiobookManager: manager, loadWatchTicks: { Empty().eraseToAnyPublisher() })
+  }
+
+  private var toc: AudiobookTableOfContents { manager.tableOfContents }
+  private func chapter(_ index: Int) -> Chapter { toc.toc[index] }
+
+  private func drainMainQueue() {
+    let drained = expectation(description: "main queue drained")
+    DispatchQueue.main.async { drained.fulfill() }
+    wait(for: [drained], timeout: 2)
+  }
+
+  /// Sends a tick, lets every subscriber run, then reads what the Palace host
+  /// reads on a tick: the presenter's chapter values and the session manager's
+  /// snapshot. Returns the lookups the whole tick cost.
+  @discardableResult
+  private func tickAndReadLikeTheHost(_ position: TrackPosition) -> Int {
+    let before = toc.chapterLookupCount
+    player.tick(position)
+    drainMainQueue()
+    _ = model.chapterPlayheadOffset
+    _ = model.chapterTimeLeft
+    _ = model.currentChapterTitle
+    _ = manager.playbackSnapshot
+    return toc.chapterLookupCount - before
+  }
+
+  func testPositionTick_openAccess_hostReadsCostOneChapterLookup() throws {
+    try makeSession(.openAccess)
+
+    let costs = (1...5).map { tickAndReadLikeTheHost(chapter(1).position + Double($0)) }
+
+    XCTAssertEqual(costs, [1, 1, 1, 1, 1])
+  }
+
+  func testPositionTick_lcpStreaming_hostReadsCostOneChapterLookup() throws {
+    try makeSession(.lcpStreaming)
+
+    let costs = (1...5).map { tickAndReadLikeTheHost(chapter(1).position + Double($0)) }
+
+    XCTAssertEqual(costs, [1, 1, 1, 1, 1])
+  }
+
+  func testPositionTick_findaway_hostReadsCostOneChapterLookup() throws {
+    try makeSession(.findaway)
+
+    let costs = (1...5).map { tickAndReadLikeTheHost(chapter(1).position + Double($0)) }
+
+    XCTAssertEqual(costs, [1, 1, 1, 1, 1])
+  }
+
+  /// A Findaway playhead that moves without a tick is read where it now is.
+  func testFindaway_playheadMovesWithoutTick_currentChapterFollowsIt() throws {
+    try makeSession(.findaway)
+    tickAndReadLikeTheHost(chapter(1).position + 4)
+
+    player.move(to: chapter(3).position + 2)
+
+    XCTAssertEqual(manager.currentChapter?.id, chapter(3).id)
+  }
+
+  /// With the toolkit writing Now Playing, its own snapshot shares the lookup too.
+  func testPositionTick_withNowPlayingWriter_stillCostsOneChapterLookup() throws {
+    try makeSession(.lcpStreaming, nowPlayingWriter: NowPlayingWriterSpy())
+
+    XCTAssertEqual(tickAndReadLikeTheHost(chapter(2).position + 3), 1)
+  }
+
+  /// A tick into the next chapter moves every reader to it.
+  func testTickIntoNextChapter_everyReaderReportsTheNewChapter() throws {
+    try makeSession(.lcpStreaming)
+    tickAndReadLikeTheHost(chapter(1).position + 4)
+
+    let next = chapter(2)
+    tickAndReadLikeTheHost(next.position + 7)
+
+    let duration = try XCTUnwrap(next.duration)
+    XCTAssertEqual(model.currentChapterTitle, next.title)
+    XCTAssertEqual(manager.currentChapter?.id, next.id)
+    XCTAssertEqual(manager.playbackSnapshot.chapter?.id, next.id)
+    XCTAssertEqual(model.chapterPlayheadOffset, 7, accuracy: 0.0001)
+    XCTAssertEqual(model.chapterTimeLeft, duration - 7, accuracy: 0.0001)
+    XCTAssertEqual(model.playbackProgress, 7 / duration, accuracy: 0.0001)
+  }
+
+  /// A seek moves the player without a tick; a read then follows the player,
+  /// not the chapter the last tick resolved.
+  func testSeekWithoutTick_readsFollowThePlayersNewPosition() throws {
+    try makeSession(.openAccess)
+    tickAndReadLikeTheHost(chapter(1).position + 4)
+
+    let target = chapter(3)
+    player.move(to: target.position + 2)
+
+    XCTAssertEqual(manager.currentChapter?.id, target.id)
+    XCTAssertEqual(manager.playbackSnapshot.chapter?.id, target.id)
+    XCTAssertEqual(manager.currentOffset, 2, accuracy: 0.0001)
+    XCTAssertEqual(manager.currentDuration, try XCTUnwrap(target.duration), accuracy: 0.0001)
+  }
+
+  /// Before any tick, a read resolves the player's position itself.
+  func testReadBeforeAnyTick_resolvesThePlayersPosition() throws {
+    try makeSession(.lcpStreaming)
+    let target = chapter(4)
+
+    player.move(to: target.position + 1)
+
+    XCTAssertEqual(manager.currentChapter?.id, target.id)
+    XCTAssertEqual(manager.playbackSnapshot.chapter?.id, target.id)
+    XCTAssertEqual(manager.playbackSnapshot.chapterOffset, 1, accuracy: 0.0001)
+  }
+
+  /// A tick exactly on a boundary belongs to the chapter that begins there, for
+  /// every reader, and the boundary still resolves to the chapter ending there
+  /// for the `.completed` tie-break after the tick filled the memo.
+  func testTickOnChapterBoundary_readersReportTheChapterThatBegins() throws {
+    try makeSession(.lcpStreaming)
+    let ending = chapter(2)
+    let beginning = chapter(3)
+    let boundary = beginning.position
+
+    tickAndReadLikeTheHost(boundary)
+
+    XCTAssertEqual(model.currentChapterTitle, beginning.title)
+    XCTAssertEqual(manager.currentChapter?.id, beginning.id)
+    XCTAssertEqual(model.chapterPlayheadOffset, 0, accuracy: 0.0001)
+    XCTAssertEqual(try toc.chapter(forPosition: boundary, preferChapterEndingHere: true).id, ending.id)
+  }
+}

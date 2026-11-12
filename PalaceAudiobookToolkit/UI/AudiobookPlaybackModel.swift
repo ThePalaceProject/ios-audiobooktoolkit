@@ -401,7 +401,7 @@ public class AudiobookPlaybackModel: ObservableObject {
   /// so it moves with the patron rather than with the audio.
   public var currentChapterTitle: String {
     if let currentLocation,
-       let title = try? audiobookManager.audiobook.tableOfContents.chapter(forPosition: currentLocation).title
+       let title = audiobookManager.audiobook.tableOfContents.memoizedChapter(forPosition: currentLocation)?.title
     {
       title
     } else if let title = audiobookManager.audiobook.tableOfContents.toc.first?.title, !title.isEmpty {
