@@ -10,6 +10,7 @@ Android's builds handle Findaway.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 
 import yaml
@@ -27,9 +28,13 @@ FORK = (
 )
 
 
-def _jobs() -> dict:
+def _doc() -> dict:
     with open(WORKFLOW) as f:
-        return yaml.safe_load(f)["jobs"]
+        return yaml.safe_load(f)
+
+
+def _jobs() -> dict:
+    return _doc()["jobs"]
 
 
 def _normalise(expr) -> str:
@@ -62,3 +67,25 @@ def test_fork_pull_requests_get_a_visible_skip_notice():
     ]
     assert len(notices) == 1
     assert not _fetches_audioengine(notices[0])
+
+
+
+def _runs_for_base(pr: dict, base: str) -> bool:
+    if "branches" in pr:
+        return any(fnmatch.fnmatchcase(base, p) for p in pr["branches"])
+    if "branches-ignore" in pr:
+        return not any(fnmatch.fnmatchcase(base, p) for p in pr["branches-ignore"])
+    return True
+
+
+def test_pull_requests_into_feature_branches_skip_the_macos_job():
+    # PyYAML reads the bare key `on` as True. A feature branch collects several
+    # PRs and runs this job once, on its own PR into main.
+    pr = _doc()[True]["pull_request"]
+    assert not _runs_for_base(pr, "feature/PP-1-x")
+
+
+def test_pull_requests_into_every_other_base_run_the_macos_job():
+    pr = _doc()[True]["pull_request"]
+    for base in ("main", "release/3.5.0", "hotfix/3.4.1-x", "fix/PP-1-y", "feat/x"):
+        assert _runs_for_base(pr, base), f"a PR into {base} would not run the tests"
