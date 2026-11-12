@@ -69,9 +69,23 @@ def test_fork_pull_requests_get_a_visible_skip_notice():
     assert not _fetches_audioengine(notices[0])
 
 
+
+def _runs_for_base(pr: dict, base: str) -> bool:
+    if "branches" in pr:
+        return any(fnmatch.fnmatchcase(base, p) for p in pr["branches"])
+    if "branches-ignore" in pr:
+        return not any(fnmatch.fnmatchcase(base, p) for p in pr["branches-ignore"])
+    return True
+
+
 def test_pull_requests_into_feature_branches_skip_the_macos_job():
     # PyYAML reads the bare key `on` as True. A feature branch collects several
     # PRs and runs this job once, on its own PR into main.
-    branches = _doc()[True]["pull_request"]["branches"]
-    assert "main" in branches
-    assert not any(fnmatch.fnmatchcase("feature/PP-1-x", b) for b in branches)
+    pr = _doc()[True]["pull_request"]
+    assert not _runs_for_base(pr, "feature/PP-1-x")
+
+
+def test_pull_requests_into_every_other_base_run_the_macos_job():
+    pr = _doc()[True]["pull_request"]
+    for base in ("main", "release/3.5.0", "hotfix/3.4.1-x", "fix/PP-1-y", "feat/x"):
+        assert _runs_for_base(pr, base), f"a PR into {base} would not run the tests"
