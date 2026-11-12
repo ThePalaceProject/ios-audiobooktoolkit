@@ -205,7 +205,7 @@ class FindawayPlayer: NSObject, Player {
       return nil
     }
 
-    return try? tableOfContents.chapter(forPosition: currentTrackPosition)
+    return tableOfContents.memoizedChapter(forPosition: currentTrackPosition)
   }
 
   // MARK: - Fast UI Position Updates

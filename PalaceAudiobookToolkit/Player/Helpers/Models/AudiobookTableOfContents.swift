@@ -27,10 +27,16 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
   /// to the linear scan rather than answer from a stale index. The index is not
   /// rebuilt here because building the list mutates it once per chapter.
   public var toc: [Chapter] {
-    didSet { chapterIndex = nil }
+    didSet {
+      chapterIndex = nil
+      lookupMemo = nil
+    }
   }
 
   private var chapterIndex: ChapterIndex?
+  /// Built with the index and dropped with it, so a copy whose chapter list
+  /// changes never answers from the memo its original filled.
+  private var lookupMemo: ChapterLookupMemo?
 
   var count: Int {
     toc.count
@@ -77,6 +83,32 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
 
   mutating func rebuildChapterIndex() {
     chapterIndex = ChapterIndex(toc: toc)
+    lookupMemo = ChapterLookupMemo()
+  }
+
+  #if DEBUG
+  /// Calls of `chapter(forPosition:)` on this list and its copies. Read by tests.
+  var chapterLookupCount: Int {
+    lookupMemo?.lookups.value ?? 0
+  }
+  #endif
+
+  /// The default-tie-break chapter for `position`, or nil where
+  /// `chapter(forPosition:)` throws. Every reader of one position tick asks for
+  /// the same position, so the last answer is kept and the tick costs one
+  /// lookup (PP-5504). The key is the position's track id and index, its track
+  /// list and its exact timestamp. Track durations are not in the key: reading
+  /// an Overdrive track's duration starts its load. So a duration that resolves
+  /// while the position stays the same reaches the answer at the next tick or seek.
+  func memoizedChapter(forPosition position: TrackPosition) -> Chapter? {
+    guard let lookupMemo else { return try? chapter(forPosition: position) }
+    let key = ChapterLookupMemo.Key(position)
+    if let last = lookupMemo.last.value, last.key == key {
+      return last.chapter
+    }
+    let chapter = try? chapter(forPosition: position)
+    lookupMemo.last.value = ChapterLookupMemo.Entry(key: key, chapter: chapter)
+    return chapter
   }
 
   var isChapterLookupIndexed: Bool {
@@ -387,6 +419,9 @@ public struct AudiobookTableOfContents: AudiobookTableOfContentsProtocol {
     forPosition position: TrackPosition,
     preferChapterEndingHere: Bool = false
   ) throws -> Chapter {
+    #if DEBUG
+    lookupMemo?.lookups.withValue { $0 += 1 }
+    #endif
     if !preferChapterEndingHere, let chapterIndex {
       switch chapterIndex.candidate(for: position) {
       case let .chapter(candidate):
@@ -602,6 +637,36 @@ struct ChapterIndex {
     }
     return low == 0 ? .noneStartsAtOrBefore : .chapter(low - 1)
   }
+}
+
+// MARK: - ChapterLookupMemo
+
+/// The last position `memoizedChapter(forPosition:)` resolved. A reference, so
+/// the player's and the audiobook's copies of one list share it.
+final class ChapterLookupMemo: Sendable {
+  struct Key: Equatable, Sendable {
+    let trackID: String
+    let trackIndex: Int
+    let tracks: ObjectIdentifier
+    let timestamp: Double
+
+    init(_ position: TrackPosition) {
+      trackID = position.track.id
+      trackIndex = position.track.index
+      tracks = ObjectIdentifier(position.tracks)
+      timestamp = position.timestamp
+    }
+  }
+
+  struct Entry: Sendable {
+    let key: Key
+    let chapter: Chapter?
+  }
+
+  let last = LockIsolated<Entry?>(nil)
+  #if DEBUG
+  let lookups = LockIsolated(0)
+  #endif
 }
 
 // MARK: - ChapterError

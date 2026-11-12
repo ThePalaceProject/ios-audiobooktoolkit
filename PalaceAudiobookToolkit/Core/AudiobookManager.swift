@@ -437,7 +437,7 @@ public final class DefaultAudiobookManager: NSObject, AudiobookManager {
   /// Resolves the chapter for a position. Tests replace it to count lookups.
   lazy var resolveChapter: (TrackPosition) -> Chapter? = { [weak self] position in
     guard let self else { return nil }
-    return try? tableOfContents.chapter(forPosition: position)
+    return tableOfContents.memoizedChapter(forPosition: position)
   }
 
   /// Monotonic clock for the tick-driven cadences. Replaced by tests.

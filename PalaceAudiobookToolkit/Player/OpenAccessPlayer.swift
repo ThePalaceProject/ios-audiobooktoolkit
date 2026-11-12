@@ -109,7 +109,7 @@ class OpenAccessPlayer: NSObject, Player {
       return nil
     }
 
-    return try? tableOfContents.chapter(forPosition: currentTrackPosition)
+    return tableOfContents.memoizedChapter(forPosition: currentTrackPosition)
   }
 
   var currentTrackPosition: TrackPosition? {

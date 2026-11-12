@@ -454,6 +454,102 @@ final class ChapterLookupIndexTests: XCTestCase {
     }
   }
 
+  // MARK: - Memoized lookup
+
+  /// The memo answers what the lookup answers, whatever order positions are
+  /// asked in: repeats, back-and-forth, and equal timestamps on different tracks.
+  func testMemoizedLookup_matchesLookup_acrossFixtures_inAnyOrder() throws {
+    var comparisons = 0
+    for manifestJSON in ManifestJSON.allCases {
+      let toc = try Self.makeTOC(manifestJSON)
+      let probes = Self.probePositions(toc)
+      let byTimestamp = probes.sorted { $0.timestamp < $1.timestamp }
+      for order in [probes, byTimestamp] {
+        var previous: TrackPosition?
+        for position in order {
+          for asked in [position, previous ?? position, position] {
+            let expected = try? toc.chapter(forPosition: asked)
+            XCTAssertEqual(
+              toc.memoizedChapter(forPosition: asked)?.id, expected?.id,
+              "\(manifestJSON.rawValue) track \(asked.track.index) @ \(asked.timestamp)"
+            )
+            comparisons += 1
+          }
+          previous = position
+        }
+      }
+    }
+    XCTAssertGreaterThan(comparisons, 10_000)
+  }
+
+  /// Asking for the position last asked costs no lookup; a different track or
+  /// timestamp costs one.
+  func testMemoizedLookup_looksUpOnlyWhenThePositionChanges() throws {
+    let toc = try Self.makeTOC(.alice)
+    let first = toc.toc[1].position + 5
+    let otherTrack = TrackPosition(track: toc.toc[2].position.track, timestamp: first.timestamp, tracks: toc.tracks)
+    let otherTime = first + 1
+
+    let before = toc.chapterLookupCount
+    _ = toc.memoizedChapter(forPosition: first)
+    _ = toc.memoizedChapter(forPosition: first)
+    let afterRepeat = toc.chapterLookupCount
+    let onOtherTrack = toc.memoizedChapter(forPosition: otherTrack)
+    let atOtherTime = toc.memoizedChapter(forPosition: otherTime)
+
+    XCTAssertEqual(afterRepeat - before, 1)
+    XCTAssertEqual(toc.chapterLookupCount - before, 3)
+    XCTAssertEqual(onOtherTrack?.id, toc.toc[2].id)
+    XCTAssertEqual(atOtherTime?.id, toc.toc[1].id)
+  }
+
+  /// A track that shares another's key under a different index, or a position
+  /// on another track list, is a different question from the memo's last one.
+  func testMemoizedLookup_sameKeyOtherIndexOrTrackList_matchesLookup() throws {
+    let toc = try Self.makeTOC(.alice)
+    let real = toc.toc[4].position + 1
+    let impostor = try Self.makeTrack(like: real.track, in: toc, index: 0, key: real.track.key)
+    let onImpostor = TrackPosition(track: impostor, timestamp: real.timestamp, tracks: real.tracks)
+    let otherList = try Self.makeTOC(.alice).tracks
+    let onOtherList = TrackPosition(track: real.track, timestamp: real.timestamp, tracks: otherList)
+
+    for asked in [real, onImpostor, real, onOtherList, real] {
+      let before = toc.chapterLookupCount
+      let answer = toc.memoizedChapter(forPosition: asked)
+      XCTAssertEqual(toc.chapterLookupCount - before, 1, "track index \(asked.track.index)")
+      XCTAssertEqual(answer?.id, (try? toc.chapter(forPosition: asked))?.id)
+    }
+  }
+
+  /// A copy whose list changes answers from its new list, not from the memo the
+  /// original filled; the original keeps its own answer.
+  func testMemoizedLookup_afterEditingACopy_followsEachCopysList() throws {
+    let original = try Self.makeTOC(.alice)
+    let probe = original.toc[3].position + 1
+    XCTAssertEqual(original.memoizedChapter(forPosition: probe)?.id, original.toc[3].id)
+
+    var edited = original
+    edited.toc.remove(at: 3)
+    let expected = try Self.referenceChapter(in: edited.toc, forPosition: probe, preferChapterEndingHere: false)
+
+    XCTAssertNotEqual(expected.id, original.toc[3].id)
+    XCTAssertEqual(edited.memoizedChapter(forPosition: probe)?.id, expected.id)
+    edited.rebuildChapterIndex()
+    XCTAssertEqual(edited.memoizedChapter(forPosition: probe)?.id, expected.id)
+    XCTAssertEqual(original.memoizedChapter(forPosition: probe)?.id, original.toc[3].id)
+  }
+
+  /// A position with no chapter stays nil when asked again.
+  func testMemoizedLookup_forEmptyList_isNilEveryTime() throws {
+    var toc = try Self.makeTOC(.alice)
+    let probe = toc.toc[0].position
+    toc.toc = []
+    toc.rebuildChapterIndex()
+
+    XCTAssertNil(toc.memoizedChapter(forPosition: probe))
+    XCTAssertNil(toc.memoizedChapter(forPosition: probe))
+  }
+
   // MARK: - Helpers
 
   private static func makeTrack(like track: any Track, in toc: AudiobookTableOfContents, index: Int, key: String) throws -> any Track {
