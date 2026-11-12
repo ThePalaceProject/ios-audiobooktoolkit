@@ -1,5 +1,6 @@
-# Builds the framework and runs the PalaceAudiobookToolkitTests suite on every
-# pull request. This is the "stage 2" that checks.yml describes.
+# Builds the framework and runs the PalaceAudiobookToolkitTests suite on pull
+# requests into main, release/** and hotfix/**. This is the "stage 2" that
+# checks.yml describes.
 #
 # The repository builds from a checkout of itself since PP-4953 vendored
 # PalaceUIKit. The one input from outside it is Findaway's
@@ -18,6 +19,9 @@ name: tests
 
 on:
   pull_request:
+    # Pull requests into a feature branch skip this macOS job; checks.yml still
+    # runs on them, and the feature branch's own PR into main runs this.
+    branches: [main, 'release/**', 'hotfix/**']
     paths-ignore:
       - '**.md'
       - 'docs/**'

@@ -10,6 +10,7 @@ Android's builds handle Findaway.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 
 import yaml
@@ -27,9 +28,13 @@ FORK = (
 )
 
 
-def _jobs() -> dict:
+def _doc() -> dict:
     with open(WORKFLOW) as f:
-        return yaml.safe_load(f)["jobs"]
+        return yaml.safe_load(f)
+
+
+def _jobs() -> dict:
+    return _doc()["jobs"]
 
 
 def _normalise(expr) -> str:
@@ -62,3 +67,11 @@ def test_fork_pull_requests_get_a_visible_skip_notice():
     ]
     assert len(notices) == 1
     assert not _fetches_audioengine(notices[0])
+
+
+def test_pull_requests_into_feature_branches_skip_the_macos_job():
+    # PyYAML reads the bare key `on` as True. A feature branch collects several
+    # PRs and runs this job once, on its own PR into main.
+    branches = _doc()[True]["pull_request"]["branches"]
+    assert "main" in branches
+    assert not any(fnmatch.fnmatchcase("feature/PP-1-x", b) for b in branches)
