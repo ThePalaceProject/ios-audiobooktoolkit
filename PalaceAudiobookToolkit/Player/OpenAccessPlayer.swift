@@ -656,6 +656,38 @@ class OpenAccessPlayer: NSObject, Player {
     return Array(allTracks[range])
   }
 
+  /// How many tracks stay queued behind the one playing.
+  nonisolated static let queueLookahead = 2
+
+  /// Whether a chapter end tops the queue up to `queueLookahead`. A subclass
+  /// that manages its own queue window turns this off.
+  var keepsQueueFilled: Bool { true }
+
+  /// Appends the tracks after the last queued one until `queueLookahead`
+  /// follow `item`, or follow the current item once AVFoundation has already
+  /// moved past `item`. A chapter end seeks rather than rebuilding, so without
+  /// this a book with a chapter per track would play through the window and
+  /// then wait on a cold rebuild.
+  func fillQueue(after item: AVPlayerItem) {
+    guard keepsQueueFilled else { return }
+    let items = avQueuePlayer.items()
+    guard let itemIndex = items.firstIndex(of: item) ?? avQueuePlayer.currentItem.flatMap(items.firstIndex(of:)),
+          let lastKey = items.last?.trackIdentifier
+    else { return }
+
+    let missing = Self.queueLookahead - (items.count - 1 - itemIndex)
+    let allTracks = tableOfContents.allTracks
+    guard missing > 0,
+          let lastTrackIndex = allTracks.firstIndex(where: { $0.key == lastKey })
+    else { return }
+
+    let nextTracks = Array(allTracks.dropFirst(lastTrackIndex + 1).prefix(missing))
+    for newItem in buildPlayerItems(fromTracks: nextTracks) where avQueuePlayer.canInsert(newItem, after: nil) {
+      avQueuePlayer.insert(newItem, after: nil)
+      addEndObserver(for: newItem)
+    }
+  }
+
   public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
     shouldResumePlayback: Bool = true,
@@ -1649,6 +1681,7 @@ extension OpenAccessPlayer {
     }
 
     // Chapter completed - notify and move to next chapter
+    fillQueue(after: endedItem)
     if let completedChapter = currentChapter {
       playbackStatePublisher.send(.completed(completedChapter))
     }

@@ -252,6 +252,30 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     )
   }
 
+  final class QuietLCPStreamingPlayer: LCPStreamingPlayer {
+    override func configurePlayer() {}
+    override func addPlayerObservers() {}
+    override func removePlayerObservers() {}
+  }
+
+  /// LCPStreamingPlayer reaches the base chapter-end handler through `super`,
+  /// which calls `fillQueue(after:)`. The streamed queue holds only the
+  /// chapter being played, so that call must add nothing there.
+  func testLCPStreamingChapterEndDoesNotTopUpTheQueue() throws {
+    let manifest = try Manifest.from(jsonFileName: ManifestJSON.bigFail.rawValue, bundle: Bundle(for: type(of: self)))
+    let tracks = Tracks(manifest: manifest, audiobookID: "queue-continuity-lcp", token: nil)
+    let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+    let player = QuietLCPStreamingPlayer(tableOfContents: toc, drmDecryptor: nil)
+    let playing = AVPlayerItem(url: URL(fileURLWithPath: "/dev/null/3.mp3"))
+    playing.trackIdentifier = toc.allTracks[3].key
+    player.avQueuePlayer.insert(playing, after: nil)
+
+    player.fillQueue(after: playing)
+
+    XCTAssertFalse(player.keepsQueueFilled)
+    XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), [toc.allTracks[3].key])
+  }
+
   /// Delivers the end-of-item notification the way AVFoundation does, to the
   /// player's own observer for that item.
   private func endPlayback(of item: AVPlayerItem) {
