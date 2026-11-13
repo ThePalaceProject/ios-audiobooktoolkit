@@ -664,24 +664,21 @@ class OpenAccessPlayer: NSObject, Player {
   var keepsQueueFilled: Bool { true }
 
   /// Appends the tracks after the last queued one until `queueLookahead`
-  /// follow `item`, or follow the current item once AVFoundation has already
-  /// moved past `item`. A chapter end seeks rather than rebuilding, so without
-  /// this a book with a chapter per track would play through the window and
-  /// then wait on a cold rebuild.
-  func fillQueue(after item: AVPlayerItem) {
-    guard keepsQueueFilled else { return }
+  /// follow the item playing. A chapter end seeks rather than rebuilding, so
+  /// without this a book with a chapter per track would play through the
+  /// window and then wait on a cold rebuild.
+  ///
+  /// `items()` starts with the current item, which at a track end is either
+  /// the item that ended or, once AVFoundation has advanced, the one after it.
+  func fillQueue() {
     let items = avQueuePlayer.items()
-    guard let itemIndex = items.firstIndex(of: item) ?? avQueuePlayer.currentItem.flatMap(items.firstIndex(of:)),
-          let lastKey = items.last?.trackIdentifier
+    let missing = Self.queueLookahead - (items.count - 1)
+    guard keepsQueueFilled, missing > 0,
+          let lastKey = items.last?.trackIdentifier,
+          let lastTrackIndex = tableOfContents.allTracks.firstIndex(where: { $0.key == lastKey })
     else { return }
 
-    let missing = Self.queueLookahead - (items.count - 1 - itemIndex)
-    let allTracks = tableOfContents.allTracks
-    guard missing > 0,
-          let lastTrackIndex = allTracks.firstIndex(where: { $0.key == lastKey })
-    else { return }
-
-    let nextTracks = Array(allTracks.dropFirst(lastTrackIndex + 1).prefix(missing))
+    let nextTracks = Array(tableOfContents.allTracks.dropFirst(lastTrackIndex + 1).prefix(missing))
     for newItem in buildPlayerItems(fromTracks: nextTracks) {
       avQueuePlayer.insert(newItem, after: nil)
       addEndObserver(for: newItem)
@@ -1681,7 +1678,7 @@ extension OpenAccessPlayer {
     }
 
     // Chapter completed - notify and move to next chapter
-    fillQueue(after: endedItem)
+    fillQueue()
     if let completedChapter = currentChapter {
       playbackStatePublisher.send(.completed(completedChapter))
     }

@@ -213,6 +213,10 @@ final class OpenAccessQueueWindowTests: XCTestCase {
         player.avQueuePlayer.items().count, 2,
         "The track after \(index + 1) should already be queued"
       )
+      XCTAssertLessThanOrEqual(
+        player.avQueuePlayer.items().count, 4,
+        "The queue should hold a few tracks, not grow at every chapter end"
+      )
       XCTAssertEqual(player.rebuildCount, 1, "Track \(index + 1) was rebuilt instead of already queued")
     }
   }
@@ -280,7 +284,7 @@ final class OpenAccessQueueWindowTests: XCTestCase {
   }
 
   /// LCPStreamingPlayer reaches the base chapter-end handler through `super`,
-  /// which calls `fillQueue(after:)`. The streamed queue holds only the
+  /// which calls `fillQueue()`. The streamed queue holds only the
   /// chapter being played, so that call must add nothing there.
   func testLCPStreamingChapterEndDoesNotTopUpTheQueue() throws {
     let manifest = try Manifest.from(jsonFileName: ManifestJSON.bigFail.rawValue, bundle: Bundle(for: type(of: self)))
@@ -291,7 +295,7 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     playing.trackIdentifier = toc.allTracks[3].key
     player.avQueuePlayer.insert(playing, after: nil)
 
-    player.fillQueue(after: playing)
+    player.fillQueue()
 
     XCTAssertFalse(player.keepsQueueFilled)
     XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), [toc.allTracks[3].key])
