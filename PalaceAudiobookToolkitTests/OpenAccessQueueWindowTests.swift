@@ -100,6 +100,16 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     XCTAssertEqual(player.builtTrackKeys, firstBuild)
   }
 
+  func testFirstBuildWithoutASavedPositionStartsAtTheFirstTrack() throws {
+    let player = try makePlayer(.anathem)
+    let tracks = player.tableOfContents.allTracks
+
+    player.lastKnownPosition = nil
+    player.buildPlayerQueue()
+
+    XCTAssertEqual(player.builtTrackKeys, tracks[0...4].map(\.key))
+  }
+
   // MARK: - Overdrive
 
   func testOverdriveRebuildStillQueuesEveryTrack() throws {
