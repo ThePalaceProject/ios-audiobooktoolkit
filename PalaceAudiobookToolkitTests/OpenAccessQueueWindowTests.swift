@@ -235,7 +235,10 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     endPlayback(of: last)
 
     XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[15].key)
-    XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), [tracks[15].key, tracks[16].key])
+    XCTAssertEqual(
+      player.avQueuePlayer.items().map(\.trackIdentifier), tracks[15...17].map(\.key),
+      "Moving on to the next chapter should leave two tracks queued behind it"
+    )
     XCTAssertEqual(player.rebuildCount, 1)
   }
 
