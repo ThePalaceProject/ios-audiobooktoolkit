@@ -575,6 +575,11 @@ class LCPStreamingPlayer: OpenAccessPlayer, StreamingCapablePlayer {
     super.removePlayerObservers()
   }
 
+  /// The streamed queue holds only the chapter being played and preloads the
+  /// next one itself (`followingChapterIndex`), so the base class's top-up at a
+  /// chapter end stays off here.
+  override var keepsQueueFilled: Bool { false }
+
   override func buildPlayerQueue() { // no-override-state: the base resets lastKnownPosition to first-track-at-0.0 (OpenAccessPlayer:587); LCP must PRESERVE a restored position, so not assigning it is the correct behaviour here, not a dropped one
     resetPlayerQueue()
     isLoaded = false

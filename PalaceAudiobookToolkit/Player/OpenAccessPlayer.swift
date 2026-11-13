@@ -566,29 +566,12 @@ class OpenAccessPlayer: NSObject, Player {
     resetPlayerQueue()
 
     let allTracks = tableOfContents.allTracks
-    let isOverdrive = tableOfContents.manifest.audiobookType == .overdrive
 
-    let tracksToLoad: [any Track]
-    if isOverdrive {
-      tracksToLoad = allTracks
-      ATLog(.debug, "OpenAccessPlayer: Building full queue for Overdrive - \(allTracks.count) tracks")
-    } else {
-      let windowSize = 5 // Load only 5 tracks at a time for faster initialization
-
-      var currentIndex = 0
-      if let position = lastKnownPosition {
-        currentIndex = allTracks.firstIndex { $0.key == position.track.key } ?? position.track.index
-      }
-
-      let startIndex = max(0, currentIndex - 1)
-      let endIndex = min(allTracks.count - 1, currentIndex + windowSize - 1)
-      tracksToLoad = Array(allTracks[startIndex...endIndex])
-
-      ATLog(
-        .debug,
-        "OpenAccessPlayer: Building queue window - tracks \(startIndex) to \(endIndex) of \(allTracks.count)"
-      )
+    var currentIndex = 0
+    if let position = lastKnownPosition {
+      currentIndex = allTracks.firstIndex { $0.key == position.track.key } ?? position.track.index
     }
+    let tracksToLoad = queueTracks(around: currentIndex)
 
     let playerItems = buildPlayerItems(fromTracks: tracksToLoad)
     if playerItems.isEmpty {
@@ -639,6 +622,72 @@ class OpenAccessPlayer: NSObject, Player {
     isLoaded = true
   }
 
+  /// How many tracks from the target onward a queue build enqueues.
+  nonisolated static let queueWindowSize = 5
+
+  /// The indices a queue build enqueues around `targetIndex`: the track before
+  /// it, then the target and the tracks after it, up to `queueWindowSize`.
+  /// Overdrive books enqueue every track. Nil for a book with no tracks.
+  nonisolated static func queueTrackRange(
+    around targetIndex: Int,
+    trackCount: Int,
+    wholeBook: Bool
+  ) -> ClosedRange<Int>? {
+    guard trackCount > 0 else { return nil }
+    guard !wholeBook else { return 0...(trackCount - 1) }
+    let target = min(max(targetIndex, 0), trackCount - 1)
+    return max(0, target - 1)...min(trackCount - 1, target + queueWindowSize - 1)
+  }
+
+  /// The tracks the first build and every rebuild enqueue, so both hold the
+  /// same few player items rather than one per track in the book.
+  private func queueTracks(around targetIndex: Int) -> [any Track] {
+    let allTracks = tableOfContents.allTracks
+    let isOverdrive = tableOfContents.manifest.audiobookType == .overdrive
+    guard let range = Self.queueTrackRange(
+      around: targetIndex, trackCount: allTracks.count, wholeBook: isOverdrive
+    ) else {
+      return []
+    }
+    ATLog(
+      .debug,
+      "OpenAccessPlayer: Building queue - tracks \(range.lowerBound) to \(range.upperBound) of \(allTracks.count)"
+    )
+    return Array(allTracks[range])
+  }
+
+  /// How many tracks a top-up queues after the current item.
+  nonisolated static let queueLookahead = 2
+
+  /// Whether a chapter end or a jump within the queue tops it up with
+  /// `fillQueue()`. A subclass that manages its own queue window turns this off.
+  var keepsQueueFilled: Bool { true }
+
+  /// Appends the tracks after the last queued one until `queueLookahead`
+  /// follow the current item, which is the first in `items()`.
+  ///
+  /// A chapter end runs this while the ended item is usually still current,
+  /// so once AVFoundation advances at least one track stays queued behind the
+  /// one playing. A jump within the queue runs it after advancing, which
+  /// leaves `queueLookahead` behind the target. Both seek rather than rebuild,
+  /// so without this a book with a chapter per track would play through the
+  /// window and then wait on a cold rebuild.
+  func fillQueue() {
+    guard keepsQueueFilled else { return }
+    let items = avQueuePlayer.items()
+    let missing = Self.queueLookahead - (items.count - 1)
+    guard missing > 0,
+          let lastKey = items.last?.trackIdentifier,
+          let lastTrackIndex = tableOfContents.allTracks.firstIndex(where: { $0.key == lastKey })
+    else { return }
+
+    let nextTracks = Array(tableOfContents.allTracks.dropFirst(lastTrackIndex + 1).prefix(missing))
+    for newItem in buildPlayerItems(fromTracks: nextTracks) {
+      avQueuePlayer.insert(newItem, after: nil)
+      addEndObserver(for: newItem)
+    }
+  }
+
   public func rebuildPlayerQueueAndNavigate(
     to trackPosition: TrackPosition?,
     shouldResumePlayback: Bool = true,
@@ -652,7 +701,11 @@ class OpenAccessPlayer: NSObject, Player {
     }
 
     resetPlayerQueue()
-    let playerItems = buildPlayerItems(fromTracks: tableOfContents.allTracks)
+    // With no target, or one not in the book, the rebuild lands on the first track.
+    let targetTrackIndex = trackPosition.flatMap { position in
+      tableOfContents.allTracks.firstIndex { $0.key == position.track.key }
+    } ?? 0
+    let playerItems = buildPlayerItems(fromTracks: queueTracks(around: targetTrackIndex))
 
     guard !playerItems.isEmpty else {
       ATLog(.error, "OpenAccessPlayer: Failed to build player items for queue rebuild")
@@ -1102,6 +1155,7 @@ class OpenAccessPlayer: NSObject, Player {
         for _ in currentIndex..<index {
           avQueuePlayer.advanceToNextItem()
         }
+        fillQueue()
       }
     }
 
@@ -1628,6 +1682,7 @@ extension OpenAccessPlayer {
     }
 
     // Chapter completed - notify and move to next chapter
+    fillQueue()
     if let completedChapter = currentChapter {
       playbackStatePublisher.send(.completed(completedChapter))
     }
