@@ -123,6 +123,25 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     XCTAssertEqual(player.builtTrackKeys, tracks.map(\.key))
   }
 
+  // MARK: - Window bounds
+
+  func testWindowForABookWithNoTracksIsEmpty() {
+    XCTAssertNil(OpenAccessPlayer.queueTrackRange(around: 0, trackCount: 0, wholeBook: false))
+    XCTAssertNil(OpenAccessPlayer.queueTrackRange(around: 0, trackCount: 0, wholeBook: true))
+  }
+
+  func testWindowForAnIndexPastTheEndEndsAtTheLastTrack() {
+    XCTAssertEqual(OpenAccessPlayer.queueTrackRange(around: 99, trackCount: 10, wholeBook: false), 8...9)
+  }
+
+  func testWindowForANegativeIndexStartsAtTheFirstTrack() {
+    XCTAssertEqual(OpenAccessPlayer.queueTrackRange(around: -3, trackCount: 10, wholeBook: false), 0...4)
+  }
+
+  func testWindowForAOneTrackBookIsThatTrack() {
+    XCTAssertEqual(OpenAccessPlayer.queueTrackRange(around: 0, trackCount: 1, wholeBook: false), 0...0)
+  }
+
   // MARK: - Helpers
 
   private func position(_ track: any Track, in player: OpenAccessPlayer) -> TrackPosition {
