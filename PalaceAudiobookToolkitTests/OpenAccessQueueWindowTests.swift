@@ -152,6 +152,120 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     XCTAssertEqual(OpenAccessPlayer.queueTrackRange(around: 0, trackCount: 1, wholeBook: false), 0...0)
   }
 
+  // MARK: - Continuity at track ends
+
+  /// Navigates the way AVQueuePlayer does once items are ready (advance, then
+  /// land), and counts rebuilds, so a test can tell a queued next track from
+  /// one that had to be rebuilt cold.
+  final class ContinuityPlayer: OpenAccessPlayer {
+    var rebuildCount = 0
+
+    override func configurePlayer() {}
+    override func addPlayerObservers() {}
+
+    override func buildPlayerItems(fromTracks tracks: [any Track]) -> [AVPlayerItem] {
+      tracks.map { track in
+        let item = AVPlayerItem(url: URL(fileURLWithPath: "/dev/null/\(track.index).mp3"))
+        item.trackIdentifier = track.key
+        return item
+      }
+    }
+
+    override func rebuildPlayerQueueAndNavigate(
+      to trackPosition: TrackPosition?,
+      shouldResumePlayback: Bool = true,
+      completion: ((Bool) -> Void)? = nil
+    ) {
+      rebuildCount += 1
+      super.rebuildPlayerQueueAndNavigate(
+        to: trackPosition, shouldResumePlayback: shouldResumePlayback, completion: completion
+      )
+    }
+
+    override func navigateToItem(at index: Int, with timestamp: TimeInterval, completion: ((Bool) -> Void)? = nil) {
+      for _ in 0..<index { avQueuePlayer.advanceToNextItem() }
+      completion?(true)
+    }
+  }
+
+  /// A book with one chapter per track finishes a chapter at every track end,
+  /// and that path seeks rather than rebuilding. The queue must keep the next
+  /// track loaded the whole way, not run dry after the first window.
+  func testChapterEndsAcrossManyTracksNeverEmptyTheQueue() throws {
+    let player = try makeContinuityPlayer(.bigFail)
+    let tracks = player.tableOfContents.allTracks
+    XCTAssertGreaterThanOrEqual(tracks.count, 14)
+
+    player.rebuildPlayerQueueAndNavigate(to: position(tracks[0], in: player))
+    XCTAssertEqual(player.rebuildCount, 1)
+
+    for index in 0..<13 {
+      let ended = try XCTUnwrap(player.avQueuePlayer.currentItem)
+      XCTAssertEqual(ended.trackIdentifier, tracks[index].key)
+
+      endPlayback(of: ended)
+
+      XCTAssertEqual(
+        player.avQueuePlayer.currentItem?.trackIdentifier, tracks[index + 1].key,
+        "Track \(index + 1) should follow track \(index)"
+      )
+      XCTAssertGreaterThanOrEqual(
+        player.avQueuePlayer.items().count, 2,
+        "The track after \(index + 1) should already be queued"
+      )
+      XCTAssertEqual(player.rebuildCount, 1, "Track \(index + 1) was rebuilt instead of already queued")
+    }
+  }
+
+  func testTheLastQueuedTrackEndingPlaysTheNextTrackWithoutARebuild() throws {
+    let player = try makeContinuityPlayer(.bigFail)
+    let tracks = player.tableOfContents.allTracks
+
+    player.rebuildPlayerQueueAndNavigate(to: position(tracks[10], in: player))
+    while player.avQueuePlayer.items().count > 1 {
+      player.avQueuePlayer.advanceToNextItem()
+    }
+    let last = try XCTUnwrap(player.avQueuePlayer.currentItem)
+    XCTAssertEqual(last.trackIdentifier, tracks[14].key)
+
+    endPlayback(of: last)
+
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[15].key)
+    XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), [tracks[15].key, tracks[16].key])
+    XCTAssertEqual(player.rebuildCount, 1)
+  }
+
+  func testSeekingToThePreviousTrackAfterARebuildLandsThere() throws {
+    let player = try makeContinuityPlayer(.bigFail)
+    let tracks = player.tableOfContents.allTracks
+
+    player.rebuildPlayerQueueAndNavigate(to: position(tracks[10], in: player))
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[10].key)
+
+    player.seekTo(position: position(tracks[9], in: player), completion: nil)
+
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[9].key)
+    XCTAssertEqual(
+      player.avQueuePlayer.items().map(\.trackIdentifier),
+      tracks[9...13].map(\.key),
+      "The tracks after the previous one should be queued behind it"
+    )
+  }
+
+  /// Delivers the end-of-item notification the way AVFoundation does, to the
+  /// player's own observer for that item.
+  private func endPlayback(of item: AVPlayerItem) {
+    NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: item)
+  }
+
+  private func makeContinuityPlayer(_ json: ManifestJSON) throws -> ContinuityPlayer {
+    let manifest = try Manifest.from(jsonFileName: json.rawValue, bundle: Bundle(for: type(of: self)))
+    let tracks = Tracks(manifest: manifest, audiobookID: "queue-continuity-\(json.rawValue)", token: nil)
+    let toc = AudiobookTableOfContents(manifest: manifest, tracks: tracks)
+    XCTAssertEqual(toc.toc.count, tracks.count, "Needs one chapter per track")
+    return ContinuityPlayer(tableOfContents: toc)
+  }
+
   // MARK: - Helpers
 
   private func position(_ track: any Track, in player: OpenAccessPlayer) -> TrackPosition {
