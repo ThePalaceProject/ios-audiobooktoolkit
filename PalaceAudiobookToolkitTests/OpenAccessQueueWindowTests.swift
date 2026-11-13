@@ -275,17 +275,48 @@ final class OpenAccessQueueWindowTests: XCTestCase {
       tracks[9...13].map(\.key),
       "The tracks after the previous one should be queued behind it"
     )
+    XCTAssertEqual(player.rebuildCount, 2, "The previous track is not queued, so the skip back rebuilds once")
   }
 
+  /// A jump to the last queued track advances through the queue rather than
+  /// rebuilding, so it has to top the queue up as a chapter end does. Here
+  /// that track then ends with AVFoundation advancing before the end notice.
+  func testAJumpToTheLastQueuedTrackKeepsTheNextTrackQueued() throws {
+    let player = try makeContinuityPlayer(.bigFail)
+    let tracks = player.tableOfContents.allTracks
+
+    player.rebuildPlayerQueueAndNavigate(to: position(tracks[10], in: player))
+    player.seekTo(position: position(tracks[14], in: player), completion: nil)
+
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[14].key)
+    XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), tracks[14...16].map(\.key))
+
+    let ended = try XCTUnwrap(player.avQueuePlayer.currentItem)
+    player.avQueuePlayer.advanceToNextItem()
+    endPlayback(of: ended)
+
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[15].key)
+    XCTAssertGreaterThanOrEqual(player.avQueuePlayer.items().count, 2)
+    XCTAssertEqual(player.rebuildCount, 1, "Track 15 was rebuilt instead of already queued")
+  }
+
+  /// Records where a chapter end sends playback instead of starting it, so
+  /// the queue after the end handler shows only what the handler itself added.
   final class QuietLCPStreamingPlayer: LCPStreamingPlayer {
+    var playRequests: [String] = []
+
     override func configurePlayer() {}
     override func addPlayerObservers() {}
     override func removePlayerObservers() {}
+
+    override public func playCallback(at position: TrackPosition, completion: ((Error?) -> Void)?) {
+      playRequests.append(position.track.key)
+    }
   }
 
-  /// LCPStreamingPlayer reaches the base chapter-end handler through `super`,
-  /// which calls `fillQueue()`. The streamed queue holds only the
-  /// chapter being played, so that call must add nothing there.
+  /// LCPStreamingPlayer hands a chapter end to the base handler through
+  /// `super`, and the base handler tops the queue up. The streamed queue holds
+  /// only the chapter being played, so nothing may be added there.
   func testLCPStreamingChapterEndDoesNotTopUpTheQueue() throws {
     let manifest = try Manifest.from(jsonFileName: ManifestJSON.bigFail.rawValue, bundle: Bundle(for: type(of: self)))
     let tracks = Tracks(manifest: manifest, audiobookID: "queue-continuity-lcp", token: nil)
@@ -295,9 +326,9 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     playing.trackIdentifier = toc.allTracks[3].key
     player.avQueuePlayer.insert(playing, after: nil)
 
-    player.fillQueue()
+    player.playerItemDidReachEnd(Notification(name: .AVPlayerItemDidPlayToEndTime, object: playing))
 
-    XCTAssertFalse(player.keepsQueueFilled)
+    XCTAssertEqual(player.playRequests, [toc.allTracks[4].key], "The chapter end should reach the base handler")
     XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), [toc.allTracks[3].key])
   }
 
