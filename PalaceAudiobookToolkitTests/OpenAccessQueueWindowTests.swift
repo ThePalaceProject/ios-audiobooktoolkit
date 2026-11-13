@@ -235,6 +235,27 @@ final class OpenAccessQueueWindowTests: XCTestCase {
     XCTAssertEqual(player.rebuildCount, 1)
   }
 
+  /// AVFoundation can advance to the next item before the end notice for the
+  /// last one arrives. The top-up then counts from the item now playing.
+  func testAnEndNoticeAfterTheAdvanceStillKeepsTheNextTrackQueued() throws {
+    let player = try makeContinuityPlayer(.bigFail)
+    let tracks = player.tableOfContents.allTracks
+
+    player.rebuildPlayerQueueAndNavigate(to: position(tracks[10], in: player))
+    while player.avQueuePlayer.items().count > 2 {
+      player.avQueuePlayer.advanceToNextItem()
+    }
+    let ended = try XCTUnwrap(player.avQueuePlayer.currentItem)
+    XCTAssertEqual(ended.trackIdentifier, tracks[13].key)
+    player.avQueuePlayer.advanceToNextItem()
+
+    endPlayback(of: ended)
+
+    XCTAssertEqual(player.avQueuePlayer.currentItem?.trackIdentifier, tracks[14].key)
+    XCTAssertEqual(player.avQueuePlayer.items().map(\.trackIdentifier), tracks[14...16].map(\.key))
+    XCTAssertEqual(player.rebuildCount, 1)
+  }
+
   func testSeekingToThePreviousTrackAfterARebuildLandsThere() throws {
     let player = try makeContinuityPlayer(.bigFail)
     let tracks = player.tableOfContents.allTracks

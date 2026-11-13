@@ -682,7 +682,7 @@ class OpenAccessPlayer: NSObject, Player {
     else { return }
 
     let nextTracks = Array(allTracks.dropFirst(lastTrackIndex + 1).prefix(missing))
-    for newItem in buildPlayerItems(fromTracks: nextTracks) where avQueuePlayer.canInsert(newItem, after: nil) {
+    for newItem in buildPlayerItems(fromTracks: nextTracks) {
       avQueuePlayer.insert(newItem, after: nil)
       addEndObserver(for: newItem)
     }
