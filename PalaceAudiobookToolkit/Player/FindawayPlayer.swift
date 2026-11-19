@@ -187,6 +187,25 @@ enum FindawayEngineCommands {
   }
 }
 
+// MARK: - FindawayRateEngine
+
+/// The engine's playback rate. A rate write is not cheap: `setCurrentRate:`
+/// rebuilds a timer inside the SDK, and that rebuild crashes
+/// (`-[FAEPlaybackEngine startTimer:]`) when it overlaps another one.
+protocol FindawayRateEngine {
+  /// Nil when no playback engine exists.
+  var currentRate: Float? { get }
+  func setRate(_ rate: Float)
+}
+
+struct LiveFindawayRateEngine: FindawayRateEngine {
+  var currentRate: Float? { FAEAudioEngine.shared()?.playbackEngine?.currentRate }
+
+  func setRate(_ rate: Float) {
+    FindawayEngineCommands.setRate(rate)
+  }
+}
+
 // MARK: - FindawayPlayer
 
 /// Main-actor isolated explicitly. It was already isolated by its conformance
@@ -225,6 +244,8 @@ class FindawayPlayer: NSObject, Player {
   private var readyForPlayback: Bool = false
   private var queuedPlayerState: PlayerState = .none
   private let audioPlaybackRateIdentifierKey = "audioPlaybackRateKey"
+  private let rateEngine: FindawayRateEngine
+  private let rateDefaults: UserDefaults
   private var audioEngine = FAEAudioEngine.shared()
   private var cancellables: Set<AnyCancellable> = []
 
@@ -339,12 +360,34 @@ class FindawayPlayer: NSObject, Player {
     )
   }
 
-  public init(
+  public convenience init(
     currentPosition: TrackPosition,
     tableOfContents: AudiobookTableOfContents,
     eventHandler: FindawayPlaybackNotificationHandler = DefaultFindawayPlaybackNotificationHandler(),
     databaseVerification: FindawayDatabaseVerification = FindawayDatabaseVerification.shared
   ) {
+    self.init(
+      currentPosition: currentPosition,
+      tableOfContents: tableOfContents,
+      eventHandler: eventHandler,
+      databaseVerification: databaseVerification,
+      rateEngine: LiveFindawayRateEngine(),
+      rateDefaults: .standard
+    )
+  }
+
+  /// The rate seams have no defaults so that a call without them resolves to
+  /// the public initializer above.
+  init(
+    currentPosition: TrackPosition,
+    tableOfContents: AudiobookTableOfContents,
+    eventHandler: FindawayPlaybackNotificationHandler,
+    databaseVerification: FindawayDatabaseVerification,
+    rateEngine: FindawayRateEngine,
+    rateDefaults: UserDefaults
+  ) {
+    self.rateEngine = rateEngine
+    self.rateDefaults = rateDefaults
     isDrmOk = true
     isLoaded = true
     queuesEvents = true
@@ -429,9 +472,9 @@ class FindawayPlayer: NSObject, Player {
 
   var playbackRate: PlaybackRate {
     get {
-      let cachedValue = UserDefaults.standard.double(forKey: audioPlaybackRateIdentifierKey)
+      let cachedValue = rateDefaults.double(forKey: audioPlaybackRateIdentifierKey)
       guard cachedValue != 0 else {
-        if let value = audioEngine?.playbackEngine?.currentRate {
+        if let value = rateEngine.currentRate {
           // PP-4518: snap to the nearest enum step rather than force-unwrap —
           // the Findaway SDK may report a rate that has no exact case (and the
           // rail now spans 0.5×–3.0×, widening the chance of a mismatch).
@@ -441,14 +484,19 @@ class FindawayPlayer: NSObject, Player {
         }
       }
 
-      audioEngine?.playbackEngine?.currentRate = Float(cachedValue)
-      return PlaybackRate.nearest(to: Float(cachedValue))
+      // Restores the saved speed after a load resets the engine, but only on a
+      // mismatch: this getter runs on every now-playing update.
+      let savedRate = Float(cachedValue)
+      if let engineRate = rateEngine.currentRate, abs(engineRate - savedRate) > 0.001 {
+        rateEngine.setRate(savedRate)
+      }
+      return PlaybackRate.nearest(to: savedRate)
     }
 
     set(newRate) {
-      UserDefaults.standard.setValue(PlaybackRate.convert(rate: newRate), forKey: audioPlaybackRateIdentifierKey)
+      rateDefaults.setValue(PlaybackRate.convert(rate: newRate), forKey: audioPlaybackRateIdentifierKey)
       ATLog(.debug, "FindawayPlayer: Setting playback rate to \(PlaybackRate.convert(rate: newRate))")
-      FindawayEngineCommands.setRate(PlaybackRate.convert(rate: newRate))
+      rateEngine.setRate(PlaybackRate.convert(rate: newRate))
     }
   }
 
