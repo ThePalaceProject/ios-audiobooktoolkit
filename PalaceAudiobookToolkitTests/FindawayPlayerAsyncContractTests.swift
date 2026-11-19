@@ -510,7 +510,113 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
                    "Announced position must be the pending start position, not the engine's offset")
   }
 
+  // MARK: - Playback rate writes
+
+  /// The now-playing updates read `playbackRate` about once a second, and each
+  /// engine write rebuilds the SDK timer whose overlap crashes in `startTimer:`.
+  /// A read must not write a rate the engine already has.
+  func testPlaybackRateRead_WhenEngineHasTheSavedRate_DoesNotWriteTheEngine() throws {
+    let engine = SpyRateEngine(currentRate: 1.5)
+    let (player, defaults) = try Self.makeRatePlayer(engine: engine)
+    defaults.set(1.5, forKey: Self.rateKey)
+
+    var reads: [PlaybackRate] = []
+    for _ in 0..<50 { reads.append(player.playbackRate) }
+
+    XCTAssertEqual(engine.writes, [], "Reading the rate must not write it again")
+    XCTAssertEqual(Set(reads), [.oneAndAHalfTime])
+  }
+
+  /// A saved speed must still reach the engine after a load resets it, and
+  /// must reach it once, not on every later read.
+  func testPlaybackRateRead_WhenEngineDiffersFromTheSavedRate_WritesTheSavedRateOnce() throws {
+    let engine = SpyRateEngine(currentRate: 1.0)
+    let (player, defaults) = try Self.makeRatePlayer(engine: engine)
+    defaults.set(1.5, forKey: Self.rateKey)
+
+    let first = player.playbackRate
+    let second = player.playbackRate
+
+    XCTAssertEqual(first, .oneAndAHalfTime)
+    XCTAssertEqual(second, .oneAndAHalfTime)
+    XCTAssertEqual(engine.writes, [1.5], "The saved rate is applied once, then the engine matches")
+  }
+
+  /// With no saved speed the engine's own rate is reported and nothing is written.
+  func testPlaybackRateRead_WhenNothingIsSaved_ReportsTheEngineRateAndWritesNothing() throws {
+    let engine = SpyRateEngine(currentRate: 1.25)
+    let (player, _) = try Self.makeRatePlayer(engine: engine)
+
+    let rate = player.playbackRate
+
+    XCTAssertEqual(rate, .oneAndAQuarterTime)
+    XCTAssertEqual(engine.writes, [])
+  }
+
+  /// Without a playback engine there is nothing to write to.
+  func testPlaybackRateRead_WhenThereIsNoEngine_ReportsTheSavedRateAndWritesNothing() throws {
+    let engine = SpyRateEngine(currentRate: nil)
+    let (player, defaults) = try Self.makeRatePlayer(engine: engine)
+    defaults.set(2.0, forKey: Self.rateKey)
+
+    let rate = player.playbackRate
+
+    XCTAssertEqual(rate, .doubleTime)
+    XCTAssertEqual(engine.writes, [])
+  }
+
+  /// Choosing a speed saves it and writes it to the engine exactly once.
+  func testPlaybackRateSet_SavesTheRateAndWritesTheEngineOnce() throws {
+    let engine = SpyRateEngine(currentRate: 1.0)
+    let (player, defaults) = try Self.makeRatePlayer(engine: engine)
+
+    player.playbackRate = .doubleTime
+    _ = player.playbackRate
+
+    XCTAssertEqual(defaults.double(forKey: Self.rateKey), 2.0)
+    XCTAssertEqual(engine.writes, [2.0])
+  }
+
   // MARK: - Test doubles
+
+  /// Records rate writes. A write updates `currentRate`, as the SDK does once
+  /// the command queue has applied it.
+  final class SpyRateEngine: FindawayRateEngine {
+    private(set) var currentRate: Float?
+    private(set) var writes: [Float] = []
+
+    init(currentRate: Float?) {
+      self.currentRate = currentRate
+    }
+
+    func setRate(_ rate: Float) {
+      writes.append(rate)
+      if currentRate != nil { currentRate = rate }
+    }
+  }
+
+  private static let rateKey = "audioPlaybackRateKey"
+
+  /// A player wired to a spy engine and its own defaults suite, so no test
+  /// reads or leaves the app's saved speed.
+  private static func makeRatePlayer(
+    engine: SpyRateEngine
+  ) throws -> (FindawayPlayer, UserDefaults) {
+    let (toc, _) = try makeFindawayFixture()
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    let suite = "FindawayPlayerRate-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      eventHandler: DefaultFindawayPlaybackNotificationHandler(),
+      databaseVerification: FindawayDatabaseVerification(),
+      rateEngine: engine,
+      rateDefaults: defaults
+    )
+    return (player, defaults)
+  }
 
   /// Spy subclass: bypasses the AudioEngine SDK by overriding
   /// `currentTrackPosition` so skipPlayhead / move(to:) math runs against
