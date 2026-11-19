@@ -484,8 +484,13 @@ class FindawayPlayer: NSObject, Player {
         }
       }
 
-      rateEngine.setRate(Float(cachedValue))
-      return PlaybackRate.nearest(to: Float(cachedValue))
+      // Restores the saved speed after a load resets the engine, but only on a
+      // mismatch: this getter runs on every now-playing update.
+      let savedRate = Float(cachedValue)
+      if let engineRate = rateEngine.currentRate, abs(engineRate - savedRate) > 0.001 {
+        rateEngine.setRate(savedRate)
+      }
+      return PlaybackRate.nearest(to: savedRate)
     }
 
     set(newRate) {
