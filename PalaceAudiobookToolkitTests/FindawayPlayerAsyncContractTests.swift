@@ -575,7 +575,128 @@ final class FindawayPlayerAsyncContractTests: XCTestCase {
     return (player, chapter)
   }
 
+  // MARK: - Playback rate writes
+
+  /// The now-playing updates read `playbackRate` about once a second, and each
+  /// engine write rebuilds the SDK timer whose overlap crashes in `startTimer:`.
+  /// A read must not write a rate the engine already has.
+  func testPlaybackRateRead_WhenEngineHasTheSavedRate_DoesNotWriteTheEngine() throws {
+    let engine = SpyRateEngine(currentRate: 1.5)
+    let (player, defaults) = try makeRatePlayer(engine: engine)
+    defaults.set(1.5, forKey: Self.rateKey)
+
+    var reads: [PlaybackRate] = []
+    for _ in 0..<50 { reads.append(player.playbackRate) }
+
+    XCTAssertEqual(engine.writes, [], "Reading the rate must not write it again")
+    XCTAssertEqual(Set(reads), [.oneAndAHalfTime])
+  }
+
+  /// A saved speed must still reach the engine after a load resets it, and
+  /// must reach it once, not on every later read.
+  func testPlaybackRateRead_WhenEngineDiffersFromTheSavedRate_WritesTheSavedRateOnce() throws {
+    let engine = SpyRateEngine(currentRate: 1.0)
+    let (player, defaults) = try makeRatePlayer(engine: engine)
+    defaults.set(1.5, forKey: Self.rateKey)
+
+    let first = player.playbackRate
+    let second = player.playbackRate
+
+    XCTAssertEqual(first, .oneAndAHalfTime)
+    XCTAssertEqual(second, .oneAndAHalfTime)
+    XCTAssertEqual(engine.writes, [1.5], "The saved rate is applied once, then the engine matches")
+  }
+
+  /// With no saved speed the engine's own rate is reported and nothing is written.
+  func testPlaybackRateRead_WhenNothingIsSaved_ReportsTheEngineRateAndWritesNothing() throws {
+    let engine = SpyRateEngine(currentRate: 1.25)
+    let (player, _) = try makeRatePlayer(engine: engine)
+
+    let rate = player.playbackRate
+
+    XCTAssertEqual(rate, .oneAndAQuarterTime)
+    XCTAssertEqual(engine.writes, [])
+  }
+
+  /// Without a playback engine there is nothing to write to.
+  func testPlaybackRateRead_WhenThereIsNoEngine_ReportsTheSavedRateAndWritesNothing() throws {
+    let engine = SpyRateEngine(currentRate: nil)
+    let (player, defaults) = try makeRatePlayer(engine: engine)
+    defaults.set(2.0, forKey: Self.rateKey)
+
+    let rate = player.playbackRate
+
+    XCTAssertEqual(rate, .doubleTime)
+    XCTAssertEqual(engine.writes, [])
+  }
+
+  /// Choosing a speed saves it and writes it to the engine exactly once.
+  func testPlaybackRateSet_SavesTheRateAndWritesTheEngineOnce() throws {
+    let engine = SpyRateEngine(currentRate: 1.0)
+    let (player, defaults) = try makeRatePlayer(engine: engine)
+
+    player.playbackRate = .doubleTime
+
+    XCTAssertEqual(defaults.double(forKey: Self.rateKey), 2.0)
+    XCTAssertEqual(engine.writes, [2.0], "The setter itself writes the engine")
+
+    _ = player.playbackRate
+
+    XCTAssertEqual(engine.writes, [2.0], "A read after the set adds no second write")
+  }
+
+  /// The SDK can report a rate a rounding step away from the one written; that
+  /// is a match, not a reason to write again.
+  func testPlaybackRateRead_WhenEngineIsWithinTolerance_DoesNotWriteTheEngine() throws {
+    let engine = SpyRateEngine(currentRate: 1.5004)
+    let (player, defaults) = try makeRatePlayer(engine: engine)
+    defaults.set(1.5, forKey: Self.rateKey)
+
+    _ = player.playbackRate
+
+    XCTAssertEqual(engine.writes, [])
+  }
+
   // MARK: - Test doubles
+
+  /// Records rate writes. A write updates `currentRate`, as the SDK does once
+  /// the command queue has applied it.
+  final class SpyRateEngine: FindawayRateEngine {
+    private(set) var currentRate: Float?
+    private(set) var writes: [Float] = []
+
+    init(currentRate: Float?) {
+      self.currentRate = currentRate
+    }
+
+    func setRate(_ rate: Float) {
+      writes.append(rate)
+      if currentRate != nil { currentRate = rate }
+    }
+  }
+
+  private static let rateKey = "audioPlaybackRateKey"
+
+  /// A player wired to a spy engine and its own defaults suite, so no test
+  /// reads or leaves the app's saved speed.
+  private func makeRatePlayer(
+    engine: SpyRateEngine
+  ) throws -> (FindawayPlayer, UserDefaults) {
+    let (toc, _) = try Self.makeFindawayFixture()
+    let firstTrack = try XCTUnwrap(toc.allTracks.first)
+    let suite = "FindawayPlayerRate-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    addTeardownBlock { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+    let player = FindawayPlayer(
+      currentPosition: TrackPosition(track: firstTrack, timestamp: 0, tracks: toc.tracks),
+      tableOfContents: toc,
+      eventHandler: DefaultFindawayPlaybackNotificationHandler(),
+      databaseVerification: FindawayDatabaseVerification(),
+      rateEngine: engine,
+      rateDefaults: defaults
+    )
+    return (player, defaults)
+  }
 
   /// Stands in for the AudioEngine: engine readings come from the test and
   /// loads are recorded instead of reaching the SDK. The queued playhead still
